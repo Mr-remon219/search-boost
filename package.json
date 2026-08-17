@@ -1,0 +1,56 @@
+{
+  "name": "search-boost-mcp",
+  "version": "0.1.0",
+  "description": "Multi-engine web search MCP for Cursor, Codex, Claude Code, Grok Build, and Antigravity — fused search, fetch, X, deep research",
+  "type": "module",
+  "bin": {
+    "search-boost-mcp": "./cli.mjs"
+  },
+  "main": "./cli.mjs",
+  "files": [
+    "cli.mjs",
+    "server.mjs",
+    "lib/",
+    "tools/",
+    "agents/",
+    "cursor/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node cli.mjs serve",
+    "install:agents": "node cli.mjs install",
+    "smoke": "node scripts/smoke.mjs",
+    "test:install": "node scripts/test-install.mjs",
+    "check": "node --check cli.mjs && node --check server.mjs && node --check tools/register.mjs && node --check tools/schemas.mjs && node --check lib/runtime.mjs && node --check lib/mcp-result.mjs && node --check lib/dsh-lib.mjs && node --check lib/paths.mjs && node --check lib/inject.mjs && node --check lib/mcp-entry.mjs && node --check lib/json-config.mjs && node --check lib/toml.mjs && node --check lib/agents/shared.mjs && node --check lib/agents/index.mjs && node --check lib/agents/types.mjs && node --check scripts/smoke.mjs && node --check scripts/test-install.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.24.2"
+  },
+  "optionalDependencies": {
+    "dsh-search-boost": ">=0.1.0"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "keywords": [
+    "mcp",
+    "cursor",
+    "codex",
+    "claude-code",
+    "grok",
+    "antigravity",
+    "web-search",
+    "search-boost"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mr-remon219/search-boost-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Mr-remon219/search-boost-mcp/issues"
+  },
+  "homepage": "https://github.com/Mr-remon219/search-boost-mcp#readme"
+}
