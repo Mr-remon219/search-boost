@@ -32,6 +32,7 @@ import {
   geminiSnippetPath,
   getRoute,
   hooksConfigPath,
+  hookScriptPath,
   mcpServerInstructionsPath,
   promptPath,
   ROUTE_IDS,
@@ -41,9 +42,21 @@ import {
 } from '../agents/router.mjs'
 import { grokInstallPaths, workspaceAgents } from '../lib/paths.mjs'
 import { readJsonFile, writeJsonFile } from '../lib/json-config.mjs'
-import { readFileSync } from 'node:fs'
 import { maskKey, readKeysFile, writeKeysFile } from '../lib/keys.mjs'
 import { getLayer, setLayer } from '../lib/layer-config.mjs'
+import {
+  buildSessionStartCommand,
+  isSearchBoostHook,
+  removeSessionStartHook,
+  upsertSessionStartHook,
+} from '../lib/hooks-config.mjs'
+import {
+  CURSOR_CLI_MCP_ALLOW,
+  mergeCliPermissionAllow,
+  removeCliPermissionAllow,
+} from '../lib/cli-config.mjs'
+import { execFileSync } from 'node:child_process'
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -174,7 +187,10 @@ for (const id of ROUTE_IDS) {
   assert(`route ${id} prompt exists`, promptPath(id).includes(getRoute(id).dir))
 }
 const cursorPrompt = await loadAgentPrompt('cursor')
-assert('load cursor inject', cursorPrompt.includes('search-boost @ Cursor IDE'))
+assert(
+  'load cursor inject',
+  cursorPrompt.includes('search-boost @ Cursor IDE') && cursorPrompt.includes('when you choose'),
+)
 assert('codex route has skill', getRoute('codex').skill === 'skill.md')
 assert('codex route has openai yaml', getRoute('codex').openaiYaml === 'openai.yaml')
 const codexPrompt = await loadAgentPrompt('codex')
@@ -225,6 +241,43 @@ assert('mcp instructions mention grok', readFileSync(mcpServerInstructionsPath()
 
 const agyPrompt = await loadAgentPrompt('antigravity')
 assert('load antigravity inject mentions search_web', agyPrompt.includes('search_web'))
+
+// hooks-config round-trip
+const hooksDir = mkdtempSync(join(tmpdir(), 'sb-hooks-'))
+const hooksPath = join(hooksDir, 'hooks.json')
+const hookCmd = buildSessionStartCommand(process.execPath, join(hooksDir, 'search-boost-session.mjs'))
+await upsertSessionStartHook(hooksPath, hookCmd, false)
+const hooksAfter = JSON.parse(readFileSync(hooksPath, 'utf8'))
+assert('hooks upsert sessionStart', hooksAfter.hooks?.sessionStart?.some((e) => isSearchBoostHook(e.command)))
+await upsertSessionStartHook(hooksPath, hookCmd, false)
+assert('hooks upsert idempotent', hooksAfter.hooks.sessionStart.length === JSON.parse(readFileSync(hooksPath, 'utf8')).hooks.sessionStart.length)
+await removeSessionStartHook(hooksPath, false)
+assert('hooks remove', !JSON.parse(readFileSync(hooksPath, 'utf8')).hooks?.sessionStart?.length)
+
+// cli-config merge round-trip
+const cliDir = mkdtempSync(join(tmpdir(), 'sb-cli-'))
+const cliPath = join(cliDir, 'cli-config.json')
+writeFileSync(cliPath, JSON.stringify({ permissions: { allow: ['Shell(git)'] } }))
+await mergeCliPermissionAllow(cliPath, CURSOR_CLI_MCP_ALLOW, false)
+const cliCfg = JSON.parse(readFileSync(cliPath, 'utf8'))
+assert('cli-config merge allow', cliCfg.permissions.allow.includes(CURSOR_CLI_MCP_ALLOW))
+await mergeCliPermissionAllow(cliPath, CURSOR_CLI_MCP_ALLOW, false)
+assert('cli-config merge idempotent', cliCfg.permissions.allow.length === JSON.parse(readFileSync(cliPath, 'utf8')).permissions.allow.length)
+await removeCliPermissionAllow(cliPath, CURSOR_CLI_MCP_ALLOW, false)
+assert('cli-config remove', !JSON.parse(readFileSync(cliPath, 'utf8')).permissions.allow.includes(CURSOR_CLI_MCP_ALLOW))
+
+// session-start hook outputs valid JSON
+const hookDir = mkdtempSync(join(tmpdir(), 'sb-hook-'))
+writeFileSync(join(hookDir, 'search-boost-inject.md'), '# test policy\n')
+copyFileSync(hookScriptPath('cursor-cli'), join(hookDir, 'search-boost-session.mjs'))
+const out = execFileSync(process.execPath, [join(hookDir, 'search-boost-session.mjs')], {
+  encoding: 'utf8',
+})
+const parsed = JSON.parse(out.trim())
+assert('session-start json', parsed.continue === true && parsed.additional_context.includes('test policy'))
+rmSync(hookDir, { recursive: true, force: true })
+rmSync(hooksDir, { recursive: true, force: true })
+rmSync(cliDir, { recursive: true, force: true })
 
 if (failed) {
   console.error(`\n${failed} test(s) failed`)

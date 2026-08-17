@@ -13,7 +13,7 @@
 | MCP registerTool + outputSchema | ✅ |
 | server instructions | ✅ |
 | resource + prompt | ✅ |
-| install-cursor 三件套 | ✅ |
+| install-cursor 五件套 (MCP+hook+skill+cli-config) | ✅ |
 | npm run smoke | ✅ |
 
 ## 架构
@@ -31,16 +31,17 @@ dsh-search-boost/lib/                  (只读，零依赖)
 
 **不移植**：`research_parallel`（依赖 DSH subagent / pi 子进程）
 
-## 安装面
+## 安装面（Cursor / Cursor CLI）
 
 | 目标 | 机制 |
 |------|------|
-| MCP | `~/.cursor/mcp.json` — env 带 `SEARCH_BOOST_DSH_ROOT` |
-| 全局策略 | `~/.cursor/AGENTS.md` — 标记块 idempotent 更新 |
+| MCP | `~/.cursor/mcp.json` — `serverUseInstructions` + stdio entry |
+| 主动策略 | `~/.cursor/hooks.json` → `sessionStart`（能力摘要，非强制） |
 | Skill | `~/.cursor/skills/search-boost/SKILL.md` |
+| CLI 免审批 | `~/.cursor/cli-config.json` → `Mcp(search-boost:*)` |
 | Policy runtime | MCP resource `search-boost://policy` |
 
-Cursor 官方全局规则在 Customize → Rules（无文件）。AGENTS.md 为用户约定 + 与 Codex 对齐习惯。
+`~/.cursor/AGENTS.md` 仅 uninstall 时清理遗留块；Cursor CLI 不加载该路径。
 
 ## pi vs dsh 引擎差异
 

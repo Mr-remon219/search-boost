@@ -318,7 +318,7 @@ export function registerAll(server) {
 
   server.registerPrompt('search_routing', {
     title: 'Search tool routing',
-    description: 'Suggested tool pick when search is chosen; bounded ~3 rounds',
+    description: 'Optional tool pick when you choose to search; bounded ~3 rounds',
     argsSchema: {
       task: z.string().describe('What the user is trying to find out'),
     },
@@ -330,10 +330,8 @@ export function registerAll(server) {
         text: [
           `Task: ${task}`,
           '',
-          'If you choose to search: start with fused_search (complexity=simple). Max ~3 rounds. Skip when local files or stable knowledge suffice.',
-          '',
-          'Route using search-boost MCP tools:',
-          '- fused_search: default verify — versions, APIs, docs, comparisons',
+          'If external facts matter and repo context is not enough, consider search-boost MCP tools (your call):',
+          '- fused_search: quick lookup — versions, APIs, docs, comparisons (complexity=simple first)',
           '- fetch_page: snippets insufficient; official doc body (+ focus)',
           '- x_search: X/Twitter posts, accounts, threads',
           '- deep_research: multi-source synthesis (repeat until gaps empty)',

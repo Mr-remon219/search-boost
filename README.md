@@ -19,7 +19,7 @@ node cli.mjs install
 # Non-interactive — all detected agents
 node cli.mjs install -y
 
-# Specific agents (cursor + cursor-cli merge into one AGENTS.md block)
+# Specific agents (cursor + cursor-cli merge into one hook inject)
 node cli.mjs install -t cursor,cursor-cli,codex -y
 
 # Preview without writes
@@ -64,16 +64,30 @@ When installed via npm, MCP config uses `search-boost-mcp serve` or `npx -y sear
 --workspace [dir]    Also inject .agents/ under cwd or dir (Antigravity)
 ```
 
+Cursor CLI always gets its `cli-config.json` allow entry — no flag needed.
+
 ## Per-agent wiring
 
 | Agent | MCP config | Prompt injection |
 |-------|------------|------------------|
-| **Cursor IDE** | `~/.cursor/mcp.json` | `~/.cursor/AGENTS.md` + skill |
-| **Cursor CLI** | same mcp.json | merged into AGENTS.md when both selected |
+| **Cursor IDE** | `~/.cursor/mcp.json` | Hook `sessionStart` + skill |
+| **Cursor CLI** | same mcp.json | same hook + skill + `cli-config.json` allow |
 | **Codex CLI** | `~/.codex/config.toml` (+ `web_search = "disabled"`) | `~/.codex/AGENTS.md` + skill (`~/.agents/skills/search-boost/`) |
 | **Claude Code** | `~/.claude.json` | `~/.claude/CLAUDE.md` + skill + `mcp__search-boost__*` allow (default with `-y`) |
 | **Grok Build** | `~/.grok/config.toml` (or `.grok/config.toml` with `--scope project`) | `~/.grok/rules/search-boost.md` + skill |
 | **Antigravity** | `~/.gemini/config/mcp_config.json`* | `~/.gemini/AGENTS.md` + `GEMINI.md` + skill |
+
+### Cursor / Cursor CLI surfaces
+
+| Surface | Path |
+|---------|------|
+| MCP | `~/.cursor/mcp.json` |
+| Proactive policy | `~/.cursor/hooks.json` → `sessionStart` (capability summary, optional) |
+| Inject body | `~/.cursor/hooks/search-boost-inject.md` |
+| Hook script | `~/.cursor/hooks/search-boost-session.mjs` |
+| Tool routing skill | `~/.cursor/skills/search-boost/SKILL.md` |
+| CLI auto-allow | `~/.cursor/cli-config.json` → `Mcp(search-boost:*)` |
+| Policy runtime | MCP resource `search-boost://policy` |
 
 \* Antigravity uses unified vs legacy MCP path detection; entry omits `type: "stdio"` (required by Antigravity UI). Uninstall sweeps both paths.
 
