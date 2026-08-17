@@ -4,6 +4,9 @@
  * Each subfolder under agents/ holds that agent's exploration artifacts:
  *   inject.md              → prompt block injected into the agent's rules file
  *   skill.md               → optional skill template (frontmatter added at install)
+ *   rule.md                → workspace Always-on rule body (antigravity)
+ *   gemini-snippet.md      → GEMINI.md override snippet (antigravity)
+ *   hooks/                 → PreInvocation hook (antigravity)
  *   server-instructions.md → optional MCP server instructions (cursor only today)
  *
  * Install adapters in lib/agents/index.mjs read paths through here — do not hard-code filenames.
@@ -22,9 +25,13 @@ export const AGENTS_ROOT = join(dirname(fileURLToPath(import.meta.url)))
  * @property {InjectKind} injectKind
  * @property {string} prompt        Filename for inject body (usually inject.md)
  * @property {string|null} skill    Skill template filename, or null
+ * @property {string|null} rule     Workspace rule template filename, or null
+ * @property {string|null} geminiSnippet GEMINI.md snippet filename, or null
+ * @property {{ config: string, script: string }|null} hooks Hook assets, or null
  * @property {string|null} serverInstructions MCP instructions file, or null
  * @property {string[]|null} mergeWith Other agent ids merged into this prompt on install
  * @property {{ serverUseInstructions?: string }|null} mcp MCP entry extras
+ * @property {string|null} [skillDescription] Skill frontmatter description override
  */
 
 /** @type {Record<string, AgentRoute>} */
@@ -85,9 +92,14 @@ export const ROUTES = {
     injectKind: 'agents-block',
     prompt: 'inject.md',
     skill: 'skill.md',
+    rule: 'rule.md',
+    geminiSnippet: 'gemini-snippet.md',
+    hooks: { config: 'hooks/hooks.json', script: 'hooks/pre-invocation.mjs' },
     serverInstructions: null,
     mergeWith: null,
     mcp: null,
+    skillDescription:
+      'Multi-engine web search before external API/integration work. Use when verifying versions, SDK signatures, cloud quotas, or comparing libraries. Prefer over built-in search_web.',
   },
 }
 
@@ -116,6 +128,34 @@ export function skillPath(id) {
   const route = getRoute(id)
   if (!route.skill) return null
   return assetPath(id, route.skill)
+}
+
+/** @param {string} id */
+export function rulePath(id) {
+  const route = getRoute(id)
+  if (!route.rule) return null
+  return assetPath(id, route.rule)
+}
+
+/** @param {string} id */
+export function geminiSnippetPath(id) {
+  const route = getRoute(id)
+  if (!route.geminiSnippet) return null
+  return assetPath(id, route.geminiSnippet)
+}
+
+/** @param {string} id */
+export function hooksConfigPath(id) {
+  const route = getRoute(id)
+  if (!route.hooks) return null
+  return assetPath(id, route.hooks.config)
+}
+
+/** @param {string} id */
+export function hooksScriptPath(id) {
+  const route = getRoute(id)
+  if (!route.hooks) return null
+  return assetPath(id, route.hooks.script)
 }
 
 /** MCP stdio server instructions — currently defined on the cursor route. */

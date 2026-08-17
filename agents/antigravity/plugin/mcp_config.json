@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "search-boost": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "search-boost-mcp",
+        "serve"
+      ],
+      "env": {
+        "SEARCH_BOOST_LAYER": "api"
+      }
+    }
+  }
+}

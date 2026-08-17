@@ -10,6 +10,8 @@
  *   search-boost status              Keys + layer + agent detection
  *   search-boost serve               Run MCP stdio server
  */
+import { resolve } from 'node:path'
+import { cwd } from 'node:process'
 import {
   AGENT_IDS,
   AGENTS,
@@ -39,6 +41,7 @@ function parseFlags(args) {
     set: {},
     unset: [],
     layer: null,
+    workspace: null,
   }
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
@@ -49,6 +52,10 @@ function parseFlags(args) {
     else if (a === '--show') flags.show = true
     else if (a === '-t' || a === '--target') flags.target = args[++i]
     else if (a === '--print-config') flags.printConfig = args[++i]
+    else if (a === '--workspace') {
+      const next = args[i + 1]
+      flags.workspace = next && !next.startsWith('-') ? resolve(args[++i]) : resolve(cwd())
+    }
     else if (a === '--set') {
       const pair = args[++i] ?? ''
       const eq = pair.indexOf('=')
@@ -76,7 +83,8 @@ Install options:
   -t, --target <ids>     cursor,codex,claude,grok,antigravity,cursor-cli | auto | all
   -y, --yes              Non-interactive: --target=auto
   --dry-run              Show actions without writing
-  --auto-allow           Claude Code: add mcp__search-boost__* to permissions.allow
+  --auto-allow           Claude / Antigravity: auto-allow search-boost MCP tools
+  --workspace [dir]      Also inject .agents/ under cwd or dir (Antigravity)
   --print-config <id>    Print MCP snippet for one agent and exit
 
 Config keys:
@@ -177,6 +185,7 @@ async function runInstall(uninstall = false) {
     yes: flags.yes,
     dryRun: flags.dryRun,
     autoAllow: flags.autoAllow,
+    workspace: flags.workspace,
     uninstall,
   }
 
