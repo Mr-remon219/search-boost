@@ -9,7 +9,7 @@ import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const SKIP_DIRS = new Set(['node_modules', '.git', '.codegraph'])
+const SKIP_DIRS = new Set(['node_modules', '.git', '.codegraph', '.agent-html'])
 
 /** @param {string} dir @returns {string[]} */
 function collect(dir) {

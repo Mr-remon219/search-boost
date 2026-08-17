@@ -10,13 +10,25 @@ import {
   removeGeminiBlock,
   removeTomlSection as removeMarkedToml,
 } from '../lib/inject.mjs'
-import { normalizeTargets } from '../lib/agents/index.mjs'
+import { normalizeTargets, parseTargetSpec } from '../lib/agents/index.mjs'
+import { parseFlags } from '../lib/cli/args.mjs'
+import { stripAllowList, upsertAllowList } from '../lib/json-config.mjs'
+import {
+  applyClaudeNativeSettings,
+  applyCodexNativeToml,
+  autoAllowAgentIds,
+  CLAUDE_WEB_SEARCH_DENY,
+  claudeNativeReplaced,
+  codexNativeReplaced,
+  replaceableNativeIds,
+} from '../lib/native-search.mjs'
 import { installCursorSurface } from '../lib/agents/cursor-family.mjs'
 import {
   antigravityMcpEntry,
   antigravityPermissions,
   claudePermissions,
   grokPermissionAllows,
+  formatPrintConfig,
   grokPermissionTomlBlock,
   jsonMcpEntry,
   tomlMcpBlock,
@@ -94,6 +106,28 @@ assert('web_search marker removed', !toml.includes('SEARCH_BOOST_WEB_SEARCH_STAR
 assert('toml mcp approval opt-in', tomlMcpBlock({ approvalAuto: true }).includes('default_tools_approval_mode = "auto"'))
 assert('toml mcp approval default off', !tomlMcpBlock().includes('default_tools_approval_mode'))
 
+// native-search capability table + pure apply
+assert('auto-allow ids include cursor', autoAllowAgentIds().includes('cursor') && autoAllowAgentIds().includes('claude'))
+assert('replaceable native is codex+claude', replaceableNativeIds().join() === 'codex,claude')
+assert('grok native is leave', replaceableNativeIds(['grok', 'cursor']).length === 0)
+let nativeToml = 'model = "x"\n'
+nativeToml = applyCodexNativeToml(nativeToml, true)
+assert('codex native apply marker', codexNativeReplaced(nativeToml) && nativeToml.includes('web_search = "disabled"'))
+nativeToml = applyCodexNativeToml(nativeToml, false)
+assert('codex native revert', !codexNativeReplaced(nativeToml) && nativeToml.includes('model = "x"'))
+const claudeOn = applyClaudeNativeSettings({ permissions: { allow: ['mcp__search-boost__*'] } }, true)
+assert('claude native deny', claudeNativeReplaced(claudeOn) && claudeOn.permissions.allow.includes('mcp__search-boost__*'))
+const claudeOff = applyClaudeNativeSettings(claudeOn, false)
+assert('claude native revert keeps allow', !claudeNativeReplaced(claudeOff) && claudeOff.permissions.allow.includes('mcp__search-boost__*'))
+assert('claude deny constant', CLAUDE_WEB_SEARCH_DENY === 'WebSearch')
+
+const printed = formatPrintConfig('codex', '/tmp/config.toml')
+assert('print-config no approval by default', !printed.includes('default_tools_approval_mode'))
+assert('print-config includes web_search by default', printed.includes('web_search = "disabled"'))
+const printedKeep = formatPrintConfig('codex', '/tmp/config.toml', { replaceNative: false, autoAllow: true })
+assert('print-config keep-native omits web_search', !printedKeep.includes('web_search = "disabled"'))
+assert('print-config auto-allow opt-in', printedKeep.includes('default_tools_approval_mode = "auto"'))
+
 // inject block round-trip
 const snippet = '## search-boost rules'
 let md = injectBlock('', snippet)
@@ -116,6 +150,36 @@ const n1 = normalizeTargets(['cursor', 'cursor-cli', 'codex'])
 assert('merge cursor family', n1.mergeCursorCli && n1.targets.join() === 'cursor,codex')
 const n2 = normalizeTargets(['cursor-cli'])
 assert('solo cursor-cli', !n2.mergeCursorCli && n2.targets[0] === 'cursor-cli')
+
+let unknownTarget = false
+try {
+  parseTargetSpec('cursor,nope')
+} catch (err) {
+  unknownTarget = err instanceof Error && err.message.includes('Unknown agent')
+}
+assert('parseTargetSpec rejects unknown', unknownTarget)
+assert('parseTargetSpec all', parseTargetSpec('all').includes('grok'))
+
+const flags = parseFlags(['-t', 'codex', '--keep-native', '--scope', 'project'])
+assert('parseFlags keep-native', flags.replaceNative === false && flags.target === 'codex' && flags.scope === 'project')
+let badFlag = false
+try {
+  parseFlags(['--bogus'])
+} catch (err) {
+  badFlag = err instanceof Error && err.message.includes('Unknown flag')
+}
+assert('parseFlags rejects unknown', badFlag)
+let missingVal = false
+try {
+  parseFlags(['--scope'])
+} catch (err) {
+  missingVal = err instanceof Error && err.message.includes('requires a value')
+}
+assert('parseFlags requires values', missingVal)
+
+const mergedAllow = upsertAllowList(['Shell(git)', 'mcp__search-boost__old'], ['mcp__search-boost__*'], (p) => p.startsWith('mcp__search-boost__'))
+assert('upsertAllowList replaces ours', mergedAllow.includes('Shell(git)') && mergedAllow.includes('mcp__search-boost__*') && !mergedAllow.includes('mcp__search-boost__old'))
+assert('stripAllowList', stripAllowList(mergedAllow, (p) => p.startsWith('mcp__search-boost__')).join() === 'Shell(git)')
 
 // cursor cli-config allow is opt-in like every other agent's auto-allow surface
 const cursorPlain = await installCursorSurface({ dryRun: true, skillAgentId: 'cursor' })
