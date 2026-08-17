@@ -5,6 +5,7 @@
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { jsonMcpEntry } from '../lib/mcp-entry.mjs'
 
 /** Shipped bundles pin the keyless layer; SEARCH_BOOST_LAYER overrides at runtime. */
 const DIST_LAYER = 'free'
@@ -21,8 +22,7 @@ copyFileSync(SKILL_SRC, SKILL_DEST)
 const mcp = {
   mcpServers: {
     'search-boost': {
-      command: 'npx',
-      args: ['-y', 'search-boost-mcp', 'serve'],
+      ...jsonMcpEntry(),
       env: { SEARCH_BOOST_LAYER: DIST_LAYER },
     },
   },

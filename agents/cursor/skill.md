@@ -24,7 +24,7 @@ Multi-engine web search when **you** decide external facts need verification or 
 
 ## More detail
 
-Hook capability summary at session start · MCP resource `search-boost://policy` (optional, Chinese).
+Hook capability summary at session start · MCP resource `search-boost://policy` (optional routing reference).
 
 ## Keys
 

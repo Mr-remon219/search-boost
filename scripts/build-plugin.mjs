@@ -6,6 +6,7 @@ import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ANTIGRAVITY_RULE_DESCRIPTION, buildSkillHeader } from '../lib/agents/shared.mjs'
+import { antigravityMcpEntry } from '../lib/mcp-entry.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const AGY = join(ROOT, 'agents', 'antigravity')
@@ -31,15 +32,11 @@ async function writeRule() {
 }
 
 async function writeMcpConfig() {
-  const config = {
-    mcpServers: {
-      'search-boost': {
-        command: 'npx',
-        args: ['-y', 'search-boost-mcp', 'serve'],
-        env: { SEARCH_BOOST_LAYER: DIST_LAYER },
-      },
-    },
+  const entry = {
+    ...antigravityMcpEntry(),
+    env: { SEARCH_BOOST_LAYER: DIST_LAYER },
   }
+  const config = { mcpServers: { 'search-boost': entry } }
   await writeFile(join(PLUGIN, 'mcp_config.json'), `${JSON.stringify(config, null, 2)}\n`, 'utf8')
 }
 
@@ -47,7 +44,7 @@ async function writePluginJson() {
   const manifest = {
     $schema: 'https://antigravity.google/schemas/v1/plugin.json',
     name: 'search-boost',
-    description: 'Multi-engine web search MCP — proactive search before external API edits.',
+    description: 'Multi-engine web search MCP — optional fused search when you want citations or corroboration.',
   }
   await writeFile(join(PLUGIN, 'plugin.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
 }

@@ -3,9 +3,11 @@
  */
 import * as z from 'zod'
 import { abortSignal, toolErr, toolOk } from '../lib/mcp-result.mjs'
+import { MCP_POLICY_TEXT } from '../lib/mcp-policy.mjs'
 import {
   X_MODES,
   X_CACHE,
+  activeLayer,
   authStatus,
   availableEngines,
   bumpEngines,
@@ -13,6 +15,7 @@ import {
   domainSearch,
   fallbackXSearch,
   fetchPage,
+  filterResearchGaps,
   formatFusedSummary,
   fusedHitToJson,
   getLayer,
@@ -20,14 +23,12 @@ import {
   layerTierTable,
   LAYER_LABELS,
   PAGE_CACHE,
+  persistLayer,
   renderXItem,
   researchRound,
-  resolveLayer,
   runEngine,
   runFused,
   runXTool,
-  SEARCH_POLICY_SECTION,
-  setLayer,
   stats,
   xAuthAvailableSync,
 } from '../lib/runtime.mjs'
@@ -58,7 +59,7 @@ export function registerAll(server) {
     annotations: { ...ANNOTATIONS.search, title: 'Search the web (multi-engine fusion)' },
   }, async (args, extra) => {
     try {
-      if (args.layer) resolveLayer(args.layer)
+      if (!String(args.query ?? '').trim()) return toolErr('fused_search: query is required')
       const signal = abortSignal(extra, 90_000)
       const result = await runFused({
         query: args.query,
@@ -121,10 +122,10 @@ export function registerAll(server) {
     annotations: { ...ANNOTATIONS.search, title: 'Deep research round' },
   }, async (args, extra) => {
     try {
-      if (args.layer) resolveLayer(args.layer)
+      if (!String(args.query ?? '').trim()) return toolErr('deep_research: query is required')
       const signal = abortSignal(extra, 120_000)
       const engines = bumpEngines()
-      const active = args.layer ?? getLayer()
+      const active = activeLayer(args.layer)
       const result = await researchRound({
         query: args.query,
         queries: args.queries,
@@ -135,9 +136,10 @@ export function registerAll(server) {
         runOne: (engineName, q, n, o) => runEngine(engines, engineName, q, n, o),
         signal,
       })
+      const gaps = filterResearchGaps(result.gaps)
       const lines = [
         `deep_research round ${result.round}: "${result.query}" — ${result.tookMs}ms`,
-        `gaps: ${result.gaps.length === 0 ? 'none' : result.gaps.join(', ')}`,
+        `gaps: ${gaps.length === 0 ? 'none' : gaps.join(', ')}`,
         result.suggested_queries?.length ? `suggested: ${result.suggested_queries.join(' | ')}` : '',
         '',
         ...result.sources.map((s, i) => `${i + 1}. [${s.covered}/${s.total}] ${s.title}\n   ${s.url}`),
@@ -146,7 +148,7 @@ export function registerAll(server) {
         round: result.round,
         query: result.query,
         tookMs: result.tookMs,
-        gaps: result.gaps,
+        gaps,
         suggested_queries: result.suggested_queries ?? [],
         sources: result.sources.map((s) => ({
           title: s.title,
@@ -205,6 +207,9 @@ export function registerAll(server) {
       const runFallback = async (primaryErr) => {
         const fb = await fallbackXSearch({ type: kind, query: args.query, username: args.username, post_id: args.post_id, limit: maxResults, webSearch })
         const items = Array.isArray(fb.data) ? fb.data : [fb.data]
+        if (!items.length) {
+          return toolErr(`x_search: no results (${fb.via ?? 'fallback'}; ${String(primaryErr).slice(0, 120)})`)
+        }
         return finish(`fallback:${fb.via}`, items, `primary: ${String(primaryErr).slice(0, 200)}`)
       }
 
@@ -249,7 +254,7 @@ export function registerAll(server) {
     try {
       const cmd = args.layer ?? 'show'
       if (cmd === 'free' || cmd === 'api') {
-        setLayer(cmd)
+        persistLayer(cmd)
         return toolOk(`layer → ${cmd} (${LAYER_LABELS[cmd]})`, { layer: cmd })
       }
       const engines = bumpEngines()
@@ -312,7 +317,7 @@ export function registerAll(server) {
     contents: [{
       uri: uri.href,
       mimeType: 'text/markdown',
-      text: SEARCH_POLICY_SECTION.text,
+      text: MCP_POLICY_TEXT,
     }],
   }))
 
