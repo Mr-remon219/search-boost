@@ -11,6 +11,7 @@ import {
   removeTomlSection as removeMarkedToml,
 } from '../lib/inject.mjs'
 import { normalizeTargets } from '../lib/agents/index.mjs'
+import { installCursorSurface } from '../lib/agents/cursor-family.mjs'
 import {
   antigravityMcpEntry,
   antigravityPermissions,
@@ -115,6 +116,12 @@ const n1 = normalizeTargets(['cursor', 'cursor-cli', 'codex'])
 assert('merge cursor family', n1.mergeCursorCli && n1.targets.join() === 'cursor,codex')
 const n2 = normalizeTargets(['cursor-cli'])
 assert('solo cursor-cli', !n2.mergeCursorCli && n2.targets[0] === 'cursor-cli')
+
+// cursor cli-config allow is opt-in like every other agent's auto-allow surface
+const cursorPlain = await installCursorSurface({ dryRun: true, skillAgentId: 'cursor' })
+assert('cursor skips cli-config without auto-allow', !cursorPlain.some((f) => f.endsWith('cli-config.json')))
+const cursorAllowed = await installCursorSurface({ dryRun: true, autoAllow: true, skillAgentId: 'cursor' })
+assert('cursor writes cli-config with auto-allow', cursorAllowed.some((f) => f.endsWith('cli-config.json')))
 
 // MCP entry shapes
 const json = jsonMcpEntry()
