@@ -23,8 +23,9 @@ export const AGENTS_ROOT = join(dirname(fileURLToPath(import.meta.url)))
  * @property {string} prompt        Filename for inject body (usually inject.md)
  * @property {string|null} skill    Skill template filename, or null
  * @property {string|null} serverInstructions MCP instructions file, or null
+ * @property {string|null} hookScript Session-start hook script filename, or null
  * @property {string[]|null} mergeWith Other agent ids merged into this prompt on install
- * @property {{ serverUseInstructions?: string }|null} mcp MCP entry extras
+ * @property {{ serverUseInstructions?: string, skillDescription?: string }|null} mcp MCP entry extras
  */
 
 /** @type {Record<string, AgentRoute>} */
@@ -37,17 +38,24 @@ export const ROUTES = {
     skill: 'skill.md',
     serverInstructions: 'server-instructions.md',
     mergeWith: ['cursor-cli'],
-    mcp: { serverUseInstructions: 'Prefer search-boost MCP over WebSearch for factual lookups.' },
+    mcp: {
+      serverUseInstructions: 'Multi-engine web search when you need verifiable external facts. Use at your discretion.',
+      skillDescription: 'Multi-engine web search MCP for verifiable external facts (versions, APIs, docs). Use when you judge it helps — not required every turn.',
+    },
   },
   'cursor-cli': {
     label: 'Cursor CLI (terminal agent)',
     dir: 'cursor-cli',
     injectKind: 'agents-block',
     prompt: 'inject.md',
-    skill: null,
-    serverInstructions: null,
+    skill: 'skill.md',
+    serverInstructions: 'server-instructions.md',
+    hookScript: 'session-start.mjs',
     mergeWith: null,
-    mcp: null,
+    mcp: {
+      serverUseInstructions: 'Multi-engine web search when you need verifiable external facts. Use at your discretion.',
+      skillDescription: 'Terminal-agent web search MCP when external facts need verification. Your call whether to search; prefer over WebSearch when you do.',
+    },
   },
   codex: {
     label: 'Codex CLI',
@@ -118,7 +126,7 @@ export function skillPath(id) {
   return assetPath(id, route.skill)
 }
 
-/** MCP stdio server instructions — currently defined on the cursor route. */
+/** MCP stdio server instructions — first route that defines serverInstructions. */
 export function mcpServerInstructionsPath() {
   for (const id of ROUTE_IDS) {
     const file = ROUTES[id].serverInstructions
@@ -126,3 +134,14 @@ export function mcpServerInstructionsPath() {
   }
   return null
 }
+
+/** @param {string} id */
+export function hookScriptPath(id) {
+  const route = getRoute(id)
+  if (!route.hookScript) return null
+  return assetPath(id, route.hookScript)
+}
+
+export const CURSOR_HOOK_SCRIPT_NAME = 'search-boost-session.mjs'
+export const CURSOR_HOOK_INJECT_NAME = 'search-boost-inject.md'
+export const CURSOR_HOOK_COMMAND_MARKER = 'search-boost-session.mjs'

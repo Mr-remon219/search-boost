@@ -2,34 +2,29 @@
 
 Server id: `search-boost` in `~/.cursor/mcp.json`.
 
-## Proactive default (bounded)
+## Your call
 
-**Search first, then answer** for external facts. **Doubt → one `fused_search`.** Do not claim "no info" without searching.
-
-**Skip search only:** stable fundamentals, workspace-local code/files, pure creation (no factual claims), user forbids web.
-
-**Stay bounded:** one focused search to start; max ~3 rounds; same query twice = stop.
+Multi-engine web search when **you** decide external facts need verification or citations. Repo context and stable knowledge are enough when they are sufficient — no mandatory search per turn.
 
 ## Tools
 
 | Tool | Use |
 |------|-----|
-| `fused_search` | Default verify / lookup (use `complexity=simple` first) |
+| `fused_search` | Quick lookup (`complexity=simple` first if searching) |
 | `fetch_page` | Full page when snippets fail; `focus` saves tokens |
 | `x_search` | X/Twitter |
-| `deep_research` | Multi-source compare; until `gaps` empty |
+| `deep_research` | Multi-source compare |
 | `search_layer` | free vs api |
 | `search_stats` | Diagnostics |
 
-## Flow
+## If you search
 
 1. `GetMcpTools` → server `search-boost`
-2. External fact needed → `fused_search` before asserting
-3. Implementing integration → search official docs before editing files
+2. Prefer search-boost over built-in `WebSearch` when structured results help
 
-## Policy
+## More detail
 
-`~/.cursor/AGENTS.md` (SEARCH_BOOST block) · MCP resource `search-boost://policy` (full rules, Chinese).
+Hook capability summary at session start · MCP resource `search-boost://policy` (optional, Chinese).
 
 ## Keys
 

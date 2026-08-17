@@ -76,7 +76,7 @@ Install options:
   -t, --target <ids>     cursor,codex,claude,grok,antigravity,cursor-cli | auto | all
   -y, --yes              Non-interactive: --target=auto
   --dry-run              Show actions without writing
-  --auto-allow           Claude Code: add mcp__search-boost__* to permissions.allow
+  --auto-allow           Auto-allow search-boost MCP tools (Claude + Cursor CLI)
   --print-config <id>    Print MCP snippet for one agent and exit
 
 Config keys:

@@ -6,9 +6,22 @@ import { injectBlock, removeBlock } from '../lib/inject.mjs'
 import { normalizeTargets } from '../lib/agents/index.mjs'
 import { antigravityMcpEntry, jsonMcpEntry } from '../lib/mcp-entry.mjs'
 import { loadAgentPrompt } from '../lib/agents/shared.mjs'
-import { getRoute, promptPath, ROUTE_IDS } from '../agents/router.mjs'
+import { getRoute, promptPath, ROUTE_IDS, hookScriptPath } from '../agents/router.mjs'
 import { maskKey, readKeysFile, writeKeysFile } from '../lib/keys.mjs'
 import { getLayer, setLayer } from '../lib/layer-config.mjs'
+import {
+  buildSessionStartCommand,
+  isSearchBoostHook,
+  removeSessionStartHook,
+  upsertSessionStartHook,
+} from '../lib/hooks-config.mjs'
+import {
+  CURSOR_CLI_MCP_ALLOW,
+  mergeCliPermissionAllow,
+  removeCliPermissionAllow,
+} from '../lib/cli-config.mjs'
+import { execFileSync } from 'node:child_process'
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -76,7 +89,44 @@ for (const id of ROUTE_IDS) {
   assert(`route ${id} prompt exists`, promptPath(id).includes(getRoute(id).dir))
 }
 const cursorPrompt = await loadAgentPrompt('cursor')
-assert('load cursor inject', cursorPrompt.includes('search-boost @ Cursor IDE'))
+assert('load cursor inject', cursorPrompt.includes('search-boost @ Cursor IDE') && cursorPrompt.includes('when you choose'))
+
+// hooks-config round-trip
+const hooksDir = mkdtempSync(join(tmpdir(), 'sb-hooks-'))
+const hooksPath = join(hooksDir, 'hooks.json')
+const hookCmd = buildSessionStartCommand(process.execPath, join(hooksDir, 'search-boost-session.mjs'))
+await upsertSessionStartHook(hooksPath, hookCmd, false)
+const hooksAfter = JSON.parse(readFileSync(hooksPath, 'utf8'))
+assert('hooks upsert sessionStart', hooksAfter.hooks?.sessionStart?.some((e) => isSearchBoostHook(e.command)))
+await upsertSessionStartHook(hooksPath, hookCmd, false)
+assert('hooks upsert idempotent', hooksAfter.hooks.sessionStart.length === JSON.parse(readFileSync(hooksPath, 'utf8')).hooks.sessionStart.length)
+await removeSessionStartHook(hooksPath, false)
+assert('hooks remove', !JSON.parse(readFileSync(hooksPath, 'utf8')).hooks?.sessionStart?.length)
+
+// cli-config merge round-trip
+const cliDir = mkdtempSync(join(tmpdir(), 'sb-cli-'))
+const cliPath = join(cliDir, 'cli-config.json')
+writeFileSync(cliPath, JSON.stringify({ permissions: { allow: ['Shell(git)'] } }))
+await mergeCliPermissionAllow(cliPath, CURSOR_CLI_MCP_ALLOW, false)
+const cliCfg = JSON.parse(readFileSync(cliPath, 'utf8'))
+assert('cli-config merge allow', cliCfg.permissions.allow.includes(CURSOR_CLI_MCP_ALLOW))
+await mergeCliPermissionAllow(cliPath, CURSOR_CLI_MCP_ALLOW, false)
+assert('cli-config merge idempotent', cliCfg.permissions.allow.length === JSON.parse(readFileSync(cliPath, 'utf8')).permissions.allow.length)
+await removeCliPermissionAllow(cliPath, CURSOR_CLI_MCP_ALLOW, false)
+assert('cli-config remove', !JSON.parse(readFileSync(cliPath, 'utf8')).permissions.allow.includes(CURSOR_CLI_MCP_ALLOW))
+
+// session-start hook outputs valid JSON
+const hookDir = mkdtempSync(join(tmpdir(), 'sb-hook-'))
+writeFileSync(join(hookDir, 'search-boost-inject.md'), '# test policy\n')
+copyFileSync(hookScriptPath('cursor-cli'), join(hookDir, 'search-boost-session.mjs'))
+const out = execFileSync(process.execPath, [join(hookDir, 'search-boost-session.mjs')], {
+  encoding: 'utf8',
+})
+const parsed = JSON.parse(out.trim())
+assert('session-start json', parsed.continue === true && parsed.additional_context.includes('test policy'))
+rmSync(hookDir, { recursive: true, force: true })
+rmSync(hooksDir, { recursive: true, force: true })
+rmSync(cliDir, { recursive: true, force: true })
 
 if (failed) {
   console.error(`\n${failed} test(s) failed`)
