@@ -36,6 +36,7 @@ function parseFlags(args) {
     autoAllow: false,
     help: false,
     show: false,
+    scope: 'user',
     set: {},
     unset: [],
     layer: null,
@@ -46,6 +47,7 @@ function parseFlags(args) {
     else if (a === '--dry-run') flags.dryRun = true
     else if (a === '-h' || a === '--help') flags.help = true
     else if (a === '--auto-allow') flags.autoAllow = true
+    else if (a === '--scope') flags.scope = args[++i]
     else if (a === '--show') flags.show = true
     else if (a === '-t' || a === '--target') flags.target = args[++i]
     else if (a === '--print-config') flags.printConfig = args[++i]
@@ -71,12 +73,14 @@ Usage:
   search-boost status
   search-boost agents
   search-boost serve
+  search-boost plugin sync-grok
 
 Install options:
   -t, --target <ids>     cursor,codex,claude,grok,antigravity,cursor-cli | auto | all
   -y, --yes              Non-interactive: --target=auto
   --dry-run              Show actions without writing
-  --auto-allow           Claude Code: add mcp__search-boost__* to permissions.allow
+  --auto-allow           Claude Code + Grok Build: auto-allow search-boost MCP tools
+  --scope user|project Grok only: user (~/.grok) or project (.grok/config.toml in cwd)
   --print-config <id>    Print MCP snippet for one agent and exit
 
 Config keys:
@@ -177,6 +181,7 @@ async function runInstall(uninstall = false) {
     yes: flags.yes,
     dryRun: flags.dryRun,
     autoAllow: flags.autoAllow,
+    scope: flags.scope === 'project' ? 'project' : 'user',
     uninstall,
   }
 
@@ -226,6 +231,15 @@ async function main() {
     case 'status':
       printStatus()
       break
+    case 'plugin': {
+      const sub = argv[1]
+      if (sub === 'sync-grok') {
+        await import('./scripts/sync-grok-plugin.mjs')
+        break
+      }
+      console.error('Usage: search-boost plugin sync-grok\n')
+      process.exit(1)
+    }
     case '-h':
     case '--help':
     case 'help':

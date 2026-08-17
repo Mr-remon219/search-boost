@@ -9,7 +9,14 @@ import {
   removeTomlSection as removeMarkedToml,
 } from '../lib/inject.mjs'
 import { normalizeTargets } from '../lib/agents/index.mjs'
-import { antigravityMcpEntry, claudePermissions, jsonMcpEntry, tomlMcpBlock } from '../lib/mcp-entry.mjs'
+import {
+  antigravityMcpEntry,
+  claudePermissions,
+  grokPermissionAllows,
+  grokPermissionTomlBlock,
+  jsonMcpEntry,
+  tomlMcpBlock,
+} from '../lib/mcp-entry.mjs'
 import { buildSkillHeader, loadAgentPrompt, loadAgentSkill } from '../lib/agents/shared.mjs'
 import {
   getRoute,
@@ -17,7 +24,10 @@ import {
   promptPath,
   ROUTE_IDS,
   SHARED_SERVER_INSTRUCTIONS,
+  skillPath,
 } from '../agents/router.mjs'
+import { grokInstallPaths } from '../lib/paths.mjs'
+import { readFileSync } from 'node:fs'
 import { maskKey, readKeysFile, writeKeysFile } from '../lib/keys.mjs'
 import { getLayer, setLayer } from '../lib/layer-config.mjs'
 import { tmpdir } from 'node:os'
@@ -122,6 +132,30 @@ assert('claude skill no agent field', !claudeHeader.includes('agent: claude'))
 // other agents: name only, no agent field
 const cursorHeader = buildSkillHeader('cursor')
 assert('cursor skill name only', cursorHeader.includes('name: search-boost') && !cursorHeader.includes('agent:'))
+
+// grok: prompt, permissions, project scope
+const grokPrompt = await loadAgentPrompt('grok')
+assert('load grok inject', grokPrompt.includes('search-boost @ Grok Build'))
+assert('load grok inject native browse', /native (Grok|browsing)/i.test(grokPrompt))
+assert('grok permission allows count', grokPermissionAllows().length === 6)
+assert('grok permission toml block', grokPermissionTomlBlock().includes('[permission]'))
+
+let grokToml = ''
+grokToml = injectTomlSection(grokToml, 'permission', grokPermissionTomlBlock())
+assert('grok permission inject marker', grokToml.includes('SEARCH_BOOST_permission_START'))
+grokToml = removeMarkedToml(grokToml, 'permission')
+assert('grok permission remove marker', !grokToml.includes('SEARCH_BOOST_permission_START'))
+
+const grokSkillPath = skillPath('grok')
+assert('grok skill path', !!grokSkillPath)
+assert('grok skill frontmatter', readFileSync(grokSkillPath, 'utf8').trimStart().startsWith('---'))
+
+const projectPaths = grokInstallPaths('project')
+assert('grok project config path', projectPaths.config.includes('.grok'))
+assert('grok project rule stays user', projectPaths.rule.includes('.grok') && projectPaths.rule.includes('rules'))
+
+// shared instructions cover per-agent routing notes
+assert('mcp instructions mention grok', readFileSync(mcpServerInstructionsPath(), 'utf8').includes('Grok Build'))
 
 if (failed) {
   console.error(`\n${failed} test(s) failed`)

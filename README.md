@@ -51,6 +51,7 @@ When installed via npm, MCP config uses `search-boost-mcp serve` or `npx -y sear
 | `agents` | List agents + detection/config status |
 | `status` | Table of detected vs configured |
 | `install --print-config <id>` | Print snippet only (no writes) |
+| `plugin sync-grok` | Regenerate `grok-plugin/` from `agents/grok/` |
 
 ### Install flags
 
@@ -58,7 +59,8 @@ When installed via npm, MCP config uses `search-boost-mcp serve` or `npx -y sear
 -t, --target <ids>   cursor | cursor-cli | codex | claude | grok | antigravity | auto | all
 -y, --yes            auto-detect agents, no prompt (Claude Code: also auto-allow MCP tools)
 --dry-run            preview only
---auto-allow         Claude Code: add mcp__search-boost__* to ~/.claude/settings.json (default with -y when claude is targeted)
+--auto-allow         Auto-allow search-boost MCP tools (Claude Code, Codex, Grok Build); implied by -y
+--scope user|project Grok only: user (~/.grok) or project (.grok/config.toml in cwd)
 ```
 
 ## Per-agent wiring
@@ -69,12 +71,46 @@ When installed via npm, MCP config uses `search-boost-mcp serve` or `npx -y sear
 | **Cursor CLI** | same mcp.json | merged into AGENTS.md when both selected |
 | **Codex CLI** | `~/.codex/config.toml` (+ `web_search = "disabled"`) | `~/.codex/AGENTS.md` + skill (`~/.agents/skills/search-boost/`) |
 | **Claude Code** | `~/.claude.json` | `~/.claude/CLAUDE.md` + skill + `mcp__search-boost__*` allow (default with `-y`) |
-| **Grok Build** | `~/.grok/config.toml` | `~/.grok/rules/search-boost.md` + skill |
+| **Grok Build** | `~/.grok/config.toml` (or `.grok/config.toml` with `--scope project`) | `~/.grok/rules/search-boost.md` + skill |
 | **Antigravity** | `~/.gemini/config/mcp_config.json`* | `~/.gemini/AGENTS.md` + skill |
 
 \* Antigravity uses unified vs legacy MCP path detection; entry omits `type: "stdio"` (required by Antigravity UI). Uninstall sweeps both paths.
 
 Tailored prompt templates live in [`agents/`](./agents/). They use **model-discretion** wording: search-boost is available tooling with routing guidance and efficiency hints (~3 rounds), not a mandatory pre-answer step. The full dsh-search-boost policy stays in the MCP resource `search-boost://policy` for deep reference.
+
+### Grok Build
+
+```bash
+# User-level install (MCP + rule + skill + optional auto-allow)
+node cli.mjs install -t grok -y --auto-allow
+
+# Project-scoped MCP only (rules/skill stay user-level)
+node cli.mjs install -t grok --scope project -y --auto-allow
+
+# Grok plugin (MCP + skill bundle)
+grok plugin install ./grok-plugin --trust
+node cli.mjs install -t grok -y --auto-allow   # optional routing rule (model decides when to search)
+
+# Regenerate plugin after editing agents/grok/skill.md
+npm run plugin:sync-grok
+```
+
+Verify with Grok:
+
+```bash
+grok inspect
+grok mcp doctor search-boost
+```
+
+Typical patterns (model's choice — not enforced):
+
+| Scenario | Often useful |
+|----------|--------------|
+| User wants cited facts (versions, APIs) | `search-boost__fused_search` |
+| Open brainstorming | native browse or direct answer |
+| X/sentiment with merged ranking | `search-boost__x_search` |
+
+See [`grok-plugin/README.md`](./grok-plugin/README.md) and [`templates/grok/.grok/config.toml`](./templates/grok/.grok/config.toml) for team sharing.
 
 ## MCP tools
 
