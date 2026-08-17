@@ -1,0 +1,12 @@
+{
+  "search-boost-reminder": {
+    "enabled": false,
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "node ./hooks/pre-invocation.mjs",
+        "timeout": 5
+      }
+    ]
+  }
+}

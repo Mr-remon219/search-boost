@@ -5,7 +5,9 @@
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { getLayer } from '../lib/layer-config.mjs'
+
+/** Shipped bundles pin the keyless layer; SEARCH_BOOST_LAYER overrides at runtime. */
+const DIST_LAYER = 'free'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGIN = join(ROOT, 'grok-plugin')
@@ -21,7 +23,7 @@ const mcp = {
     'search-boost': {
       command: 'npx',
       args: ['-y', 'search-boost-mcp', 'serve'],
-      env: { SEARCH_BOOST_LAYER: getLayer() },
+      env: { SEARCH_BOOST_LAYER: DIST_LAYER },
     },
   },
 }
