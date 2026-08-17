@@ -59,19 +59,19 @@ When installed via npm, MCP config uses `search-boost-mcp serve` or `npx -y sear
 -t, --target <ids>   cursor | cursor-cli | codex | claude | grok | antigravity | auto | all
 -y, --yes            auto-detect agents, no prompt (also implies --auto-allow)
 --dry-run            preview only
---auto-allow         Auto-allow search-boost MCP tools (Claude Code, Codex, Grok Build, Antigravity)
+--auto-allow         Auto-allow search-boost MCP tools (every agent that supports it)
 --scope user|project Grok only: user (~/.grok) or project (.grok/config.toml in cwd)
 --workspace [dir]    Also inject .agents/ under cwd or dir (Antigravity)
 ```
 
-Cursor CLI always gets its `cli-config.json` allow entry — no flag needed.
+Each agent's auto-allow surface: `cli-config.json` (Cursor), `settings.json` (Claude Code, Antigravity), `default_tools_approval_mode` (Codex), `[permission]` block (Grok Build).
 
 ## Per-agent wiring
 
 | Agent | MCP config | Prompt injection |
 |-------|------------|------------------|
 | **Cursor IDE** | `~/.cursor/mcp.json` | Hook `sessionStart` + skill |
-| **Cursor CLI** | same mcp.json | same hook + skill + `cli-config.json` allow |
+| **Cursor CLI** | same mcp.json | same hook + skill + `cli-config.json` allow (with `--auto-allow` / `-y`) |
 | **Codex CLI** | `~/.codex/config.toml` (+ `web_search = "disabled"`) | `~/.codex/AGENTS.md` + skill (`~/.agents/skills/search-boost/`) |
 | **Claude Code** | `~/.claude.json` | `~/.claude/CLAUDE.md` + skill + `mcp__search-boost__*` allow (default with `-y`) |
 | **Grok Build** | `~/.grok/config.toml` (or `.grok/config.toml` with `--scope project`) | `~/.grok/rules/search-boost.md` + skill |
@@ -86,7 +86,7 @@ Cursor CLI always gets its `cli-config.json` allow entry — no flag needed.
 | Inject body | `~/.cursor/hooks/search-boost-inject.md` |
 | Hook script | `~/.cursor/hooks/search-boost-session.mjs` |
 | Tool routing skill | `~/.cursor/skills/search-boost/SKILL.md` |
-| CLI auto-allow | `~/.cursor/cli-config.json` → `Mcp(search-boost:*)` |
+| CLI auto-allow | `~/.cursor/cli-config.json` → `Mcp(search-boost:*)` (opt-in) |
 | Policy runtime | MCP resource `search-boost://policy` |
 
 \* Antigravity uses unified vs legacy MCP path detection; entry omits `type: "stdio"` (required by Antigravity UI). Uninstall sweeps both paths.
