@@ -15,6 +15,7 @@ import {
 import { runWizard } from './lib/installer/index.mjs'
 import { printStatus } from './lib/installer/status.mjs'
 import { runTui } from './lib/installer/tui.mjs'
+import { getVersion } from './lib/pkg.mjs'
 
 const argv = process.argv.slice(2)
 
@@ -64,6 +65,11 @@ async function main() {
       break
     case 'plugin':
       await runPlugin(argv[1])
+      break
+    case '-v':
+    case '--version':
+    case 'version':
+      console.log(getVersion())
       break
     case '-h':
     case '--help':

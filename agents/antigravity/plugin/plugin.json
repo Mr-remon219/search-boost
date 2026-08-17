@@ -1,5 +1,5 @@
 {
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "search-boost",
-  "description": "Multi-engine web search MCP — proactive search before external API edits."
+  "description": "Multi-engine web search MCP — optional fused search when you want citations or corroboration."
 }

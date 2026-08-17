@@ -40,6 +40,6 @@ MCP: **`~/.grok/config.toml`** → `[mcp_servers.search-boost]`. Optional precis
 ## Grok-specific
 
 - Rule: `~/.grok/rules/search-boost.md` · Skill: `~/.grok/skills/search-boost/`
-- Resource `search-boost://policy` — optional detailed routing reference (Chinese)
+- Resource `search-boost://policy` — optional detailed routing reference
 - **Plugin:** `grok plugin install ./grok-plugin --trust` then `search-boost install -t grok -y --auto-allow`
 - **Project MCP:** `search-boost install -t grok --scope project -y` writes `.grok/config.toml` in cwd (rules stay user-level)

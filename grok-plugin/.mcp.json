@@ -1,10 +1,10 @@
 {
   "mcpServers": {
     "search-boost": {
-      "command": "npx",
+      "type": "stdio",
+      "command": "C:/Users/Administrator/AppData/Local/pi-node/current/node.exe",
       "args": [
-        "-y",
-        "search-boost-mcp",
+        "W:/fastproject/search-boost-mcp/cli.mjs",
         "serve"
       ],
       "env": {

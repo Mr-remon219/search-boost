@@ -31,6 +31,7 @@ import {
   formatPrintConfig,
   grokPermissionTomlBlock,
   jsonMcpEntry,
+  resolveMcpLaunch,
   tomlMcpBlock,
 } from '../lib/mcp-entry.mjs'
 import {
@@ -94,6 +95,14 @@ assert('toml upsert updates body', toml.includes('"serve", "v2"'))
 toml = removeTomlSection(toml, 'search-boost')
 assert('toml remove section', !hasTomlSection(toml, 'search-boost'))
 assert('toml preserves other keys', toml.includes('web_search'))
+
+// idempotent upsert + clean remove (Codex/Grok config.toml)
+toml = 'model = "test"\n'
+toml = upsertTomlSection(toml, 'search-boost', 'command = "node"\nargs = ["serve"]')
+toml = upsertTomlSection(toml, 'search-boost', 'command = "node"\nargs = ["serve", "v2"]')
+assert('toml upsert idempotent body', (toml.match(/^command =/gm) || []).length === 1 && toml.includes('"serve", "v2"'))
+toml = removeTomlSection(toml, 'search-boost')
+assert('toml remove leaves unrelated keys', toml.includes('model = "test"') && !toml.includes('command ='))
 
 // web_search marker round-trip
 toml = injectTomlSection(toml, 'WEB_SEARCH', 'web_search = "disabled"')
@@ -190,6 +199,8 @@ assert('cursor writes cli-config with auto-allow', cursorAllowed.some((f) => f.e
 // MCP entry shapes
 const json = jsonMcpEntry()
 assert('json entry has type stdio', json.type === 'stdio' && json.command && json.args?.length)
+const launch = resolveMcpLaunch()
+assert('mcp launch uses node cli before npx', launch.command !== 'npx' && launch.args.some((a) => a.endsWith('cli.mjs')))
 const agy = antigravityMcpEntry()
 assert('antigravity omits type', !('type' in agy) && agy.command && agy.args?.length)
 
