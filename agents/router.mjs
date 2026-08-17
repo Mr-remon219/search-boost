@@ -3,7 +3,9 @@
  *
  * Each subfolder under agents/ holds that agent's exploration artifacts:
  *   inject.md              → prompt block injected into the agent's rules file
- *   skill.md               → optional skill template (frontmatter added at install)
+ *   skill.md               → optional skill template; frontmatter comes from the route's
+ *                            skillFrontmatter unless the template declares its own
+ *   openai.yaml            → optional Codex skill manifest
  *   server-instructions.md → optional per-agent MCP notes (cursor); shared/ for MCP process
  *
  * Install adapters in lib/agents/index.mjs read paths through here — do not hard-code filenames.
@@ -27,6 +29,7 @@ export const SHARED_SERVER_INSTRUCTIONS = join(AGENTS_ROOT, 'shared', 'server-in
  * @property {InjectKind} injectKind
  * @property {string} prompt        Filename for inject body (usually inject.md)
  * @property {string|null} skill    Skill template filename, or null
+ * @property {string|null} openaiYaml agents/openai.yaml template filename, or null
  * @property {string|null} serverInstructions MCP instructions file, or null
  * @property {string[]|null} mergeWith Other agent ids merged into this prompt on install
  * @property {{ serverUseInstructions?: string }|null} mcp MCP entry extras
@@ -60,7 +63,8 @@ export const ROUTES = {
     dir: 'codex',
     injectKind: 'agents-block',
     prompt: 'inject.md',
-    skill: null,
+    skill: 'skill.md',
+    openaiYaml: 'openai.yaml',
     serverInstructions: null,
     mergeWith: null,
     mcp: null,
@@ -134,6 +138,13 @@ export function skillPath(id) {
   const route = getRoute(id)
   if (!route.skill) return null
   return assetPath(id, route.skill)
+}
+
+/** @param {string} id */
+export function openaiYamlPath(id) {
+  const route = getRoute(id)
+  if (!route.openaiYaml) return null
+  return assetPath(id, route.openaiYaml)
 }
 
 /** MCP stdio server instructions — shared across all agents (single server process). */
