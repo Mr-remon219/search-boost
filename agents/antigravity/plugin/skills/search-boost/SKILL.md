@@ -1,3 +1,8 @@
+---
+name: search-boost
+description: Multi-engine web search before external API/integration work. Use when verifying versions, SDK signatures, cloud quotas, or comparing libraries. Prefer over built-in search_web.
+---
+
 # search-boost MCP @ Antigravity
 
 Server id: `search-boost` in `~/.gemini/config/mcp_config.json` (or `.agents/mcp_config.json`).

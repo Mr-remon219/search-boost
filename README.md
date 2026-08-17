@@ -57,10 +57,11 @@ When installed via npm, MCP config uses `search-boost-mcp serve` or `npx -y sear
 
 ```
 -t, --target <ids>   cursor | cursor-cli | codex | claude | grok | antigravity | auto | all
--y, --yes            auto-detect agents, no prompt (Claude Code: also auto-allow MCP tools)
+-y, --yes            auto-detect agents, no prompt (also implies --auto-allow)
 --dry-run            preview only
---auto-allow         Auto-allow search-boost MCP tools (Claude Code, Codex, Grok Build); implied by -y
+--auto-allow         Auto-allow search-boost MCP tools (Claude Code, Codex, Grok Build, Antigravity)
 --scope user|project Grok only: user (~/.grok) or project (.grok/config.toml in cwd)
+--workspace [dir]    Also inject .agents/ under cwd or dir (Antigravity)
 ```
 
 ## Per-agent wiring
@@ -72,7 +73,7 @@ When installed via npm, MCP config uses `search-boost-mcp serve` or `npx -y sear
 | **Codex CLI** | `~/.codex/config.toml` (+ `web_search = "disabled"`) | `~/.codex/AGENTS.md` + skill (`~/.agents/skills/search-boost/`) |
 | **Claude Code** | `~/.claude.json` | `~/.claude/CLAUDE.md` + skill + `mcp__search-boost__*` allow (default with `-y`) |
 | **Grok Build** | `~/.grok/config.toml` (or `.grok/config.toml` with `--scope project`) | `~/.grok/rules/search-boost.md` + skill |
-| **Antigravity** | `~/.gemini/config/mcp_config.json`* | `~/.gemini/AGENTS.md` + skill |
+| **Antigravity** | `~/.gemini/config/mcp_config.json`* | `~/.gemini/AGENTS.md` + `GEMINI.md` + skill |
 
 \* Antigravity uses unified vs legacy MCP path detection; entry omits `type: "stdio"` (required by Antigravity UI). Uninstall sweeps both paths.
 
@@ -112,6 +113,33 @@ Typical patterns (model's choice — not enforced):
 
 See [`grok-plugin/README.md`](./grok-plugin/README.md) and [`templates/grok/.grok/config.toml`](./templates/grok/.grok/config.toml) for team sharing.
 
+### Antigravity injection matrix
+
+| Surface | Global | Workspace | Plugin |
+|---------|--------|-----------|--------|
+| MCP | `~/.gemini/config/mcp_config.json` | `.agents/mcp_config.json` | `mcp_config.json` |
+| Cross-tool rules | `~/.gemini/AGENTS.md` | — | — |
+| AGY routing override | `~/.gemini/GEMINI.md` | — | — |
+| Always-on rule | — | `.agents/rules/search-boost.md` | `rules/search-boost.md` |
+| Skill | `~/.gemini/config/skills/search-boost/` | `.agents/skills/search-boost/` | `skills/search-boost/` |
+| Permissions | `~/.gemini/antigravity-cli/settings.json` + `--auto-allow` | — | manual |
+| PreInvocation hook | — | `.agents/hooks.json` | `hooks.json` |
+
+Recommended install:
+
+```bash
+# Global + workspace + auto-allow MCP tools
+node cli.mjs install -t antigravity --auto-allow --workspace -y
+
+# Optional: Antigravity CLI plugin bundle (skill, rule, MCP, hook)
+npm run build:plugin
+agy plugin install ./agents/antigravity/plugin
+```
+
+Plugin ships skill/rule/MCP/hook. Global `AGENTS.md`, `GEMINI.md`, and permissions still come from `cli.mjs install`.
+
+Enable the PreInvocation reminder in workspace or plugin: set `"enabled": true` on `search-boost-reminder` in `hooks.json`.
+
 ## MCP tools
 
 `fused_search` · `fetch_page` · `deep_research` · `x_search` · `search_layer` · `search_stats`
@@ -131,8 +159,9 @@ Resolve order:
 ```bash
 npm run check
 npm run test:install
+npm run build:plugin
 npm run smoke
-node cli.mjs install --dry-run -t all
+node cli.mjs install --dry-run -t antigravity --workspace --auto-allow
 node cli.mjs install --print-config antigravity
 ```
 

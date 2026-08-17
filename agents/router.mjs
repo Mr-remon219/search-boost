@@ -6,6 +6,9 @@
  *   skill.md               → optional skill template; frontmatter comes from the route's
  *                            skillFrontmatter unless the template declares its own
  *   openai.yaml            → optional Codex skill manifest
+ *   rule.md                → workspace Always-on rule body (antigravity)
+ *   gemini-snippet.md      → GEMINI.md override snippet (antigravity)
+ *   hooks/                 → PreInvocation hook (antigravity)
  *
  * The stdio server's own instructions are agent-neutral and live in
  * agents/shared/server-instructions.md — one server process serves every agent.
@@ -32,6 +35,9 @@ export const SHARED_SERVER_INSTRUCTIONS = join(AGENTS_ROOT, 'shared', 'server-in
  * @property {string} prompt        Filename for inject body (usually inject.md)
  * @property {string|null} skill    Skill template filename, or null
  * @property {string|null} openaiYaml agents/openai.yaml template filename, or null
+ * @property {string|null} rule     Workspace rule template filename, or null
+ * @property {string|null} geminiSnippet GEMINI.md snippet filename, or null
+ * @property {{ config: string, script: string }|null} hooks Hook assets, or null
  * @property {string|null} serverInstructions MCP instructions file, or null
  * @property {string[]|null} mergeWith Other agent ids merged into this prompt on install
  * @property {{ serverUseInstructions?: string }|null} mcp MCP entry extras
@@ -109,9 +115,16 @@ export const ROUTES = {
     injectKind: 'agents-block',
     prompt: 'inject.md',
     skill: 'skill.md',
+    rule: 'rule.md',
+    geminiSnippet: 'gemini-snippet.md',
+    hooks: { config: 'hooks/hooks.json', script: 'hooks/pre-invocation.mjs' },
     serverInstructions: null,
     mergeWith: null,
     mcp: null,
+    skillFrontmatter: {
+      description:
+        'Multi-engine web search before external API/integration work. Use when verifying versions, SDK signatures, cloud quotas, or comparing libraries. Prefer over built-in search_web.',
+    },
   },
 }
 
@@ -147,6 +160,34 @@ export function openaiYamlPath(id) {
   const route = getRoute(id)
   if (!route.openaiYaml) return null
   return assetPath(id, route.openaiYaml)
+}
+
+/** @param {string} id */
+export function rulePath(id) {
+  const route = getRoute(id)
+  if (!route.rule) return null
+  return assetPath(id, route.rule)
+}
+
+/** @param {string} id */
+export function geminiSnippetPath(id) {
+  const route = getRoute(id)
+  if (!route.geminiSnippet) return null
+  return assetPath(id, route.geminiSnippet)
+}
+
+/** @param {string} id */
+export function hooksConfigPath(id) {
+  const route = getRoute(id)
+  if (!route.hooks) return null
+  return assetPath(id, route.hooks.config)
+}
+
+/** @param {string} id */
+export function hooksScriptPath(id) {
+  const route = getRoute(id)
+  if (!route.hooks) return null
+  return assetPath(id, route.hooks.script)
 }
 
 /** MCP stdio server instructions — shared across all agents (single server process). */
