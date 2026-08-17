@@ -1,47 +1,31 @@
-# search-boost @ Cursor CLI (terminal agent)
+# search-boost @ Cursor CLI
 
-Terminal agent with MCP — **`search-boost` is your primary web surface.** Browse proactively; do not wait for the user to ask "go search."
+**search-boost** MCP is available for multi-engine web search with citations. **You decide** when a lookup helps — it is not required on every turn.
 
-## Proactive search (default-on, bounded)
+## When search-boost helps (optional)
 
-**External world → search before you act.** Implementing, advising, or shelling against APIs/packages without a quick lookup is a failure mode.
+Consider it when **verifiable external facts** would improve the answer and you are not confident from repo context alone:
 
-**Auto-trigger** (do this silently, without asking permission):
-- Before `npm install` / adding a dependency — verify package name, major version, breaking changes
-- Before curl/wget against an API — confirm endpoint, auth header shape, rate limits
-- Version-sensitive flags, CLI subcommands, env var names
-- Anything time-sensitive or outside the repo
+- Package/API versions, flags, endpoints, deprecations
+- Time-sensitive or vendor-specific behavior before `npm install`, curl, or similar
+- Comparing libraries or confirming niche documentation
 
-**Hard rules**
-- **Doubt → search** — one `fused_search` beats a wrong terminal command.
-- Never claim "not documented" / "doesn't exist" until you have searched.
-- Attach source URLs to factual claims; mark guesses as *(inference)*.
+**Often skip:** stable CS fundamentals, pure local work (files, tests, git), creative tasks with no factual claims, or when the user forbids web.
 
-**Do not search**
-- Repo-local: read files, run tests, git history
-- Stable CS fundamentals with no external dependency
-- User said no web, or task is pure local refactor
-
-**Bounded discipline**
-- One focused search per angle; escalate to `fetch_page` only when snippets fail
-- Max **~3 rounds** per question; no duplicate queries
-- Prefer MCP over ad-hoc `curl` for discovery; shell fetch is fallback when `fetch_page` fails
-
-## Tool routing
+## Tool routing (if you search)
 
 | Situation | Tool |
 |-----------|------|
 | Quick fact / version / API shape | `fused_search` `complexity=simple` |
-| Need paragraph-level proof | `fetch_page` + `focus` |
-| X posts / accounts / threads | `x_search` |
-| Compare options / multi-source | `deep_research` → iterate `suggested_queries` |
+| Snippets too thin | `fetch_page` + `focus` |
+| X / Twitter | `x_search` |
+| Multi-source compare | `deep_research` |
 
-## CLI habits
+## Habits (non-binding)
 
-- `GetMcpTools` server `search-boost` early in the session.
-- Prefer MCP over built-in `WebSearch` when both exist.
-- Layer `free` by default; `search_layer` → `api` when keyed engines are configured and free tier is empty.
+- `GetMcpTools` server `search-boost` when you might need web tools this session.
+- Prefer search-boost over built-in `WebSearch` when you **choose** to search and want structured results + URLs.
+- Stay efficient: one focused query per angle; ~3 rounds max if follow-ups are needed.
+- Cite URLs for external claims; label guesses as *(inference)*.
 
-## Pre-command self-check
-
-About to run something that depends on external truth? If unsure → search first, then command.
+Resource `search-boost://policy` has extended guidance (optional read).

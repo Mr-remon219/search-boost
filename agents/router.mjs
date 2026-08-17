@@ -38,7 +38,7 @@ export const SHARED_SERVER_INSTRUCTIONS = join(AGENTS_ROOT, 'shared', 'server-in
  * @property {string|null} rule     Workspace rule template filename, or null
  * @property {string|null} geminiSnippet GEMINI.md snippet filename, or null
  * @property {{ config: string, script: string }|null} hooks Hook assets, or null
- * @property {string|null} serverInstructions MCP instructions file, or null
+ * @property {string|null} hookScript Session-start hook script filename, or null
  * @property {string[]|null} mergeWith Other agent ids merged into this prompt on install
  * @property {{ serverUseInstructions?: string }|null} mcp MCP entry extras
  * @property {SkillFrontmatter|null} skillFrontmatter Optional SKILL.md frontmatter overrides
@@ -52,19 +52,30 @@ export const ROUTES = {
     injectKind: 'agents-block',
     prompt: 'inject.md',
     skill: 'skill.md',
-    serverInstructions: null,
     mergeWith: ['cursor-cli'],
-    mcp: { serverUseInstructions: 'Prefer search-boost MCP over WebSearch for factual lookups.' },
+    mcp: {
+      serverUseInstructions: 'Multi-engine web search when you need verifiable external facts. Use at your discretion.',
+    },
+    skillFrontmatter: {
+      description:
+        'Multi-engine web search MCP for verifiable external facts (versions, APIs, docs). Use when you judge it helps — not required every turn.',
+    },
   },
   'cursor-cli': {
     label: 'Cursor CLI (terminal agent)',
     dir: 'cursor-cli',
     injectKind: 'agents-block',
     prompt: 'inject.md',
-    skill: null,
-    serverInstructions: null,
+    skill: 'skill.md',
+    hookScript: 'session-start.mjs',
     mergeWith: null,
-    mcp: null,
+    mcp: {
+      serverUseInstructions: 'Multi-engine web search when you need verifiable external facts. Use at your discretion.',
+    },
+    skillFrontmatter: {
+      description:
+        'Terminal-agent web search MCP when external facts need verification. Your call whether to search; prefer over WebSearch when you do.',
+    },
   },
   codex: {
     label: 'Codex CLI',
@@ -73,7 +84,6 @@ export const ROUTES = {
     prompt: 'inject.md',
     skill: 'skill.md',
     openaiYaml: 'openai.yaml',
-    serverInstructions: null,
     mergeWith: null,
     mcp: null,
   },
@@ -83,7 +93,6 @@ export const ROUTES = {
     injectKind: 'agents-block',
     prompt: 'inject.md',
     skill: 'skill.md',
-    serverInstructions: null,
     mergeWith: null,
     mcp: null,
     skillFrontmatter: {
@@ -105,7 +114,6 @@ export const ROUTES = {
     injectKind: 'rule-file',
     prompt: 'inject.md',
     skill: 'skill.md',
-    serverInstructions: null,
     mergeWith: null,
     mcp: null,
   },
@@ -118,7 +126,6 @@ export const ROUTES = {
     rule: 'rule.md',
     geminiSnippet: 'gemini-snippet.md',
     hooks: { config: 'hooks/hooks.json', script: 'hooks/pre-invocation.mjs' },
-    serverInstructions: null,
     mergeWith: null,
     mcp: null,
     skillFrontmatter: {
@@ -194,3 +201,14 @@ export function hooksScriptPath(id) {
 export function mcpServerInstructionsPath() {
   return SHARED_SERVER_INSTRUCTIONS
 }
+
+/** @param {string} id */
+export function hookScriptPath(id) {
+  const route = getRoute(id)
+  if (!route.hookScript) return null
+  return assetPath(id, route.hookScript)
+}
+
+export const CURSOR_HOOK_SCRIPT_NAME = 'search-boost-session.mjs'
+export const CURSOR_HOOK_INJECT_NAME = 'search-boost-inject.md'
+export const CURSOR_HOOK_COMMAND_MARKER = 'search-boost-session.mjs'
