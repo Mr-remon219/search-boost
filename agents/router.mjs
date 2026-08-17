@@ -6,7 +6,9 @@
  *   skill.md               → optional skill template; frontmatter comes from the route's
  *                            skillFrontmatter unless the template declares its own
  *   openai.yaml            → optional Codex skill manifest
- *   server-instructions.md → optional per-agent MCP notes (cursor); shared/ for MCP process
+ *
+ * The stdio server's own instructions are agent-neutral and live in
+ * agents/shared/server-instructions.md — one server process serves every agent.
  *
  * Install adapters in lib/agents/index.mjs read paths through here — do not hard-code filenames.
  */
@@ -44,7 +46,7 @@ export const ROUTES = {
     injectKind: 'agents-block',
     prompt: 'inject.md',
     skill: 'skill.md',
-    serverInstructions: 'server-instructions.md',
+    serverInstructions: null,
     mergeWith: ['cursor-cli'],
     mcp: { serverUseInstructions: 'Prefer search-boost MCP over WebSearch for factual lookups.' },
   },

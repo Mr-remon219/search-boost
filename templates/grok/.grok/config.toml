@@ -1,0 +1,19 @@
+# Project-scoped Grok MCP template — copy to repo root as `.grok/config.toml`
+# Optional routing rule (model decides when to search): `search-boost install -t grok -y`
+
+[mcp_servers.search-boost]
+command = "npx"
+args = ["-y", "search-boost-mcp", "serve"]
+env = { SEARCH_BOOST_LAYER = "free" }
+startup_timeout_sec = 60
+tool_timeout_sec = 180
+
+[permission]
+allow = [
+  "MCPTool(search-boost__fused_search)",
+  "MCPTool(search-boost__fetch_page)",
+  "MCPTool(search-boost__deep_research)",
+  "MCPTool(search-boost__x_search)",
+  "MCPTool(search-boost__search_layer)",
+  "MCPTool(search-boost__search_stats)",
+]
