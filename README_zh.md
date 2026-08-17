@@ -1,18 +1,24 @@
 # search-boost-mcp
 
-给编程 Agent 用的**多引擎联网搜索 MCP 服务**。装一次 CLI，就能接入 **Cursor**、**Cursor CLI**、**Codex**、**Claude Code**、**Grok Build** 和 **Antigravity**。
+面向编程 Agent 的**多引擎联网搜索 MCP 服务**。安装 CLI 后即可接入 **Cursor**、**Cursor CLI**、**Codex**、**Claude Code**、**Grok Build** 和 **Antigravity**。
 
 > **search-boost 系列**
 >
 > | 项目 | 用在哪 | 链接 |
 > |------|--------|------|
-> | **search-boost-mcp**（本仓库） | Cursor · Codex · Claude · Grok · Antigravity | 你正在看的这个 |
+> | **search-boost-mcp**（本仓库） | Cursor · Codex · Claude · Grok · Antigravity | 当前仓库 |
 > | [**dsh-search-boost**](https://github.com/Mr-remon219/dsh-search-boost) | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | [GitHub](https://github.com/Mr-remon219/dsh-search-boost) · [npm](https://www.npmjs.com/package/dsh-search-boost) |
 > | [**pi-search-boost**](https://github.com/Mr-remon219/pi-search-boost) | [pi](https://github.com/earendil-works/pi-coding-agent) | [GitHub](https://github.com/Mr-remon219/pi-search-boost) · [npm](https://www.npmjs.com/package/pi-search-boost) |
 
-底层搜索引擎来自 [`dsh-search-boost`](https://github.com/Mr-remon219/dsh-search-boost)（已作为 npm 依赖打包进来），支持 Bing、DuckDuckGo、Exa 免费通道，以及可选的 Tavily / Brave / Exa；还有 X 搜索回退、Jina 正文抓取和深度研究多轮检索。
+底层搜索引擎来自 [`dsh-search-boost`](https://github.com/Mr-remon219/dsh-search-boost)（已作为 npm 依赖打包进来）：**free** 层并行调用 Bing、Exa 免费通道、Google News 与 Yahoo；**api** 层在此基础上增加 DuckDuckGo、Antigravity CLI（本机可用时）以及配置了 Key 的 Tavily / Brave / Exa。此外还提供 X 搜索降级、Jina 正文抓取和深度研究多轮检索。
 
 English → [README.md](./README.md)
+
+### v0.1.2 更新
+
+- **免费层引擎池**经 live 基准测试后重组：常规搜索用 Bing + Exa-free + Google News + Yahoo；DuckDuckGo 仅用于带域名限制的检索（如 `x_search` 降级时的 `site:` 查询）。
+- **`x_search` 降级**在多引擎域名搜索时会自动加上 `site:x.com`，无 XAI 凭据时关键词搜索也能返回结果。
+- 依赖 [`dsh-search-boost@0.1.2`](https://www.npmjs.com/package/dsh-search-boost)。
 
 ---
 
@@ -42,7 +48,7 @@ search-boost install -t antigravity --workspace --auto-allow -y
 
 ---
 
-## 有哪些工具
+## MCP 工具
 
 | MCP 工具 | 干什么用 |
 |----------|----------|
@@ -57,8 +63,8 @@ search-boost install -t antigravity --workspace --auto-allow -y
 
 **两种搜索层**
 
-- **free**：Bing + DDG + Exa-free（本机有 Antigravity CLI 的话也会用上），**不用配 API Key**
-- **api**：在 free 基础上再加 Tavily / Brave / Exa，需要 Key
+- **free**：Bing + Exa-free + Google News + Yahoo，**无需 API Key**。DuckDuckGo 仅用于域名限定搜索（如 `x_search` 降级）。
+- **api**：在 free 层基础上增加 DuckDuckGo、Antigravity CLI（本机可用时）以及 Tavily / Brave / Exa，需配置 Key
 
 配 Key：`search-boost config keys`，写到 `~/.dsh-search-boost-keys.json`；也可以设环境变量 `TAVILY_API_KEY`、`BRAVE_API_KEY`、`EXA_API_KEY`。
 

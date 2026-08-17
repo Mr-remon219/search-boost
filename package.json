@@ -1,6 +1,6 @@
 {
   "name": "search-boost-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Multi-engine web search MCP for Cursor, Codex, Claude Code, Grok Build, and Antigravity — fused search, fetch, X, deep research",
   "type": "module",
   "bin": {
@@ -33,7 +33,7 @@
   "dependencies": {
     "@clack/prompts": "^0.10.1",
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "dsh-search-boost": "^0.1.1",
+    "dsh-search-boost": "^0.1.2",
     "zod": "^3.24.2"
   },
   "engines": {

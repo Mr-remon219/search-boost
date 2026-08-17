@@ -53,7 +53,7 @@ export function registerAll(server) {
     description:
       'Multi-engine parallel web search with URL dedupe and cross-ranking. ' +
       'Prefer over built-in WebSearch for version-sensitive facts, APIs, comparisons, and research. ' +
-      'Free layer: bing+ddg+exa-free (no keys). Api layer adds tavily/brave/exa when keyed.',
+      'Free layer: bing+exa-free+googlenews+yahoo (no keys). Api layer adds ddg+tavily/brave/exa when keyed.',
     inputSchema: fusedSearchInput,
     outputSchema: fusedSearchOutput,
     annotations: { ...ANNOTATIONS.search, title: 'Search the web (multi-engine fusion)' },
@@ -260,8 +260,8 @@ export function registerAll(server) {
       const engines = bumpEngines()
       const layer = getLayer()
       const names = layer === 'free'
-        ? ['bing', 'ddg', 'exa-free', 'antigravity']
-        : ['bing', 'ddg', 'exa-free', 'antigravity', 'tavily', 'brave', 'exa']
+        ? ['bing', 'exa-free', 'googlenews', 'yahoo']
+        : ['bing', 'ddg', 'yahoo', 'exa-free', 'googlenews', 'antigravity', 'tavily', 'brave', 'exa']
       const actual = availableEngines(engines, names)
       const x = authStatus()
       const text = [

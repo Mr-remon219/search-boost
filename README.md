@@ -1,6 +1,6 @@
 # search-boost-mcp
 
-Multi-engine web search as an **MCP server** for coding agents — one CLI installs into **Cursor**, **Cursor CLI**, **Codex**, **Claude Code**, **Grok Build**, and **Antigravity**.
+Multi-engine web search **MCP server** for coding agents. One CLI install wires it into **Cursor**, **Cursor CLI**, **Codex**, **Claude Code**, **Grok Build**, and **Antigravity**.
 
 > **search-boost family**
 >
@@ -10,9 +10,15 @@ Multi-engine web search as an **MCP server** for coding agents — one CLI insta
 > | [**dsh-search-boost**](https://github.com/Mr-remon219/dsh-search-boost) | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle plugin | [GitHub](https://github.com/Mr-remon219/dsh-search-boost) · [npm](https://www.npmjs.com/package/dsh-search-boost) |
 > | [**pi-search-boost**](https://github.com/Mr-remon219/pi-search-boost) | [pi](https://github.com/earendil-works/pi-coding-agent) extension | [GitHub](https://github.com/Mr-remon219/pi-search-boost) · [npm](https://www.npmjs.com/package/pi-search-boost) |
 
-Search engines come from [`dsh-search-boost`](https://github.com/Mr-remon219/dsh-search-boost) (bundled as an npm dependency): Bing, DuckDuckGo, Exa-free, optional Tavily/Brave/Exa, X/Twitter fallback, Jina fetch, and deep-research rounds.
+Search engines come from [`dsh-search-boost`](https://github.com/Mr-remon219/dsh-search-boost) (bundled as an npm dependency): on the **free** layer, Bing, Exa-free, Google News, and Yahoo run in parallel; the **api** layer adds DuckDuckGo, Antigravity CLI (when available), and keyed Tavily / Brave / Exa. Also included: X/Twitter fallback, Jina page fetch, and deep-research rounds.
 
 中文文档 → [README_zh.md](./README_zh.md)
+
+### What's new in v0.1.2
+
+- **Free-layer engine pool rebuilt** after live benchmarks: Bing + Exa-free + Google News + Yahoo for general search; DuckDuckGo kept for domain-restricted routes (e.g. `x_search` fallback with `site:` queries).
+- **`x_search` fallback** auto-prepends `site:x.com` for multi-engine domain search so keyword mode works without XAI credentials.
+- Depends on [`dsh-search-boost@0.1.2`](https://www.npmjs.com/package/dsh-search-boost).
 
 ---
 
@@ -57,8 +63,8 @@ Also: resource `search-boost://policy` · prompt `search_routing`
 
 **Layers**
 
-- **free** — Bing + DDG + Exa-free (+ Antigravity CLI when available); no API keys
-- **api** — free engines plus Tavily / Brave / Exa when keys are set
+- **free** — Bing + Exa-free + Google News + Yahoo; no API keys. DuckDuckGo is used only for domain-restricted searches (e.g. `x_search` fallback).
+- **api** — free-layer engines plus DuckDuckGo, Antigravity CLI (when available), and Tavily / Brave / Exa when keys are set
 
 Keys: `search-boost config keys` → `~/.dsh-search-boost-keys.json` (or env `TAVILY_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`).
 
