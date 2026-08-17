@@ -4,9 +4,9 @@
 import { upsertTomlSection, removeTomlSection, hasTomlSection } from '../lib/toml.mjs'
 import { injectBlock, removeBlock } from '../lib/inject.mjs'
 import { normalizeTargets } from '../lib/agents/index.mjs'
-import { antigravityMcpEntry, jsonMcpEntry } from '../lib/mcp-entry.mjs'
-import { loadAgentPrompt } from '../lib/agents/shared.mjs'
-import { getRoute, promptPath, ROUTE_IDS } from '../agents/router.mjs'
+import { antigravityMcpEntry, claudePermissions, jsonMcpEntry } from '../lib/mcp-entry.mjs'
+import { loadAgentPrompt, buildSkillHeader } from '../lib/agents/shared.mjs'
+import { getRoute, promptPath, ROUTE_IDS, mcpServerInstructionsPath, SHARED_SERVER_INSTRUCTIONS } from '../agents/router.mjs'
 import { maskKey, readKeysFile, writeKeysFile } from '../lib/keys.mjs'
 import { getLayer, setLayer } from '../lib/layer-config.mjs'
 import { tmpdir } from 'node:os'
@@ -77,6 +77,23 @@ for (const id of ROUTE_IDS) {
 }
 const cursorPrompt = await loadAgentPrompt('cursor')
 assert('load cursor inject', cursorPrompt.includes('search-boost @ Cursor IDE'))
+
+// claude permissions wildcard
+const perms = claudePermissions()
+assert('claude permissions wildcard', perms.length === 1 && perms[0] === 'mcp__search-boost__*')
+
+// shared MCP server instructions
+assert('mcp instructions path is shared', mcpServerInstructionsPath() === SHARED_SERVER_INSTRUCTIONS)
+
+// claude skill frontmatter
+const claudeHeader = buildSkillHeader('claude')
+assert('claude skill has description', claudeHeader.includes('description: Multi-engine web search'))
+assert('claude skill has allowed-tools', claudeHeader.includes('allowed-tools: mcp__search-boost__fused_search'))
+assert('claude skill no agent field', !claudeHeader.includes('agent: claude'))
+
+// other agents: name only, no agent field
+const cursorHeader = buildSkillHeader('cursor')
+assert('cursor skill name only', cursorHeader.includes('name: search-boost') && !cursorHeader.includes('agent:'))
 
 if (failed) {
   console.error(`\n${failed} test(s) failed`)

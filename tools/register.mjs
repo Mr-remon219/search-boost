@@ -318,7 +318,7 @@ export function registerAll(server) {
 
   server.registerPrompt('search_routing', {
     title: 'Search tool routing',
-    description: 'Proactive tool pick: verify before assert; bounded ~3 rounds',
+    description: 'Suggested tool pick when search is chosen; bounded ~3 rounds',
     argsSchema: {
       task: z.string().describe('What the user is trying to find out'),
     },
@@ -330,7 +330,7 @@ export function registerAll(server) {
         text: [
           `Task: ${task}`,
           '',
-          'Proactive rule: if this involves external facts, search BEFORE asserting. Doubt → fused_search (complexity=simple). Max ~3 rounds.',
+          'If you choose to search: start with fused_search (complexity=simple). Max ~3 rounds. Skip when local files or stable knowledge suffice.',
           '',
           'Route using search-boost MCP tools:',
           '- fused_search: default verify — versions, APIs, docs, comparisons',
@@ -339,8 +339,8 @@ export function registerAll(server) {
           '- deep_research: multi-source synthesis (repeat until gaps empty)',
           '- search_layer: switch free (keyless) vs api (keyed engines)',
           '',
-          'Skip search only for: stable fundamentals, local workspace code, pure creation, user opt-out.',
-          'Read resource search-boost://policy for full proactive policy.',
+          'Often skip: stable fundamentals, local workspace code, pure creation, user opt-out.',
+          'Optional reference: resource search-boost://policy.',
         ].join('\n'),
       },
     }],

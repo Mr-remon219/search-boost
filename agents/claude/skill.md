@@ -1,30 +1,32 @@
 # search-boost MCP @ Claude Code
 
-Server id: `search-boost` in `~/.claude.json`.
+Server id: `search-boost` in `~/.claude.json`. Tools: `mcp__search-boost__<tool>` (e.g. `mcp__search-boost__fused_search`).
 
-## Proactive default (bounded)
+## Use when it helps
 
-**Search first, then answer** for external facts. **Doubt → one `fused_search`.** Do not claim "no info" without searching.
+Web search is **available, not required**. Reach for it when external facts matter and memory or local files are not enough.
 
-**Skip search only:** stable fundamentals, workspace-local code/files, pure creation, user forbids web.
+**Good fits:** versions, APIs, comparisons, niche tech, anything you'd rather verify than guess.
 
-**Stay bounded:** one focused search to start; max ~3 rounds; same query twice = stop.
+**Often skip:** stable fundamentals, workspace code, pure creation, user opt-out.
+
+**If you search:** start with one `fused_search`; ~3 rounds max; cite URLs.
 
 ## Tools
 
 | Tool | Use |
 |------|-----|
-| `fused_search` | Default verify / lookup |
+| `fused_search` | General lookup / verify |
 | `fetch_page` | Full page when snippets fail |
 | `x_search` | X/Twitter |
 | `deep_research` | Multi-source compare |
 | `search_layer` | free vs api |
 | `search_stats` | Diagnostics |
 
-## Policy
+## Reference
 
-`~/.claude/CLAUDE.md` (SEARCH_BOOST block) · MCP resource `search-boost://policy`.
+`~/.claude/CLAUDE.md` (SEARCH_BOOST block) · resource `search-boost://policy` (optional detail).
 
 ## Keys
 
-Optional — run `search-boost config keys` or set env vars.
+Optional — `search-boost config keys` or env vars.
