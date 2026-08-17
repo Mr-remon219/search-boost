@@ -1,12 +1,4 @@
----
-name: search-boost
-description: >-
-  Multi-engine web search MCP. Proactively search before external factual claims
-  (versions, APIs, docs). Use for verify-before-assert; skip for local code only.
-  Prefer fused_search over built-in WebSearch. Free layer needs no API keys.
----
-
-# search-boost MCP
+# search-boost MCP @ Cursor
 
 Server id: `search-boost` in `~/.cursor/mcp.json`.
 
@@ -41,4 +33,4 @@ Server id: `search-boost` in `~/.cursor/mcp.json`.
 
 ## Keys
 
-Optional — free layer: bing + ddg + exa-free. See `dsh-search-boost` README for keyed setup.
+Optional — free layer: bing + ddg + exa-free. Run `search-boost config keys` or see dsh-search-boost README.

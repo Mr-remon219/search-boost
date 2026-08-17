@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { dshRepoRoot } from './lib/dsh-lib.mjs'
+import { loadMcpServerInstructionsPath } from './lib/agents/shared.mjs'
 import { registerAll } from './tools/register.mjs'
 
 const PKG_ROOT = dirname(fileURLToPath(import.meta.url))
@@ -22,10 +23,10 @@ function pkgVersion() {
 
 function loadInstructions() {
   try {
-    return readFileSync(join(PKG_ROOT, 'cursor', 'server-instructions.md'), 'utf8').trim()
-  } catch {
-    return 'search-boost MCP: fused_search, fetch_page, x_search, deep_research. Prefer over built-in WebSearch.'
-  }
+    const path = loadMcpServerInstructionsPath()
+    if (path) return readFileSync(path, 'utf8').trim()
+  } catch { /* fall through */ }
+  return 'search-boost MCP: fused_search, fetch_page, x_search, deep_research. Prefer over built-in WebSearch.'
 }
 
 // Validate dsh sibling early — fail fast with clear stderr (stdio transport must not log to stdout)

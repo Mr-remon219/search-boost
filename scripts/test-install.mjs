@@ -5,6 +5,12 @@ import { upsertTomlSection, removeTomlSection, hasTomlSection } from '../lib/tom
 import { injectBlock, removeBlock } from '../lib/inject.mjs'
 import { normalizeTargets } from '../lib/agents/index.mjs'
 import { antigravityMcpEntry, jsonMcpEntry } from '../lib/mcp-entry.mjs'
+import { loadAgentPrompt } from '../lib/agents/shared.mjs'
+import { getRoute, promptPath, ROUTE_IDS } from '../agents/router.mjs'
+import { maskKey, readKeysFile, writeKeysFile } from '../lib/keys.mjs'
+import { getLayer, setLayer } from '../lib/layer-config.mjs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 let failed = 0
 
@@ -47,6 +53,30 @@ const json = jsonMcpEntry()
 assert('json entry has type stdio', json.type === 'stdio' && json.command && json.args?.length)
 const agy = antigravityMcpEntry()
 assert('antigravity omits type', !('type' in agy) && agy.command && agy.args?.length)
+
+// keys + layer round-trip (isolated temp files)
+process.env.SEARCH_BOOST_KEYS_FILE = join(tmpdir(), `search-boost-test-keys-${process.pid}.json`)
+process.env.SEARCH_BOOST_LAYER_FILE = join(tmpdir(), `search-boost-test-layer-${process.pid}.json`)
+delete process.env.SEARCH_BOOST_LAYER
+writeKeysFile({ tavily: 'tvly-test-key-12345678', brave: undefined })
+const k = readKeysFile()
+assert('keys write tavily', k.tavily === 'tvly-test-key-12345678')
+assert('keys mask', maskKey('tvly-test-key-12345678').includes('****'))
+writeKeysFile({ tavily: undefined })
+assert('keys unset', !readKeysFile().tavily)
+
+// layer
+setLayer('free')
+assert('layer free', getLayer() === 'free')
+setLayer('api')
+assert('layer api', getLayer() === 'api')
+
+// router resolves per-agent assets
+for (const id of ROUTE_IDS) {
+  assert(`route ${id} prompt exists`, promptPath(id).includes(getRoute(id).dir))
+}
+const cursorPrompt = await loadAgentPrompt('cursor')
+assert('load cursor inject', cursorPrompt.includes('search-boost @ Cursor IDE'))
 
 if (failed) {
   console.error(`\n${failed} test(s) failed`)
