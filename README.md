@@ -67,14 +67,14 @@ When installed via npm, MCP config uses `search-boost-mcp serve` or `npx -y sear
 |-------|------------|------------------|
 | **Cursor IDE** | `~/.cursor/mcp.json` | `~/.cursor/AGENTS.md` + skill |
 | **Cursor CLI** | same mcp.json | merged into AGENTS.md when both selected |
-| **Codex CLI** | `~/.codex/config.toml` | `~/.codex/AGENTS.md` |
+| **Codex CLI** | `~/.codex/config.toml` (+ `web_search = "disabled"`) | `~/.codex/AGENTS.md` + skill (`~/.agents/skills/search-boost/`) |
 | **Claude Code** | `~/.claude.json` | `~/.claude/CLAUDE.md` + skill |
 | **Grok Build** | `~/.grok/config.toml` | `~/.grok/rules/search-boost.md` + skill |
 | **Antigravity** | `~/.gemini/config/mcp_config.json`* | `~/.gemini/AGENTS.md` + skill |
 
 \* Antigravity uses unified vs legacy MCP path detection; entry omits `type: "stdio"` (required by Antigravity UI). Uninstall sweeps both paths.
 
-Tailored prompt templates live in [`agents/`](./agents/). They implement a **bounded proactive search** policy aligned with dsh-search-boost `policy.js`: search-first for external facts, doubt→search, max ~3 rounds, per-agent restraint.
+Tailored prompt templates live in [`agents/`](./agents/). Codex uses **optional, model-discretion** search guidance; other agents may still use stronger proactive wording. Shared MCP resource `search-boost://policy` holds the full dsh-search-boost policy when you want deep reference.
 
 ## MCP tools
 

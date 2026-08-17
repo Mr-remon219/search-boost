@@ -2,10 +2,10 @@
  * Unit-style checks for install helpers (no writes to real home dir).
  */
 import { upsertTomlSection, removeTomlSection, hasTomlSection } from '../lib/toml.mjs'
-import { injectBlock, removeBlock } from '../lib/inject.mjs'
+import { injectBlock, removeBlock, removeTomlMarker, upsertTomlMarker } from '../lib/inject.mjs'
 import { normalizeTargets } from '../lib/agents/index.mjs'
-import { antigravityMcpEntry, jsonMcpEntry } from '../lib/mcp-entry.mjs'
-import { loadAgentPrompt } from '../lib/agents/shared.mjs'
+import { antigravityMcpEntry, jsonMcpEntry, tomlMcpBlock } from '../lib/mcp-entry.mjs'
+import { loadAgentPrompt, loadAgentSkill } from '../lib/agents/shared.mjs'
 import { getRoute, promptPath, ROUTE_IDS } from '../agents/router.mjs'
 import { maskKey, readKeysFile, writeKeysFile } from '../lib/keys.mjs'
 import { getLayer, setLayer } from '../lib/layer-config.mjs'
@@ -32,6 +32,16 @@ assert('toml upsert updates body', toml.includes('"serve", "v2"'))
 toml = removeTomlSection(toml, 'search-boost')
 assert('toml remove section', !hasTomlSection(toml, 'search-boost'))
 assert('toml preserves other keys', toml.includes('web_search'))
+
+// web_search marker round-trip
+toml = upsertTomlMarker(toml, 'WEB_SEARCH', 'web_search = "disabled"')
+assert('web_search marker present', toml.includes('SEARCH_BOOST_WEB_SEARCH_START'))
+assert('web_search marker value', toml.includes('web_search = "disabled"'))
+toml = removeTomlMarker(toml, 'WEB_SEARCH')
+assert('web_search marker removed', !toml.includes('SEARCH_BOOST_WEB_SEARCH_START'))
+
+// MCP toml block includes auto approval
+assert('toml mcp approval mode', tomlMcpBlock().includes('default_tools_approval_mode = "auto"'))
 
 // inject block round-trip
 const snippet = '## search-boost rules'
@@ -77,6 +87,12 @@ for (const id of ROUTE_IDS) {
 }
 const cursorPrompt = await loadAgentPrompt('cursor')
 assert('load cursor inject', cursorPrompt.includes('search-boost @ Cursor IDE'))
+assert('codex route has skill', getRoute('codex').skill === 'skill.md')
+assert('codex route has openai yaml', getRoute('codex').openaiYaml === 'openai.yaml')
+const codexPrompt = await loadAgentPrompt('codex')
+assert('load codex inject', codexPrompt.includes('search-boost @ Codex CLI'))
+const codexSkill = await loadAgentSkill('codex')
+assert('load codex skill', codexSkill?.includes('mcp__search-boost__fused_search'))
 
 if (failed) {
   console.error(`\n${failed} test(s) failed`)

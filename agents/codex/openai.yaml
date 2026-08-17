@@ -1,0 +1,7 @@
+policy:
+  allow_implicit_invocation: true
+dependencies:
+  tools:
+    - type: mcp
+      value: search-boost
+      description: Optional multi-engine web search when verification helps

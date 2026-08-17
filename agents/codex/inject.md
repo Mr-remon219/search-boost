@@ -1,48 +1,49 @@
 # search-boost @ Codex CLI
 
-MCP via **`~/.codex/config.toml`**, server id **`search-boost`**. **Search before factual claims** — especially before writing code that calls external systems.
+MCP via **`~/.codex/config.toml`**, server id **`search-boost`**. Multi-engine web search when you **choose** to verify external facts — not a mandatory step every turn.
 
-## Proactive search (default-on, bounded)
+Skill: **`~/.agents/skills/search-boost/`** — invoke explicitly with `$search-boost`.
 
-Codex runs autonomously: **treat search as part of implementation**, not an optional extra.
+## When search helps (your call)
 
-**Auto-trigger** (before code or strong statements):
-- Package/API you are about to import, configure, or document
-- CLI flags, env vars, auth flows, HTTP paths
-- "Latest", "deprecated", "removed in", compatibility matrices
-- Unfamiliar error messages that reference external services
+Use search-boost when **uncertainty would materially affect the answer or the patch** — especially before integration code, version-sensitive advice, or claims about third-party systems.
 
-**Hard rules**
-- **Doubt → search** — do not patch around uncertainty.
-- Never say information is missing without having run `fused_search`.
-- Cite URLs from `structuredContent.results`; mark unverified guesses.
+**Good candidates**
+- Package/API you may import, configure, or document
+- CLI flags, env vars, auth flows, HTTP paths you are not sure about
+- "Latest", "deprecated", "removed in", compatibility questions
+- Errors referencing external services you have not confirmed
 
-**Do not search**
+**Often skip** (use judgment — no search required)
 - Refactors confined to repo code you can read
 - Stable language/stdlib behavior with no third-party dependency
-- User disabled web / forbids browsing
+- You are already confident from repo context or prior verified results this session
+- User forbids web / asks for speed over verification
 
-**Bounded discipline**
-- One **`fused_search`** per unknown; `fetch_page` for one official doc when implementing
-- Avoid **`web.run` + search-boost** for the same question — pick one path
-- Max **~3 rounds**; sandbox fetch failures → one shell fallback, not five retries
-- Optional: `web_search = "disabled"` in config.toml to make search-boost the single web path
+## How to use well (if you search)
+
+- Prefer **`mcp__search-boost__fused_search`** for quick lookup; **`fetch_page`** for one official doc body
+- Cite URLs from `structuredContent.results` when you rely on web evidence; label inference as *(inference)*
+- Stay efficient: one focused query to start; avoid repeating the same query; ~3 rounds is usually enough
+- Installer sets `web_search = "disabled"` (SEARCH_BOOST marker). If you re-enable `cached`/`live`, pick **one** web path per question — search-boost or built-in web, not both
 
 ## Tool routing
 
-| Task | Tool |
-|------|------|
-| Lookup / verify | `fused_search` |
-| Read doc page | `fetch_page` |
-| X/Twitter | `x_search` |
-| Survey / compare | `deep_research` |
+| Task | MCP tool |
+|------|----------|
+| Lookup / verify | `mcp__search-boost__fused_search` |
+| Read doc page | `mcp__search-boost__fetch_page` |
+| X/Twitter | `mcp__search-boost__x_search` |
+| Survey / compare | `mcp__search-boost__deep_research` |
+| Layer / diagnostics | `mcp__search-boost__search_layer` · `mcp__search-boost__search_stats` |
 
 ## Codex-specific
 
-- Invoke MCP tools on the native MCP channel.
-- Keys optional — free layer needs no `PI_SEARCH_*` / Tavily keys.
-- If `fetch_page` fails in sandbox, one controlled shell fetch is acceptable; do not skip search entirely.
+- Invoke MCP tools on the native MCP channel (names above).
+- Optional deep reference: MCP resource **`search-boost://policy`** · prompt **`search_routing`**
+- Keys optional — free layer needs no Tavily/Brave/Exa keys.
+- If `fetch_page` fails in sandbox, a controlled shell fetch is acceptable — or proceed without web if the task does not need it.
 
-## Pre-patch self-check
+## Autonomy
 
-This change depends on external truth (API, version, config)? Search first, then edit.
+You decide whether to search. When you skip search, say so briefly if the answer hinges on assumptions. When you search, cite what you found.

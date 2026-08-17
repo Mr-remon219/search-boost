@@ -22,6 +22,7 @@ export const AGENTS_ROOT = join(dirname(fileURLToPath(import.meta.url)))
  * @property {InjectKind} injectKind
  * @property {string} prompt        Filename for inject body (usually inject.md)
  * @property {string|null} skill    Skill template filename, or null
+ * @property {string|null} openaiYaml agents/openai.yaml template filename, or null
  * @property {string|null} serverInstructions MCP instructions file, or null
  * @property {string[]|null} mergeWith Other agent ids merged into this prompt on install
  * @property {{ serverUseInstructions?: string }|null} mcp MCP entry extras
@@ -54,7 +55,8 @@ export const ROUTES = {
     dir: 'codex',
     injectKind: 'agents-block',
     prompt: 'inject.md',
-    skill: null,
+    skill: 'skill.md',
+    openaiYaml: 'openai.yaml',
     serverInstructions: null,
     mergeWith: null,
     mcp: null,
@@ -116,6 +118,13 @@ export function skillPath(id) {
   const route = getRoute(id)
   if (!route.skill) return null
   return assetPath(id, route.skill)
+}
+
+/** @param {string} id */
+export function openaiYamlPath(id) {
+  const route = getRoute(id)
+  if (!route.openaiYaml) return null
+  return assetPath(id, route.openaiYaml)
 }
 
 /** MCP stdio server instructions — currently defined on the cursor route. */
