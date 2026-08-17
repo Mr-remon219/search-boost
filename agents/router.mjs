@@ -4,7 +4,8 @@
  * Each subfolder under agents/ holds that agent's exploration artifacts:
  *   inject.md              → prompt block injected into the agent's rules file
  *   skill.md               → optional skill template (frontmatter added at install)
- *   server-instructions.md → optional MCP server instructions (cursor only today)
+ *   server-instructions.md → optional per-agent MCP notes (deprecated for MCP server)
+ *   mcp/server-instructions.md → shared MCP server instructions (stdio)
  *
  * Install adapters in lib/agents/index.mjs read paths through here — do not hard-code filenames.
  */
@@ -35,7 +36,7 @@ export const ROUTES = {
     injectKind: 'agents-block',
     prompt: 'inject.md',
     skill: 'skill.md',
-    serverInstructions: 'server-instructions.md',
+    serverInstructions: null,
     mergeWith: ['cursor-cli'],
     mcp: { serverUseInstructions: 'Prefer search-boost MCP over WebSearch for factual lookups.' },
   },
@@ -118,11 +119,7 @@ export function skillPath(id) {
   return assetPath(id, route.skill)
 }
 
-/** MCP stdio server instructions — currently defined on the cursor route. */
+/** Shared MCP stdio server instructions (agent-neutral). */
 export function mcpServerInstructionsPath() {
-  for (const id of ROUTE_IDS) {
-    const file = ROUTES[id].serverInstructions
-    if (file) return assetPath(id, file)
-  }
-  return null
+  return join(AGENTS_ROOT, 'mcp', 'server-instructions.md')
 }
