@@ -1,223 +1,132 @@
 # search-boost-mcp
 
-Multi-engine web search **MCP server** for coding agents — with one CLI to install into **Cursor**, **Cursor CLI**, **Codex**, **Claude Code**, **Grok Build**, and **Antigravity**.
+Multi-engine web search as an **MCP server** for coding agents — one CLI installs into **Cursor**, **Cursor CLI**, **Codex**, **Claude Code**, **Grok Build**, and **Antigravity**.
 
-Engine implementation read-only from [`dsh-search-boost`](../dsh-search-boost/) `lib/` (or npm `dsh-search-boost` when published).
+> **search-boost family**
+>
+> | Project | For | Link |
+> |---------|-----|------|
+> | **search-boost-mcp** *(this repo)* | Cursor · Codex · Claude · Grok · Antigravity via MCP | you are here |
+> | [**dsh-search-boost**](https://github.com/Mr-remon219/dsh-search-boost) | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle plugin | [GitHub](https://github.com/Mr-remon219/dsh-search-boost) · [npm](https://www.npmjs.com/package/dsh-search-boost) |
+> | [**pi-search-boost**](https://github.com/Mr-remon219/pi-search-boost) | [pi](https://github.com/earendil-works/pi-coding-agent) extension | [GitHub](https://github.com/Mr-remon219/pi-search-boost) · [npm](https://www.npmjs.com/package/pi-search-boost) |
 
-## Quick start (local dev)
+Search engines come from [`dsh-search-boost`](https://github.com/Mr-remon219/dsh-search-boost) (bundled as an npm dependency): Bing, DuckDuckGo, Exa-free, optional Tavily/Brave/Exa, X/Twitter fallback, Jina fetch, and deep-research rounds.
 
-```bash
-cd search-boost-mcp
-npm install
-npm run check
-npm run test:install
-npm run smoke
+中文文档 → [README_zh.md](./README_zh.md)
 
-# Interactive TUI (setup, keys, layer, native search, status)
-node cli.mjs
+---
 
-# Linear onboarding (keys + layer + agents)
-node cli.mjs setup
+## Install (recommended)
 
-# Non-interactive — all detected agents
-node cli.mjs install -y
-
-# Specific agents (cursor + cursor-cli merge into one hook inject)
-node cli.mjs install -t cursor,cursor-cli,codex -y
-
-# Preview without writes
-node cli.mjs install --dry-run -y
-
-# Check detection vs configured state
-node cli.mjs status
-```
-
-After install, **restart** each agent to load MCP.
-
-## npm package (not published yet)
+**Requires Node ≥ 22.13.**
 
 ```bash
-npm install -g search-boost-mcp   # future
-search-boost-mcp install -y
-search-boost-mcp serve            # MCP stdio entry
+npm install -g search-boost-mcp
+search-boost setup          # interactive: keys → layer → agents
+# or non-interactive:
+search-boost install -y     # all detected agents
 ```
 
-When installed via npm, MCP config uses `search-boost-mcp serve` or `npx -y search-boost-mcp serve` — no hard-coded repo paths.
+Restart each agent after install so MCP reloads.
 
-## CLI commands
-
-| Command | Description |
-|---------|-------------|
-| *(no args)* | Interactive TUI — setup, install, keys, layer, native search, status |
-| `setup` | Linear onboarding (keys + layer + agents) |
-| `serve` | Run MCP stdio server |
-| `install` | Merge MCP config + inject prompts + optional native-search replace |
-| `uninstall` | Remove search-boost from selected agents |
-| `config keys` | tavily / brave / exa |
-| `config layer` | `free` or `api` |
-| `config search` | Replace or keep each agent's built-in web search |
-| `print <id>` | Print MCP snippet (no writes) |
-| `status` | Keys + layer + agents + native-search state |
-| `agents` | TSV: id, label, detected, configured, native-search |
-| `plugin sync-grok` | Regenerate `grok-plugin/` from `agents/grok/` |
-| `plugin build` | Build Antigravity plugin bundle |
-
-### Install flags
-
-```
--t, --target <ids>   cursor | cursor-cli | codex | claude | grok | antigravity | auto | all
-                     (unknown ids and unknown flags now error)
--y, --yes            auto-detect agents, no prompt (implies --auto-allow and --replace-native)
---dry-run            preview only
---auto-allow         Pre-approve search-boost MCP tools
---replace-native     Disable built-in web_search where the agent has a switch (default)
---keep-native        Leave built-in WebSearch / web_search / browse on
---scope user|project Grok only: user (~/.grok) or project (.grok/config.toml in cwd)
---workspace [dir]    Also inject .agents/ under cwd or dir (Antigravity)
-```
-
-Each agent's auto-allow surface: `cli-config.json` (Cursor), `settings.json` (Claude Code, Antigravity), `default_tools_approval_mode` (Codex), `[permission]` block (Grok Build).
-
-### Native web search replacement
-
-search-boost can **replace** the agent's original web search where a real switch exists, and **prefer** it everywhere else.
-
-| Agent | Built-in | Switch | Default install |
-|-------|----------|--------|-----------------|
-| **Codex** | `web_search` | `web_search = "disabled"` in `config.toml` | replaced |
-| **Claude Code** | `WebSearch` | `permissions.deny: ["WebSearch"]` | replaced |
-| **Cursor / CLI** | WebSearch / `@web` | none — hook + skill prefer search-boost | prompt |
-| **Antigravity** | `search_web` | none — inject prefers search-boost | prompt |
-| **Grok Build** | native browse | **left on** — browse stays valid for exploration | left |
+### One-liners by agent
 
 ```bash
-# Inspect
-node cli.mjs config search --show
-node cli.mjs status
-
-# Apply / revert without a full reinstall
-node cli.mjs config search -t codex,claude --replace-native
-node cli.mjs config search -t claude --keep-native
-
-# Install without touching built-in search
-node cli.mjs install -t all -y --keep-native
+search-boost install -t cursor -y
+search-boost install -t codex,claude -y --auto-allow
+search-boost install -t grok -y --auto-allow
+search-boost install -t antigravity --workspace --auto-allow -y
 ```
 
-## Per-agent wiring
+Preview without writing: `search-boost install --dry-run -y`
 
-| Agent | MCP config | Prompt injection |
-|-------|------------|------------------|
-| **Cursor IDE** | `~/.cursor/mcp.json` | Hook `sessionStart` + skill |
-| **Cursor CLI** | same mcp.json | same hook + skill + `cli-config.json` allow (with `--auto-allow` / `-y`) |
-| **Codex CLI** | `~/.codex/config.toml` (+ `web_search = "disabled"` unless `--keep-native`) | `~/.codex/AGENTS.md` + skill (`~/.agents/skills/search-boost/`) |
-| **Claude Code** | `~/.claude.json` | `~/.claude/CLAUDE.md` + skill + `mcp__search-boost__*` allow + `WebSearch` deny (unless `--keep-native`) |
-| **Grok Build** | `~/.grok/config.toml` (or `.grok/config.toml` with `--scope project`) | `~/.grok/rules/search-boost.md` + skill |
-| **Antigravity** | `~/.gemini/config/mcp_config.json`* | `~/.gemini/AGENTS.md` + `GEMINI.md` + skill |
+---
 
-### Cursor / Cursor CLI surfaces
+## What you get
 
-| Surface | Path |
-|---------|------|
-| MCP | `~/.cursor/mcp.json` |
-| Proactive policy | `~/.cursor/hooks.json` → `sessionStart` (capability summary, optional) |
-| Inject body | `~/.cursor/hooks/search-boost-inject.md` |
-| Hook script | `~/.cursor/hooks/search-boost-session.mjs` |
-| Tool routing skill | `~/.cursor/skills/search-boost/SKILL.md` |
-| CLI auto-allow | `~/.cursor/cli-config.json` → `Mcp(search-boost:*)` (opt-in) |
-| Policy runtime | MCP resource `search-boost://policy` |
+| MCP tool | Purpose |
+|----------|---------|
+| `fused_search` | Multi-engine parallel search, dedupe, cross-ranking |
+| `fetch_page` | Full page text (Jina + HTML fallback, optional `focus`) |
+| `x_search` | X/Twitter keyword / user / thread |
+| `deep_research` | One research round — gaps + suggested follow-ups |
+| `search_layer` | Show or set `free` (keyless) vs `api` (keyed engines) |
+| `search_stats` | Cache hits, engine availability, diagnostics |
 
-\* Antigravity uses unified vs legacy MCP path detection; entry omits `type: "stdio"` (required by Antigravity UI). Uninstall sweeps both paths.
+Also: resource `search-boost://policy` · prompt `search_routing`
 
-Tailored prompt templates live in [`agents/`](./agents/). They use **model-discretion** wording: search-boost is available tooling with routing guidance and efficiency hints (~3 rounds), not a mandatory pre-answer step. The full dsh-search-boost policy stays in the MCP resource `search-boost://policy` for deep reference.
+**Layers**
 
-### Grok Build
+- **free** — Bing + DDG + Exa-free (+ Antigravity CLI when available); no API keys
+- **api** — free engines plus Tavily / Brave / Exa when keys are set
+
+Keys: `search-boost config keys` → `~/.dsh-search-boost-keys.json` (or env `TAVILY_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`).
+
+---
+
+## CLI cheat sheet
+
+| Command | What it does |
+|---------|----------------|
+| `search-boost` | Interactive TUI |
+| `search-boost setup` | Onboarding (keys + layer + install) |
+| `search-boost install` / `uninstall` | Wire MCP + prompts into agents |
+| `search-boost serve` | Run MCP stdio server (used by agents) |
+| `search-boost status` | Keys, layer, per-agent configured state |
+| `search-boost config keys\|layer\|search` | Keys, default layer, native-search replace |
+| `search-boost print <agent>` | Print MCP snippet without writing |
+| `search-boost agents` | Machine-readable agent list |
+
+**Install flags:** `-t cursor,codex,…|auto|all` · `-y` (non-interactive) · `--dry-run` · `--auto-allow` · `--replace-native` / `--keep-native` · `--scope user|project` (Grok) · `--workspace` (Antigravity `.agents/`)
+
+---
+
+## Supported agents
+
+| Agent | MCP config | Also installs |
+|-------|------------|---------------|
+| Cursor IDE / CLI | `~/.cursor/mcp.json` | hook, skill, optional CLI auto-allow |
+| Codex CLI | `~/.codex/config.toml` | AGENTS.md, skill |
+| Claude Code | `~/.claude.json` | CLAUDE.md, skill, permissions |
+| Grok Build | `~/.grok/config.toml` | rule, skill · [grok-plugin](./grok-plugin/) |
+| Antigravity | `~/.gemini/config/mcp_config.json` | AGENTS.md, GEMINI.md, skill, optional workspace |
+
+Prompts use **model-discretion** wording (search when you choose — not forced every turn). See [`agents/`](./agents/) for per-agent templates.
+
+**Native web search:** Codex `web_search` and Claude `WebSearch` can be disabled with `--replace-native` (default on `-y`). Cursor / Antigravity rely on skill + hook preference only. Grok native browse is left on.
+
+---
+
+## Grok plugin
 
 ```bash
-# User-level install (MCP + rule + skill + optional auto-allow)
-node cli.mjs install -t grok -y --auto-allow
-
-# Project-scoped MCP only (rules/skill stay user-level)
-node cli.mjs install -t grok --scope project -y --auto-allow
-
-# Grok plugin (MCP + skill bundle)
 grok plugin install ./grok-plugin --trust
-node cli.mjs install -t grok -y --auto-allow   # optional routing rule (model decides when to search)
-
-# Regenerate plugin after editing agents/grok/skill.md
-npm run plugin:sync-grok
+search-boost install -t grok -y --auto-allow
 ```
 
-Verify with Grok:
+Details → [grok-plugin/README.md](./grok-plugin/README.md)
 
-```bash
-grok inspect
-grok mcp doctor search-boost
-```
-
-Typical patterns (model's choice — not enforced):
-
-| Scenario | Often useful |
-|----------|--------------|
-| User wants cited facts (versions, APIs) | `search-boost__fused_search` |
-| Open brainstorming | native browse or direct answer |
-| X/sentiment with merged ranking | `search-boost__x_search` |
-
-See [`grok-plugin/README.md`](./grok-plugin/README.md) and [`templates/grok/.grok/config.toml`](./templates/grok/.grok/config.toml) for team sharing.
-
-### Antigravity injection matrix
-
-| Surface | Global | Workspace | Plugin |
-|---------|--------|-----------|--------|
-| MCP | `~/.gemini/config/mcp_config.json` | `.agents/mcp_config.json` | `mcp_config.json` |
-| Cross-tool rules | `~/.gemini/AGENTS.md` | — | — |
-| AGY routing override | `~/.gemini/GEMINI.md` | — | — |
-| Always-on rule | — | `.agents/rules/search-boost.md` | `rules/search-boost.md` |
-| Skill | `~/.gemini/config/skills/search-boost/` | `.agents/skills/search-boost/` | `skills/search-boost/` |
-| Permissions | `~/.gemini/antigravity-cli/settings.json` + `--auto-allow` | — | manual |
-| PreInvocation hook | — | `.agents/hooks.json` | `hooks.json` |
-
-Recommended install:
-
-```bash
-# Global + workspace + auto-allow MCP tools
-node cli.mjs install -t antigravity --auto-allow --workspace -y
-
-# Optional: Antigravity CLI plugin bundle (skill, rule, MCP, hook)
-npm run build:plugin
-agy plugin install ./agents/antigravity/plugin
-```
-
-Plugin ships skill/rule/MCP/hook. Global `AGENTS.md`, `GEMINI.md`, and permissions still come from `cli.mjs install`.
-
-Enable the PreInvocation reminder in workspace or plugin: set `"enabled": true` on `search-boost-reminder` in `hooks.json`.
-
-## MCP tools
-
-`fused_search` · `fetch_page` · `deep_research` · `x_search` · `search_layer` · `search_stats`
-
-Resource: `search-boost://policy` · Prompt: `search_routing`
-
-## dsh-search-boost dependency
-
-Resolve order:
-
-1. `SEARCH_BOOST_DSH_ROOT` env
-2. Sibling `../dsh-search-boost/` (monorepo dev)
-3. `node_modules/dsh-search-boost/` (after npm co-install)
+---
 
 ## Development
 
 ```bash
-npm run check
-npm run test:install
-npm run build:plugin
-npm run smoke
-node cli.mjs install --dry-run -t antigravity --workspace --auto-allow
-node cli.mjs print antigravity
-node cli.mjs print codex --auto-allow
-node cli.mjs config search --show
+git clone https://github.com/Mr-remon219/search-boost-mcp.git
+cd search-boost-mcp && npm install
+npm run check && npm run test:install && npm run smoke
+node cli.mjs install --dry-run -y
 ```
+
+Local clone installs write `node /path/to/cli.mjs serve` (not npx). Sibling checkout: set `SEARCH_BOOST_DSH_ROOT=../dsh-search-boost` if needed.
+
+---
 
 ## License
 
 MIT
+
+---
+
+**Links:** [Issues](https://github.com/Mr-remon219/search-boost-mcp/issues) · [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost) · [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost)
+
+**Friendly link:** [LINUX DO 社区](https://linux.do/)
