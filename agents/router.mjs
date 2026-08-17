@@ -4,7 +4,7 @@
  * Each subfolder under agents/ holds that agent's exploration artifacts:
  *   inject.md              → prompt block injected into the agent's rules file
  *   skill.md               → optional skill template (frontmatter added at install)
- *   server-instructions.md → optional MCP server instructions (cursor only today)
+ *   server-instructions.md → optional per-agent MCP notes (cursor); shared/ for MCP process
  *
  * Install adapters in lib/agents/index.mjs read paths through here — do not hard-code filenames.
  */
@@ -12,6 +12,11 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const AGENTS_ROOT = join(dirname(fileURLToPath(import.meta.url)))
+
+/** Agent-neutral MCP handshake instructions (single stdio server for all agents). */
+export const SHARED_SERVER_INSTRUCTIONS = join(AGENTS_ROOT, 'shared', 'server-instructions.md')
+
+/** @typedef {{ description?: string, allowedTools?: string[] }} SkillFrontmatter */
 
 /** @typedef {'agents-block'|'rule-file'} InjectKind */
 
@@ -25,6 +30,7 @@ export const AGENTS_ROOT = join(dirname(fileURLToPath(import.meta.url)))
  * @property {string|null} serverInstructions MCP instructions file, or null
  * @property {string[]|null} mergeWith Other agent ids merged into this prompt on install
  * @property {{ serverUseInstructions?: string }|null} mcp MCP entry extras
+ * @property {SkillFrontmatter|null} skillFrontmatter Optional SKILL.md frontmatter overrides
  */
 
 /** @type {Record<string, AgentRoute>} */
@@ -68,6 +74,18 @@ export const ROUTES = {
     serverInstructions: null,
     mergeWith: null,
     mcp: null,
+    skillFrontmatter: {
+      description:
+        'Multi-engine web search when external facts need verification. Optional — use your judgment for versions, APIs, comparisons, or niche tech. Tools: fused_search, fetch_page, x_search, deep_research.',
+      allowedTools: [
+        'mcp__search-boost__fused_search',
+        'mcp__search-boost__fetch_page',
+        'mcp__search-boost__deep_research',
+        'mcp__search-boost__x_search',
+        'mcp__search-boost__search_layer',
+        'mcp__search-boost__search_stats',
+      ],
+    },
   },
   grok: {
     label: 'Grok Build',
@@ -118,11 +136,7 @@ export function skillPath(id) {
   return assetPath(id, route.skill)
 }
 
-/** MCP stdio server instructions — currently defined on the cursor route. */
+/** MCP stdio server instructions — shared across all agents (single server process). */
 export function mcpServerInstructionsPath() {
-  for (const id of ROUTE_IDS) {
-    const file = ROUTES[id].serverInstructions
-    if (file) return assetPath(id, file)
-  }
-  return null
+  return SHARED_SERVER_INSTRUCTIONS
 }

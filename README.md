@@ -56,9 +56,9 @@ When installed via npm, MCP config uses `search-boost-mcp serve` or `npx -y sear
 
 ```
 -t, --target <ids>   cursor | cursor-cli | codex | claude | grok | antigravity | auto | all
--y, --yes            auto-detect agents, no prompt
+-y, --yes            auto-detect agents, no prompt (Claude Code: also auto-allow MCP tools)
 --dry-run            preview only
---auto-allow         Claude Code: add mcp__search-boost__* to ~/.claude/settings.json
+--auto-allow         Claude Code: add mcp__search-boost__* to ~/.claude/settings.json (default with -y when claude is targeted)
 ```
 
 ## Per-agent wiring
@@ -68,7 +68,7 @@ When installed via npm, MCP config uses `search-boost-mcp serve` or `npx -y sear
 | **Cursor IDE** | `~/.cursor/mcp.json` | `~/.cursor/AGENTS.md` + skill |
 | **Cursor CLI** | same mcp.json | merged into AGENTS.md when both selected |
 | **Codex CLI** | `~/.codex/config.toml` | `~/.codex/AGENTS.md` |
-| **Claude Code** | `~/.claude.json` | `~/.claude/CLAUDE.md` + skill |
+| **Claude Code** | `~/.claude.json` | `~/.claude/CLAUDE.md` + skill + `mcp__search-boost__*` allow (default with `-y`) |
 | **Grok Build** | `~/.grok/config.toml` | `~/.grok/rules/search-boost.md` + skill |
 | **Antigravity** | `~/.gemini/config/mcp_config.json`* | `~/.gemini/AGENTS.md` + skill |
 
