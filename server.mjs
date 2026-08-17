@@ -3,23 +3,12 @@
  * search-boost MCP server (stdio) for Cursor.
  */
 import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { dshRepoRoot } from './lib/dsh-lib.mjs'
 import { loadMcpServerInstructionsPath } from './lib/agents/shared.mjs'
+import { getVersion } from './lib/pkg.mjs'
 import { registerAll } from './tools/register.mjs'
-
-const PKG_ROOT = dirname(fileURLToPath(import.meta.url))
-
-function pkgVersion() {
-  try {
-    return JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf8')).version ?? '0.1.0'
-  } catch {
-    return '0.1.0'
-  }
-}
 
 function loadInstructions() {
   try {
@@ -38,7 +27,7 @@ try {
 }
 
 const server = new McpServer(
-  { name: 'search-boost', version: pkgVersion() },
+  { name: 'search-boost', version: getVersion() },
   {
     instructions: loadInstructions(),
     capabilities: {

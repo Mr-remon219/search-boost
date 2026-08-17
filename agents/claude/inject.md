@@ -36,4 +36,4 @@ Consider `search-boost` when verification would materially improve the answer:
 - Skill: `~/.claude/skills/search-boost/SKILL.md` · `/search-boost` when you want the routing cheat sheet.
 - Optional deep reference: MCP resource `search-boost://policy` (suggested patterns, not requirements).
 
-Install adds `mcp__search-boost__*` to permissions so search is frictionless when you choose it.
+Install can add `mcp__search-boost__*` to allow and deny built-in `WebSearch` so search-boost is the web path. `--keep-native` leaves `WebSearch` available.

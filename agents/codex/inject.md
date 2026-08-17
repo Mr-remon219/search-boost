@@ -25,7 +25,7 @@ Use search-boost when **uncertainty would materially affect the answer or the pa
 - Prefer **`mcp__search-boost__fused_search`** for quick lookup; **`fetch_page`** for one official doc body
 - Cite URLs from `structuredContent.results` when you rely on web evidence; label inference as *(inference)*
 - Stay efficient: one focused query to start; avoid repeating the same query; ~3 rounds is usually enough
-- Installer sets `web_search = "disabled"` (SEARCH_BOOST marker). If you re-enable `cached`/`live`, pick **one** web path per question — search-boost or built-in web, not both
+- If native search was replaced, config has `web_search = "disabled"` (SEARCH_BOOST marker). If you re-enable `cached`/`live`, pick **one** web path per question — search-boost or built-in web, not both
 
 ## Tool routing
 

@@ -13,8 +13,11 @@ npm run check
 npm run test:install
 npm run smoke
 
-# Interactive agent picker (codegraph-style)
-node cli.mjs install
+# Interactive TUI (setup, keys, layer, native search, status)
+node cli.mjs
+
+# Linear onboarding (keys + layer + agents)
+node cli.mjs setup
 
 # Non-interactive — all detected agents
 node cli.mjs install -y
@@ -45,26 +48,60 @@ When installed via npm, MCP config uses `search-boost-mcp serve` or `npx -y sear
 
 | Command | Description |
 |---------|-------------|
-| `serve` | Run MCP stdio server (default) |
-| `install` | Merge MCP config + inject agent-specific prompts |
+| *(no args)* | Interactive TUI — setup, install, keys, layer, native search, status |
+| `setup` | Linear onboarding (keys + layer + agents) |
+| `serve` | Run MCP stdio server |
+| `install` | Merge MCP config + inject prompts + optional native-search replace |
 | `uninstall` | Remove search-boost from selected agents |
-| `agents` | List agents + detection/config status |
-| `status` | Table of detected vs configured |
-| `install --print-config <id>` | Print snippet only (no writes) |
+| `config keys` | tavily / brave / exa |
+| `config layer` | `free` or `api` |
+| `config search` | Replace or keep each agent's built-in web search |
+| `print <id>` | Print MCP snippet (no writes) |
+| `status` | Keys + layer + agents + native-search state |
+| `agents` | TSV: id, label, detected, configured, native-search |
 | `plugin sync-grok` | Regenerate `grok-plugin/` from `agents/grok/` |
+| `plugin build` | Build Antigravity plugin bundle |
 
 ### Install flags
 
 ```
 -t, --target <ids>   cursor | cursor-cli | codex | claude | grok | antigravity | auto | all
--y, --yes            auto-detect agents, no prompt (also implies --auto-allow)
+                     (unknown ids and unknown flags now error)
+-y, --yes            auto-detect agents, no prompt (implies --auto-allow and --replace-native)
 --dry-run            preview only
---auto-allow         Auto-allow search-boost MCP tools (every agent that supports it)
+--auto-allow         Pre-approve search-boost MCP tools
+--replace-native     Disable built-in web_search where the agent has a switch (default)
+--keep-native        Leave built-in WebSearch / web_search / browse on
 --scope user|project Grok only: user (~/.grok) or project (.grok/config.toml in cwd)
 --workspace [dir]    Also inject .agents/ under cwd or dir (Antigravity)
 ```
 
 Each agent's auto-allow surface: `cli-config.json` (Cursor), `settings.json` (Claude Code, Antigravity), `default_tools_approval_mode` (Codex), `[permission]` block (Grok Build).
+
+### Native web search replacement
+
+search-boost can **replace** the agent's original web search where a real switch exists, and **prefer** it everywhere else.
+
+| Agent | Built-in | Switch | Default install |
+|-------|----------|--------|-----------------|
+| **Codex** | `web_search` | `web_search = "disabled"` in `config.toml` | replaced |
+| **Claude Code** | `WebSearch` | `permissions.deny: ["WebSearch"]` | replaced |
+| **Cursor / CLI** | WebSearch / `@web` | none — hook + skill prefer search-boost | prompt |
+| **Antigravity** | `search_web` | none — inject prefers search-boost | prompt |
+| **Grok Build** | native browse | **left on** — browse stays valid for exploration | left |
+
+```bash
+# Inspect
+node cli.mjs config search --show
+node cli.mjs status
+
+# Apply / revert without a full reinstall
+node cli.mjs config search -t codex,claude --replace-native
+node cli.mjs config search -t claude --keep-native
+
+# Install without touching built-in search
+node cli.mjs install -t all -y --keep-native
+```
 
 ## Per-agent wiring
 
@@ -72,8 +109,8 @@ Each agent's auto-allow surface: `cli-config.json` (Cursor), `settings.json` (Cl
 |-------|------------|------------------|
 | **Cursor IDE** | `~/.cursor/mcp.json` | Hook `sessionStart` + skill |
 | **Cursor CLI** | same mcp.json | same hook + skill + `cli-config.json` allow (with `--auto-allow` / `-y`) |
-| **Codex CLI** | `~/.codex/config.toml` (+ `web_search = "disabled"`) | `~/.codex/AGENTS.md` + skill (`~/.agents/skills/search-boost/`) |
-| **Claude Code** | `~/.claude.json` | `~/.claude/CLAUDE.md` + skill + `mcp__search-boost__*` allow (default with `-y`) |
+| **Codex CLI** | `~/.codex/config.toml` (+ `web_search = "disabled"` unless `--keep-native`) | `~/.codex/AGENTS.md` + skill (`~/.agents/skills/search-boost/`) |
+| **Claude Code** | `~/.claude.json` | `~/.claude/CLAUDE.md` + skill + `mcp__search-boost__*` allow + `WebSearch` deny (unless `--keep-native`) |
 | **Grok Build** | `~/.grok/config.toml` (or `.grok/config.toml` with `--scope project`) | `~/.grok/rules/search-boost.md` + skill |
 | **Antigravity** | `~/.gemini/config/mcp_config.json`* | `~/.gemini/AGENTS.md` + `GEMINI.md` + skill |
 
@@ -176,7 +213,9 @@ npm run test:install
 npm run build:plugin
 npm run smoke
 node cli.mjs install --dry-run -t antigravity --workspace --auto-allow
-node cli.mjs install --print-config antigravity
+node cli.mjs print antigravity
+node cli.mjs print codex --auto-allow
+node cli.mjs config search --show
 ```
 
 ## License
