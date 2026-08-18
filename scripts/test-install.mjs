@@ -59,7 +59,7 @@ import {
   SHARED_SERVER_INSTRUCTIONS,
   skillPath,
 } from '../agents/router.mjs'
-import { agentConfigured, grokConfigCandidates, grokInstallPaths, grokUninstallScopes, PATHS, workspaceAgents } from '../lib/paths.mjs'
+import { agentConfigured, grokConfigCandidates, grokInstallPaths, grokScopeHasArtifacts, grokUninstallScopes, PATHS, workspaceAgents } from '../lib/paths.mjs'
 import {
   countPermissionSections,
   grokAlwaysApproveMode,
@@ -92,7 +92,10 @@ import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 
 let failed = 0
 
@@ -195,7 +198,7 @@ assert('inject replace', md.includes('updated'))
 md = removeBlock(md)
 assert('remove block', !md.includes('SEARCH_BOOST_START'))
 const broken = `${MARKER_START}\nbody\n<!-- user edited away end -->`
-assert('removeMarked keeps file when end missing', removeMarked(broken, MARKER_START, MARKER_END) === broken)
+assert('removeMarked strips when end missing', !removeMarked(broken, MARKER_START, MARKER_END).includes('SEARCH_BOOST_START'))
 
 // GEMINI block round-trip
 let gem = injectGeminiBlock('', '## search routing')
@@ -505,6 +508,15 @@ legacyGrokToml = grokReinstall(legacyGrokToml)
 assert('grok re-install idempotent permission count', countPermissionSections(legacyGrokToml) === 1)
 assert('grok re-install preserves marker', legacyGrokToml.includes('SEARCH_BOOST_permission_START'))
 
+// grok: mixed [permission] allow keeps unrelated entries
+let mixedPermToml = `[permission]\nallow = [\n  "MCPTool(search-boost__fused_search)",\n  "Shell(git)",\n]\n`
+mixedPermToml = stripLegacySearchBoostPermission(mixedPermToml)
+assert('grok strip mixed permission keeps other allows', mixedPermToml.includes('Shell(git)'))
+assert('grok strip mixed permission removes search-boost', !mixedPermToml.includes('search-boost__'))
+assert('grok strip mixed permission keeps section', mixedPermToml.includes('[permission]'))
+mixedPermToml = stripLegacySearchBoostPermission(`[permission]\nallow = [\n  "MCPTool(search-boost__fused_search)",\n]\n`)
+assert('grok strip search-boost-only permission removes section', !mixedPermToml.includes('[permission]'))
+
 // grok: skip [permission] when permission_mode=always-approve
 let alwaysApproveToml = `[ui]\npermission_mode = "always-approve"\n`
 alwaysApproveToml = grokReinstall(alwaysApproveToml)
@@ -545,14 +557,69 @@ writeFileSync(join(grokDir, '.grok', 'rules', 'search-boost.md'), '# rule\n')
 writeFileSync(join(grokDir, '.grok', 'skills', 'search-boost', 'SKILL.md'), '# skill\n')
 process.chdir(grokDir)
 assert('grok configured project scope', agentConfigured('grok') === true)
-assert('grok uninstall scopes user+project', grokUninstallScopes('user').join() === 'user,project')
+assert('grok scope has artifacts project', grokScopeHasArtifacts('project') === true)
+assert('grok uninstall scopes user only', grokUninstallScopes('user').join() === 'user')
 assert('grok uninstall scopes all', grokUninstallScopes('all').join() === 'user,project')
 await AGENTS.grok.uninstall({ scope: 'project', dryRun: false })
-assert('grok uninstall project config', !readFileSync(join(grokDir, '.grok', 'config.toml'), 'utf8').includes('[mcp_servers.search-boost]'))
+assert('grok uninstall project config', !existsSync(join(grokDir, '.grok', 'config.toml')))
 assert('grok uninstall project rule', !existsSync(join(grokDir, '.grok', 'rules', 'search-boost.md')))
 assert('grok uninstall project skill', !existsSync(join(grokDir, '.grok', 'skills', 'search-boost', 'SKILL.md')))
 process.chdir(origCwd)
 rmSync(grokDir, { recursive: true, force: true })
+
+// grok: user scope uninstall does not touch project artifacts
+{
+  const grokUserDir = mkdtempSync(join(tmpdir(), 'sb-grok-user-'))
+  const grokUserHome = mkdtempSync(join(tmpdir(), 'sb-grok-user-home-'))
+  mkdirSync(join(grokUserDir, '.grok', 'rules'), { recursive: true })
+  mkdirSync(join(grokUserDir, '.grok', 'skills', 'search-boost'), { recursive: true })
+  writeFileSync(join(grokUserDir, '.grok', 'config.toml'), '[mcp_servers.search-boost]\ncommand = "npx"\n')
+  writeFileSync(join(grokUserDir, '.grok', 'rules', 'search-boost.md'), '# project rule\n')
+  writeFileSync(join(grokUserDir, '.grok', 'skills', 'search-boost', 'SKILL.md'), '# project skill\n')
+  mkdirSync(join(grokUserHome, '.grok', 'rules'), { recursive: true })
+  mkdirSync(join(grokUserHome, '.grok', 'skills', 'search-boost'), { recursive: true })
+  writeFileSync(join(grokUserHome, '.grok', 'config.toml'), '[mcp_servers.search-boost]\ncommand = "npx"\n')
+  writeFileSync(join(grokUserHome, '.grok', 'rules', 'search-boost.md'), '# user rule\n')
+  writeFileSync(join(grokUserHome, '.grok', 'skills', 'search-boost', 'SKILL.md'), '# user skill\n')
+  execFileSync(
+    process.execPath,
+    [
+      '-e',
+      `import { AGENTS } from ${JSON.stringify(join(repoRoot, 'lib/agents/index.mjs'))}; await AGENTS.grok.uninstall({ scope: "user", dryRun: false });`,
+    ],
+    { cwd: grokUserDir, env: { ...process.env, HOME: grokUserHome }, stdio: 'pipe' },
+  )
+  assert('grok user uninstall removes user config', !existsSync(join(grokUserHome, '.grok', 'config.toml')))
+  assert('grok user uninstall leaves project config', existsSync(join(grokUserDir, '.grok', 'config.toml')))
+  assert('grok user uninstall leaves project rule', existsSync(join(grokUserDir, '.grok', 'rules', 'search-boost.md')))
+  assert('grok user uninstall leaves project skill', existsSync(join(grokUserDir, '.grok', 'skills', 'search-boost', 'SKILL.md')))
+  rmSync(grokUserDir, { recursive: true, force: true })
+  rmSync(grokUserHome, { recursive: true, force: true })
+}
+
+// grok: all scope no-op does not create files
+const grokNoopDir = mkdtempSync(join(tmpdir(), 'sb-grok-noop-'))
+process.chdir(grokNoopDir)
+await AGENTS.grok.uninstall({ scope: 'all', dryRun: false })
+assert('grok all uninstall no-op no config', !existsSync(join(grokNoopDir, '.grok', 'config.toml')))
+assert('grok all uninstall no-op no rule', !existsSync(join(grokNoopDir, '.grok', 'rules', 'search-boost.md')))
+assert('grok all uninstall no-op no skill', !existsSync(join(grokNoopDir, '.grok', 'skills', 'search-boost', 'SKILL.md')))
+process.chdir(origCwd)
+rmSync(grokNoopDir, { recursive: true, force: true })
+
+// grok: fresh install then uninstall deletes config
+{
+  const grokFreshDir = mkdtempSync(join(tmpdir(), 'sb-grok-fresh-'))
+  process.chdir(grokFreshDir)
+  await AGENTS.grok.install({ scope: 'project', dryRun: false, autoAllow: true })
+  assert('grok fresh install creates project config', existsSync(join(grokFreshDir, '.grok', 'config.toml')))
+  await AGENTS.grok.uninstall({ scope: 'project', dryRun: false })
+  assert('grok fresh uninstall deletes project config', !existsSync(join(grokFreshDir, '.grok', 'config.toml')))
+  assert('grok fresh uninstall deletes project rule', !existsSync(join(grokFreshDir, '.grok', 'rules', 'search-boost.md')))
+  assert('grok fresh uninstall deletes project skill', !existsSync(join(grokFreshDir, '.grok', 'skills', 'search-boost', 'SKILL.md')))
+  process.chdir(origCwd)
+  rmSync(grokFreshDir, { recursive: true, force: true })
+}
 
 // shared instructions cover per-agent routing notes
 assert('mcp instructions mention grok', readFileSync(mcpServerInstructionsPath(), 'utf8').includes('Grok Build'))
