@@ -12,6 +12,7 @@ import {
   availableEngines,
   bumpEngines,
   cleanJsonValue,
+  collectSearchStats,
   domainSearch,
   ENGINE_ORDER,
   fallbackXSearch,
@@ -293,21 +294,7 @@ export function registerAll(server) {
     annotations: { ...ANNOTATIONS.stats, title: 'Search diagnostics' },
   }, async () => {
     try {
-      const engines = bumpEngines()
-      const xSource = authStatus()
-      const body = {
-        startedAt: stats.startedAt,
-        layer: getLayer(),
-        cacheHits: stats.cacheHits,
-        cacheMisses: stats.cacheMisses,
-        tierCounts: stats.tierCounts,
-        engines: Object.fromEntries(
-          ENGINE_ORDER.map((name) => [name, engines[name]?.available() ?? false]),
-        ),
-        xOfficial: xAuthAvailableSync(),
-        xSource: xSource.source,
-        recent: stats.recent.slice(0, 10),
-      }
+      const body = collectSearchStats()
       return toolOk(JSON.stringify(body, null, 2), body)
     } catch (err) {
       return toolErr(err instanceof Error ? err.message : String(err))
