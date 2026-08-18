@@ -26,6 +26,9 @@ jobs:
         run: |
           if grep -q 'runDoctor' lib/cli/commands.mjs; then
             node cli.mjs doctor --quick --json
+            ec=$?
+            if [ "$ec" -eq 2 ]; then exit 0; fi
+            exit "$ec"
           fi
       - run: npm run test:fusion
       - run: npm run smoke

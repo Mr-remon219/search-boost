@@ -267,6 +267,14 @@ await withIsolatedHome(async (home) => {
   }
 }
 
+// agents: fresh machine with no agents detected or configured -> warn (not fail)
+await withIsolatedHome(async (home) => {
+  const { report, exitCode } = runDoctorInSubprocess(home, 'agents')
+  const coverage = findCheck(report, 'agent_install_coverage')
+  assert('agent_install_coverage warn when none', coverage?.status === 'warn')
+  assert('agent_install_coverage none exit 2', exitCode === 2)
+})
+
 if (failed) {
   console.error(`\n${failed} test(s) failed`)
   process.exit(1)
