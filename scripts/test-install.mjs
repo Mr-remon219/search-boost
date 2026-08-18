@@ -88,7 +88,7 @@ import {
 import { readJsonFile, writeJsonFile } from '../lib/json-config.mjs'
 import { maskKey, readKeysFile, readKeysFromCandidates, writeKeysFile, envKeyHint, resetLegacyKeysMigrationNotice, RECOMMEND_ALL_KEYED_ENGINES, readKeysRouting, readEngineRouting, setEnabledEngines } from '../lib/keys.mjs'
 import { engineRegistry } from '../lib/search/engines.js'
-import { readFirstExistingJson } from '../lib/config-paths.mjs'
+import { readFirstExistingJson, resetConfigMigrationNotices, prepareConfigWrite } from '../lib/config-paths.mjs'
 import {
   forgetAntigravityWorkspace,
   listAntigravityWorkspaces,
@@ -109,12 +109,13 @@ import {
   removeCliPermissionAllow,
 } from '../lib/cli-config.mjs'
 import { stripSearchBoostPermissions } from '../lib/antigravity-settings.mjs'
+import { countSearchBoostAllowEntries, isSearchBoostAllow } from '../lib/claude-settings.mjs'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 
@@ -336,7 +337,6 @@ assert('antigravity omits type', !('type' in agy) && agy.command && agy.args?.le
 // antigravity permissions
 const agyPerms = antigravityPermissions()
 assert('antigravity permissions wildcard', agyPerms.includes('mcp(search-boost/*)'))
-assert('antigravity permissions fused_search', agyPerms.includes('mcp(search-boost/fused_search)'))
 
 // workspace paths
 const ws = workspaceAgents('/tmp/myproject')
@@ -386,6 +386,43 @@ assert('keys write tavily', k.tavily === 'tvly-test-key-12345678')
 assert('keys mask', maskKey('tvly-test-key-12345678').includes('****'))
 writeKeysFile({ tavily: undefined })
 assert('keys unset', !readKeysFile().tavily)
+
+// empty nested must not shadow flat keys
+{
+  const saved = {
+    HOME: process.env.HOME,
+    USERPROFILE: process.env.USERPROFILE,
+    SEARCH_BOOST_HOME: process.env.SEARCH_BOOST_HOME,
+    SEARCH_BOOST_KEYS_FILE: process.env.SEARCH_BOOST_KEYS_FILE,
+  }
+  const nestBase = mkdtempSync(join(tmpdir(), 'sb-empty-nested-shadow-'))
+  process.env.HOME = nestBase
+  process.env.USERPROFILE = nestBase
+  delete process.env.SEARCH_BOOST_HOME
+  delete process.env.SEARCH_BOOST_KEYS_FILE
+  mkdirSync(join(nestBase, '.search-boost/config'), { recursive: true })
+  writeFileSync(join(nestBase, '.search-boost/config/keys.json'), '{}\n', 'utf8')
+  writeFileSync(
+    join(nestBase, '.search-boost-keys.json'),
+    `${JSON.stringify({ tavily: 'flat-shadow-key-123456' })}\n`,
+    'utf8',
+  )
+  const shadowRead = readKeysFile()
+  assert('empty nested falls through to flat keys', shadowRead.tavily === 'flat-shadow-key-123456')
+  resetConfigMigrationNotices()
+  prepareConfigWrite('keys')
+  assert(
+    'empty nested write merges flat keys',
+    JSON.parse(readFileSync(join(nestBase, '.search-boost/config/keys.json'), 'utf8')).tavily
+      === 'flat-shadow-key-123456',
+  )
+  assert('empty nested merge keeps flat file', existsSync(join(nestBase, '.search-boost-keys.json')))
+  for (const [key, value] of Object.entries(saved)) {
+    if (value === undefined) delete process.env[key]
+    else process.env[key] = value
+  }
+  rmSync(nestBase, { recursive: true, force: true })
+}
 
 // empty primary must not fall back to legacy keys
 const emptyPrimaryHome = mkdtempSync(join(tmpdir(), 'sb-empty-primary-'))
@@ -532,6 +569,8 @@ assert('load codex skill', codexSkill?.includes('mcp__search-boost__fused_search
 // claude permissions wildcard
 const perms = claudePermissions()
 assert('claude permissions wildcard', perms.length === 1 && perms[0] === 'mcp__search-boost__*')
+assert('claude allow non-string safe', !isSearchBoostAllow(null) && !isSearchBoostAllow(42))
+assert('claude allow filters non-string', countSearchBoostAllowEntries(['mcp__search-boost__*', null, 1]) === 1)
 
 // shared MCP server instructions
 assert('mcp instructions path is shared', mcpServerInstructionsPath() === SHARED_SERVER_INSTRUCTIONS)
@@ -654,9 +693,9 @@ rmSync(grokDir, { recursive: true, force: true })
     process.execPath,
     [
       '-e',
-      `import { AGENTS } from ${JSON.stringify(join(repoRoot, 'lib/agents/index.mjs'))}; await AGENTS.grok.uninstall({ scope: "user", dryRun: false });`,
+      `import { AGENTS } from '${pathToFileURL(join(repoRoot, 'lib/agents/index.mjs')).href}'; await AGENTS.grok.uninstall({ scope: "user", dryRun: false });`,
     ],
-    { cwd: grokUserDir, env: { ...process.env, HOME: grokUserHome }, stdio: 'pipe' },
+    { cwd: grokUserDir, env: { ...process.env, HOME: grokUserHome, USERPROFILE: grokUserHome }, stdio: 'pipe' },
   )
   assert('grok user uninstall removes user config', !existsSync(join(grokUserHome, '.grok', 'config.toml')))
   assert('grok user uninstall leaves project config', existsSync(join(grokUserDir, '.grok', 'config.toml')))
