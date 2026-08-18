@@ -5,6 +5,7 @@
 import { help, installOpts, parseFlags } from './lib/cli/args.mjs'
 import {
   printAgentsTsv,
+  printDoctor,
   printSnippet,
   runConfigKeys,
   runConfigLayer,
@@ -54,9 +55,13 @@ async function main() {
       if (sub === 'keys') await runConfigKeys(argv.slice(2))
       else if (sub === 'layer') await runConfigLayer(argv.slice(2))
       else if (sub === 'search') await runConfigSearchCmd(argv.slice(2))
-      else throw new Error('Usage: search-boost config keys|layer|search')
+      else if (sub === 'diag') printDoctor()
+      else throw new Error('Usage: search-boost config keys|layer|search|diag')
       break
     }
+    case 'doctor':
+      printDoctor()
+      break
     case 'agents':
       printAgentsTsv()
       break

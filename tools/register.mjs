@@ -12,6 +12,7 @@ import {
   availableEngines,
   bumpEngines,
   cleanJsonValue,
+  collectSearchStats,
   domainSearch,
   ENGINE_ORDER,
   fallbackXSearch,

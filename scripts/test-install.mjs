@@ -61,7 +61,7 @@ import {
 } from '../agents/router.mjs'
 import { agentConfigured, grokConfigCandidates, grokInstallPaths, grokUninstallScopes, PATHS, workspaceAgents } from '../lib/paths.mjs'
 import { readJsonFile, writeJsonFile } from '../lib/json-config.mjs'
-import { maskKey, readKeysFile, readKeysFromCandidates, writeKeysFile } from '../lib/keys.mjs'
+import { maskKey, readKeysFile, readKeysFromCandidates, writeKeysFile, envKeyHint, resetLegacyKeysMigrationNotice } from '../lib/keys.mjs'
 import { readFirstExistingJson } from '../lib/config-paths.mjs'
 import {
   forgetAntigravityWorkspace,
@@ -312,6 +312,34 @@ const layerParsed = readFirstExistingJson([primaryLayerPath, legacyLayerPath], {
 assert('legacy layer path readable', layerParsed.layer === 'free')
 rmSync(legacyLayerDir, { recursive: true, force: true })
 process.env.SEARCH_BOOST_LAYER_FILE = join(tmpdir(), `search-boost-test-layer-${process.pid}.json`)
+
+// legacy keys migration notice (one-time warn when primary missing)
+resetLegacyKeysMigrationNotice()
+const savedKeysEnv = process.env.SEARCH_BOOST_KEYS_FILE
+delete process.env.SEARCH_BOOST_KEYS_FILE
+const legacyNoticeHome = mkdtempSync(join(tmpdir(), 'sb-legacy-notice-'))
+writeFileSync(
+  join(legacyNoticeHome, '.dsh-search-boost-keys.json'),
+  `${JSON.stringify({ tavily: 'legacy-notice-key' })}\n`,
+  'utf8',
+)
+const origWarn = console.warn
+let warnCount = 0
+console.warn = () => { warnCount++ }
+readKeysFile({ homeDir: legacyNoticeHome })
+assert('legacy keys migration notice', warnCount === 1)
+readKeysFile({ homeDir: legacyNoticeHome })
+assert('legacy keys migration notice once', warnCount === 1)
+console.warn = origWarn
+resetLegacyKeysMigrationNotice()
+rmSync(legacyNoticeHome, { recursive: true, force: true })
+if (savedKeysEnv) process.env.SEARCH_BOOST_KEYS_FILE = savedKeysEnv
+
+// env key hint
+process.env.TAVILY_API_KEY = 'tvly-env-key-12345678'
+assert('env key hint', envKeyHint('tavily')?.includes('TAVILY_API_KEY still set in environment'))
+delete process.env.TAVILY_API_KEY
+assert('env key hint absent', envKeyHint('tavily') === null)
 
 // layer
 setLayer('free')
