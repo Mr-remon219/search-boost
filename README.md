@@ -110,11 +110,13 @@ Also: resource `search-boost://policy` · prompt `search_routing`
 - **free** — Bing + DuckDuckGo + Yahoo + Exa-free; no API keys.
 - **api** — free-layer engines plus Antigravity CLI (when available) and **any** of Tavily / Brave / Exa that you configure (one key works; all three recommended for best cross-engine fusion)
 
-Keys: `search-boost config keys` → `~/.search-boost-keys.json` (legacy `~/.dsh-search-boost-keys.json` still read; or env `TAVILY_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`). Optional routing: `enabledEngines: ["exa"]` or `"engines": { "brave": { "enabled": false } }` in the keys file.
+Keys: `search-boost config keys` → `~/.search-boost/config/keys.json` (flat `~/.search-boost-keys.json` and legacy `~/.dsh-search-boost-keys.json` still read; or env `TAVILY_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`). Optional routing: `enabledEngines: ["exa"]` or `"engines": { "brave": { "enabled": false } }` in the keys file.
+
+**Config layout (v0.1.6+):** runtime data lives under `~/.search-boost/` — `config/` (keys, layer, xauth), `cache/` (xguest token), `state/` (Antigravity workspace registry). First write lazy-migrates from flat `~/.search-boost-*.json` files (old copies kept). Override base: `SEARCH_BOOST_HOME`; per-file: `SEARCH_BOOST_*_FILE`.
 
 Obtain keys: [Tavily](https://app.tavily.com/) · [Brave Search API](https://brave.com/search/api/) · [Exa](https://dashboard.exa.ai/)
 
-**X/Twitter auth (optional):** improves official `x_search` when credentials are present. Stored at `~/.search-boost-xauth.json` (legacy `~/.dsh-search-boost-xauth.json` still read) or via `XAI_API_KEY` / Grok `/x-login`. Override file path: `SEARCH_BOOST_XAUTH_FILE`.
+**X/Twitter auth (optional):** improves official `x_search` when credentials are present. Stored at `~/.search-boost/config/xauth.json` (flat/legacy paths still read) or via `XAI_API_KEY` / Grok `/x-login`. Override file path: `SEARCH_BOOST_XAUTH_FILE`.
 
 **Config file overrides:** `SEARCH_BOOST_KEYS_FILE`, `SEARCH_BOOST_LAYER_FILE`, `SEARCH_BOOST_XAUTH_FILE` (optional env vars pointing at custom paths).
 

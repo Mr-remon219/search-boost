@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { CHECK_IDS } from '../lib/doctor/registry.mjs'
 import { runDoctor } from '../lib/doctor/run.mjs'
 import { renderHuman } from '../lib/doctor/render.mjs'
+import { hasLegacySearchBoostPermission } from '../lib/grok-toml.mjs'
 
 let failed = 0
 
@@ -270,8 +271,38 @@ await withIsolatedHome(async (home) => {
   }
 }
 
-// registry drift: quick checks (design spec lists 15 ids)
-assert('registry quick check count', CHECK_IDS.length === 16)
+// registry drift: quick checks
+assert('registry quick check count', CHECK_IDS.length === 22)
+
+// config_layout warn when flat files exist without nested layout
+await withIsolatedHome(async (home) => {
+  writeFileSync(join(home, '.search-boost-keys.json'), '{}\n', 'utf8')
+  const saved = {
+    HOME: process.env.HOME,
+    USERPROFILE: process.env.USERPROFILE,
+    SEARCH_BOOST_KEYS_FILE: process.env.SEARCH_BOOST_KEYS_FILE,
+    SEARCH_BOOST_LAYER_FILE: process.env.SEARCH_BOOST_LAYER_FILE,
+  }
+  process.env.HOME = home
+  process.env.USERPROFILE = home
+  delete process.env.SEARCH_BOOST_KEYS_FILE
+  delete process.env.SEARCH_BOOST_LAYER_FILE
+  const { report } = await runDoctor({
+    silent: true,
+    category: 'config',
+    env: {
+      TAVILY_API_KEY: undefined,
+      BRAVE_API_KEY: undefined,
+      EXA_API_KEY: undefined,
+    },
+  })
+  for (const [key, value] of Object.entries(saved)) {
+    if (value === undefined) delete process.env[key]
+    else process.env[key] = value
+  }
+  const check = findCheck(report, 'config_layout')
+  assert('config_layout warn on flat-only keys', check?.status === 'warn')
+})
 
 // --category probe with no registered checks → exit 2
 {
@@ -338,6 +369,66 @@ await withIsolatedHome(async (home) => {
     assert('claude keep-native native_search_mismatch warn', native?.status === 'warn')
     const coverage = findCheck(report, 'agent_install_coverage')
     assert('claude keep-native agent_install_coverage pass', coverage?.status === 'pass')
+    const claudePerm = findCheck(report, 'claude_permission_config')
+    assert('claude keep-native permission config pass', claudePerm?.status === 'pass')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// agents: claude partial install (settings without MCP)
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-claude-partial-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    writeFileSync(
+      join(home, '.claude', 'settings.json'),
+      `${JSON.stringify({ permissions: { allow: ['mcp__search-boost__*'] } })}\n`,
+      'utf8',
+    )
+    const { report } = runDoctorInSubprocess(home, 'agents')
+    const claudePerm = findCheck(report, 'claude_permission_config')
+    assert('claude partial install fails permission check', claudePerm?.status === 'fail')
+    assert('claude partial install fix hint', claudePerm?.fix_hint?.includes('search-boost install -t claude'))
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// agents: claude duplicate allow + bypass redundant
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-claude-dup-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    writeFileSync(
+      join(home, '.claude.json'),
+      `${JSON.stringify({ mcpServers: { 'search-boost': { command: 'node', args: ['cli.mjs', 'serve'] } } })}\n`,
+      'utf8',
+    )
+    writeFileSync(
+      join(home, '.claude', 'settings.json'),
+      `${JSON.stringify({
+        permissions: {
+          allow: ['mcp__search-boost__*', 'mcp__search-boost__fused_search'],
+        },
+      })}\n`,
+      'utf8',
+    )
+    const { report: dupReport } = runDoctorInSubprocess(home, 'agents')
+    const dupCheck = findCheck(dupReport, 'claude_permission_config')
+    assert('claude duplicate allow warn', dupCheck?.status === 'warn')
+
+    writeFileSync(
+      join(home, '.claude', 'settings.json'),
+      `${JSON.stringify({
+        bypassPermissions: true,
+        permissions: { allow: ['mcp__search-boost__*'] },
+      })}\n`,
+      'utf8',
+    )
+    const { report: bypassReport } = runDoctorInSubprocess(home, 'agents')
+    const bypassCheck = findCheck(bypassReport, 'claude_permission_config')
+    assert('claude bypass redundant allow warn', bypassCheck?.status === 'warn')
   } finally {
     rmSync(home, { recursive: true, force: true })
   }
@@ -350,6 +441,123 @@ await withIsolatedHome(async (home) => {
   assert('agent_install_coverage warn when none', coverage?.status === 'warn')
   assert('agent_install_coverage none exit 2', exitCode === 2)
 })
+
+// cursor: MCP configured but no sessionStart hook -> warn
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-cursor-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.cursor'), { recursive: true })
+    writeFileSync(
+      join(home, '.cursor', 'mcp.json'),
+      `${JSON.stringify({ mcpServers: { 'search-boost': { command: 'node', args: ['cli.mjs', 'serve'] } } })}\n`,
+      'utf8',
+    )
+    const { report } = runDoctorInSubprocess(home, 'agents')
+    const hook = findCheck(report, 'cursor_hook_config')
+    assert('cursor_hook_config warn without sessionStart', hook?.status === 'warn')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// cursor: duplicate sessionStart search-boost hooks -> fail
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-cursor-dup-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.cursor', 'hooks'), { recursive: true })
+    writeFileSync(
+      join(home, '.cursor', 'mcp.json'),
+      `${JSON.stringify({ mcpServers: { 'search-boost': { command: 'node', args: ['cli.mjs', 'serve'] } } })}\n`,
+      'utf8',
+    )
+    writeFileSync(join(home, '.cursor', 'hooks', 'search-boost-session.mjs'), '// hook\n', 'utf8')
+    writeFileSync(join(home, '.cursor', 'hooks', 'search-boost-inject.md'), '# inject\n', 'utf8')
+    const cmd = `${process.execPath} "${join(home, '.cursor', 'hooks', 'search-boost-session.mjs').replace(/\\/g, '/')}"`
+    writeFileSync(
+      join(home, '.cursor', 'hooks.json'),
+      `${JSON.stringify({
+        version: 1,
+        hooks: {
+          sessionStart: [
+            { command: cmd, timeout: 10 },
+            { command: cmd, timeout: 10 },
+          ],
+        },
+      })}\n`,
+      'utf8',
+    )
+    const { report } = runDoctorInSubprocess(home, 'agents')
+    const hook = findCheck(report, 'cursor_hook_config')
+    assert('cursor_hook_config fail on duplicate sessionStart', hook?.status === 'fail')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// antigravity: search-boost in both MCP paths -> fail
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-agy-dup-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.gemini', 'config'), { recursive: true })
+    mkdirSync(join(home, '.gemini', 'antigravity'), { recursive: true })
+    const entry = { command: 'node', args: ['cli.mjs', 'serve'] }
+    writeFileSync(
+      join(home, '.gemini', 'config', 'mcp_config.json'),
+      `${JSON.stringify({ mcpServers: { 'search-boost': entry } })}\n`,
+      'utf8',
+    )
+    writeFileSync(
+      join(home, '.gemini', 'antigravity', 'mcp_config.json'),
+      `${JSON.stringify({ mcpServers: { 'search-boost': entry } })}\n`,
+      'utf8',
+    )
+    const { report } = runDoctorInSubprocess(home, 'agents')
+    const dup = findCheck(report, 'antigravity_mcp_duplication')
+    assert('antigravity_mcp_duplication fail on dual MCP', dup?.status === 'fail')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// antigravity: wildcard + granular permissions -> warn
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-agy-perm-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.gemini', 'config'), { recursive: true })
+    mkdirSync(join(home, '.gemini', 'antigravity-cli'), { recursive: true })
+    writeFileSync(
+      join(home, '.gemini', 'config', 'mcp_config.json'),
+      `${JSON.stringify({ mcpServers: { 'search-boost': { command: 'node', args: ['serve'] } } })}\n`,
+      'utf8',
+    )
+    writeFileSync(
+      join(home, '.gemini', 'antigravity-cli', 'settings.json'),
+      `${JSON.stringify({
+        permissions: {
+          allow: ['mcp(search-boost/*)', 'mcp(search-boost/fused_search)'],
+        },
+      })}\n`,
+      'utf8',
+    )
+    const { report } = runDoctorInSubprocess(home, 'agents')
+    const perm = findCheck(report, 'antigravity_permission_config')
+    assert('antigravity_permission_config warn on redundant perms', perm?.status === 'warn')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// grok: marked permission region above [permission] is not legacy
+{
+  const markedToml = `# SEARCH_BOOST_permission_START
+[permission]
+allow = [
+  "MCPTool(search-boost__fused_search)",
+]
+# SEARCH_BOOST_permission_END
+`
+  assert('grok marked permission not legacy', !hasLegacySearchBoostPermission(markedToml))
+}
 
 if (failed) {
   console.error(`\n${failed} test(s) failed`)
