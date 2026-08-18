@@ -25,8 +25,10 @@ jobs:
       - name: Doctor CLI smoke
         run: |
           if grep -q 'runDoctor' lib/cli/commands.mjs; then
+            set +e
             node cli.mjs doctor --quick --json
             ec=$?
+            set -e
             if [ "$ec" -eq 2 ]; then exit 0; fi
             exit "$ec"
           fi
