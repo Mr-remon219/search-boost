@@ -271,7 +271,7 @@ await withIsolatedHome(async (home) => {
 }
 
 // registry drift: quick checks (design spec lists 15 ids)
-assert('registry quick check count', CHECK_IDS.length === 15)
+assert('registry quick check count', CHECK_IDS.length === 16)
 
 // --category probe with no registered checks → exit 2
 {

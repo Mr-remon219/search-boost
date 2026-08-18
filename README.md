@@ -162,6 +162,8 @@ Prompts use **model-discretion** wording (search when you choose — not forced 
 
 The plugin ships inside the npm package (MCP via portable `npx`, plus skill).
 
+**Re-install is idempotent:** `search-boost install -t grok` removes any prior search-boost `[permission]` block (marked or legacy) before writing a fresh one, so duplicate `[permission]` keys cannot break `grok` startup. If `[ui] permission_mode = "always-approve"` is already set, `--auto-allow` skips injecting `[permission]` (always-approve approves MCP tools globally). `search-boost doctor` warns on duplicate or redundant permission blocks.
+
 **From a git clone** (repo root):
 
 ```bash
@@ -199,6 +201,7 @@ Details → [grok-plugin/README.md](./grok-plugin/README.md)
 | Network/proxy issues | Phase 2: `search-boost doctor --probe` (not yet implemented) |
 | MCP won't start | `search-boost doctor` → `mcp_launch_command`, `node_version`; then `search-boost serve` |
 | Grok plugin MCP won't start | `grok mcp doctor search-boost`; ensure `npx` and network access work |
+| `grok` fails on config.toml parse | Duplicate `[permission]` — run `search-boost install -t grok -y --auto-allow` |
 | Antigravity `agy` never runs | Requires **api** layer, `agy` on PATH, and `complexity` medium/complex — not simple |
 | Timeouts / fetch errors | Corporate proxy or firewall may block Bing/DDG/Jina; try `search-boost serve` locally to read stderr |
 

@@ -60,6 +60,11 @@ import {
   skillPath,
 } from '../agents/router.mjs'
 import { agentConfigured, grokConfigCandidates, grokInstallPaths, grokUninstallScopes, PATHS, workspaceAgents } from '../lib/paths.mjs'
+import {
+  countPermissionSections,
+  grokAlwaysApproveMode,
+  stripLegacySearchBoostPermission,
+} from '../lib/grok-toml.mjs'
 import { readJsonFile, writeJsonFile } from '../lib/json-config.mjs'
 import { maskKey, readKeysFile, readKeysFromCandidates, writeKeysFile, envKeyHint, resetLegacyKeysMigrationNotice, RECOMMEND_ALL_KEYED_ENGINES, readKeysRouting, readEngineRouting, setEnabledEngines } from '../lib/keys.mjs'
 import { engineRegistry } from '../lib/search/engines.js'
@@ -481,6 +486,30 @@ grokToml = injectTomlSection(grokToml, 'permission', grokPermissionTomlBlock())
 assert('grok permission inject marker', grokToml.includes('SEARCH_BOOST_permission_START'))
 grokToml = removeMarkedToml(grokToml, 'permission')
 assert('grok permission remove marker', !grokToml.includes('SEARCH_BOOST_permission_START'))
+
+// grok: legacy unmarked [permission] + re-install idempotency (no duplicate [permission])
+let legacyGrokToml = `[ui]\npermission_mode = "ask"\n\n[permission]\nallow = [\n  "MCPTool(search-boost__fused_search)",\n  "MCPTool(search-boost__fetch_page)",\n]\n`
+const grokReinstall = (input) => {
+  let t = upsertTomlSection(input, 'search-boost', tomlMcpBlock())
+  t = removeMarkedToml(t, 'permission')
+  t = stripLegacySearchBoostPermission(t)
+  if (!grokAlwaysApproveMode(t)) {
+    t = injectTomlSection(t, 'permission', grokPermissionTomlBlock())
+  }
+  return t
+}
+legacyGrokToml = grokReinstall(legacyGrokToml)
+assert('grok legacy permission migrated to marker', legacyGrokToml.includes('SEARCH_BOOST_permission_START'))
+assert('grok legacy permission single section after first install', countPermissionSections(legacyGrokToml) === 1)
+legacyGrokToml = grokReinstall(legacyGrokToml)
+assert('grok re-install idempotent permission count', countPermissionSections(legacyGrokToml) === 1)
+assert('grok re-install preserves marker', legacyGrokToml.includes('SEARCH_BOOST_permission_START'))
+
+// grok: skip [permission] when permission_mode=always-approve
+let alwaysApproveToml = `[ui]\npermission_mode = "always-approve"\n`
+alwaysApproveToml = grokReinstall(alwaysApproveToml)
+assert('grok skip permission when always-approve', countPermissionSections(alwaysApproveToml) === 0)
+assert('grok always-approve still has mcp section', alwaysApproveToml.includes('[mcp_servers.search-boost]'))
 
 const grokSkillPath = skillPath('grok')
 assert('grok skill path', !!grokSkillPath)
