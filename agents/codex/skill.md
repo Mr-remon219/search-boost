@@ -39,4 +39,4 @@ Search is **available, not required**. Use it when web evidence would improve co
 
 ## Keys
 
-Optional — free layer: bing + ddg + exa-free. Run `search-boost config keys` or see dsh-search-boost README.
+Optional — free layer: bing + ddg + exa-free. Run `search-boost config keys`.

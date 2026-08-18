@@ -13,6 +13,7 @@ import {
   bumpEngines,
   cleanJsonValue,
   domainSearch,
+  ENGINE_ORDER,
   fallbackXSearch,
   fetchPage,
   filterResearchGaps,
@@ -53,7 +54,7 @@ export function registerAll(server) {
     description:
       'Multi-engine parallel web search with URL dedupe and cross-ranking. ' +
       'Prefer over built-in WebSearch for version-sensitive facts, APIs, comparisons, and research. ' +
-      'Free layer: bing+exa-free+googlenews+yahoo (no keys). Api layer adds ddg+tavily/brave/exa when keyed.',
+      'Free layer: bing+ddg+yahoo+exa-free (no keys). Api layer adds antigravity+tavily/brave/exa when keyed.',
     inputSchema: fusedSearchInput,
     outputSchema: fusedSearchOutput,
     annotations: { ...ANNOTATIONS.search, title: 'Search the web (multi-engine fusion)' },
@@ -96,8 +97,10 @@ export function registerAll(server) {
     annotations: { ...ANNOTATIONS.search, title: 'Fetch URL content' },
   }, async (args, extra) => {
     try {
+      const url = String(args.url ?? '').trim()
+      if (!url) return toolErr('fetch_page: url is required')
       const signal = abortSignal(extra, 60_000)
-      const page = await fetchPage(String(args.url).trim(), args.focus, PAGE_CACHE, signal)
+      const page = await fetchPage(url, args.focus, PAGE_CACHE, signal)
       const summary = `fetch_page: ${page.url} — via ${page.via}, ${page.word_count} words, ${page.tookMs}ms`
       return toolOk(`${summary}\n\n${page.content}`, {
         url: page.url,
@@ -259,9 +262,8 @@ export function registerAll(server) {
       }
       const engines = bumpEngines()
       const layer = getLayer()
-      const names = layer === 'free'
-        ? ['bing', 'exa-free', 'googlenews', 'yahoo']
-        : ['bing', 'ddg', 'yahoo', 'exa-free', 'googlenews', 'antigravity', 'tavily', 'brave', 'exa']
+      const tierTable = layerTierTable(layer)
+      const names = [...new Set(Object.values(tierTable).flat())]
       const actual = availableEngines(engines, names)
       const x = authStatus()
       const text = [
@@ -291,14 +293,9 @@ export function registerAll(server) {
         cacheHits: stats.cacheHits,
         cacheMisses: stats.cacheMisses,
         tierCounts: stats.tierCounts,
-        engines: {
-          bing: engines.bing?.available() ?? false,
-          ddg: engines.ddg?.available() ?? false,
-          'exa-free': engines['exa-free']?.available() ?? false,
-          tavily: engines.tavily?.available() ?? false,
-          brave: engines.brave?.available() ?? false,
-          exa: engines.exa?.available() ?? false,
-        },
+        engines: Object.fromEntries(
+          ENGINE_ORDER.map((name) => [name, engines[name]?.available() ?? false]),
+        ),
         xOfficial: xAuthAvailableSync(),
         xSource: xSource.source,
         recent: stats.recent.slice(0, 10),

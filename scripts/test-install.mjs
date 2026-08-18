@@ -6,11 +6,14 @@ import {
   injectBlock,
   injectGeminiBlock,
   injectTomlSection,
+  MARKER_END,
+  MARKER_START,
   removeBlock,
   removeGeminiBlock,
+  removeMarked,
   removeTomlSection as removeMarkedToml,
 } from '../lib/inject.mjs'
-import { normalizeTargets, parseTargetSpec } from '../lib/agents/index.mjs'
+import { normalizeTargets, parseTargetSpec, AGENTS } from '../lib/agents/index.mjs'
 import { parseFlags } from '../lib/cli/args.mjs'
 import { stripAllowList, upsertAllowList } from '../lib/json-config.mjs'
 import {
@@ -56,7 +59,13 @@ import {
 } from '../agents/router.mjs'
 import { grokInstallPaths, workspaceAgents } from '../lib/paths.mjs'
 import { readJsonFile, writeJsonFile } from '../lib/json-config.mjs'
-import { maskKey, readKeysFile, writeKeysFile } from '../lib/keys.mjs'
+import { maskKey, readKeysFile, readKeysFromCandidates, writeKeysFile } from '../lib/keys.mjs'
+import { readFirstExistingJson } from '../lib/config-paths.mjs'
+import {
+  forgetAntigravityWorkspace,
+  listAntigravityWorkspaces,
+  recordAntigravityWorkspace,
+} from '../lib/workspace-marker.mjs'
 import { getLayer, setLayer } from '../lib/layer-config.mjs'
 import {
   buildSessionStartCommand,
@@ -114,6 +123,7 @@ assert('web_search marker removed', !toml.includes('SEARCH_BOOST_WEB_SEARCH_STAR
 // MCP toml block: auto approval only when opted in
 assert('toml mcp approval opt-in', tomlMcpBlock({ approvalAuto: true }).includes('default_tools_approval_mode = "auto"'))
 assert('toml mcp approval default off', !tomlMcpBlock().includes('default_tools_approval_mode'))
+assert('toml mcp no baked layer env', !tomlMcpBlock().includes('SEARCH_BOOST_LAYER'))
 
 // native-search capability table + pure apply
 assert('auto-allow ids include cursor', autoAllowAgentIds().includes('cursor') && autoAllowAgentIds().includes('claude'))
@@ -145,6 +155,8 @@ md = injectBlock(md, snippet + '\nupdated')
 assert('inject replace', md.includes('updated'))
 md = removeBlock(md)
 assert('remove block', !md.includes('SEARCH_BOOST_START'))
+const broken = `${MARKER_START}\nbody\n<!-- user edited away end -->`
+assert('removeMarked keeps file when end missing', removeMarked(broken, MARKER_START, MARKER_END) === broken)
 
 // GEMINI block round-trip
 let gem = injectGeminiBlock('', '## search routing')
@@ -258,11 +270,49 @@ assert('keys mask', maskKey('tvly-test-key-12345678').includes('****'))
 writeKeysFile({ tavily: undefined })
 assert('keys unset', !readKeysFile().tavily)
 
+// empty primary must not fall back to legacy keys
+const emptyPrimaryHome = mkdtempSync(join(tmpdir(), 'sb-empty-primary-'))
+writeFileSync(join(emptyPrimaryHome, '.search-boost-keys.json'), '{}\n', 'utf8')
+writeFileSync(
+  join(emptyPrimaryHome, '.dsh-search-boost-keys.json'),
+  `${JSON.stringify({ tavily: 'legacy-should-not-load' })}\n`,
+  'utf8',
+)
+const clearedPrimary = readKeysFile({ homeDir: emptyPrimaryHome })
+assert('empty primary blocks legacy keys', !clearedPrimary.tavily)
+rmSync(emptyPrimaryHome, { recursive: true, force: true })
+
+// legacy config path fallback (primary missing, legacy file present)
+const legacyDir = mkdtempSync(join(tmpdir(), 'sb-legacy-keys-'))
+const primaryKeysPath = join(legacyDir, '.search-boost-keys.json')
+const legacyKeysPath = join(legacyDir, '.dsh-search-boost-keys.json')
+writeFileSync(legacyKeysPath, `${JSON.stringify({ tavily: 'legacy-key-from-dsh-path' })}\n`, 'utf8')
+const legacyRead = readKeysFromCandidates([primaryKeysPath, legacyKeysPath])
+assert('legacy keys path fallback', legacyRead.tavily === 'legacy-key-from-dsh-path')
+const jsonFallback = readFirstExistingJson([primaryKeysPath, legacyKeysPath], {})
+assert('readFirstExistingJson legacy', jsonFallback.tavily === 'legacy-key-from-dsh-path')
+rmSync(legacyDir, { recursive: true, force: true })
+
+// layer config legacy fallback
+const legacyLayerDir = mkdtempSync(join(tmpdir(), 'sb-legacy-layer-'))
+const primaryLayerPath = join(legacyLayerDir, '.search-boost-layer.json')
+const legacyLayerPath = join(legacyLayerDir, '.dsh-search-boost-layer.json')
+writeFileSync(legacyLayerPath, `${JSON.stringify({ layer: 'free' })}\n`, 'utf8')
+process.env.SEARCH_BOOST_LAYER_FILE = primaryLayerPath
+// Simulate layer read: primary missing → should not find via env-only path; test candidates directly
+const layerParsed = readFirstExistingJson([primaryLayerPath, legacyLayerPath], {})
+assert('legacy layer path readable', layerParsed.layer === 'free')
+rmSync(legacyLayerDir, { recursive: true, force: true })
+process.env.SEARCH_BOOST_LAYER_FILE = join(tmpdir(), `search-boost-test-layer-${process.pid}.json`)
+
 // layer
 setLayer('free')
 assert('layer free', getLayer() === 'free')
 setLayer('api')
 assert('layer api', getLayer() === 'api')
+process.env.SEARCH_BOOST_LAYER = 'free'
+assert('layer file beats env', getLayer() === 'api')
+delete process.env.SEARCH_BOOST_LAYER
 
 // router resolves per-agent assets
 for (const id of ROUTE_IDS) {
@@ -316,7 +366,8 @@ assert('grok skill frontmatter', readFileSync(grokSkillPath, 'utf8').trimStart()
 
 const projectPaths = grokInstallPaths('project')
 assert('grok project config path', projectPaths.config.includes('.grok'))
-assert('grok project rule stays user', projectPaths.rule.includes('.grok') && projectPaths.rule.includes('rules'))
+assert('grok project rule path', projectPaths.rule.includes('.grok') && projectPaths.rule.includes('rules'))
+assert('grok project skill path', projectPaths.skill.includes('.grok') && projectPaths.skill.includes('skills'))
 
 // shared instructions cover per-agent routing notes
 assert('mcp instructions mention grok', readFileSync(mcpServerInstructionsPath(), 'utf8').includes('Grok Build'))
@@ -360,6 +411,21 @@ assert('session-start json', parsed.continue === true && parsed.additional_conte
 rmSync(hookDir, { recursive: true, force: true })
 rmSync(hooksDir, { recursive: true, force: true })
 rmSync(cliDir, { recursive: true, force: true })
+
+// antigravity workspace marker round-trip
+process.env.SEARCH_BOOST_WORKSPACES_FILE = join(tmpdir(), `search-boost-workspaces-${process.pid}.json`)
+await recordAntigravityWorkspace('/tmp/project-a', false)
+await recordAntigravityWorkspace('/tmp/project-b', false)
+assert('workspace marker records', (await listAntigravityWorkspaces()).length === 2)
+await forgetAntigravityWorkspace('/tmp/project-a', false)
+assert('workspace marker forgets', (await listAntigravityWorkspaces()).length === 1)
+delete process.env.SEARCH_BOOST_WORKSPACES_FILE
+
+// agent install adapters (dry-run — catches missing imports on codex/claude paths)
+await AGENTS.codex.install({ dryRun: true, autoAllow: false, replaceNative: true })
+await AGENTS.claude.install({ dryRun: true, autoAllow: false, replaceNative: true })
+assert('codex install dry-run', true)
+assert('claude install dry-run', true)
 
 if (failed) {
   console.error(`\n${failed} test(s) failed`)

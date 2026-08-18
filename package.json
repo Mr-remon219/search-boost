@@ -28,12 +28,12 @@
     "plugin:sync-grok": "node scripts/sync-grok-plugin.mjs",
     "build:plugin": "node scripts/build-plugin.mjs",
     "check": "node scripts/check-syntax.mjs",
-    "prepublishOnly": "npm run check && npm run test:install"
+    "prepublishOnly": "npm run check && npm run test:install && npm run smoke"
   },
   "dependencies": {
     "@clack/prompts": "^0.10.1",
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "dsh-search-boost": "^0.1.2",
+    "undici": "^6.27.0",
     "zod": "^3.24.2"
   },
   "engines": {

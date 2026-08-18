@@ -4,7 +4,6 @@
 [mcp_servers.search-boost]
 command = "npx"
 args = ["-y", "search-boost-mcp", "serve"]
-env = { SEARCH_BOOST_LAYER = "free" }
 startup_timeout_sec = 60
 tool_timeout_sec = 180
 

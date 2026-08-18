@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /**
- * Syntax-check every .mjs the package ships — walks the tree so new files are
- * covered without editing package.json.
+ * Syntax-check shipped source — .mjs tree-wide plus vendored lib/search/*.js.
  */
 import { execFileSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
@@ -19,6 +18,8 @@ function collect(dir) {
       if (SKIP_DIRS.has(entry.name)) continue
       out.push(...collect(join(dir, entry.name)))
     } else if (entry.name.endsWith('.mjs')) {
+      out.push(join(dir, entry.name))
+    } else if (entry.name.endsWith('.js') && relative(ROOT, dir).replace(/\\/g, '/') === 'lib/search') {
       out.push(join(dir, entry.name))
     }
   }

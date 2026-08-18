@@ -9,17 +9,15 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..')
-const DSH = join(PKG, '..', 'dsh-search-boost')
+
+const env = { ...process.env }
+delete env.SEARCH_BOOST_LAYER
 
 const transport = new StdioClientTransport({
   command: 'node',
   args: [join(PKG, 'cli.mjs'), 'serve'],
   cwd: PKG,
-  env: {
-    ...process.env,
-    SEARCH_BOOST_DSH_ROOT: DSH,
-    SEARCH_BOOST_LAYER: 'free',
-  },
+  env,
   stderr: 'pipe',
 })
 

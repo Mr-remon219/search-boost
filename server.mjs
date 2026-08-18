@@ -5,7 +5,6 @@
 import { readFileSync } from 'node:fs'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { dshRepoRoot } from './lib/dsh-lib.mjs'
 import { loadMcpServerInstructionsPath } from './lib/agents/shared.mjs'
 import { getVersion } from './lib/pkg.mjs'
 import { registerAll } from './tools/register.mjs'
@@ -16,14 +15,6 @@ function loadInstructions() {
     if (path) return readFileSync(path, 'utf8').trim()
   } catch { /* fall through */ }
   return 'search-boost MCP: fused_search, fetch_page, x_search, deep_research. Use when you need verifiable external facts — at your discretion.'
-}
-
-// Validate dsh sibling early — fail fast with clear stderr (stdio transport must not log to stdout)
-try {
-  dshRepoRoot()
-} catch (err) {
-  console.error('[search-boost-mcp]', err instanceof Error ? err.message : String(err))
-  process.exit(1)
 }
 
 const server = new McpServer(

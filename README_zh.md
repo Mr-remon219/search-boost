@@ -10,15 +10,15 @@
 > | [**dsh-search-boost**](https://github.com/Mr-remon219/dsh-search-boost) | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | [GitHub](https://github.com/Mr-remon219/dsh-search-boost) · [npm](https://www.npmjs.com/package/dsh-search-boost) |
 > | [**pi-search-boost**](https://github.com/Mr-remon219/pi-search-boost) | [pi](https://github.com/earendil-works/pi-coding-agent) | [GitHub](https://github.com/Mr-remon219/pi-search-boost) · [npm](https://www.npmjs.com/package/pi-search-boost) |
 
-底层搜索引擎来自 [`dsh-search-boost`](https://github.com/Mr-remon219/dsh-search-boost)（已作为 npm 依赖打包进来）：**free** 层并行调用 Bing、Exa 免费通道、Google News 与 Yahoo；**api** 层在此基础上增加 DuckDuckGo、Antigravity CLI（本机可用时）以及配置了 Key 的 Tavily / Brave / Exa。此外还提供 X 搜索降级、Jina 正文抓取和深度研究多轮检索。
+底层搜索引擎**内置于 [`lib/search/`](./lib/search/)**（源自 [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)）：**free** 层并行调用 Bing、DuckDuckGo、Yahoo 与 Exa-free；**api** 层在此基础上增加 Antigravity CLI（本机可用时）以及配置了 Key 的 Tavily / Brave / Exa。此外还提供 X 搜索降级、Jina 正文抓取和深度研究多轮检索。
 
 English → [README.md](./README.md)
 
 ### v0.1.2 更新
 
-- **免费层引擎池**经 live 基准测试后重组：常规搜索用 Bing + Exa-free + Google News + Yahoo；DuckDuckGo 仅用于带域名限制的检索（如 `x_search` 降级时的 `site:` 查询）。
+- **自包含引擎池**（`lib/search/`）：常规搜索用 Bing + DuckDuckGo + Yahoo + Exa-free；同一引擎池也用于 `x_search` 降级时的 `site:` 查询。
 - **`x_search` 降级**在多引擎域名搜索时会自动加上 `site:x.com`，无 XAI 凭据时关键词搜索也能返回结果。
-- 依赖 [`dsh-search-boost@0.1.2`](https://www.npmjs.com/package/dsh-search-boost)。
+- **无需外部 dsh 仓库或 npm 依赖** — 引擎逻辑已 vendored 到本仓库。
 
 ---
 
@@ -63,10 +63,12 @@ search-boost install -t antigravity --workspace --auto-allow -y
 
 **两种搜索层**
 
-- **free**：Bing + Exa-free + Google News + Yahoo，**无需 API Key**。DuckDuckGo 仅用于域名限定搜索（如 `x_search` 降级）。
-- **api**：在 free 层基础上增加 DuckDuckGo、Antigravity CLI（本机可用时）以及 Tavily / Brave / Exa，需配置 Key
+- **free**：Bing + DuckDuckGo + Yahoo + Exa-free，**无需 API Key**。
+- **api**：在 free 层基础上增加 Antigravity CLI（本机可用时）以及 Tavily / Brave / Exa，需配置 Key
 
-配 Key：`search-boost config keys`，写到 `~/.dsh-search-boost-keys.json`；也可以设环境变量 `TAVILY_API_KEY`、`BRAVE_API_KEY`、`EXA_API_KEY`。
+配 Key：`search-boost config keys`，写到 `~/.search-boost-keys.json`（仍会读取旧路径 `~/.dsh-search-boost-keys.json`）；也可以设环境变量 `TAVILY_API_KEY`、`BRAVE_API_KEY`、`EXA_API_KEY`。
+
+**配置文件路径覆盖：** 环境变量 `SEARCH_BOOST_KEYS_FILE`、`SEARCH_BOOST_LAYER_FILE`（可选，指向自定义路径）。
 
 ---
 
@@ -123,7 +125,7 @@ npm run check && npm run test:install && npm run smoke
 node cli.mjs install --dry-run -y
 ```
 
-从源码安装时，MCP 启动命令会写成 `node /你的路径/cli.mjs serve`。如果和 dsh 放在同一个 monorepo，可以设 `SEARCH_BOOST_DSH_ROOT=../dsh-search-boost`。
+从源码安装时，MCP 启动命令会写成 `node /你的路径/cli.mjs serve`。无需 sibling checkout 或 `SEARCH_BOOST_DSH_ROOT`。
 
 ---
 

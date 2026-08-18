@@ -12,9 +12,6 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const AGY = join(ROOT, 'agents', 'antigravity')
 const PLUGIN = join(AGY, 'plugin')
 
-/** Shipped bundles pin the keyless layer; SEARCH_BOOST_LAYER overrides at runtime. */
-const DIST_LAYER = 'free'
-
 async function writeSkill() {
   const body = await readFile(join(AGY, 'skill.md'), 'utf8')
   const header = buildSkillHeader('antigravity')
@@ -32,10 +29,7 @@ async function writeRule() {
 }
 
 async function writeMcpConfig() {
-  const entry = {
-    ...antigravityMcpEntry(),
-    env: { SEARCH_BOOST_LAYER: DIST_LAYER },
-  }
+  const entry = antigravityMcpEntry()
   const config = { mcpServers: { 'search-boost': entry } }
   await writeFile(join(PLUGIN, 'mcp_config.json'), `${JSON.stringify(config, null, 2)}\n`, 'utf8')
 }

@@ -7,9 +7,6 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { jsonMcpEntry } from '../lib/mcp-entry.mjs'
 
-/** Shipped bundles pin the keyless layer; SEARCH_BOOST_LAYER overrides at runtime. */
-const DIST_LAYER = 'free'
-
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGIN = join(ROOT, 'grok-plugin')
 const SKILL_SRC = join(ROOT, 'agents', 'grok', 'skill.md')
@@ -21,10 +18,7 @@ copyFileSync(SKILL_SRC, SKILL_DEST)
 
 const mcp = {
   mcpServers: {
-    'search-boost': {
-      ...jsonMcpEntry(),
-      env: { SEARCH_BOOST_LAYER: DIST_LAYER },
-    },
+    'search-boost': jsonMcpEntry(),
   },
 }
 writeFileSync(MCP_DEST, `${JSON.stringify(mcp, null, 2)}\n`)

@@ -44,4 +44,8 @@ Optional detail: resource `search-boost://policy`.
 
 ## Keys
 
-Free layer: no keys. Api: `~/.dsh-search-boost-keys.json` or `TAVILY_API_KEY` / `BRAVE_API_KEY` / `EXA_API_KEY`.
+Free layer: no keys. Api: `~/.search-boost-keys.json` (legacy `~/.dsh-search-boost-keys.json` still read) or `TAVILY_API_KEY` / `BRAVE_API_KEY` / `EXA_API_KEY`. Override file paths with `SEARCH_BOOST_KEYS_FILE` / `SEARCH_BOOST_LAYER_FILE`.
+
+## Runtime
+
+Search engines are **vendored in `lib/search/`** — this MCP server runs standalone (`node cli.mjs serve`); no sibling checkout or external search-boost runtime is required.

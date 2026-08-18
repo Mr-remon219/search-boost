@@ -29,4 +29,4 @@ MCP resource `search-boost://policy` · hook injects a short capability summary 
 
 ## Keys
 
-Optional — free layer: bing + ddg + exa-free. Run `search-boost config keys` or see dsh-search-boost README.
+Optional — free layer: bing + ddg + exa-free. Run `search-boost config keys`.

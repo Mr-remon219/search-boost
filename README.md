@@ -10,15 +10,15 @@ Multi-engine web search **MCP server** for coding agents. One CLI install wires 
 > | [**dsh-search-boost**](https://github.com/Mr-remon219/dsh-search-boost) | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle plugin | [GitHub](https://github.com/Mr-remon219/dsh-search-boost) · [npm](https://www.npmjs.com/package/dsh-search-boost) |
 > | [**pi-search-boost**](https://github.com/Mr-remon219/pi-search-boost) | [pi](https://github.com/earendil-works/pi-coding-agent) extension | [GitHub](https://github.com/Mr-remon219/pi-search-boost) · [npm](https://www.npmjs.com/package/pi-search-boost) |
 
-Search engines come from [`dsh-search-boost`](https://github.com/Mr-remon219/dsh-search-boost) (bundled as an npm dependency): on the **free** layer, Bing, Exa-free, Google News, and Yahoo run in parallel; the **api** layer adds DuckDuckGo, Antigravity CLI (when available), and keyed Tavily / Brave / Exa. Also included: X/Twitter fallback, Jina page fetch, and deep-research rounds.
+Search engines are **vendored in [`lib/search/`](./lib/search/)** (originally from [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)): on the **free** layer, Bing, DuckDuckGo, Yahoo, and Exa-free run in parallel; the **api** layer adds Antigravity CLI (when available) and keyed Tavily / Brave / Exa. Also included: X/Twitter fallback, Jina page fetch, and deep-research rounds.
 
 中文文档 → [README_zh.md](./README_zh.md)
 
 ### What's new in v0.1.2
 
-- **Free-layer engine pool rebuilt** after live benchmarks: Bing + Exa-free + Google News + Yahoo for general search; DuckDuckGo kept for domain-restricted routes (e.g. `x_search` fallback with `site:` queries).
+- **Self-contained engine pool** in `lib/search/`: Bing + DuckDuckGo + Yahoo + Exa-free for general search; same pool powers `x_search` fallback with `site:` queries.
 - **`x_search` fallback** auto-prepends `site:x.com` for multi-engine domain search so keyword mode works without XAI credentials.
-- Depends on [`dsh-search-boost@0.1.2`](https://www.npmjs.com/package/dsh-search-boost).
+- **No external dsh repo or npm dependency** — engine logic is vendored in this repository.
 
 ---
 
@@ -63,10 +63,12 @@ Also: resource `search-boost://policy` · prompt `search_routing`
 
 **Layers**
 
-- **free** — Bing + Exa-free + Google News + Yahoo; no API keys. DuckDuckGo is used only for domain-restricted searches (e.g. `x_search` fallback).
-- **api** — free-layer engines plus DuckDuckGo, Antigravity CLI (when available), and Tavily / Brave / Exa when keys are set
+- **free** — Bing + DuckDuckGo + Yahoo + Exa-free; no API keys.
+- **api** — free-layer engines plus Antigravity CLI (when available) and Tavily / Brave / Exa when keys are set
 
-Keys: `search-boost config keys` → `~/.dsh-search-boost-keys.json` (or env `TAVILY_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`).
+Keys: `search-boost config keys` → `~/.search-boost-keys.json` (legacy `~/.dsh-search-boost-keys.json` still read; or env `TAVILY_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`).
+
+**Config file overrides:** `SEARCH_BOOST_KEYS_FILE`, `SEARCH_BOOST_LAYER_FILE` (optional env vars pointing at custom paths).
 
 ---
 
@@ -123,7 +125,7 @@ npm run check && npm run test:install && npm run smoke
 node cli.mjs install --dry-run -y
 ```
 
-Local clone installs write `node /path/to/cli.mjs serve` (not npx). Sibling checkout: set `SEARCH_BOOST_DSH_ROOT=../dsh-search-boost` if needed.
+Local clone installs write `node /path/to/cli.mjs serve` (not npx). No sibling checkout or `SEARCH_BOOST_DSH_ROOT` is required.
 
 ---
 

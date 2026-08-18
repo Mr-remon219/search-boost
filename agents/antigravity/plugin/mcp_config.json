@@ -5,10 +5,7 @@
       "args": [
         "W:/fastproject/search-boost-mcp/cli.mjs",
         "serve"
-      ],
-      "env": {
-        "SEARCH_BOOST_LAYER": "free"
-      }
+      ]
     }
   }
 }
