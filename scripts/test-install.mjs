@@ -68,7 +68,7 @@ import {
   listAntigravityWorkspaces,
   recordAntigravityWorkspace,
 } from '../lib/workspace-marker.mjs'
-import { getLayer, setLayer } from '../lib/layer-config.mjs'
+import { getLayer, setLayer, shouldPersistDefaultLayer } from '../lib/layer-config.mjs'
 import { formatKeyStatusLines } from '../lib/installer/keys-wizard.mjs'
 import { layerApiNoKeysWarning } from '../lib/installer/status.mjs'
 import {
@@ -143,6 +143,35 @@ assert('claude native deny', claudeNativeReplaced(claudeOn) && claudeOn.permissi
 const claudeOff = applyClaudeNativeSettings(claudeOn, false)
 assert('claude native revert keeps allow', !claudeNativeReplaced(claudeOff) && claudeOff.permissions.allow.includes('mcp__search-boost__*'))
 assert('claude deny constant', CLAUDE_WEB_SEARCH_DENY === 'WebSearch')
+
+// claude configured = MCP only (--keep-native skips WebSearch deny; native_search_mismatch covers that)
+{
+  const claudeHome = mkdtempSync(join(tmpdir(), `sb-claude-home-${process.pid}-`))
+  const saved = { USERPROFILE: process.env.USERPROFILE, HOME: process.env.HOME }
+  process.env.USERPROFILE = claudeHome
+  process.env.HOME = claudeHome
+  try {
+    mkdirSync(join(claudeHome, '.claude'), { recursive: true })
+    writeFileSync(
+      join(claudeHome, '.claude.json'),
+      `${JSON.stringify({ mcpServers: { 'search-boost': { command: 'node', args: ['cli.mjs', 'serve'] } } })}\n`,
+      'utf8',
+    )
+    writeFileSync(
+      join(claudeHome, '.claude', 'settings.json'),
+      `${JSON.stringify({ permissions: { allow: ['mcp__search-boost__*'] } })}\n`,
+      'utf8',
+    )
+    const { agentConfigured: agentConfiguredFresh } = await import(`../lib/paths.mjs?claudeHome=${Date.now()}`)
+    assert('claude configured with MCP only (keep-native)', agentConfiguredFresh('claude') === true)
+  } finally {
+    if (saved.USERPROFILE === undefined) delete process.env.USERPROFILE
+    else process.env.USERPROFILE = saved.USERPROFILE
+    if (saved.HOME === undefined) delete process.env.HOME
+    else process.env.HOME = saved.HOME
+    rmSync(claudeHome, { recursive: true, force: true })
+  }
+}
 
 const printed = formatPrintConfig('codex', '/tmp/config.toml')
 assert('print-config no approval by default', !printed.includes('default_tools_approval_mode'))
@@ -349,6 +378,23 @@ assert('layer api', getLayer() === 'api')
 process.env.SEARCH_BOOST_LAYER = 'free'
 assert('layer file beats env', getLayer() === 'api')
 delete process.env.SEARCH_BOOST_LAYER
+
+// shouldPersistDefaultLayer respects env override (install must not write layer file)
+{
+  const savedLayerFile = process.env.SEARCH_BOOST_LAYER_FILE
+  const savedLayerEnv = process.env.SEARCH_BOOST_LAYER
+  const layerPath = join(tmpdir(), `search-boost-layer-env-${process.pid}.json`)
+  process.env.SEARCH_BOOST_LAYER_FILE = layerPath
+  process.env.SEARCH_BOOST_LAYER = 'api'
+  delete process.env.TAVILY_API_KEY
+  delete process.env.BRAVE_API_KEY
+  delete process.env.EXA_API_KEY
+  assert('shouldPersistDefaultLayer false when SEARCH_BOOST_LAYER set', shouldPersistDefaultLayer() === false)
+  if (savedLayerFile === undefined) delete process.env.SEARCH_BOOST_LAYER_FILE
+  else process.env.SEARCH_BOOST_LAYER_FILE = savedLayerFile
+  if (savedLayerEnv === undefined) delete process.env.SEARCH_BOOST_LAYER
+  else process.env.SEARCH_BOOST_LAYER = savedLayerEnv
+}
 
 // status helpers
 setLayer('api')

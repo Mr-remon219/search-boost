@@ -1,11 +1,14 @@
 /**
  * Unit-style checks for search-boost doctor (isolated temp home).
  */
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { CHECK_IDS } from '../lib/doctor/registry.mjs'
 import { runDoctor } from '../lib/doctor/run.mjs'
+import { renderHuman } from '../lib/doctor/render.mjs'
 
 let failed = 0
 
@@ -48,6 +51,39 @@ async function withIsolatedHome(fn) {
 
 function findCheck(report, id) {
   return report.checks.find((c) => c.id === id)
+}
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
+
+/**
+ * Run doctor in a child process so agent paths pick up isolated HOME.
+ * @param {string} home
+ * @param {string} category
+ */
+function runDoctorInSubprocess(home, category) {
+  const script = `
+import { runDoctor } from './lib/doctor/run.mjs';
+const { report, exitCode } = await runDoctor({
+  silent: true,
+  category: ${JSON.stringify(category)},
+  homeDir: process.env.HOME,
+  env: {
+    TAVILY_API_KEY: undefined,
+    BRAVE_API_KEY: undefined,
+    EXA_API_KEY: undefined,
+  },
+});
+process.stdout.write(JSON.stringify({ report, exitCode }));
+`
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+    cwd: repoRoot,
+    env: { ...process.env, HOME: home, USERPROFILE: home },
+    encoding: 'utf8',
+  })
+  if (r.status !== 0) {
+    throw new Error(r.stderr || r.stdout || `subprocess exit ${r.status}`)
+  }
+  return JSON.parse(r.stdout.trim())
 }
 
 // layer_keys_coherence warn (api, no keys) → exit 2
@@ -160,6 +196,76 @@ await withIsolatedHome(async (home) => {
 
 // registry drift: quick checks (design spec lists 15 ids)
 assert('registry quick check count', CHECK_IDS.length === 15)
+
+// --category probe with no registered checks → exit 2
+{
+  const { exitCode } = await runDoctor({ silent: true, category: 'probe' })
+  assert('probe category empty exit 2', exitCode === 2)
+}
+
+// config_paths_writable verifies override parent dirs
+await withIsolatedHome(async (home) => {
+  const keysDir = join(home, 'custom')
+  mkdirSync(keysDir, { recursive: true })
+  const keysPath = join(keysDir, 'keys.json')
+  const { report } = await runDoctor({
+    homeDir: home,
+    silent: true,
+    category: 'config',
+    env: { SEARCH_BOOST_KEYS_FILE: keysPath },
+  })
+  const check = findCheck(report, 'config_paths_writable')
+  assert('config_paths_writable pass with env override', check?.status === 'pass')
+})
+
+// render exit footnote distinguishes fail vs strict-warn
+{
+  const failReport = {
+    packageVersion: '0.0.0',
+    mode: 'quick',
+    timestamp: '',
+    summary: { pass: 0, warn: 0, fail: 1, skip: 0, exitCode: 1 },
+    checks: [],
+  }
+  const warnReport = {
+    ...failReport,
+    summary: { pass: 0, warn: 1, fail: 0, skip: 0, exitCode: 2 },
+  }
+  const strictReport = {
+    ...failReport,
+    summary: { pass: 0, warn: 1, fail: 0, skip: 0, exitCode: 1 },
+  }
+  assert('render exit fail message', renderHuman(failReport).includes('Exit: 1 (failures present)'))
+  assert('render exit warn message', renderHuman(warnReport).includes('Exit: 2 (warnings present'))
+  assert('render exit strict message', renderHuman(strictReport).includes('Exit: 1 (--strict: warnings treated as failures)'))
+}
+
+// agents: claude keep-native (MCP configured, WebSearch not denied)
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-claude-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    writeFileSync(
+      join(home, '.claude.json'),
+      `${JSON.stringify({ mcpServers: { 'search-boost': { command: 'node', args: ['cli.mjs', 'serve'] } } })}\n`,
+      'utf8',
+    )
+    writeFileSync(
+      join(home, '.claude', 'settings.json'),
+      `${JSON.stringify({ permissions: { allow: ['mcp__search-boost__*'] } })}\n`,
+      'utf8',
+    )
+    const { report } = runDoctorInSubprocess(home, 'agents')
+    const unconfigured = findCheck(report, 'agent_detected_unconfigured')
+    assert('claude keep-native not agent_detected_unconfigured', unconfigured?.status === 'pass')
+    const native = findCheck(report, 'native_search_mismatch')
+    assert('claude keep-native native_search_mismatch warn', native?.status === 'warn')
+    const coverage = findCheck(report, 'agent_install_coverage')
+    assert('claude keep-native agent_install_coverage pass', coverage?.status === 'pass')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
 
 if (failed) {
   console.error(`\n${failed} test(s) failed`)

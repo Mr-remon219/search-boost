@@ -190,7 +190,7 @@ Details → [grok-plugin/README.md](./grok-plugin/README.md)
 | MCP server missing in agent | Re-run install, **restart the agent**, check `search-boost status` |
 | Tool calls blocked / approval every turn | Re-install with `--auto-allow`, or approve once in the agent UI |
 | No results / empty engines | `search-boost doctor` — check layer/keys/engine checks; **free** needs no keys; **api** needs keys via `search-boost config keys` or env vars |
-| Network/proxy issues | `search-boost doctor --probe` (when available) |
+| Network/proxy issues | Phase 2: `search-boost doctor --probe` (not yet implemented) |
 | MCP won't start | `search-boost doctor` → `mcp_launch_command`, `node_version`; then `search-boost serve` |
 | Grok plugin MCP won't start | `grok mcp doctor search-boost`; ensure `npx` and network access work |
 | Antigravity `agy` never runs | Requires **api** layer, `agy` on PATH, and `complexity` medium/complex — not simple |

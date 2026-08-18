@@ -190,7 +190,7 @@ search-boost install -t grok -y --auto-allow
 | Agent 里看不到 MCP | 重新安装并**重启 Agent**，执行 `search-boost status` |
 | 每次调用都要审批 | 重装时加 `--auto-allow`，或在 Agent 里一次性批准 |
 | 搜不到结果 / 引擎为空 | `search-boost doctor` — 看 layer/密钥/引擎检查；**free** 无需 Key；**api** 需 `search-boost config keys` 或环境变量 |
-| 网络/代理问题 | `search-boost doctor --probe`（可用时） |
+| 网络/代理问题 | Phase 2：`search-boost doctor --probe`（尚未实现） |
 | MCP 起不来 | `search-boost doctor` → `mcp_launch_command`、`node_version`；再跑 `search-boost serve` |
 | Grok 插件 MCP 起不来 | `grok mcp doctor search-boost`；确认 `npx` 与网络可用 |
 | Antigravity 的 `agy` 从不运行 | 需 **api** 层、PATH 中有 `agy`，且 `complexity` 为 medium/complex |
