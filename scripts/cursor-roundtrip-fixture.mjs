@@ -4,6 +4,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const home = process.argv[2]
 const node = process.argv[3]
@@ -17,9 +18,9 @@ process.env.HOME = home
 process.env.USERPROFILE = home
 process.env.SEARCH_BOOST_CURSOR_INSTALL_STATE = join(home, '.search-boost', 'state', 'cursor-install.json')
 
-const { installCursorSurface, uninstallCursorSurface } = await import(join(repo, 'lib/agents/cursor-family.mjs'))
-const { agentConfigured, CURSOR_SURFACE: surface } = await import(join(repo, 'lib/paths.mjs'))
-const { CURSOR_CLI_MCP_ALLOW } = await import(join(repo, 'lib/cli-config.mjs'))
+const { installCursorSurface, uninstallCursorSurface } = await import(pathToFileURL(join(repo, 'lib/agents/cursor-family.mjs')).href)
+const { agentConfigured, CURSOR_SURFACE: surface } = await import(pathToFileURL(join(repo, 'lib/paths.mjs')).href)
+const { CURSOR_CLI_MCP_ALLOW } = await import(pathToFileURL(join(repo, 'lib/cli-config.mjs')).href)
 
 const out = {}
 mkdirSync(join(home, '.cursor', 'hooks'), { recursive: true })
