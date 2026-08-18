@@ -49,7 +49,7 @@ async function writeHooks() {
   await copyFile(join(AGY, 'hooks', 'pre-invocation.mjs'), join(hooksDir, 'pre-invocation.mjs'))
   const hooks = {
     'search-boost-reminder': {
-      enabled: false,
+      enabled: true,
       PreInvocation: [
         {
           type: 'command',

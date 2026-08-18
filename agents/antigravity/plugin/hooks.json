@@ -1,6 +1,6 @@
 {
   "search-boost-reminder": {
-    "enabled": false,
+    "enabled": true,
     "PreInvocation": [
       {
         "type": "command",

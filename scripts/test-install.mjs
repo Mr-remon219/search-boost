@@ -59,7 +59,7 @@ import {
   SHARED_SERVER_INSTRUCTIONS,
   skillPath,
 } from '../agents/router.mjs'
-import { agentConfigured, grokConfigCandidates, grokInstallPaths, workspaceAgents } from '../lib/paths.mjs'
+import { agentConfigured, grokConfigCandidates, grokInstallPaths, grokUninstallScopes, PATHS, workspaceAgents } from '../lib/paths.mjs'
 import { readJsonFile, writeJsonFile } from '../lib/json-config.mjs'
 import { maskKey, readKeysFile, readKeysFromCandidates, writeKeysFile } from '../lib/keys.mjs'
 import { readFirstExistingJson } from '../lib/config-paths.mjs'
@@ -83,7 +83,7 @@ import {
   removeCliPermissionAllow,
 } from '../lib/cli-config.mjs'
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -187,6 +187,7 @@ assert('parseTargetSpec all', parseTargetSpec('all').includes('grok'))
 
 const flags = parseFlags(['-t', 'codex', '--keep-native', '--scope', 'project'])
 assert('parseFlags keep-native', flags.replaceNative === false && flags.target === 'codex' && flags.scope === 'project')
+assert('parseFlags scope all', parseFlags(['--scope', 'all']).scope === 'all')
 let badFlag = false
 try {
   parseFlags(['--bogus'])
@@ -393,15 +394,37 @@ assert('grok project config path', projectPaths.config.includes('.grok'))
 assert('grok project rule path', projectPaths.rule.includes('.grok') && projectPaths.rule.includes('rules'))
 assert('grok project skill path', projectPaths.skill.includes('.grok') && projectPaths.skill.includes('skills'))
 
+const userPrint = AGENTS.grok.printConfig({ scope: 'user' })
+assert('grok printConfig user path', userPrint.includes(PATHS.grok.config))
+const origCwd = process.cwd()
+const grokPrintDir = mkdtempSync(join(tmpdir(), 'sb-grok-print-'))
+process.chdir(grokPrintDir)
+const projectPrint = AGENTS.grok.printConfig({ scope: 'project' })
+const expectedProjectConfig = join(grokPrintDir, '.grok', 'config.toml').replace(/\\/g, '/')
+assert(
+  'grok printConfig project path',
+  projectPrint.replace(/\\/g, '/').includes(expectedProjectConfig),
+)
+process.chdir(origCwd)
+rmSync(grokPrintDir, { recursive: true, force: true })
+
 const candidates = grokConfigCandidates()
 assert('grok config candidates user+project', candidates.length === 2 && candidates.every((p) => p.endsWith('config.toml')))
 
 const grokDir = mkdtempSync(join(tmpdir(), 'sb-grok-'))
-mkdirSync(join(grokDir, '.grok'), { recursive: true })
+mkdirSync(join(grokDir, '.grok', 'rules'), { recursive: true })
+mkdirSync(join(grokDir, '.grok', 'skills', 'search-boost'), { recursive: true })
 writeFileSync(join(grokDir, '.grok', 'config.toml'), '[mcp_servers.search-boost]\ncommand = "npx"\n')
-const origCwd = process.cwd()
+writeFileSync(join(grokDir, '.grok', 'rules', 'search-boost.md'), '# rule\n')
+writeFileSync(join(grokDir, '.grok', 'skills', 'search-boost', 'SKILL.md'), '# skill\n')
 process.chdir(grokDir)
 assert('grok configured project scope', agentConfigured('grok') === true)
+assert('grok uninstall scopes user+project', grokUninstallScopes('user').join() === 'user,project')
+assert('grok uninstall scopes all', grokUninstallScopes('all').join() === 'user,project')
+await AGENTS.grok.uninstall({ scope: 'project', dryRun: false })
+assert('grok uninstall project config', !readFileSync(join(grokDir, '.grok', 'config.toml'), 'utf8').includes('[mcp_servers.search-boost]'))
+assert('grok uninstall project rule', !existsSync(join(grokDir, '.grok', 'rules', 'search-boost.md')))
+assert('grok uninstall project skill', !existsSync(join(grokDir, '.grok', 'skills', 'search-boost', 'SKILL.md')))
 process.chdir(origCwd)
 rmSync(grokDir, { recursive: true, force: true })
 

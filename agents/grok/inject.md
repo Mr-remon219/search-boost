@@ -1,6 +1,6 @@
 # search-boost @ Grok Build
 
-MCP: **`~/.grok/config.toml`** → `[mcp_servers.search-boost]`. Optional precision search — use when **you judge** citations or multi-engine corroboration help; native Grok browse is equally valid for exploration.
+MCP: **`~/.grok/config.toml`** (user) or **`./.grok/config.toml`** (project) → `[mcp_servers.search-boost]`. Optional precision search — use when **you judge** citations or multi-engine corroboration help; native Grok browse is equally valid for exploration.
 
 ## When search-boost helps (your call)
 
@@ -39,7 +39,7 @@ MCP: **`~/.grok/config.toml`** → `[mcp_servers.search-boost]`. Optional precis
 
 ## Grok-specific
 
-- Rule: `~/.grok/rules/search-boost.md` · Skill: `~/.grok/skills/search-boost/`
+- Rule: `~/.grok/rules/search-boost.md` or `./.grok/rules/search-boost.md` · Skill: `~/.grok/skills/search-boost/` or `./.grok/skills/search-boost/`
 - Resource `search-boost://policy` — optional detailed routing reference
 - **Plugin:** `grok plugin install ./grok-plugin --trust` then `search-boost install -t grok -y --auto-allow`
 - **Project MCP:** `search-boost install -t grok --scope project -y` writes `.grok/config.toml` in cwd (rules stay user-level)
