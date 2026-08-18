@@ -21,5 +21,11 @@ jobs:
       - run: npm run plugin:sync-grok
       - run: npm run check
       - run: npm run test:install
+      - run: npm run test:doctor
+      - name: Doctor CLI smoke
+        run: |
+          if grep -q 'runDoctor' lib/cli/commands.mjs; then
+            node cli.mjs doctor --quick --json
+          fi
       - run: npm run test:fusion
       - run: npm run smoke

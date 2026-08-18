@@ -25,11 +25,12 @@
     "install:agents": "node cli.mjs install",
     "smoke": "node scripts/smoke.mjs",
     "test:install": "node scripts/test-install.mjs",
+    "test:doctor": "node scripts/test-doctor.mjs",
     "plugin:sync-grok": "node scripts/sync-grok-plugin.mjs",
     "build:plugin": "node scripts/build-plugin.mjs",
     "check": "node scripts/check-syntax.mjs",
     "test:fusion": "node scripts/test-fusion-errors.mjs",
-    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:install && npm run test:fusion && npm run smoke"
+    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:install && npm run test:doctor && npm run test:fusion && npm run smoke"
   },
   "dependencies": {
     "@clack/prompts": "^0.10.1",
