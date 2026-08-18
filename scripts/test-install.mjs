@@ -59,7 +59,7 @@ import {
   SHARED_SERVER_INSTRUCTIONS,
   skillPath,
 } from '../agents/router.mjs'
-import { agentConfigured, grokConfigCandidates, grokInstallPaths, grokUninstallScopes, PATHS, workspaceAgents } from '../lib/paths.mjs'
+import { agentConfigured, grokConfigCandidates, grokInstallPaths, grokUninstallScopes, CURSOR_SURFACE, MCP_SERVER_ID, PATHS, workspaceAgents } from '../lib/paths.mjs'
 import {
   countPermissionSections,
   grokAlwaysApproveMode,
@@ -563,14 +563,21 @@ assert('load antigravity inject mentions search_web', agyPrompt.includes('search
 // hooks-config round-trip
 const hooksDir = mkdtempSync(join(tmpdir(), 'sb-hooks-'))
 const hooksPath = join(hooksDir, 'hooks.json')
-const hookCmd = buildSessionStartCommand(process.execPath, join(hooksDir, 'search-boost-session.mjs'))
-await upsertSessionStartHook(hooksPath, hookCmd, false)
+const localHookScript = join(hooksDir, 'search-boost-session.mjs')
+const hookCmd = buildSessionStartCommand(process.execPath, localHookScript)
+await upsertSessionStartHook(hooksPath, hookCmd, false, localHookScript)
 const hooksAfter = JSON.parse(readFileSync(hooksPath, 'utf8'))
-assert('hooks upsert sessionStart', hooksAfter.hooks?.sessionStart?.some((e) => isSearchBoostHook(e.command)))
-await upsertSessionStartHook(hooksPath, hookCmd, false)
+assert('hooks upsert sessionStart', hooksAfter.hooks?.sessionStart?.some((e) => isSearchBoostHook(e.command, localHookScript)))
+await upsertSessionStartHook(hooksPath, hookCmd, false, localHookScript)
 assert('hooks upsert idempotent', hooksAfter.hooks.sessionStart.length === JSON.parse(readFileSync(hooksPath, 'utf8')).hooks.sessionStart.length)
-await removeSessionStartHook(hooksPath, false)
-assert('hooks remove', !JSON.parse(readFileSync(hooksPath, 'utf8')).hooks?.sessionStart?.length)
+await removeSessionStartHook(hooksPath, false, localHookScript)
+assert('hooks remove', !existsSync(hooksPath))
+
+// isSearchBoostHook ignores foreign commands that mention the script name elsewhere
+assert(
+  'hooks foreign command not matched',
+  !isSearchBoostHook(`${process.execPath} "/tmp/other/search-boost-session.mjs"`, localHookScript),
+)
 
 // cli-config merge round-trip
 const cliDir = mkdtempSync(join(tmpdir(), 'sb-cli-'))
@@ -579,10 +586,20 @@ writeFileSync(cliPath, JSON.stringify({ permissions: { allow: ['Shell(git)'] } }
 await mergeCliPermissionAllow(cliPath, CURSOR_CLI_MCP_ALLOW, false)
 const cliCfg = JSON.parse(readFileSync(cliPath, 'utf8'))
 assert('cli-config merge allow', cliCfg.permissions.allow.includes(CURSOR_CLI_MCP_ALLOW))
+assert('cli-config records owned allow', cliCfg._searchBoost?.ownedAllows?.includes(CURSOR_CLI_MCP_ALLOW))
 await mergeCliPermissionAllow(cliPath, CURSOR_CLI_MCP_ALLOW, false)
 assert('cli-config merge idempotent', cliCfg.permissions.allow.length === JSON.parse(readFileSync(cliPath, 'utf8')).permissions.allow.length)
 await removeCliPermissionAllow(cliPath, CURSOR_CLI_MCP_ALLOW, false)
-assert('cli-config remove', !JSON.parse(readFileSync(cliPath, 'utf8')).permissions.allow.includes(CURSOR_CLI_MCP_ALLOW))
+const cliAfterRemove = JSON.parse(readFileSync(cliPath, 'utf8'))
+assert('cli-config remove owned allow', !cliAfterRemove.permissions?.allow?.includes(CURSOR_CLI_MCP_ALLOW))
+assert('cli-config remove keeps foreign allow', cliAfterRemove.permissions.allow.includes('Shell(git)'))
+
+// pre-existing allow (not owned) survives uninstall removal
+writeFileSync(cliPath, JSON.stringify({ permissions: { allow: ['Shell(git)', CURSOR_CLI_MCP_ALLOW] } }))
+await removeCliPermissionAllow(cliPath, CURSOR_CLI_MCP_ALLOW, false)
+const cliPreExisting = JSON.parse(readFileSync(cliPath, 'utf8'))
+assert('cli-config preserves pre-existing allow', cliPreExisting.permissions.allow.includes(CURSOR_CLI_MCP_ALLOW))
+assert('cli-config remove not-owned is no-op', !cliPreExisting._searchBoost?.ownedAllows?.includes(CURSOR_CLI_MCP_ALLOW))
 
 // session-start hook outputs valid JSON
 const hookDir = mkdtempSync(join(tmpdir(), 'sb-hook-'))
@@ -596,6 +613,36 @@ assert('session-start json', parsed.continue === true && parsed.additional_conte
 rmSync(hookDir, { recursive: true, force: true })
 rmSync(hooksDir, { recursive: true, force: true })
 rmSync(cliDir, { recursive: true, force: true })
+
+// cursor install + uninstall round-trip (isolated temp HOME via subprocess)
+{
+  const cursorHome = mkdtempSync(join(tmpdir(), `sb-cursor-home-${process.pid}-`))
+  const fixture = join(process.cwd(), 'scripts/cursor-roundtrip-fixture.mjs')
+  try {
+    const raw = execFileSync(process.execPath, [fixture, cursorHome, process.execPath, process.cwd()], {
+      encoding: 'utf8',
+    }).trim()
+    const rt = JSON.parse(raw)
+    assert('cursor round-trip configured after install', rt.configuredAfterInstall === true)
+    assert('cursor round-trip foreign hook preserved after install', rt.foreignHookAfterInstall === true)
+    assert('cursor round-trip auto-allow written', rt.autoAllowWritten === true)
+    assert('cursor round-trip unconfigured after uninstall', rt.unconfiguredAfterUninstall === true)
+    assert('cursor round-trip skill removed', rt.skillRemoved === true)
+    assert('cursor round-trip skill parent removed', rt.skillParentRemoved === true)
+    assert('cursor round-trip hook script removed', rt.hookScriptRemoved === true)
+    assert('cursor round-trip mcp pruned when empty', rt.mcpPruned === true)
+    assert('cursor round-trip cli-config pruned when empty', rt.cliConfigPruned === true)
+    assert('cursor round-trip foreign hook preserved after uninstall', rt.foreignHookAfterUninstall === true)
+    assert('cursor auto-allow symmetry install without', rt.noAutoAllowOnInstall === true)
+    assert('cursor auto-allow symmetry uninstall without', rt.noAutoAllowOnUninstall === true)
+    assert('cursor auto-allow symmetry install with', rt.withAutoAllowOnInstall === true)
+    assert('cursor auto-allow symmetry uninstall with', rt.withAutoAllowOnUninstall === true)
+    assert('cursor pre-existing allow preserved', rt.preExistingAllowPreserved === true)
+    assert('cursor pre-existing foreign allow preserved', rt.preExistingForeignPreserved === true)
+  } finally {
+    rmSync(cursorHome, { recursive: true, force: true })
+  }
+}
 
 // antigravity workspace marker round-trip
 process.env.SEARCH_BOOST_WORKSPACES_FILE = join(tmpdir(), `search-boost-workspaces-${process.pid}.json`)
