@@ -21,4 +21,5 @@ jobs:
       - run: npm run plugin:sync-grok
       - run: npm run check
       - run: npm run test:install
+      - run: npm run test:fusion
       - run: npm run smoke

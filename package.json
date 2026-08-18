@@ -28,7 +28,8 @@
     "plugin:sync-grok": "node scripts/sync-grok-plugin.mjs",
     "build:plugin": "node scripts/build-plugin.mjs",
     "check": "node scripts/check-syntax.mjs",
-    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:install && npm run smoke"
+    "test:fusion": "node scripts/test-fusion-errors.mjs",
+    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:install && npm run test:fusion && npm run smoke"
   },
   "dependencies": {
     "@clack/prompts": "^0.10.1",
