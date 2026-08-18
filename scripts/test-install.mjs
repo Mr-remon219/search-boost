@@ -692,6 +692,7 @@ rmSync(grokDir, { recursive: true, force: true })
   execFileSync(
     process.execPath,
     [
+      '--input-type=module',
       '-e',
       `import { AGENTS } from '${pathToFileURL(join(repoRoot, 'lib/agents/index.mjs')).href}'; await AGENTS.grok.uninstall({ scope: "user", dryRun: false });`,
     ],
