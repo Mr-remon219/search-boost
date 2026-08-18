@@ -50,6 +50,7 @@ Preview without writing: `search-boost install --dry-run -y`
 
 ```bash
 search-boost status    # keys, layer, per-agent configured state
+search-boost doctor    # layer, keys, engine availability (no MCP session needed)
 ```
 
 Then confirm in your agent:
@@ -117,6 +118,7 @@ Obtain keys: [Tavily](https://app.tavily.com/) · [Brave Search API](https://bra
 | `search-boost install` / `uninstall` | Wire MCP + prompts into agents |
 | `search-boost serve` | Run MCP stdio server (used by agents) |
 | `search-boost status` | Keys, layer, per-agent configured state |
+| `search-boost doctor` | Layer, keys, engine availability (same as `config diag`) |
 | `search-boost config keys\|layer\|search` | Keys, default layer, native-search replace |
 | `search-boost print <agent>` | Print MCP snippet without writing |
 | `search-boost agents` | Machine-readable agent list |
@@ -180,7 +182,7 @@ Details → [grok-plugin/README.md](./grok-plugin/README.md)
 | Install fails immediately | Node **≥ 22.13** (`node -v`); upgrade if older |
 | MCP server missing in agent | Re-run install, **restart the agent**, check `search-boost status` |
 | Tool calls blocked / approval every turn | Re-install with `--auto-allow`, or approve once in the agent UI |
-| No results / empty engines | `search-boost config layer --show` — **free** needs no keys; **api** needs keys via `search-boost config keys` or env vars |
+| No results / empty engines | `search-boost doctor` — check layer, keys, and which engines are available; **free** needs no keys; **api** needs keys via `search-boost config keys` or env vars |
 | Grok plugin MCP won't start | `grok mcp doctor search-boost`; ensure `npx` and network access work |
 | Antigravity `agy` never runs | Requires **api** layer, `agy` on PATH, and `complexity` medium/complex — not simple |
 | Timeouts / fetch errors | Corporate proxy or firewall may block Bing/DDG/Jina; try `search-boost serve` locally to read stderr |

@@ -50,6 +50,7 @@ search-boost install -t antigravity --workspace --auto-allow -y
 
 ```bash
 search-boost status    # 密钥、搜索层、各 Agent 是否已配置
+search-boost doctor    # 搜索层、密钥、可用引擎（无需启动 MCP）
 ```
 
 然后在对应 Agent 里确认：
@@ -117,6 +118,7 @@ search-boost status    # 密钥、搜索层、各 Agent 是否已配置
 | `search-boost install` / `uninstall` | 安装或卸载到各 Agent |
 | `search-boost serve` | 启动 MCP 服务（Agent 调用的入口） |
 | `search-boost status` | 看密钥、搜索层、各 Agent 是否已配置 |
+| `search-boost doctor` | 搜索层、密钥、可用引擎（同 `config diag`） |
 | `search-boost config keys\|layer\|search` | 管密钥、默认层、是否替换内置搜索 |
 | `search-boost print <agent>` | 只打印 MCP 配置片段，不改文件 |
 | `search-boost agents` | 列出 Agent（适合脚本读） |
@@ -180,7 +182,7 @@ search-boost install -t grok -y --auto-allow
 | 安装直接失败 | 确认 Node **≥ 22.13**（`node -v`） |
 | Agent 里看不到 MCP | 重新安装并**重启 Agent**，执行 `search-boost status` |
 | 每次调用都要审批 | 重装时加 `--auto-allow`，或在 Agent 里一次性批准 |
-| 搜不到结果 / 引擎为空 | `search-boost config layer --show` — **free** 无需 Key；**api** 需 `search-boost config keys` 或环境变量 |
+| 搜不到结果 / 引擎为空 | `search-boost doctor` — 检查搜索层、密钥与可用引擎；**free** 无需 Key；**api** 需 `search-boost config keys` 或环境变量 |
 | Grok 插件 MCP 起不来 | `grok mcp doctor search-boost`；确认 `npx` 与网络可用 |
 | Antigravity 的 `agy` 从不运行 | 需 **api** 层、PATH 中有 `agy`，且 `complexity` 为 medium/complex |
 | 超时 / 抓取失败 | 公司代理或防火墙可能拦截 Bing/DDG/Jina；本地跑 `search-boost serve` 看 stderr |
