@@ -8,19 +8,29 @@ Install **search-boost MCP** and **skill** into [Grok Build](https://x.ai/grok).
 
 ## Install
 
-```bash
-# 1. Install the plugin bundle (MCP + skill)
-# From a git clone:
-grok plugin install ./grok-plugin --trust
-# Or from the global npm package (no clone):
-#   grok plugin install "$(npm root -g)/search-boost-mcp/grok-plugin" --trust
-# Windows PowerShell: "$(npm root -g)\search-boost-mcp\grok-plugin"
+**Recommended** — one command installs the plugin (when `grok` is on PATH) plus config, rule, and skill:
 
-# 2. Optional: write search routing rules (model decides when to search)
+```bash
+npm install -g search-boost-mcp
 search-boost install -t grok -y --auto-allow
 ```
 
-If you already ran `npm i -g search-boost-mcp`, use the global `search-boost` command in step 2.
+If `grok` is not on PATH, the plugin step is skipped with a warning; config/rule/skill still install. Use `--skip-grok-plugin` to skip the plugin step explicitly.
+
+**Manual plugin only** (advanced — e.g. marketplace path install without `search-boost` CLI):
+
+```bash
+# From a git clone:
+grok plugin install ./grok-plugin --trust
+# Or from the global npm package:
+#   grok plugin install "$(npm root -g)/search-boost-mcp/grok-plugin" --trust
+# Windows PowerShell: "$(npm root -g)\search-boost-mcp\grok-plugin"
+
+# Then optional routing rules:
+search-boost install -t grok -y --auto-allow --skip-grok-plugin
+```
+
+The bundled `.mcp.json` uses `npx -y search-boost-mcp serve` (portable). A separate `[mcp_servers.search-boost]` in `config.toml` from `search-boost install` may also exist — both work.
 
 ---
 
@@ -53,19 +63,29 @@ To publish on the Grok plugin marketplace: open a PR to [xai-org/plugin-marketpl
 
 ### 怎么装
 
-```bash
-# 1. 安装插件包（含 MCP + skill）
-# 从仓库克隆：
-grok plugin install ./grok-plugin --trust
-# 或全局 npm 包（无需克隆）：
-#   grok plugin install "$(npm root -g)/search-boost-mcp/grok-plugin" --trust
-# Windows PowerShell: "$(npm root -g)\search-boost-mcp\grok-plugin"
+**推荐** — 一条命令（`grok` 在 PATH 时）自动装插件 + config、rule、skill：
 
-# 2. 可选：写入搜索路由规则（什么时候搜，由模型自己判断）
+```bash
+npm install -g search-boost-mcp
 search-boost install -t grok -y --auto-allow
 ```
 
-如果已经 `npm i -g search-boost-mcp`，第二步直接用全局命令 `search-boost` 就行。
+PATH 中没有 `grok` 时，插件步骤会跳过并警告，config/rule/skill 仍会安装。显式跳过插件：加 `--skip-grok-plugin`。
+
+**仅手动装插件**（进阶 — 例如不走 search-boost CLI 的市场路径）：
+
+```bash
+# 从仓库克隆：
+grok plugin install ./grok-plugin --trust
+# 或全局 npm 包：
+#   grok plugin install "$(npm root -g)/search-boost-mcp/grok-plugin" --trust
+# Windows PowerShell: "$(npm root -g)\search-boost-mcp\grok-plugin"
+
+# 再可选写入路由规则：
+search-boost install -t grok -y --auto-allow --skip-grok-plugin
+```
+
+包内 `.mcp.json` 使用 `npx -y search-boost-mcp serve`（可移植）。`search-boost install` 写入的 `config.toml` 里也可能有 `[mcp_servers.search-boost]` — 两者均可工作。
 
 ### 怎么确认装好了
 

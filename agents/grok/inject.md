@@ -42,6 +42,6 @@ MCP: **`~/.grok/config.toml`** (user) or **`./.grok/config.toml`** (project) →
 
 - Rule: `~/.grok/rules/search-boost.md` or `./.grok/rules/search-boost.md` · Skill: `~/.grok/skills/search-boost/` or `./.grok/skills/search-boost/`
 - Resource `search-boost://policy` — optional detailed routing reference
-- **Plugin:** `grok plugin install ./grok-plugin --trust` then `search-boost install -t grok -y --auto-allow`
+- **Plugin:** installed automatically by `search-boost install -t grok -y --auto-allow` when `grok` is on PATH (manual: `grok plugin install ./grok-plugin --trust`)
 - **Project MCP:** `search-boost install -t grok --scope project -y` writes `.grok/config.toml` in cwd (rules stay user-level)
 - Api layer: ≥1 of tavily/brave/exa via `search-boost config keys` (all three recommended)

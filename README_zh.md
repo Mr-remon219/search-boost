@@ -34,7 +34,7 @@ search-boost install -y     # 给所有能检测到的 Agent 装上
 ```bash
 search-boost install -t cursor -y
 search-boost install -t codex,claude -y --auto-allow
-search-boost install -t grok -y --auto-allow
+search-boost install -t grok -y --auto-allow   # grok CLI 在 PATH 时自动装插件 + 配置
 search-boost install -t antigravity --workspace --auto-allow -y
 ```
 
@@ -74,6 +74,8 @@ search-boost status          # 安装态仪表盘（密钥、搜索层、各 Age
 | 仅 `-t`、不加 `-y` | 对该目标非交互安装，**默认仍会替换内置搜索**，但**不会**自动加 `--auto-allow`；需要免审批请显式加上 |
 | `--auto-allow` | 在 Agent 配置里预批准 search-boost 的 MCP 工具（Cursor CLI 白名单、Codex 自动审批、Claude/Grok/Antigravity 权限规则），避免每轮都弹审批 |
 | `--replace-native` / `--keep-native` | 关闭或保留内置联网（Codex `web_search`、Claude `WebSearch`）。非交互安装时默认替换 |
+| `--scope user\|project\|all` | 仅 Grok：user（`~/.grok`）、project（cwd 下 `.grok/`），卸载时可选 both |
+| `--skip-grok-plugin` | 仅 Grok：跳过 bundled `grok plugin install`；仍会写入 config.toml、rule、skill |
 | `--dry-run` | 只打印将要修改的内容，不写文件 |
 
 若要完整走密钥 + 搜索层选择，请用 `search-boost setup`，或不加 `-y` 的 `search-boost install`。
@@ -85,7 +87,7 @@ search-boost uninstall -t codex -y
 search-boost uninstall -t cursor,codex,claude -y
 ```
 
-卸载只移除 **search-boost 拥有** 的配置块（带标记的 MCP、skill、hook、权限规则）。在 Agent 支持的情况下会恢复内置联网（Codex 顶层 `web_search`、Claude `WebSearch` deny），除非你安装时用了 `--keep-native`，或原本就有未标记的用户设置。若文件仅因 search-boost 而存在且清理后为空，会被删除。预览：加 `--dry-run`。
+卸载只移除 **search-boost 拥有** 的配置块（带标记的 MCP、skill、hook、权限规则）。在 Agent 支持的情况下会恢复内置联网（Codex 顶层 `web_search`、Claude `WebSearch` deny），除非你安装时用了 `--keep-native`，或原本就有未标记的用户设置。若文件仅因 search-boost 而存在且清理后为空，会被删除。Grok 的 `grok plugin uninstall` 为**尽力而为**（CLI 缺失或失败时会警告并继续）。预览：加 `--dry-run`。
 
 ---
 
@@ -134,7 +136,7 @@ search-boost uninstall -t cursor,codex,claude -y
 | `search-boost print <agent>` | 只打印 MCP 配置片段，不改文件 |
 | `search-boost agents` | 列出 Agent（适合脚本读） |
 
-**安装时常用参数：** `-t` 指定 Agent · `-y` 非交互（隐含 `--auto-allow` 与 `--replace-native`）· `--dry-run` 预览 · `--auto-allow` 预批准 MCP 工具（见上表）· `--replace-native` / `--keep-native` · `--scope`（Grok）· `--workspace`（Antigravity `.agents/`）
+**安装时常用参数：** `-t` 指定 Agent · `-y` 非交互（隐含 `--auto-allow` 与 `--replace-native`）· `--dry-run` 预览 · `--auto-allow` 预批准 MCP 工具（见上表）· `--replace-native` / `--keep-native` · `--scope user|project|all`（Grok）· `--skip-grok-plugin`（Grok）· `--workspace`（Antigravity `.agents/`）
 
 ---
 
@@ -146,7 +148,7 @@ search-boost uninstall -t cursor,codex,claude -y
 | Cursor CLI | `~/.cursor/mcp.json`（与 IDE 共用 surface） | hook、skill（CLI 版）、可选 CLI 免审批 |
 | Codex CLI | `~/.codex/config.toml` | AGENTS.md、skill |
 | Claude Code | `~/.claude.json` | CLAUDE.md、skill、权限规则 |
-| Grok Build | `~/.grok/config.toml` | rule、skill · 另有 [grok-plugin](./grok-plugin/) |
+| Grok Build | `~/.grok/config.toml` | rule、skill、随包 [grok-plugin](./grok-plugin/)（`grok` 在 PATH 时自动安装） |
 | Antigravity | `~/.gemini/config/mcp_config.json` | AGENTS.md、GEMINI.md、skill，可选工作区配置 |
 
 提示词的设计是**让模型自己决定要不要搜**，不是每轮都强制联网。各 Agent 的模板在 [`agents/`](./agents/) 里。
@@ -157,36 +159,7 @@ search-boost uninstall -t cursor,codex,claude -y
 
 **Antigravity + `agy` CLI：** 在 **api** 层且本机 PATH 有 `agy` 时，Antigravity CLI 引擎仅在 **medium** / **complex** 档位的 `fused_search` 中参与，简单查询不会走它；依赖本机登录与平台配额，超时约 45 秒。
 
----
-
-## Grok 插件
-
-插件随 npm 包一起发布（MCP 用可移植的 `npx` 启动，含 skill）。
-
-**重复安装是幂等的：** `search-boost install -t grok` 会先移除旧的 search-boost `[permission]` 块（带标记或 legacy），再写入新的，避免重复 `[permission]` 导致 `grok` 无法启动。卸载只剥离 search-boost 拥有的 permission 行，空配置会 unlink。若已设置 `[ui] permission_mode = "always-approve"`，`--auto-allow` 会跳过注入 `[permission]`。`search-boost doctor` 会对重复或冗余 permission 块发出警告。
-
-**从 git 克隆**（仓库根目录）：
-
-```bash
-grok plugin install ./grok-plugin --trust
-search-boost install -t grok -y --auto-allow
-```
-
-**全局安装 `npm install -g search-boost-mcp` 后**（无需克隆）：
-
-```bash
-# bash / macOS / Linux
-grok plugin install "$(npm root -g)/search-boost-mcp/grok-plugin" --trust
-
-# Windows PowerShell
-grok plugin install "$(npm root -g)\search-boost-mcp\grok-plugin" --trust
-
-search-boost install -t grok -y --auto-allow
-```
-
-包内 `.mcp.json` 使用 `npx -y search-boost-mcp serve`，任意装有 Node ≥ 22.13 的机器均可使用。
-
-更多说明见 [grok-plugin/README.md](./grok-plugin/README.md)。
+**Grok Build：** `search-boost install -t grok -y --auto-allow` 在 Grok CLI 位于 PATH 时会执行 `grok plugin install <bundled grok-plugin> --trust`，随后写入 `config.toml`、rule 与 skill。若 PATH 中没有 `grok`，插件步骤会跳过并给出警告，配置安装仍会继续。仅需 config/rule/skill 时加 `--skip-grok-plugin`。重复安装对 `[permission]` 块（带标记或 legacy）是幂等的；卸载只剥离 search-boost 拥有的 permission 行。若已设 `[ui] permission_mode = "always-approve"`，`--auto-allow` 会跳过注入 `[permission]`。插件 `.mcp.json` 使用可移植的 `npx`；`config.toml` 使用 `resolveMcpLaunch()`（源码开发时为本地 `node`）——两者可并存。手动装插件（进阶）：`grok plugin install ./grok-plugin --trust` → [grok-plugin/README.md](./grok-plugin/README.md)。
 
 ---
 

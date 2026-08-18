@@ -34,7 +34,7 @@ Restart each agent after install so MCP reloads.
 ```bash
 search-boost install -t cursor -y
 search-boost install -t codex,claude -y --auto-allow
-search-boost install -t grok -y --auto-allow
+search-boost install -t grok -y --auto-allow   # plugin + config when grok CLI on PATH
 search-boost install -t antigravity --workspace --auto-allow -y
 ```
 
@@ -74,6 +74,8 @@ If tools appear but calls fail, run `search-boost serve` in a terminal to see st
 | `-t` **without** `-y` | Still non-interactive for that target and still **replaces native search by default** — but does **not** imply `--auto-allow`; add it explicitly if you want no permission prompts |
 | `--auto-allow` | Pre-approve search-boost MCP tools in agent config (Cursor CLI allowlist, Codex `default_tools_approval_mode`, Claude/Grok/Antigravity permission rules) so the agent does not prompt every session |
 | `--replace-native` / `--keep-native` | Disable or keep built-in web search where the agent supports a switch (Codex `web_search`, Claude `WebSearch`). Default is replace when non-interactive |
+| `--scope user\|project\|all` | Grok only: user (`~/.grok`), project (`.grok/` in cwd), or both on uninstall |
+| `--skip-grok-plugin` | Grok only: skip bundled `grok plugin install`; still writes config.toml, rule, and skill |
 | `--dry-run` | Print actions without writing files |
 
 For full onboarding (API keys + layer choice), run `search-boost setup` or `search-boost install` without `-y`.
@@ -85,7 +87,7 @@ search-boost uninstall -t codex -y
 search-boost uninstall -t cursor,codex,claude -y
 ```
 
-Uninstall removes only **search-boost-owned** blocks (marked MCP entries, skills, hooks, permission rules). Where the agent supports it, native web search is restored (Codex top-level `web_search`, Claude `WebSearch` deny) unless you used `--keep-native` at install time or had pre-existing unmarked settings. Config files created solely for search-boost are unlinked when empty after cleanup. Preview: `--dry-run`.
+Uninstall removes only **search-boost-owned** blocks (marked MCP entries, skills, hooks, permission rules). Where the agent supports it, native web search is restored (Codex top-level `web_search`, Claude `WebSearch` deny) unless you used `--keep-native` at install time or had pre-existing unmarked settings. Config files created solely for search-boost are unlinked when empty after cleanup. For Grok, plugin removal via `grok plugin uninstall` is **best-effort** (warns and continues if the CLI is missing or uninstall fails). Preview: `--dry-run`.
 
 ---
 
@@ -134,7 +136,7 @@ Obtain keys: [Tavily](https://app.tavily.com/) · [Brave Search API](https://bra
 | `search-boost print <agent>` | Print MCP snippet without writing |
 | `search-boost agents` | Machine-readable agent list |
 
-**Install flags:** `-t cursor,codex,…|auto|all` · `-y` (non-interactive; implies `--auto-allow` + `--replace-native`) · `--dry-run` · `--auto-allow` (pre-approve MCP tools — see table above) · `--replace-native` / `--keep-native` · `--scope user|project` (Grok) · `--workspace` (Antigravity `.agents/`)
+**Install flags:** `-t cursor,codex,…|auto|all` · `-y` (non-interactive; implies `--auto-allow` + `--replace-native`) · `--dry-run` · `--auto-allow` (pre-approve MCP tools — see table above) · `--replace-native` / `--keep-native` · `--scope user|project|all` (Grok) · `--skip-grok-plugin` (Grok) · `--workspace` (Antigravity `.agents/`)
 
 ---
 
@@ -146,7 +148,7 @@ Obtain keys: [Tavily](https://app.tavily.com/) · [Brave Search API](https://bra
 | Cursor CLI | `~/.cursor/mcp.json` (same surface as IDE) | hook, skill (CLI variant), optional CLI auto-allow |
 | Codex CLI | `~/.codex/config.toml` | AGENTS.md, skill |
 | Claude Code | `~/.claude.json` | CLAUDE.md, skill, permissions |
-| Grok Build | `~/.grok/config.toml` | rule, skill · [grok-plugin](./grok-plugin/) |
+| Grok Build | `~/.grok/config.toml` | rule, skill, bundled [grok-plugin](./grok-plugin/) (when `grok` on PATH) |
 | Antigravity | `~/.gemini/config/mcp_config.json` | AGENTS.md, GEMINI.md, skill, optional workspace |
 
 Prompts use **model-discretion** wording (search when you choose — not forced every turn). See [`agents/`](./agents/) for per-agent templates.
@@ -157,36 +159,7 @@ Prompts use **model-discretion** wording (search when you choose — not forced 
 
 **Antigravity + `agy` CLI:** On the **api** layer, the optional Antigravity CLI engine (`agy` on PATH) joins **medium** and **complex** `fused_search` tiers only — not simple lookups. It depends on local sign-in and platform quota; timeouts are ~45s.
 
----
-
-## Grok plugin
-
-The plugin ships inside the npm package (MCP via portable `npx`, plus skill).
-
-**Re-install is idempotent:** `search-boost install -t grok` removes any prior search-boost `[permission]` block (marked or legacy) before writing a fresh one, so duplicate `[permission]` keys cannot break `grok` startup. Uninstall strips only search-boost-owned permission lines and unlinks empty configs. If `[ui] permission_mode = "always-approve"` is already set, `--auto-allow` skips injecting `[permission]` (always-approve approves MCP tools globally). `search-boost doctor` warns on duplicate or redundant permission blocks.
-
-**From a git clone** (repo root):
-
-```bash
-grok plugin install ./grok-plugin --trust
-search-boost install -t grok -y --auto-allow
-```
-
-**After `npm install -g search-boost-mcp`** (no clone needed):
-
-```bash
-# bash / macOS / Linux
-grok plugin install "$(npm root -g)/search-boost-mcp/grok-plugin" --trust
-
-# Windows PowerShell
-grok plugin install "$(npm root -g)\search-boost-mcp\grok-plugin" --trust
-
-search-boost install -t grok -y --auto-allow
-```
-
-The bundled `.mcp.json` uses `npx -y search-boost-mcp serve` so the plugin works on any machine with Node ≥ 22.13.
-
-Details → [grok-plugin/README.md](./grok-plugin/README.md)
+**Grok Build:** `search-boost install -t grok -y --auto-allow` runs `grok plugin install <bundled grok-plugin> --trust` when the Grok CLI is on PATH, then writes `config.toml`, rule, and skill. If `grok` is not on PATH, the plugin step is skipped with a warning and the config install still proceeds. Use `--skip-grok-plugin` for config/rule/skill only. Re-install is idempotent for `[permission]` blocks (marked or legacy); uninstall strips search-boost-owned permission lines. If `[ui] permission_mode = "always-approve"`, `--auto-allow` skips injecting `[permission]`. The plugin's `.mcp.json` uses portable `npx`; `config.toml` uses `resolveMcpLaunch()` (local `node` when developing from a clone) — both can coexist. Manual plugin install: `grok plugin install ./grok-plugin --trust` (advanced) → [grok-plugin/README.md](./grok-plugin/README.md).
 
 ---
 

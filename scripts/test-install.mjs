@@ -85,6 +85,17 @@ import {
   grokAlwaysApproveMode,
   stripLegacySearchBoostPermission,
 } from '../lib/grok-toml.mjs'
+import {
+  GROK_PLUGIN_NAME,
+  grokCliAvailable,
+  grokPluginInstallCommandLine,
+  grokPluginUninstallCommandLine,
+  installGrokPlugin,
+  resolveGrokPluginDir,
+  resolveInstalledGrokPluginId,
+  uninstallGrokPlugin,
+} from '../lib/grok-plugin.mjs'
+import { PKG_ROOT } from '../lib/pkg.mjs'
 import { readJsonFile, writeJsonFile } from '../lib/json-config.mjs'
 import { maskKey, readKeysFile, readKeysFromCandidates, writeKeysFile, envKeyHint, resetLegacyKeysMigrationNotice, RECOMMEND_ALL_KEYED_ENGINES, readKeysRouting, readEngineRouting, setEnabledEngines } from '../lib/keys.mjs'
 import { engineRegistry } from '../lib/search/engines.js'
@@ -728,6 +739,80 @@ rmSync(grokNoopDir, { recursive: true, force: true })
   assert('grok fresh uninstall deletes project skill', !existsSync(join(grokFreshDir, '.grok', 'skills', 'search-boost', 'SKILL.md')))
   process.chdir(origCwd)
   rmSync(grokFreshDir, { recursive: true, force: true })
+}
+
+// grok-plugin: bundled dir + CLI helpers
+const grokPluginDir = resolveGrokPluginDir()
+assert('resolveGrokPluginDir points at grok-plugin', grokPluginDir.endsWith('grok-plugin') || grokPluginDir.endsWith('grok-plugin\\'))
+assert('resolveGrokPluginDir under PKG_ROOT', grokPluginDir.startsWith(PKG_ROOT))
+assert('grok-plugin dir exists', existsSync(grokPluginDir))
+assert('grok-plugin plugin.json name', JSON.parse(readFileSync(join(grokPluginDir, 'plugin.json'), 'utf8')).name === GROK_PLUGIN_NAME)
+assert('grok plugin install command includes --trust', grokPluginInstallCommandLine().includes('--trust'))
+assert('grok plugin uninstall command uses plugin name', grokPluginUninstallCommandLine().includes(GROK_PLUGIN_NAME))
+
+assert('parseFlags --skip-grok-plugin', parseFlags(['--skip-grok-plugin']).skipGrokPlugin === true)
+
+// grok-plugin: dry-run prints command without spawn
+{
+  const logs = []
+  const origLog = console.log
+  console.log = (...args) => { logs.push(args.join(' ')) }
+  try {
+    const r = installGrokPlugin({ dryRun: true })
+    assert('installGrokPlugin dry-run ok', r.ok === true && r.dryRun === true)
+    assert('installGrokPlugin dry-run logs command', logs.some((l) => l.includes('Would run:') && l.includes('grok plugin install') && l.includes('--trust')))
+  } finally {
+    console.log = origLog
+  }
+}
+
+// grok-plugin: uninstall dry-run prints command without spawn
+{
+  const logs = []
+  const origLog = console.log
+  console.log = (...args) => { logs.push(args.join(' ')) }
+  try {
+    const r = uninstallGrokPlugin({ dryRun: true })
+    assert('uninstallGrokPlugin dry-run ok', r.ok === true && r.dryRun === true)
+    assert(
+      'uninstallGrokPlugin dry-run logs command',
+      logs.some((l) => l.includes('Would run:') && l.includes('grok plugin uninstall') && l.includes(GROK_PLUGIN_NAME)),
+    )
+  } finally {
+    console.log = origLog
+  }
+}
+
+// grok-plugin: skip bypasses subprocess
+assert('installGrokPlugin skip', installGrokPlugin({ skip: true }).skipped === true)
+assert('uninstallGrokPlugin skip', uninstallGrokPlugin({ skip: true }).skipped === true)
+
+// grok-plugin: AGENTS.grok.install dry-run includes plugin step
+{
+  const logs = []
+  const origLog = console.log
+  console.log = (...args) => { logs.push(args.join(' ')) }
+  const grokDryDir = mkdtempSync(join(tmpdir(), 'sb-grok-dry-'))
+  process.chdir(grokDryDir)
+  try {
+    await AGENTS.grok.install({ scope: 'project', dryRun: true, autoAllow: true })
+    assert('grok agent dry-run plugin command', logs.some((l) => l.includes('grok plugin install')))
+    assert('grok agent dry-run no config write', !existsSync(join(grokDryDir, '.grok', 'config.toml')))
+  } finally {
+    console.log = origLog
+    process.chdir(origCwd)
+    rmSync(grokDryDir, { recursive: true, force: true })
+  }
+}
+
+// grok-plugin: optional integration when grok CLI on PATH
+if (grokCliAvailable()) {
+  console.log('ok: grok CLI detected on PATH (integration checks)')
+  const installedId = resolveInstalledGrokPluginId()
+  assert('resolveInstalledGrokPluginId returns string', typeof installedId === 'string' && installedId.length > 0)
+  assert('grok plugin install command includes grok-plugin dir', grokPluginInstallCommandLine().includes('grok-plugin'))
+} else {
+  console.log('skip: grok CLI not on PATH (integration)')
 }
 
 // shared instructions cover per-agent routing notes
