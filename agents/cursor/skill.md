@@ -28,4 +28,4 @@ Hook capability summary at session start · MCP resource `search-boost://policy`
 
 ## Keys
 
-Optional — free layer: bing + ddg + exa-free. Run `search-boost config keys`.
+Optional — free layer: bing + ddg + yahoo + exa-free. Run `search-boost config keys`.

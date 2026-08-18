@@ -46,6 +46,38 @@ search-boost install -t antigravity --workspace --auto-allow -y
 
 只想看看会改哪些文件、不真正写入：加 `--dry-run`。
 
+### 验证安装
+
+```bash
+search-boost status    # 密钥、搜索层、各 Agent 是否已配置
+```
+
+然后在对应 Agent 里确认：
+
+| Agent | 快速检查 |
+|-------|----------|
+| **Cursor** | 设置 → MCP → `search-boost` 已连接且列出工具 |
+| **Cursor CLI** | 同上，配置在 `~/.cursor/mcp.json` |
+| **Codex** | 会话中能看到 `mcp__search-boost__*` 工具 |
+| **Claude Code** | MCP 面板有 `search-boost`；若用了 `--auto-allow` 则无需每次审批 |
+| **Grok Build** | `grok mcp doctor search-boost` · `grok inspect` |
+| **Antigravity** | MCP 配置含 `search-boost`；安装后需重启 IDE |
+
+工具能列出但调用失败时，可在终端跑 `search-boost serve` 看启动报错。
+
+### 安装参数说明
+
+| 参数 | 作用 |
+|------|------|
+| `-t`, `--target` | 指定 Agent（`cursor`、`codex`、`claude`、`grok`、`antigravity`、`cursor-cli`、`auto`、`all`） |
+| `-y`, `--yes` | 非交互：跳过密钥/搜索层向导、默认 `--target=auto`，**同时隐含** `--auto-allow` 与 `--replace-native` |
+| 仅 `-t`、不加 `-y` | 对该目标非交互安装，**默认仍会替换内置搜索**，但**不会**自动加 `--auto-allow`；需要免审批请显式加上 |
+| `--auto-allow` | 在 Agent 配置里预批准 search-boost 的 MCP 工具（Cursor CLI 白名单、Codex 自动审批、Claude/Grok/Antigravity 权限规则），避免每轮都弹审批 |
+| `--replace-native` / `--keep-native` | 关闭或保留内置联网（Codex `web_search`、Claude `WebSearch`）。非交互安装时默认替换 |
+| `--dry-run` | 只打印将要修改的内容，不写文件 |
+
+若要完整走密钥 + 搜索层选择，请用 `search-boost setup`，或不加 `-y` 的 `search-boost install`。
+
 ---
 
 ## MCP 工具
@@ -85,7 +117,7 @@ search-boost install -t antigravity --workspace --auto-allow -y
 | `search-boost print <agent>` | 只打印 MCP 配置片段，不改文件 |
 | `search-boost agents` | 列出 Agent（适合脚本读） |
 
-**安装时常用参数：** `-t` 指定 Agent · `-y` 全自动 · `--dry-run` 预览 · `--auto-allow` 免审批 MCP 工具 · `--replace-native` / `--keep-native` 是否关掉内置搜索 · `--scope`（Grok 用户级/项目级）· `--workspace`（Antigravity 工作区 `.agents/`）
+**安装时常用参数：** `-t` 指定 Agent · `-y` 非交互（隐含 `--auto-allow` 与 `--replace-native`）· `--dry-run` 预览 · `--auto-allow` 预批准 MCP 工具（见上表）· `--replace-native` / `--keep-native` · `--scope`（Grok）· `--workspace`（Antigravity `.agents/`）
 
 ---
 
@@ -101,18 +133,52 @@ search-boost install -t antigravity --workspace --auto-allow -y
 
 提示词的设计是**让模型自己决定要不要搜**，不是每轮都强制联网。各 Agent 的模板在 [`agents/`](./agents/) 里。
 
-**和内置搜索的关系：** 加 `-y` 时，默认会关掉 Codex 的 `web_search` 和 Claude 的 `WebSearch`；想保留就加 `--keep-native`。Cursor、Antigravity 没有硬开关，靠 skill 和 hook 引导优先用 search-boost。Grok 自带的 browse **不会动**。
+**和内置搜索的关系：** 非交互安装时默认会关掉 Codex 的 `web_search` 和 Claude 的 `WebSearch`；想保留就加 `--keep-native`。Cursor、Antigravity 没有硬开关，靠 skill 和 hook 引导优先用 search-boost。Grok 自带的 browse **不会动**。
+
+**Antigravity + `agy` CLI：** 在 **api** 层且本机 PATH 有 `agy` 时，Antigravity CLI 引擎仅在 **medium** / **complex** 档位的 `fused_search` 中参与，简单查询不会走它；依赖本机登录与平台配额，超时约 45 秒。
 
 ---
 
 ## Grok 插件
+
+插件随 npm 包一起发布（MCP 用可移植的 `npx` 启动，含 skill）。
+
+**从 git 克隆**（仓库根目录）：
 
 ```bash
 grok plugin install ./grok-plugin --trust
 search-boost install -t grok -y --auto-allow
 ```
 
+**全局安装 `npm install -g search-boost-mcp` 后**（无需克隆）：
+
+```bash
+# bash / macOS / Linux
+grok plugin install "$(npm root -g)/search-boost-mcp/grok-plugin" --trust
+
+# Windows PowerShell
+grok plugin install "$(npm root -g)\search-boost-mcp\grok-plugin" --trust
+
+search-boost install -t grok -y --auto-allow
+```
+
+包内 `.mcp.json` 使用 `npx -y search-boost-mcp serve`，任意装有 Node ≥ 22.13 的机器均可使用。
+
 更多说明见 [grok-plugin/README.md](./grok-plugin/README.md)。
+
+---
+
+## 故障排查
+
+| 现象 | 建议 |
+|------|------|
+| 安装直接失败 | 确认 Node **≥ 22.13**（`node -v`） |
+| Agent 里看不到 MCP | 重新安装并**重启 Agent**，执行 `search-boost status` |
+| 每次调用都要审批 | 重装时加 `--auto-allow`，或在 Agent 里一次性批准 |
+| 搜不到结果 / 引擎为空 | `search-boost config layer --show` — **free** 无需 Key；**api** 需 `search-boost config keys` 或环境变量 |
+| Grok 插件 MCP 起不来 | `grok mcp doctor search-boost`；确认 `npx` 与网络可用 |
+| Antigravity 的 `agy` 从不运行 | 需 **api** 层、PATH 中有 `agy`，且 `complexity` 为 medium/complex |
+| 超时 / 抓取失败 | 公司代理或防火墙可能拦截 Bing/DDG/Jina；本地跑 `search-boost serve` 看 stderr |
 
 ---
 

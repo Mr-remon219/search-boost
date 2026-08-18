@@ -34,6 +34,7 @@ import {
   formatPrintConfig,
   grokPermissionTomlBlock,
   jsonMcpEntry,
+  pluginMcpEntry,
   resolveMcpLaunch,
   tomlMcpBlock,
 } from '../lib/mcp-entry.mjs'
@@ -42,6 +43,7 @@ import {
   HOOK_ENTRY_KEY,
   injectAntigravityRule,
   injectSkill,
+  installAntigravityHook,
   loadAgentPrompt,
   loadAgentSkill,
 } from '../lib/agents/shared.mjs'
@@ -57,7 +59,7 @@ import {
   SHARED_SERVER_INSTRUCTIONS,
   skillPath,
 } from '../agents/router.mjs'
-import { grokInstallPaths, workspaceAgents } from '../lib/paths.mjs'
+import { agentConfigured, grokConfigCandidates, grokInstallPaths, workspaceAgents } from '../lib/paths.mjs'
 import { readJsonFile, writeJsonFile } from '../lib/json-config.mjs'
 import { maskKey, readKeysFile, readKeysFromCandidates, writeKeysFile } from '../lib/keys.mjs'
 import { readFirstExistingJson } from '../lib/config-paths.mjs'
@@ -67,6 +69,8 @@ import {
   recordAntigravityWorkspace,
 } from '../lib/workspace-marker.mjs'
 import { getLayer, setLayer } from '../lib/layer-config.mjs'
+import { formatKeyStatusLines } from '../lib/installer/keys-wizard.mjs'
+import { layerApiNoKeysWarning } from '../lib/installer/status.mjs'
 import {
   buildSessionStartCommand,
   isSearchBoostHook,
@@ -79,7 +83,7 @@ import {
   removeCliPermissionAllow,
 } from '../lib/cli-config.mjs'
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -213,6 +217,9 @@ const json = jsonMcpEntry()
 assert('json entry has type stdio', json.type === 'stdio' && json.command && json.args?.length)
 const launch = resolveMcpLaunch()
 assert('mcp launch uses node cli before npx', launch.command !== 'npx' && launch.args.some((a) => a.endsWith('cli.mjs')))
+const plugin = pluginMcpEntry()
+assert('plugin mcp entry is npx', plugin.command === 'npx' && plugin.args?.includes('-y') && plugin.args?.includes('search-boost-mcp'))
+assert('plugin mcp entry no abs paths', !/[A-Za-z]:[/\\]/.test(JSON.stringify(plugin)))
 const agy = antigravityMcpEntry()
 assert('antigravity omits type', !('type' in agy) && agy.command && agy.args?.length)
 
@@ -314,6 +321,23 @@ process.env.SEARCH_BOOST_LAYER = 'free'
 assert('layer file beats env', getLayer() === 'api')
 delete process.env.SEARCH_BOOST_LAYER
 
+// status helpers
+setLayer('api')
+writeKeysFile({ tavily: undefined, brave: undefined, exa: undefined })
+delete process.env.TAVILY_API_KEY
+delete process.env.BRAVE_API_KEY
+delete process.env.EXA_API_KEY
+assert('layer api no keys warning', layerApiNoKeysWarning()?.includes('no API keys configured'))
+setLayer('free')
+assert('layer free no warning', layerApiNoKeysWarning() === null)
+writeKeysFile({ tavily: 'tvly-test-key-12345678' })
+setLayer('api')
+assert('layer api with keys no warning', layerApiNoKeysWarning() === null)
+writeKeysFile({ tavily: undefined })
+const keyLines = formatKeyStatusLines()
+assert('formatKeyStatusLines has keys header', keyLines[0].includes('API keys'))
+assert('formatKeyStatusLines has file path', keyLines.some((l) => l.startsWith('File:')))
+
 // router resolves per-agent assets
 for (const id of ROUTE_IDS) {
   assert(`route ${id} prompt exists`, promptPath(id).includes(getRoute(id).dir))
@@ -369,6 +393,18 @@ assert('grok project config path', projectPaths.config.includes('.grok'))
 assert('grok project rule path', projectPaths.rule.includes('.grok') && projectPaths.rule.includes('rules'))
 assert('grok project skill path', projectPaths.skill.includes('.grok') && projectPaths.skill.includes('skills'))
 
+const candidates = grokConfigCandidates()
+assert('grok config candidates user+project', candidates.length === 2 && candidates.every((p) => p.endsWith('config.toml')))
+
+const grokDir = mkdtempSync(join(tmpdir(), 'sb-grok-'))
+mkdirSync(join(grokDir, '.grok'), { recursive: true })
+writeFileSync(join(grokDir, '.grok', 'config.toml'), '[mcp_servers.search-boost]\ncommand = "npx"\n')
+const origCwd = process.cwd()
+process.chdir(grokDir)
+assert('grok configured project scope', agentConfigured('grok') === true)
+process.chdir(origCwd)
+rmSync(grokDir, { recursive: true, force: true })
+
 // shared instructions cover per-agent routing notes
 assert('mcp instructions mention grok', readFileSync(mcpServerInstructionsPath(), 'utf8').includes('Grok Build'))
 
@@ -420,6 +456,13 @@ assert('workspace marker records', (await listAntigravityWorkspaces()).length ==
 await forgetAntigravityWorkspace('/tmp/project-a', false)
 assert('workspace marker forgets', (await listAntigravityWorkspaces()).length === 1)
 delete process.env.SEARCH_BOOST_WORKSPACES_FILE
+
+// antigravity workspace hook enables on install
+const agyHookDir = mkdtempSync(join(tmpdir(), 'sb-agy-hook-'))
+await installAntigravityHook(agyHookDir, false)
+const agyHooks = JSON.parse(readFileSync(join(agyHookDir, '.agents', 'hooks.json'), 'utf8'))
+assert('antigravity hook enabled on install', agyHooks[HOOK_ENTRY_KEY]?.enabled === true)
+rmSync(agyHookDir, { recursive: true, force: true })
 
 // agent install adapters (dry-run — catches missing imports on codex/claude paths)
 await AGENTS.codex.install({ dryRun: true, autoAllow: false, replaceNative: true })

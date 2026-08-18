@@ -5,7 +5,7 @@
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { jsonMcpEntry } from '../lib/mcp-entry.mjs'
+import { pluginMcpEntry } from '../lib/mcp-entry.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGIN = join(ROOT, 'grok-plugin')
@@ -18,7 +18,7 @@ copyFileSync(SKILL_SRC, SKILL_DEST)
 
 const mcp = {
   mcpServers: {
-    'search-boost': jsonMcpEntry(),
+    'search-boost': pluginMcpEntry(),
   },
 }
 writeFileSync(MCP_DEST, `${JSON.stringify(mcp, null, 2)}\n`)

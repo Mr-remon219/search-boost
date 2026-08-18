@@ -25,6 +25,12 @@ export const fusedSearchOutput = {
   tookMs: z.number(),
   cacheHit: z.boolean(),
   resultCount: z.number(),
+  engineStats: z.record(z.object({
+    used: z.boolean(),
+    errors: z.number(),
+    note: z.string().optional(),
+  })).optional(),
+  warnings: z.array(z.string()).optional(),
   results: z.array(z.object({
     title: z.string(),
     url: z.string(),

@@ -46,6 +46,38 @@ search-boost install -t antigravity --workspace --auto-allow -y
 
 Preview without writing: `search-boost install --dry-run -y`
 
+### Verify install
+
+```bash
+search-boost status    # keys, layer, per-agent configured state
+```
+
+Then confirm in your agent:
+
+| Agent | Quick check |
+|-------|-------------|
+| **Cursor** | Settings → MCP → `search-boost` connected; tools listed |
+| **Cursor CLI** | Same MCP entry in `~/.cursor/mcp.json` |
+| **Codex** | `codex` session lists `mcp__search-boost__*` tools |
+| **Claude Code** | MCP panel shows `search-boost`; tools callable without deny prompt (if `--auto-allow`) |
+| **Grok Build** | `grok mcp doctor search-boost` · `grok inspect` |
+| **Antigravity** | MCP config includes `search-boost`; restart IDE after install |
+
+If tools appear but calls fail, run `search-boost serve` in a terminal to see startup errors.
+
+### Install flags (quick reference)
+
+| Flag | Effect |
+|------|--------|
+| `-t`, `--target` | Which agent(s) to wire (`cursor`, `codex`, `claude`, `grok`, `antigravity`, `cursor-cli`, `auto`, `all`) |
+| `-y`, `--yes` | Non-interactive: skips keys/layer wizard, uses `--target=auto`, **implies** `--auto-allow` and `--replace-native` |
+| `-t` **without** `-y` | Still non-interactive for that target and still **replaces native search by default** — but does **not** imply `--auto-allow`; add it explicitly if you want no permission prompts |
+| `--auto-allow` | Pre-approve search-boost MCP tools in agent config (Cursor CLI allowlist, Codex `default_tools_approval_mode`, Claude/Grok/Antigravity permission rules) so the agent does not prompt every session |
+| `--replace-native` / `--keep-native` | Disable or keep built-in web search where the agent supports a switch (Codex `web_search`, Claude `WebSearch`). Default is replace when non-interactive |
+| `--dry-run` | Print actions without writing files |
+
+For full onboarding (API keys + layer choice), run `search-boost setup` or `search-boost install` without `-y`.
+
 ---
 
 ## What you get
@@ -85,7 +117,7 @@ Keys: `search-boost config keys` → `~/.search-boost-keys.json` (legacy `~/.dsh
 | `search-boost print <agent>` | Print MCP snippet without writing |
 | `search-boost agents` | Machine-readable agent list |
 
-**Install flags:** `-t cursor,codex,…|auto|all` · `-y` (non-interactive) · `--dry-run` · `--auto-allow` · `--replace-native` / `--keep-native` · `--scope user|project` (Grok) · `--workspace` (Antigravity `.agents/`)
+**Install flags:** `-t cursor,codex,…|auto|all` · `-y` (non-interactive; implies `--auto-allow` + `--replace-native`) · `--dry-run` · `--auto-allow` (pre-approve MCP tools — see table above) · `--replace-native` / `--keep-native` · `--scope user|project` (Grok) · `--workspace` (Antigravity `.agents/`)
 
 ---
 
@@ -101,18 +133,52 @@ Keys: `search-boost config keys` → `~/.search-boost-keys.json` (legacy `~/.dsh
 
 Prompts use **model-discretion** wording (search when you choose — not forced every turn). See [`agents/`](./agents/) for per-agent templates.
 
-**Native web search:** Codex `web_search` and Claude `WebSearch` can be disabled with `--replace-native` (default on `-y`). Cursor / Antigravity rely on skill + hook preference only. Grok native browse is left on.
+**Native web search:** Codex `web_search` and Claude `WebSearch` can be disabled with `--replace-native` (default when non-interactive). Cursor / Antigravity rely on skill + hook preference only. Grok native browse is left on.
+
+**Antigravity + `agy` CLI:** On the **api** layer, the optional Antigravity CLI engine (`agy` on PATH) joins **medium** and **complex** `fused_search` tiers only — not simple lookups. It depends on local sign-in and platform quota; timeouts are ~45s.
 
 ---
 
 ## Grok plugin
+
+The plugin ships inside the npm package (MCP via portable `npx`, plus skill).
+
+**From a git clone** (repo root):
 
 ```bash
 grok plugin install ./grok-plugin --trust
 search-boost install -t grok -y --auto-allow
 ```
 
+**After `npm install -g search-boost-mcp`** (no clone needed):
+
+```bash
+# bash / macOS / Linux
+grok plugin install "$(npm root -g)/search-boost-mcp/grok-plugin" --trust
+
+# Windows PowerShell
+grok plugin install "$(npm root -g)\search-boost-mcp\grok-plugin" --trust
+
+search-boost install -t grok -y --auto-allow
+```
+
+The bundled `.mcp.json` uses `npx -y search-boost-mcp serve` so the plugin works on any machine with Node ≥ 22.13.
+
 Details → [grok-plugin/README.md](./grok-plugin/README.md)
+
+---
+
+## Troubleshooting
+
+| Symptom | What to try |
+|---------|-------------|
+| Install fails immediately | Node **≥ 22.13** (`node -v`); upgrade if older |
+| MCP server missing in agent | Re-run install, **restart the agent**, check `search-boost status` |
+| Tool calls blocked / approval every turn | Re-install with `--auto-allow`, or approve once in the agent UI |
+| No results / empty engines | `search-boost config layer --show` — **free** needs no keys; **api** needs keys via `search-boost config keys` or env vars |
+| Grok plugin MCP won't start | `grok mcp doctor search-boost`; ensure `npx` and network access work |
+| Antigravity `agy` never runs | Requires **api** layer, `agy` on PATH, and `complexity` medium/complex — not simple |
+| Timeouts / fetch errors | Corporate proxy or firewall may block Bing/DDG/Jina; try `search-boost serve` locally to read stderr |
 
 ---
 

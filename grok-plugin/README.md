@@ -10,7 +10,11 @@
 
 ```bash
 # 1. 安装插件包（含 MCP + skill）
+# 从仓库克隆：
 grok plugin install ./grok-plugin --trust
+# 或全局 npm 包（无需克隆）：
+#   grok plugin install "$(npm root -g)/search-boost-mcp/grok-plugin" --trust
+# Windows PowerShell: "$(npm root -g)\search-boost-mcp\grok-plugin"
 
 # 2. 可选：写入搜索路由规则（什么时候搜，由模型自己判断）
 search-boost install -t grok -y --auto-allow

@@ -18,6 +18,8 @@ import {
   fetchPage,
   filterResearchGaps,
   formatFusedSummary,
+  formatAllEnginesFailedMessage,
+  allAttemptedEnginesFailed,
   fusedHitToJson,
   getLayer,
   hitToPost,
@@ -75,7 +77,7 @@ export function registerAll(server) {
         signal,
       })
       const hits = result.results.map(fusedHitToJson)
-      return toolOk(formatFusedSummary(result), {
+      const structured = {
         query: result.query,
         layer: result.layer ?? getLayer(),
         tier: result.tier,
@@ -83,7 +85,13 @@ export function registerAll(server) {
         cacheHit: Boolean(result.cacheHit),
         resultCount: hits.length,
         results: hits,
-      })
+        engineStats: result.engineStats ?? {},
+        warnings: result.warnings ?? [],
+      }
+      if (hits.length === 0 && allAttemptedEnginesFailed(result.engineStats)) {
+        return toolErr(formatAllEnginesFailedMessage(result), structured)
+      }
+      return toolOk(formatFusedSummary(result), structured)
     } catch (err) {
       return toolErr(err instanceof Error ? err.message : String(err))
     }
