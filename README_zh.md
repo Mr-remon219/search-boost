@@ -129,7 +129,14 @@ search-boost uninstall -t cursor,codex,claude -y
 
 获取 Key：[Tavily](https://app.tavily.com/) · [Brave Search API](https://brave.com/search/api/) · [Exa](https://dashboard.exa.ai/)
 
-**X/Twitter 凭据（可选）：** 配置后可走官方 `x_search` 路径。存储于 `~/.search-boost/config/xauth.json`（仍会读取 flat/legacy 路径），或通过 `XAI_API_KEY` / Grok `/x-login`。路径覆盖：`SEARCH_BOOST_XAUTH_FILE`。
+**X/Twitter 凭据（可选）：** 配置后可走官方 `x_search` 路径。存储于 `~/.search-boost/config/xauth.json`（仍会读取 flat/legacy 路径），或通过 `XAI_API_KEY`。使用 `search-boost config x` 配置（见下方命令表）。MCP `/x-login` 与 `search-boost config x` 写入同一本地副本。路径覆盖：`SEARCH_BOOST_XAUTH_FILE`。
+
+```bash
+search-boost config x --show              # 查看 xauth 状态
+search-boost config x --import-grok       # 从 grok CLI 导入登录
+search-boost config x --set-xai-key KEY   # 保存 XAI API key
+search-boost config x --logout            # 删除本地副本
+```
 
 **配置文件路径覆盖：** 环境变量 `SEARCH_BOOST_KEYS_FILE`、`SEARCH_BOOST_LAYER_FILE`、`SEARCH_BOOST_XAUTH_FILE`（可选，指向自定义路径）。
 
@@ -143,10 +150,9 @@ search-boost uninstall -t cursor,codex,claude -y
 | `search-boost setup` | 一条龙：密钥 + 搜索层 + 安装 |
 | `search-boost install` / `uninstall` | 安装或卸载到各 Agent |
 | `search-boost serve` | 启动 MCP 服务（Agent 调用的入口） |
-| `search-boost status` | 看密钥、搜索层、各 Agent 是否已配置 |
+| `search-boost status` | 看密钥、搜索层、X 凭据、各 Agent 是否已配置 |
 | `search-boost doctor [--quick\|--probe] [--json] [--strict]` | 配置/Agent/引擎健康检查，含 pass/warn/fail 判定 |
-| `search-boost status` | 密钥、搜索层、各 Agent 安装态（无 verdict） |
-| `search-boost config keys\|layer\|search` | 管密钥、默认层、是否替换内置搜索 |
+| `search-boost config keys\|layer\|x\|search` | 管密钥、默认层、X 凭据、是否替换内置搜索 |
 | `search-boost print <agent>` | 只打印 MCP 配置片段，不改文件 |
 | `search-boost agents` | 列出 Agent（适合脚本读） |
 

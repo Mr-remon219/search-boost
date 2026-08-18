@@ -9,6 +9,7 @@ import {
   runConfigKeys,
   runConfigLayer,
   runConfigSearchCmd,
+  runConfigX,
   runDoctor,
   runInstall,
   runPlugin,
@@ -54,11 +55,12 @@ async function main() {
       const sub = argv[1]
       if (sub === 'keys') await runConfigKeys(argv.slice(2))
       else if (sub === 'layer') await runConfigLayer(argv.slice(2))
+      else if (sub === 'x') await runConfigX(argv.slice(2))
       else if (sub === 'search') await runConfigSearchCmd(argv.slice(2))
       else if (sub === 'diag') {
         const result = await runDoctor(argv.slice(2), { deprecated: true })
         process.exitCode = result.exitCode
-      } else throw new Error('Usage: search-boost config keys|layer|search|diag')
+      } else throw new Error('Usage: search-boost config keys|layer|x|search|diag')
       break
     }
     case 'doctor': {

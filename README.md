@@ -129,7 +129,14 @@ Keys: `search-boost config keys` → `~/.search-boost/config/keys.json` (flat `~
 
 Obtain keys: [Tavily](https://app.tavily.com/) · [Brave Search API](https://brave.com/search/api/) · [Exa](https://dashboard.exa.ai/)
 
-**X/Twitter auth (optional):** improves official `x_search` when credentials are present. Stored at `~/.search-boost/config/xauth.json` (flat/legacy paths still read) or via `XAI_API_KEY` / Grok `/x-login`. Override file path: `SEARCH_BOOST_XAUTH_FILE`.
+**X/Twitter auth (optional):** improves official `x_search` when credentials are present. Stored at `~/.search-boost/config/xauth.json` (flat/legacy paths still read) or via `XAI_API_KEY`. Configure with `search-boost config x` (see CLI cheat sheet). MCP `/x-login` and `search-boost config x` write the same local copy. Override file path: `SEARCH_BOOST_XAUTH_FILE`.
+
+```bash
+search-boost config x --show              # xauth status
+search-boost config x --import-grok       # import grok CLI login
+search-boost config x --set-xai-key KEY   # store XAI API key
+search-boost config x --logout            # remove local copy
+```
 
 **Config file overrides:** `SEARCH_BOOST_KEYS_FILE`, `SEARCH_BOOST_LAYER_FILE`, `SEARCH_BOOST_XAUTH_FILE` (optional env vars pointing at custom paths).
 
@@ -143,10 +150,9 @@ Obtain keys: [Tavily](https://app.tavily.com/) · [Brave Search API](https://bra
 | `search-boost setup` | Onboarding (keys + layer + install) |
 | `search-boost install` / `uninstall` | Wire MCP + prompts into agents |
 | `search-boost serve` | Run MCP stdio server (used by agents) |
-| `search-boost status` | Keys, layer, per-agent configured state |
+| `search-boost status` | Keys, layer, X credentials, per-agent configured state |
 | `search-boost doctor [--quick\|--probe] [--json] [--strict]` | Config/agents/engine health checks with pass/warn/fail |
-| `search-boost status` | Keys, layer, per-agent install state (no verdict) |
-| `search-boost config keys\|layer\|search` | Keys, default layer, native-search replace |
+| `search-boost config keys\|layer\|x\|search` | Keys, default layer, X auth, native-search replace |
 | `search-boost print <agent>` | Print MCP snippet without writing |
 | `search-boost agents` | Machine-readable agent list |
 
