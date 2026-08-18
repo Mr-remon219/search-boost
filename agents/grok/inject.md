@@ -44,3 +44,4 @@ MCP: **`~/.grok/config.toml`** (user) or **`./.grok/config.toml`** (project) →
 - Resource `search-boost://policy` — optional detailed routing reference
 - **Plugin:** `grok plugin install ./grok-plugin --trust` then `search-boost install -t grok -y --auto-allow`
 - **Project MCP:** `search-boost install -t grok --scope project -y` writes `.grok/config.toml` in cwd (rules stay user-level)
+- Api layer: ≥1 of tavily/brave/exa via `search-boost config keys` (all three recommended)

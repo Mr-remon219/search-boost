@@ -29,4 +29,4 @@ Web search is **available, not required**. Reach for it when external facts matt
 
 ## Keys
 
-Optional — `search-boost config keys` or env vars.
+Optional — `search-boost config keys` or env vars. Api layer needs ≥1 keyed engine; all three recommended.

@@ -10,9 +10,15 @@ Multi-engine web search **MCP server** for coding agents. One CLI install wires 
 > | [**dsh-search-boost**](https://github.com/Mr-remon219/dsh-search-boost) | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle plugin | [GitHub](https://github.com/Mr-remon219/dsh-search-boost) · [npm](https://www.npmjs.com/package/dsh-search-boost) |
 > | [**pi-search-boost**](https://github.com/Mr-remon219/pi-search-boost) | [pi](https://github.com/earendil-works/pi-coding-agent) extension | [GitHub](https://github.com/Mr-remon219/pi-search-boost) · [npm](https://www.npmjs.com/package/pi-search-boost) |
 
-Search engines are **vendored in [`lib/search/`](./lib/search/)** (originally from [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)): on the **free** layer, Bing, DuckDuckGo, Yahoo, and Exa-free run in parallel; the **api** layer adds Antigravity CLI (when available) and keyed Tavily / Brave / Exa. Also included: X/Twitter fallback, Jina page fetch, and deep-research rounds.
+Search engines are **vendored in [`lib/search/`](./lib/search/)** (originally from [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)): on the **free** layer, Bing, DuckDuckGo, Yahoo, and Exa-free run in parallel; the **api** layer adds Antigravity CLI (when available) and **whichever keyed Tavily / Brave / Exa engines you configure** (one key is enough; all three recommended for best fusion). Also included: X/Twitter fallback, Jina page fetch, and deep-research rounds.
 
 中文文档 → [README_zh.md](./README_zh.md)
+
+### What's new in v0.1.4
+
+- **Single-engine api layer** — api tier uses whichever of tavily/brave/exa you configure or enable; no need for all three keys.
+- **Per-engine routing** — optional `enabledEngines` or per-engine `enabled: false` in `~/.search-boost-keys.json`.
+- **Partial-key messaging** — doctor, status, keys wizard, and `fused_search` warn when fewer than three keyed engines are active and recommend configuring all three.
 
 ### What's new in v0.1.2
 
@@ -102,9 +108,9 @@ Also: resource `search-boost://policy` · prompt `search_routing`
 **Layers**
 
 - **free** — Bing + DuckDuckGo + Yahoo + Exa-free; no API keys.
-- **api** — free-layer engines plus Antigravity CLI (when available) and Tavily / Brave / Exa when keys are set
+- **api** — free-layer engines plus Antigravity CLI (when available) and **any** of Tavily / Brave / Exa that you configure (one key works; all three recommended for best cross-engine fusion)
 
-Keys: `search-boost config keys` → `~/.search-boost-keys.json` (legacy `~/.dsh-search-boost-keys.json` still read; or env `TAVILY_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`).
+Keys: `search-boost config keys` → `~/.search-boost-keys.json` (legacy `~/.dsh-search-boost-keys.json` still read; or env `TAVILY_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`). Optional routing: `enabledEngines: ["exa"]` or `"engines": { "brave": { "enabled": false } }` in the keys file.
 
 Obtain keys: [Tavily](https://app.tavily.com/) · [Brave Search API](https://brave.com/search/api/) · [Exa](https://dashboard.exa.ai/)
 
@@ -189,7 +195,7 @@ Details → [grok-plugin/README.md](./grok-plugin/README.md)
 | Install fails immediately | Node **≥ 22.13** (`node -v`); upgrade if older |
 | MCP server missing in agent | Re-run install, **restart the agent**, check `search-boost status` |
 | Tool calls blocked / approval every turn | Re-install with `--auto-allow`, or approve once in the agent UI |
-| No results / empty engines | `search-boost doctor` — check layer/keys/engine checks; **free** needs no keys; **api** needs keys via `search-boost config keys` or env vars |
+| No results / empty engines | `search-boost doctor` — check layer/keys/engine checks; **free** needs no keys; **api** needs **at least one** keyed engine via `search-boost config keys` or env vars (all three recommended) |
 | Network/proxy issues | Phase 2: `search-boost doctor --probe` (not yet implemented) |
 | MCP won't start | `search-boost doctor` → `mcp_launch_command`, `node_version`; then `search-boost serve` |
 | Grok plugin MCP won't start | `grok mcp doctor search-boost`; ensure `npx` and network access work |

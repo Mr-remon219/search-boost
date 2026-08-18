@@ -37,6 +37,7 @@ import {
   stats,
   xAuthAvailableSync,
 } from '../lib/runtime.mjs'
+import { readKeysRouting } from '../lib/keys.mjs'
 import {
   ANNOTATIONS,
   deepResearchInput,
@@ -276,16 +277,32 @@ export function registerAll(server) {
       }
       const engines = bumpEngines()
       const layer = getLayer()
+      const { summary } = readKeysRouting()
       const tierTable = layerTierTable(layer)
       const names = [...new Set(Object.values(tierTable).flat())]
       const actual = availableEngines(engines, names)
       const x = authStatus()
+      const keyedLine = layer === 'api'
+        ? `keyed: ${summary.enabled}/${summary.total} enabled (${summary.enabledNames.join(', ') || 'none'})`
+        : null
       const text = [
         `layer: ${layer} — ${LAYER_LABELS[layer]}`,
+        keyedLine,
         `engines: ${actual.join(', ') || '(none)'}`,
         `x_search: ${xAuthAvailableSync() ? 'official' : 'fallback'} (${x.source})`,
-      ].join('\n')
-      return toolOk(text, { layer, engines: actual, xOfficial: xAuthAvailableSync(), xSource: x.source })
+      ].filter(Boolean).join('\n')
+      return toolOk(text, {
+        layer,
+        engines: actual,
+        keyedEngines: layer === 'api' ? {
+          configured: summary.configured,
+          enabled: summary.enabled,
+          total: summary.total,
+          enabledNames: summary.enabledNames,
+        } : undefined,
+        xOfficial: xAuthAvailableSync(),
+        xSource: x.source,
+      })
     } catch (err) {
       return toolErr(err instanceof Error ? err.message : String(err))
     }

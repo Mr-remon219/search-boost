@@ -61,7 +61,8 @@ import {
 } from '../agents/router.mjs'
 import { agentConfigured, grokConfigCandidates, grokInstallPaths, grokUninstallScopes, PATHS, workspaceAgents } from '../lib/paths.mjs'
 import { readJsonFile, writeJsonFile } from '../lib/json-config.mjs'
-import { maskKey, readKeysFile, readKeysFromCandidates, writeKeysFile, envKeyHint, resetLegacyKeysMigrationNotice } from '../lib/keys.mjs'
+import { maskKey, readKeysFile, readKeysFromCandidates, writeKeysFile, envKeyHint, resetLegacyKeysMigrationNotice, RECOMMEND_ALL_KEYED_ENGINES, readKeysRouting, readEngineRouting, setEnabledEngines } from '../lib/keys.mjs'
+import { engineRegistry } from '../lib/search/engines.js'
 import { readFirstExistingJson } from '../lib/config-paths.mjs'
 import {
   forgetAntigravityWorkspace,
@@ -246,7 +247,9 @@ assert('cursor writes cli-config with auto-allow', cursorAllowed.some((f) => f.e
 const json = jsonMcpEntry()
 assert('json entry has type stdio', json.type === 'stdio' && json.command && json.args?.length)
 const launch = resolveMcpLaunch()
-assert('mcp launch uses node cli before npx', launch.command !== 'npx' && launch.args.some((a) => a.endsWith('cli.mjs')))
+assert('mcp launch prefers bin or node cli over npx', launch.command !== 'npx' && launch.args.includes('serve') && (
+  launch.args.some((a) => a.endsWith('cli.mjs')) || launch.command.includes('search-boost')
+))
 const plugin = pluginMcpEntry()
 assert('plugin mcp entry is npx', plugin.command === 'npx' && plugin.args?.includes('-y') && plugin.args?.includes('search-boost-mcp'))
 assert('plugin mcp entry no abs paths', !/[A-Za-z]:[/\\]/.test(JSON.stringify(plugin)))
@@ -408,10 +411,30 @@ assert('layer free no warning', layerApiNoKeysWarning() === null)
 writeKeysFile({ tavily: 'tvly-test-key-12345678' })
 setLayer('api')
 assert('layer api with keys no warning', layerApiNoKeysWarning() === null)
-writeKeysFile({ tavily: undefined })
+const partialKeyLines = formatKeyStatusLines()
+assert('formatKeyStatusLines partial pool count', partialKeyLines.some((l) => l.includes('Keyed pool: 1/3')))
+assert('formatKeyStatusLines partial recommendation', partialKeyLines.some((l) => l.includes(RECOMMEND_ALL_KEYED_ENGINES)))
+writeKeysFile({ tavily: 'tvly-test-key-12345678', brave: 'brave-test-key-12345678', exa: 'exa-test-key-1234567890' })
+const fullKeyLines = formatKeyStatusLines()
+assert('formatKeyStatusLines no recommendation when all three', !fullKeyLines.some((l) => l.includes(RECOMMEND_ALL_KEYED_ENGINES)))
+writeKeysFile({ tavily: undefined, brave: undefined, exa: undefined })
 const keyLines = formatKeyStatusLines()
 assert('formatKeyStatusLines has keys header', keyLines[0].includes('API keys'))
 assert('formatKeyStatusLines has file path', keyLines.some((l) => l.startsWith('File:')))
+
+// enabledEngines routing round-trip
+writeKeysFile({ tavily: 'tvly-test-key-12345678', exa: 'exa-test-key-12345678' })
+setEnabledEngines(['exa'])
+const exaOnly = readKeysRouting()
+assert('enabledEngines exa only', exaOnly.enabledNames.length === 1 && exaOnly.enabledNames[0] === 'exa')
+assert('enabledEngines intentional single', exaOnly.summary.intentionalSingle === true)
+const exaRegistry = engineRegistry(exaOnly.keys, exaOnly.enabledSet)
+assert('engineRegistry respects enabledEngines', exaRegistry.exa.available() && !exaRegistry.tavily.available())
+setEnabledEngines(null)
+assert('clear enabledEngines uses all keys', readKeysRouting().enabledNames.sort().join(',') === 'exa,tavily')
+writeKeysFile({ tavily: undefined, exa: undefined, enabledEngines: null })
+assert('parseFlags --engines', parseFlags(['--engines', 'exa']).engines === 'exa')
+assert('parseFlags --enable', parseFlags(['--enable', 'brave']).enable[0] === 'brave')
 
 // router resolves per-agent assets
 for (const id of ROUTE_IDS) {

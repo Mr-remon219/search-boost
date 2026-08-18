@@ -32,4 +32,4 @@ Rule: `~/.grok/rules/search-boost.md` (user) or `./.grok/rules/search-boost.md` 
 
 ## Keys
 
-Optional — run `search-boost config keys`.
+Optional — run `search-boost config keys`. Api layer: ≥1 of tavily/brave/exa (all three recommended for best fusion).

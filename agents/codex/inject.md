@@ -41,7 +41,7 @@ Use search-boost when **uncertainty would materially affect the answer or the pa
 
 - Invoke MCP tools on the native MCP channel (names above).
 - Optional deep reference: MCP resource **`search-boost://policy`** · prompt **`search_routing`**
-- Keys optional — free layer needs no Tavily/Brave/Exa keys.
+- Keys optional — free layer needs no Tavily/Brave/Exa keys. Api: ≥1 keyed engine (all three recommended).
 - If `fetch_page` fails in sandbox, a controlled shell fetch is acceptable — or proceed without web if the task does not need it.
 
 ## Autonomy

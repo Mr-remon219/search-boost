@@ -32,4 +32,4 @@ Good fits when **you** want evidence beyond repo context:
 
 - `GetMcpTools` → server `search-boost` when web tools may be useful
 - Resource `search-boost://policy` for extended optional guidance
-- Free layer works without keys (`bing`+`ddg`+`yahoo`+`exa-free`)
+- Free layer works without keys (`bing`+`ddg`+`yahoo`+`exa-free`); api needs ≥1 of tavily/brave/exa via `search-boost config keys` (all three recommended)

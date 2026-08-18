@@ -35,5 +35,6 @@ Consider `search-boost` when verification would materially improve the answer:
 - Subagents: pass **explicit queries** if you delegate research — they may not search on their own.
 - Skill: `~/.claude/skills/search-boost/SKILL.md` · `/search-boost` when you want the routing cheat sheet.
 - Optional deep reference: MCP resource `search-boost://policy` (suggested patterns, not requirements).
+- Keys optional — free layer needs no keys. Api: ≥1 of tavily/brave/exa (all three recommended).
 
 Install can add `mcp__search-boost__*` to allow and deny built-in `WebSearch` so search-boost is the web path. `--keep-native` leaves `WebSearch` available.

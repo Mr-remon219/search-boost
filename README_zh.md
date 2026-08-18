@@ -10,9 +10,15 @@
 > | [**dsh-search-boost**](https://github.com/Mr-remon219/dsh-search-boost) | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | [GitHub](https://github.com/Mr-remon219/dsh-search-boost) · [npm](https://www.npmjs.com/package/dsh-search-boost) |
 > | [**pi-search-boost**](https://github.com/Mr-remon219/pi-search-boost) | [pi](https://github.com/earendil-works/pi-coding-agent) | [GitHub](https://github.com/Mr-remon219/pi-search-boost) · [npm](https://www.npmjs.com/package/pi-search-boost) |
 
-底层搜索引擎**内置于 [`lib/search/`](./lib/search/)**（源自 [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)）：**free** 层并行调用 Bing、DuckDuckGo、Yahoo 与 Exa-free；**api** 层在此基础上增加 Antigravity CLI（本机可用时）以及配置了 Key 的 Tavily / Brave / Exa。此外还提供 X 搜索降级、Jina 正文抓取和深度研究多轮检索。
+底层搜索引擎**内置于 [`lib/search/`](./lib/search/)**（源自 [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)）：**free** 层并行调用 Bing、DuckDuckGo、Yahoo 与 Exa-free；**api** 层在此基础上增加 Antigravity CLI（本机可用时）以及**你已配置**的 Tavily / Brave / Exa（配一个 Key 即可运行；建议配齐三个以获得最佳融合）。此外还提供 X 搜索降级、Jina 正文抓取和深度研究多轮检索。
 
 English → [README.md](./README.md)
+
+### v0.1.4 更新
+
+- **api 层单引擎** — 只需配置 tavily/brave/exa 之一即可走 api 层；不必三个 Key 齐全。
+- **按引擎路由** — 可在 `~/.search-boost-keys.json` 中用 `enabledEngines` 或 `"engines": { "brave": { "enabled": false } }` 控制参与融合的引擎。
+- **部分 Key 提示** — doctor、status、密钥向导与 `fused_search` 在少于三个 keyed 引擎时会提示，并建议配齐三个。
 
 ### v0.1.2 更新
 
@@ -102,9 +108,9 @@ search-boost status          # 安装态仪表盘（密钥、搜索层、各 Age
 **两种搜索层**
 
 - **free**：Bing + DuckDuckGo + Yahoo + Exa-free，**无需 API Key**。
-- **api**：在 free 层基础上增加 Antigravity CLI（本机可用时）以及 Tavily / Brave / Exa，需配置 Key
+- **api**：在 free 层基础上增加 Antigravity CLI（本机可用时）以及**任意已配置**的 Tavily / Brave / Exa（一个 Key 即可；建议配齐三个以获得最佳多引擎融合）
 
-配 Key：`search-boost config keys`，写到 `~/.search-boost-keys.json`（仍会读取旧路径 `~/.dsh-search-boost-keys.json`）；也可以设环境变量 `TAVILY_API_KEY`、`BRAVE_API_KEY`、`EXA_API_KEY`。
+配 Key：`search-boost config keys`，写到 `~/.search-boost-keys.json`（仍会读取旧路径 `~/.dsh-search-boost-keys.json`）；也可以设环境变量 `TAVILY_API_KEY`、`BRAVE_API_KEY`、`EXA_API_KEY`。可选路由：`enabledEngines: ["exa"]` 或 `"engines": { "brave": { "enabled": false } }`。
 
 获取 Key：[Tavily](https://app.tavily.com/) · [Brave Search API](https://brave.com/search/api/) · [Exa](https://dashboard.exa.ai/)
 
@@ -189,7 +195,7 @@ search-boost install -t grok -y --auto-allow
 | 安装直接失败 | 确认 Node **≥ 22.13**（`node -v`） |
 | Agent 里看不到 MCP | 重新安装并**重启 Agent**，执行 `search-boost status` |
 | 每次调用都要审批 | 重装时加 `--auto-allow`，或在 Agent 里一次性批准 |
-| 搜不到结果 / 引擎为空 | `search-boost doctor` — 看 layer/密钥/引擎检查；**free** 无需 Key；**api** 需 `search-boost config keys` 或环境变量 |
+| 搜不到结果 / 引擎为空 | `search-boost doctor` — 看 layer/密钥/引擎检查；**free** 无需 Key；**api** 需**至少一个** keyed 引擎（`search-boost config keys` 或环境变量；建议配齐三个） |
 | 网络/代理问题 | Phase 2：`search-boost doctor --probe`（尚未实现） |
 | MCP 起不来 | `search-boost doctor` → `mcp_launch_command`、`node_version`；再跑 `search-boost serve` |
 | Grok 插件 MCP 起不来 | `grok mcp doctor search-boost`；确认 `npx` 与网络可用 |

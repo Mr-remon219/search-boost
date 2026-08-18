@@ -7,7 +7,7 @@ disable-model-invocation: false
 
 # search-boost MCP @ Grok Build
 
-Server id: `search-boost` in `~/.grok/config.toml`.
+Server id: `search-boost` in `~/.grok/config.toml` (user scope) or `./.grok/config.toml` (project scope).
 
 ## Your choice
 
@@ -28,8 +28,8 @@ If you do search: one tool path per query (don't duplicate search-boost + generi
 
 ## Policy
 
-Rule: `~/.grok/rules/search-boost.md` · optional resource `search-boost://policy`.
+Rule: `~/.grok/rules/search-boost.md` (user) or `./.grok/rules/search-boost.md` (project) · optional resource `search-boost://policy`.
 
 ## Keys
 
-Optional — run `search-boost config keys`.
+Optional — run `search-boost config keys`. Api layer: ≥1 of tavily/brave/exa (all three recommended for best fusion).

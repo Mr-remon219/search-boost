@@ -106,7 +106,7 @@ await withIsolatedHome(async (home) => {
   assert('layer_keys_coherence warn exit 2', exitCode === 2)
 })
 
-// layer_keys_coherence pass (api with key)
+// layer_keys_coherence warn (api with single key)
 await withIsolatedHome(async (home) => {
   writeFileSync(join(home, '.search-boost-layer.json'), `${JSON.stringify({ layer: 'api' })}\n`, 'utf8')
   writeFileSync(
@@ -125,7 +125,83 @@ await withIsolatedHome(async (home) => {
     },
   })
   const check = findCheck(report, 'layer_keys_coherence')
-  assert('layer_keys_coherence pass with api + key', check?.status === 'pass')
+  assert('layer_keys_coherence warn on api with single key', check?.status === 'warn')
+  assert('layer_keys_coherence single key mentions 1/3', check?.message?.includes('1/3'))
+})
+
+// layer_keys_coherence pass (api with three keys)
+await withIsolatedHome(async (home) => {
+  writeFileSync(join(home, '.search-boost-layer.json'), `${JSON.stringify({ layer: 'api' })}\n`, 'utf8')
+  writeFileSync(
+    join(home, '.search-boost-keys.json'),
+    `${JSON.stringify({
+      tavily: 'tvly-test-key-12345678',
+      brave: 'brave-test-key-12345678',
+      exa: 'exa-test-key-1234567890',
+    })}\n`,
+    'utf8',
+  )
+  const { report } = await runDoctor({
+    homeDir: home,
+    silent: true,
+    category: 'config',
+    env: {
+      TAVILY_API_KEY: undefined,
+      BRAVE_API_KEY: undefined,
+      EXA_API_KEY: undefined,
+    },
+  })
+  const check = findCheck(report, 'layer_keys_coherence')
+  assert('layer_keys_coherence pass with api + three keys', check?.status === 'pass')
+})
+
+// api_keyed_pool warn on partial keyed engines
+await withIsolatedHome(async (home) => {
+  writeFileSync(join(home, '.search-boost-layer.json'), `${JSON.stringify({ layer: 'api' })}\n`, 'utf8')
+  writeFileSync(
+    join(home, '.search-boost-keys.json'),
+    `${JSON.stringify({ exa: 'exa-test-key-1234567890', enabledEngines: ['exa'] })}\n`,
+    'utf8',
+  )
+  const { report } = await runDoctor({
+    homeDir: home,
+    silent: true,
+    category: 'engines',
+    env: {
+      TAVILY_API_KEY: undefined,
+      BRAVE_API_KEY: undefined,
+      EXA_API_KEY: undefined,
+    },
+  })
+  const check = findCheck(report, 'api_keyed_pool')
+  assert('api_keyed_pool warn on single enabled engine', check?.status === 'warn')
+  assert('api_keyed_pool single engine OK message', check?.message?.includes('single engine OK'))
+})
+
+// api_keyed_pool pass with all three keys
+await withIsolatedHome(async (home) => {
+  writeFileSync(join(home, '.search-boost-layer.json'), `${JSON.stringify({ layer: 'api' })}\n`, 'utf8')
+  writeFileSync(
+    join(home, '.search-boost-keys.json'),
+    `${JSON.stringify({
+      tavily: 'tvly-test-key-12345678',
+      brave: 'brave-test-key-12345678',
+      exa: 'exa-test-key-1234567890',
+    })}\n`,
+    'utf8',
+  )
+  const { report } = await runDoctor({
+    homeDir: home,
+    silent: true,
+    category: 'engines',
+    env: {
+      TAVILY_API_KEY: undefined,
+      BRAVE_API_KEY: undefined,
+      EXA_API_KEY: undefined,
+    },
+  })
+  const check = findCheck(report, 'api_keyed_pool')
+  assert('api_keyed_pool pass with three keys', check?.status === 'pass')
 })
 
 // keys_file_integrity fail (corrupt JSON) → exit 1

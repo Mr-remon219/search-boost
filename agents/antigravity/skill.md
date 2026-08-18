@@ -31,4 +31,4 @@ Server id: `search-boost` in `~/.gemini/config/mcp_config.json` (or `.agents/mcp
 
 ## Keys
 
-Optional — run `search-boost config keys`.
+Optional — run `search-boost config keys`. Api: ≥1 keyed engine; all three recommended.
