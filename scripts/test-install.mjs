@@ -3,6 +3,10 @@
  */
 import { upsertTomlSection, removeTomlSection, hasTomlSection } from '../lib/toml.mjs'
 import {
+  stripMarkedWebSearchFromMcpToml,
+  stripWebSearchFromSectionBody,
+} from '../lib/codex-toml.mjs'
+import {
   injectBlock,
   injectGeminiBlock,
   injectTomlSection,
@@ -44,6 +48,7 @@ import {
   injectAntigravityRule,
   injectSkill,
   installAntigravityHook,
+  isOwnedSearchBoostSkill,
   loadAgentPrompt,
   loadAgentSkill,
 } from '../lib/agents/shared.mjs'
@@ -143,6 +148,41 @@ assert('web_search marker present', toml.includes('SEARCH_BOOST_WEB_SEARCH_START
 assert('web_search marker value', toml.includes('web_search = "disabled"'))
 toml = removeMarkedToml(toml, 'WEB_SEARCH')
 assert('web_search marker removed', !toml.includes('SEARCH_BOOST_WEB_SEARCH_START'))
+
+// codex-toml: strip marked web_search inside MCP only, preserve bare user lines
+{
+  const markedInMcp = [
+    'command = "node"',
+    '# SEARCH_BOOST_WEB_SEARCH_START',
+    'web_search = "disabled"',
+    '# SEARCH_BOOST_WEB_SEARCH_END',
+    'args = ["serve"]',
+  ].join('\n')
+  const stripped = stripWebSearchFromSectionBody(markedInMcp)
+  assert('stripWebSearch removes marked block in MCP body', !stripped.includes('SEARCH_BOOST_WEB_SEARCH_START'))
+  assert('stripWebSearch keeps other MCP keys', stripped.includes('command = "node"') && stripped.includes('args = ["serve"]'))
+
+  const userMcpWebSearch = 'command = "node"\nweb_search = "live"\nargs = ["serve"]'
+  assert('stripWebSearch preserves bare MCP web_search', stripWebSearchFromSectionBody(userMcpWebSearch) === userMcpWebSearch)
+
+  let codexToml = [
+    'web_search = "cached"',
+    '',
+    '[mcp_servers.search-boost]',
+    'command = "node"',
+    '# SEARCH_BOOST_WEB_SEARCH_START',
+    'web_search = "disabled"',
+    '# SEARCH_BOOST_WEB_SEARCH_END',
+    'web_search = "live"',
+  ].join('\n')
+  codexToml = stripMarkedWebSearchFromMcpToml(codexToml, 'search-boost')
+  assert('stripMarkedWebSearchFromMcpToml keeps top-level web_search', /^web_search = "cached"/m.test(codexToml))
+  assert('stripMarkedWebSearchFromMcpToml removes marked block in MCP', !codexToml.includes('SEARCH_BOOST_WEB_SEARCH_START'))
+  assert('stripMarkedWebSearchFromMcpToml keeps bare MCP web_search', codexToml.includes('web_search = "live"'))
+}
+
+assert('isOwnedSearchBoostSkill detects ours', isOwnedSearchBoostSkill('mcp__search-boost__fused_search'))
+assert('isOwnedSearchBoostSkill rejects foreign', !isOwnedSearchBoostSkill('# my unrelated skill\n'))
 
 // MCP toml block: auto approval only when opted in
 assert('toml mcp approval opt-in', tomlMcpBlock({ approvalAuto: true }).includes('default_tools_approval_mode = "auto"'))
@@ -765,7 +805,7 @@ function runInTempHome(script) {
       process.execPath,
       ['--input-type=module', '-e', script],
       {
-        cwd: join(import.meta.dirname, '..'),
+        cwd: repoRoot,
         env: {
           ...process.env,
           HOME: home,
@@ -780,6 +820,27 @@ function runInTempHome(script) {
     const stderr = err && typeof err === 'object' && 'stderr' in err ? String(err.stderr) : String(err)
     console.error(stderr)
     return false
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// Codex install/uninstall integration (subprocess — PATHS binds at import time)
+function runCodexIntegrationScenario(scenario) {
+  const home = mkdtempSync(join(tmpdir(), `sb-codex-int-${process.pid}-`))
+  try {
+    execFileSync(process.execPath, ['scripts/test-codex-uninstall-integration.mjs', scenario], {
+      cwd: repoRoot,
+      env: { ...process.env, HOME: home, USERPROFILE: home },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8',
+    })
+    console.log(`ok: codex integration scenario ${scenario}`)
+  } catch (err) {
+    const out = `${err.stdout ?? ''}${err.stderr ?? ''}`
+    if (out.trim()) process.stdout.write(out.endsWith('\n') ? out : `${out}\n`)
+    console.error(`FAIL: codex integration scenario ${scenario}`)
+    failed++
   } finally {
     rmSync(home, { recursive: true, force: true })
   }
@@ -889,6 +950,10 @@ assert('agy uninstall no orphan AGENTS/GEMINI when never existed', runInTempHome
   }
   console.log('SUBPROCESS_OK')
 `))
+
+for (const scenario of ['round-trip', 'keep-native', 'mcp-migration', 'foreign-skill', 'empty-config', 'write-unlink']) {
+  runCodexIntegrationScenario(scenario)
+}
 
 if (failed) {
   console.error(`\n${failed} test(s) failed`)
