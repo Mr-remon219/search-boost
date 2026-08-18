@@ -1,5 +1,7 @@
 # 探索笔记 — search-boost-mcp
 
+> **Maintainer-only** — internal design notes, not end-user documentation. See [README.md](./README.md) for user docs.
+
 > 2026-08-18 · 独立 MCP 项目
 
 ## 完成度

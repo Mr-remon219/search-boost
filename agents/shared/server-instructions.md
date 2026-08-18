@@ -10,7 +10,7 @@ Multi-engine web search for coding agents. **Available when you want grounded ex
 
 **Often skip:** stable fundamentals, files in the workspace, pure creation, user opt-out.
 
-**If you search:** prefer one focused `fused_search` (`complexity=simple`); cite URLs; label inference; ~3 rounds max; duplicate query → stop.
+**If you search:** prefer one focused `fused_search` (`complexity=simple`); cite URLs; label inference; ~3 rounds max per question; duplicate query → stop. For `deep_research`, one round per call — repeat with `suggested_queries` until gaps empty (~3 rounds max total).
 
 Optional detail: resource `search-boost://policy`.
 
@@ -27,7 +27,7 @@ Optional detail: resource `search-boost://policy`.
 | `fused_search` | General lookup / verify |
 | `fetch_page` | Snippets insufficient; official doc body |
 | `x_search` | X/Twitter |
-| `deep_research` | Multi-source synthesis |
+| `deep_research` | Multi-source synthesis (one round per call; repeat until gaps empty, ~3 max) |
 | `search_layer` | free vs api |
 | `search_stats` | Diagnostics |
 

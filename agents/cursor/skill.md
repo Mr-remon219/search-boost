@@ -13,7 +13,7 @@ Multi-engine web search when **you** decide external facts need verification or 
 | `fused_search` | Quick lookup (`complexity=simple` first if searching) |
 | `fetch_page` | Full page when snippets fail; `focus` saves tokens |
 | `x_search` | X/Twitter |
-| `deep_research` | Multi-source compare |
+| `deep_research` | Multi-source synthesis — one round per call; repeat with `suggested_queries` until gaps empty (~3 rounds max) |
 | `search_layer` | free vs api |
 | `search_stats` | Diagnostics |
 

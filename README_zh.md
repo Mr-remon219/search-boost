@@ -87,7 +87,7 @@ search-boost status    # 密钥、搜索层、各 Agent 是否已配置
 | `fused_search` | 多引擎并行搜、去重、综合排序 |
 | `fetch_page` | 拉网页正文（Jina 优先，失败走 HTML；`focus` 可只留相关段落，省 token） |
 | `x_search` | 搜 X / Twitter：关键词、用户、帖子串 |
-| `deep_research` | 做一轮深度研究，告诉你还缺什么、下一步搜什么 |
+| `deep_research` | 每轮一次深度研究 — 按 `suggested_queries` 重复调用直到 gaps 为空，再综合结论（建议最多 ~3 轮） |
 | `search_layer` | 查看或切换搜索层：`free`（免 Key）/ `api`（带 Key 的引擎） |
 | `search_stats` | 看缓存、各引擎是否可用等诊断信息 |
 
@@ -100,7 +100,11 @@ search-boost status    # 密钥、搜索层、各 Agent 是否已配置
 
 配 Key：`search-boost config keys`，写到 `~/.search-boost-keys.json`（仍会读取旧路径 `~/.dsh-search-boost-keys.json`）；也可以设环境变量 `TAVILY_API_KEY`、`BRAVE_API_KEY`、`EXA_API_KEY`。
 
-**配置文件路径覆盖：** 环境变量 `SEARCH_BOOST_KEYS_FILE`、`SEARCH_BOOST_LAYER_FILE`（可选，指向自定义路径）。
+获取 Key：[Tavily](https://app.tavily.com/) · [Brave Search API](https://brave.com/search/api/) · [Exa](https://dashboard.exa.ai/)
+
+**X/Twitter 凭据（可选）：** 配置后可走官方 `x_search` 路径。存储于 `~/.search-boost-xauth.json`（仍会读取旧路径 `~/.dsh-search-boost-xauth.json`），或通过 `XAI_API_KEY` / Grok `/x-login`。路径覆盖：`SEARCH_BOOST_XAUTH_FILE`。
+
+**配置文件路径覆盖：** 环境变量 `SEARCH_BOOST_KEYS_FILE`、`SEARCH_BOOST_LAYER_FILE`、`SEARCH_BOOST_XAUTH_FILE`（可选，指向自定义路径）。
 
 ---
 
@@ -125,7 +129,8 @@ search-boost status    # 密钥、搜索层、各 Agent 是否已配置
 
 | Agent | MCP 写在哪 | 还会注入什么 |
 |-------|------------|--------------|
-| Cursor IDE / CLI | `~/.cursor/mcp.json` | hook、skill，可选 CLI 免审批 |
+| Cursor IDE | `~/.cursor/mcp.json` | hook、skill |
+| Cursor CLI | `~/.cursor/mcp.json` | hook、skill（CLI 版）、可选 CLI 免审批 |
 | Codex CLI | `~/.codex/config.toml` | AGENTS.md、skill |
 | Claude Code | `~/.claude.json` | CLAUDE.md、skill、权限规则 |
 | Grok Build | `~/.grok/config.toml` | rule、skill · 另有 [grok-plugin](./grok-plugin/) |
