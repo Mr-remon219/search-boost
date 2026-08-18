@@ -5,11 +5,11 @@
 import { help, installOpts, parseFlags } from './lib/cli/args.mjs'
 import {
   printAgentsTsv,
-  printDoctor,
   printSnippet,
   runConfigKeys,
   runConfigLayer,
   runConfigSearchCmd,
+  runDoctor,
   runInstall,
   runPlugin,
 } from './lib/cli/commands.mjs'
@@ -55,13 +55,17 @@ async function main() {
       if (sub === 'keys') await runConfigKeys(argv.slice(2))
       else if (sub === 'layer') await runConfigLayer(argv.slice(2))
       else if (sub === 'search') await runConfigSearchCmd(argv.slice(2))
-      else if (sub === 'diag') printDoctor()
-      else throw new Error('Usage: search-boost config keys|layer|search|diag')
+      else if (sub === 'diag') {
+        const result = await runDoctor(argv.slice(2), { deprecated: true })
+        process.exitCode = result.exitCode
+      } else throw new Error('Usage: search-boost config keys|layer|search|diag')
       break
     }
-    case 'doctor':
-      printDoctor()
+    case 'doctor': {
+      const result = await runDoctor(argv.slice(1))
+      process.exitCode = result.exitCode
       break
+    }
     case 'agents':
       printAgentsTsv()
       break
