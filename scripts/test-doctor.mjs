@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { CHECK_IDS } from '../lib/doctor/registry.mjs'
 import { runDoctor } from '../lib/doctor/run.mjs'
 import { renderHuman } from '../lib/doctor/render.mjs'
+import { markClaudeOwnedWebSearchDeny } from '../lib/native-search.mjs'
 
 let failed = 0
 
@@ -271,7 +272,7 @@ await withIsolatedHome(async (home) => {
 }
 
 // registry drift: quick checks (design spec lists 15 ids)
-assert('registry quick check count', CHECK_IDS.length === 16)
+assert('registry quick check count', CHECK_IDS.length === 18)
 
 // --category probe with no registered checks → exit 2
 {
@@ -350,6 +351,44 @@ await withIsolatedHome(async (home) => {
   assert('agent_install_coverage warn when none', coverage?.status === 'warn')
   assert('agent_install_coverage none exit 2', exitCode === 2)
 })
+
+// agents: claude orphan deny after MCP removed
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-claude-orphan-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    writeFileSync(
+      join(home, '.claude', 'settings.json'),
+      `${JSON.stringify(markClaudeOwnedWebSearchDeny({ permissions: { deny: ['WebSearch'] } }, true))}\n`,
+      'utf8',
+    )
+    const { report } = runDoctorInSubprocess(home, 'agents')
+    const orphan = findCheck(report, 'claude_orphan_deny')
+    assert('claude orphan deny warn', orphan?.status === 'warn')
+    assert('claude orphan deny fix_hint uninstall', orphan?.fix_hint?.includes('uninstall -t claude'))
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// agents: claude partial install fix_hint includes uninstall
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-claude-partial-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    writeFileSync(
+      join(home, '.claude.json'),
+      `${JSON.stringify({ mcpServers: { 'search-boost': { command: 'node', args: ['cli.mjs', 'serve'] } } })}\n`,
+      'utf8',
+    )
+    const { report } = runDoctorInSubprocess(home, 'agents')
+    const partial = findCheck(report, 'claude_partial_install')
+    assert('claude partial install warn', partial?.status === 'warn')
+    assert('claude partial install fix_hint uninstall', partial?.fix_hint?.includes('uninstall -t claude'))
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
 
 if (failed) {
   console.error(`\n${failed} test(s) failed`)
