@@ -29,6 +29,20 @@ search-boost install -y     # 给所有能检测到的 Agent 装上
 
 装完后记得**重启**对应的 Agent，MCP 才会生效。
 
+### 升级
+
+已经在用 search-boost-mcp？先更新全局 CLI，再重装到各 Agent（`~/.search-boost/` 下的密钥与搜索层会保留）：
+
+```bash
+npm install -g search-boost-mcp@latest
+search-boost install -y                 # 所有检测到的 Agent
+# 或按 Agent，例如 Grok 一键（grok CLI 在 PATH 时含插件 + 配置）：
+search-boost install -t grok -y --auto-allow
+search-boost doctor
+```
+
+重装后**重启** Agent。首次写入时会从旧的 flat `~/.search-boost-*.json` 路径懒迁移配置。
+
 ### 按 Agent 单独安装
 
 ```bash

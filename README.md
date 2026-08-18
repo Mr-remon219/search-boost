@@ -29,6 +29,20 @@ search-boost install -y     # all detected agents
 
 Restart each agent after install so MCP reloads.
 
+### Upgrade
+
+Already using search-boost-mcp? Update the global CLI, then refresh agent configs (keys/layer under `~/.search-boost/` are kept):
+
+```bash
+npm install -g search-boost-mcp@latest
+search-boost install -y                 # all detected agents
+# or pick targets, e.g. Grok one-step (plugin + config when grok on PATH):
+search-boost install -t grok -y --auto-allow
+search-boost doctor
+```
+
+Restart each agent after reinstall. Config lazy-migrates from older flat `~/.search-boost-*.json` paths on first write.
+
 ### One-liners by agent
 
 ```bash
