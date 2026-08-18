@@ -339,6 +339,66 @@ await withIsolatedHome(async (home) => {
     assert('claude keep-native native_search_mismatch warn', native?.status === 'warn')
     const coverage = findCheck(report, 'agent_install_coverage')
     assert('claude keep-native agent_install_coverage pass', coverage?.status === 'pass')
+    const claudePerm = findCheck(report, 'claude_permission_config')
+    assert('claude keep-native permission config pass', claudePerm?.status === 'pass')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// agents: claude partial install (settings without MCP)
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-claude-partial-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    writeFileSync(
+      join(home, '.claude', 'settings.json'),
+      `${JSON.stringify({ permissions: { allow: ['mcp__search-boost__*'] } })}\n`,
+      'utf8',
+    )
+    const { report } = runDoctorInSubprocess(home, 'agents')
+    const claudePerm = findCheck(report, 'claude_permission_config')
+    assert('claude partial install fails permission check', claudePerm?.status === 'fail')
+    assert('claude partial install fix hint', claudePerm?.fix_hint?.includes('search-boost install -t claude'))
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// agents: claude duplicate allow + bypass redundant
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-claude-dup-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    writeFileSync(
+      join(home, '.claude.json'),
+      `${JSON.stringify({ mcpServers: { 'search-boost': { command: 'node', args: ['cli.mjs', 'serve'] } } })}\n`,
+      'utf8',
+    )
+    writeFileSync(
+      join(home, '.claude', 'settings.json'),
+      `${JSON.stringify({
+        permissions: {
+          allow: ['mcp__search-boost__*', 'mcp__search-boost__fused_search'],
+        },
+      })}\n`,
+      'utf8',
+    )
+    const { report: dupReport } = runDoctorInSubprocess(home, 'agents')
+    const dupCheck = findCheck(dupReport, 'claude_permission_config')
+    assert('claude duplicate allow warn', dupCheck?.status === 'warn')
+
+    writeFileSync(
+      join(home, '.claude', 'settings.json'),
+      `${JSON.stringify({
+        bypassPermissions: true,
+        permissions: { allow: ['mcp__search-boost__*'] },
+      })}\n`,
+      'utf8',
+    )
+    const { report: bypassReport } = runDoctorInSubprocess(home, 'agents')
+    const bypassCheck = findCheck(bypassReport, 'claude_permission_config')
+    assert('claude bypass redundant allow warn', bypassCheck?.status === 'warn')
   } finally {
     rmSync(home, { recursive: true, force: true })
   }
