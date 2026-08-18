@@ -803,6 +803,7 @@ assert('codex install dry-run', true)
 assert('claude install dry-run', true)
 
 // antigravity-settings strip helper
+{
   const stripped = stripSearchBoostPermissions({
     permissions: { allow: ['Shell(git)', 'mcp(search-boost/*)', 'mcp(other)'] },
   })
@@ -918,6 +919,10 @@ assert('agy install+uninstall round-trip subprocess', runInTempHome(`
   await AGENTS.antigravity.uninstall({ dryRun: false, workspace: wsRoot })
 
   for (const mcpPath of antigravityMcpPaths()) {
+    if (!existsSync(mcpPath)) {
+      checks.push([\`mcp clean \${mcpPath}\`, true])
+      continue
+    }
     const cfg = JSON.parse(readFileSync(mcpPath, 'utf8'))
     checks.push([\`mcp clean \${mcpPath}\`, !cfg.mcpServers?.['search-boost']])
   }
@@ -1007,8 +1012,11 @@ import { AGENTS } from './lib/agents/index.mjs';
 await AGENTS.claude.uninstall({ dryRun: false });
 process.stdout.write('ok');
 `)
-    const cfg = JSON.parse(readFileSync(join(claudeHome, '.claude.json'), 'utf8'))
-    assert('claude roundtrip MCP removed', !cfg.mcpServers?.['search-boost'])
+    const claudeJsonPath = join(claudeHome, '.claude.json')
+    assert(
+      'claude roundtrip MCP removed',
+      !existsSync(claudeJsonPath) || !JSON.parse(readFileSync(claudeJsonPath, 'utf8')).mcpServers?.['search-boost'],
+    )
     assert('claude roundtrip skill removed', !existsSync(join(claudeHome, '.claude', 'skills', 'search-boost', 'SKILL.md')))
     assert('claude roundtrip empty CLAUDE.md removed', !existsSync(join(claudeHome, '.claude', 'CLAUDE.md')))
     const settingsAfterUninstall = JSON.parse(readFileSync(join(claudeHome, '.claude', 'settings.json'), 'utf8'))
