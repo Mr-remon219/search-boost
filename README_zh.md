@@ -14,18 +14,6 @@
 
 English → [README.md](./README.md)
 
-### v0.1.4 更新
-
-- **api 层单引擎** — 只需配置 tavily/brave/exa 之一即可走 api 层；不必三个 Key 齐全。
-- **按引擎路由** — 可在 `~/.search-boost-keys.json` 中用 `enabledEngines` 或 `"engines": { "brave": { "enabled": false } }` 控制参与融合的引擎。
-- **部分 Key 提示** — doctor、status、密钥向导与 `fused_search` 在少于三个 keyed 引擎时会提示，并建议配齐三个。
-
-### v0.1.2 更新
-
-- **自包含引擎池**（`lib/search/`）：常规搜索用 Bing + DuckDuckGo + Yahoo + Exa-free；同一引擎池也用于 `x_search` 降级时的 `site:` 查询。
-- **`x_search` 降级**在多引擎域名搜索时会自动加上 `site:x.com`，无 XAI 凭据时关键词搜索也能返回结果。
-- **无需外部 dsh 仓库或 npm 依赖** — 引擎逻辑已 vendored 到本仓库。
-
 ---
 
 ## 快速安装
@@ -90,6 +78,15 @@ search-boost status          # 安装态仪表盘（密钥、搜索层、各 Age
 
 若要完整走密钥 + 搜索层选择，请用 `search-boost setup`，或不加 `-y` 的 `search-boost install`。
 
+### 卸载
+
+```bash
+search-boost uninstall -t codex -y
+search-boost uninstall -t cursor,codex,claude -y
+```
+
+卸载只移除 **search-boost 拥有** 的配置块（带标记的 MCP、skill、hook、权限规则）。在 Agent 支持的情况下会恢复内置联网（Codex 顶层 `web_search`、Claude `WebSearch` deny），除非你安装时用了 `--keep-native`，或原本就有未标记的用户设置。若文件仅因 search-boost 而存在且清理后为空，会被删除。预览：加 `--dry-run`。
+
 ---
 
 ## MCP 工具
@@ -110,11 +107,13 @@ search-boost status          # 安装态仪表盘（密钥、搜索层、各 Age
 - **free**：Bing + DuckDuckGo + Yahoo + Exa-free，**无需 API Key**。
 - **api**：在 free 层基础上增加 Antigravity CLI（本机可用时）以及**任意已配置**的 Tavily / Brave / Exa（一个 Key 即可；建议配齐三个以获得最佳多引擎融合）
 
-配 Key：`search-boost config keys`，写到 `~/.search-boost-keys.json`（仍会读取旧路径 `~/.dsh-search-boost-keys.json`）；也可以设环境变量 `TAVILY_API_KEY`、`BRAVE_API_KEY`、`EXA_API_KEY`。可选路由：`enabledEngines: ["exa"]` 或 `"engines": { "brave": { "enabled": false } }`。
+配 Key：`search-boost config keys`，写到 `~/.search-boost/config/keys.json`（仍会读取 flat `~/.search-boost-keys.json` 与 legacy `~/.dsh-search-boost-keys.json`）；也可以设环境变量 `TAVILY_API_KEY`、`BRAVE_API_KEY`、`EXA_API_KEY`。可选路由：`enabledEngines: ["exa"]` 或 `"engines": { "brave": { "enabled": false } }`。
+
+**配置目录：** 运行时数据位于 `~/.search-boost/` — `config/`（keys、layer、xauth）、`cache/`（xguest token）、`state/`（Antigravity 工作区注册表）。首次写入时从 flat `~/.search-boost-*.json` 与 legacy `~/.dsh-*` 懒迁移（旧文件保留）。覆盖根目录：`SEARCH_BOOST_HOME`；单文件：`SEARCH_BOOST_*_FILE`。
 
 获取 Key：[Tavily](https://app.tavily.com/) · [Brave Search API](https://brave.com/search/api/) · [Exa](https://dashboard.exa.ai/)
 
-**X/Twitter 凭据（可选）：** 配置后可走官方 `x_search` 路径。存储于 `~/.search-boost-xauth.json`（仍会读取旧路径 `~/.dsh-search-boost-xauth.json`），或通过 `XAI_API_KEY` / Grok `/x-login`。路径覆盖：`SEARCH_BOOST_XAUTH_FILE`。
+**X/Twitter 凭据（可选）：** 配置后可走官方 `x_search` 路径。存储于 `~/.search-boost/config/xauth.json`（仍会读取 flat/legacy 路径），或通过 `XAI_API_KEY` / Grok `/x-login`。路径覆盖：`SEARCH_BOOST_XAUTH_FILE`。
 
 **配置文件路径覆盖：** 环境变量 `SEARCH_BOOST_KEYS_FILE`、`SEARCH_BOOST_LAYER_FILE`、`SEARCH_BOOST_XAUTH_FILE`（可选，指向自定义路径）。
 
@@ -144,7 +143,7 @@ search-boost status          # 安装态仪表盘（密钥、搜索层、各 Age
 | Agent | MCP 写在哪 | 还会注入什么 |
 |-------|------------|--------------|
 | Cursor IDE | `~/.cursor/mcp.json` | hook、skill |
-| Cursor CLI | `~/.cursor/mcp.json` | hook、skill（CLI 版）、可选 CLI 免审批 |
+| Cursor CLI | `~/.cursor/mcp.json`（与 IDE 共用 surface） | hook、skill（CLI 版）、可选 CLI 免审批 |
 | Codex CLI | `~/.codex/config.toml` | AGENTS.md、skill |
 | Claude Code | `~/.claude.json` | CLAUDE.md、skill、权限规则 |
 | Grok Build | `~/.grok/config.toml` | rule、skill · 另有 [grok-plugin](./grok-plugin/) |
@@ -152,7 +151,9 @@ search-boost status          # 安装态仪表盘（密钥、搜索层、各 Age
 
 提示词的设计是**让模型自己决定要不要搜**，不是每轮都强制联网。各 Agent 的模板在 [`agents/`](./agents/) 里。
 
-**和内置搜索的关系：** 非交互安装时默认会关掉 Codex 的 `web_search` 和 Claude 的 `WebSearch`；想保留就加 `--keep-native`。Cursor、Antigravity 没有硬开关，靠 skill 和 hook 引导优先用 search-boost。Grok 自带的 browse **不会动**。
+**和内置搜索的关系：** 非交互安装且使用 `--replace-native`（默认）时，Codex 会在 `config.toml` **顶层**写入带标记的 `web_search = "disabled"`（不会写进 `[mcp_servers.*]`）；Claude 会在 `settings.json` 写入带 ownership 标记的 `WebSearch` deny。卸载时只移除 search-boost 拥有的项，并在安全时恢复内置搜索。想保留内置搜索就加 `--keep-native`。Cursor、Antigravity 没有硬开关，靠 skill 和 hook 引导优先用 search-boost。Grok 自带的 browse **不会动**。
+
+**Cursor + Cursor CLI：** 两个 target 共用一套 `~/.cursor/` 配置。`-t cursor,cursor-cli` 会把 IDE 与 CLI 提示词合并写入一次；卸载会清理整份共用 surface。
 
 **Antigravity + `agy` CLI：** 在 **api** 层且本机 PATH 有 `agy` 时，Antigravity CLI 引擎仅在 **medium** / **complex** 档位的 `fused_search` 中参与，简单查询不会走它；依赖本机登录与平台配额，超时约 45 秒。
 
@@ -161,6 +162,8 @@ search-boost status          # 安装态仪表盘（密钥、搜索层、各 Age
 ## Grok 插件
 
 插件随 npm 包一起发布（MCP 用可移植的 `npx` 启动，含 skill）。
+
+**重复安装是幂等的：** `search-boost install -t grok` 会先移除旧的 search-boost `[permission]` 块（带标记或 legacy），再写入新的，避免重复 `[permission]` 导致 `grok` 无法启动。卸载只剥离 search-boost 拥有的 permission 行，空配置会 unlink。若已设置 `[ui] permission_mode = "always-approve"`，`--auto-allow` 会跳过注入 `[permission]`。`search-boost doctor` 会对重复或冗余 permission 块发出警告。
 
 **从 git 克隆**（仓库根目录）：
 

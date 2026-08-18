@@ -14,18 +14,6 @@ Search engines are **vendored in [`lib/search/`](./lib/search/)** (originally fr
 
 中文文档 → [README_zh.md](./README_zh.md)
 
-### What's new in v0.1.4
-
-- **Single-engine api layer** — api tier uses whichever of tavily/brave/exa you configure or enable; no need for all three keys.
-- **Per-engine routing** — optional `enabledEngines` or per-engine `enabled: false` in `~/.search-boost-keys.json`.
-- **Partial-key messaging** — doctor, status, keys wizard, and `fused_search` warn when fewer than three keyed engines are active and recommend configuring all three.
-
-### What's new in v0.1.2
-
-- **Self-contained engine pool** in `lib/search/`: Bing + DuckDuckGo + Yahoo + Exa-free for general search; same pool powers `x_search` fallback with `site:` queries.
-- **`x_search` fallback** auto-prepends `site:x.com` for multi-engine domain search so keyword mode works without XAI credentials.
-- **No external dsh repo or npm dependency** — engine logic is vendored in this repository.
-
 ---
 
 ## Install (recommended)
@@ -90,6 +78,15 @@ If tools appear but calls fail, run `search-boost serve` in a terminal to see st
 
 For full onboarding (API keys + layer choice), run `search-boost setup` or `search-boost install` without `-y`.
 
+### Uninstall
+
+```bash
+search-boost uninstall -t codex -y
+search-boost uninstall -t cursor,codex,claude -y
+```
+
+Uninstall removes only **search-boost-owned** blocks (marked MCP entries, skills, hooks, permission rules). Where the agent supports it, native web search is restored (Codex top-level `web_search`, Claude `WebSearch` deny) unless you used `--keep-native` at install time or had pre-existing unmarked settings. Config files created solely for search-boost are unlinked when empty after cleanup. Preview: `--dry-run`.
+
 ---
 
 ## What you get
@@ -112,7 +109,7 @@ Also: resource `search-boost://policy` · prompt `search_routing`
 
 Keys: `search-boost config keys` → `~/.search-boost/config/keys.json` (flat `~/.search-boost-keys.json` and legacy `~/.dsh-search-boost-keys.json` still read; or env `TAVILY_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`). Optional routing: `enabledEngines: ["exa"]` or `"engines": { "brave": { "enabled": false } }` in the keys file.
 
-**Config layout (v0.1.6+):** runtime data lives under `~/.search-boost/` — `config/` (keys, layer, xauth), `cache/` (xguest token), `state/` (Antigravity workspace registry). First write lazy-migrates from flat `~/.search-boost-*.json` files (old copies kept). Override base: `SEARCH_BOOST_HOME`; per-file: `SEARCH_BOOST_*_FILE`.
+**Config layout:** runtime data lives under `~/.search-boost/` — `config/` (keys, layer, xauth), `cache/` (xguest token), `state/` (Antigravity workspace registry). First write lazy-migrates from flat `~/.search-boost-*.json` and legacy `~/.dsh-*` files (old copies kept). Override base: `SEARCH_BOOST_HOME`; per-file: `SEARCH_BOOST_*_FILE`.
 
 Obtain keys: [Tavily](https://app.tavily.com/) · [Brave Search API](https://brave.com/search/api/) · [Exa](https://dashboard.exa.ai/)
 
@@ -146,7 +143,7 @@ Obtain keys: [Tavily](https://app.tavily.com/) · [Brave Search API](https://bra
 | Agent | MCP config | Also installs |
 |-------|------------|---------------|
 | Cursor IDE | `~/.cursor/mcp.json` | hook, skill |
-| Cursor CLI | `~/.cursor/mcp.json` | hook, skill (CLI variant), optional CLI auto-allow |
+| Cursor CLI | `~/.cursor/mcp.json` (same surface as IDE) | hook, skill (CLI variant), optional CLI auto-allow |
 | Codex CLI | `~/.codex/config.toml` | AGENTS.md, skill |
 | Claude Code | `~/.claude.json` | CLAUDE.md, skill, permissions |
 | Grok Build | `~/.grok/config.toml` | rule, skill · [grok-plugin](./grok-plugin/) |
@@ -154,7 +151,9 @@ Obtain keys: [Tavily](https://app.tavily.com/) · [Brave Search API](https://bra
 
 Prompts use **model-discretion** wording (search when you choose — not forced every turn). See [`agents/`](./agents/) for per-agent templates.
 
-**Native web search:** Codex `web_search` and Claude `WebSearch` can be disabled with `--replace-native` (default when non-interactive). Cursor / Antigravity rely on skill + hook preference only. Grok native browse is left on.
+**Native web search:** With `--replace-native` (default when non-interactive), Codex gets a marked top-level `web_search = "disabled"` in `config.toml` (never inside `[mcp_servers.*]`); Claude gets an ownership-marked `WebSearch` deny in `settings.json`. Uninstall removes only search-boost-owned entries and restores native search when safe. Cursor / Antigravity rely on skill + hook preference only. Grok native browse is left on.
+
+**Cursor + Cursor CLI:** Both targets share one `~/.cursor/` surface. Installing `-t cursor,cursor-cli` merges IDE + CLI prompts into a single write; uninstall clears the shared surface.
 
 **Antigravity + `agy` CLI:** On the **api** layer, the optional Antigravity CLI engine (`agy` on PATH) joins **medium** and **complex** `fused_search` tiers only — not simple lookups. It depends on local sign-in and platform quota; timeouts are ~45s.
 
@@ -164,7 +163,7 @@ Prompts use **model-discretion** wording (search when you choose — not forced 
 
 The plugin ships inside the npm package (MCP via portable `npx`, plus skill).
 
-**Re-install is idempotent:** `search-boost install -t grok` removes any prior search-boost `[permission]` block (marked or legacy) before writing a fresh one, so duplicate `[permission]` keys cannot break `grok` startup. If `[ui] permission_mode = "always-approve"` is already set, `--auto-allow` skips injecting `[permission]` (always-approve approves MCP tools globally). `search-boost doctor` warns on duplicate or redundant permission blocks.
+**Re-install is idempotent:** `search-boost install -t grok` removes any prior search-boost `[permission]` block (marked or legacy) before writing a fresh one, so duplicate `[permission]` keys cannot break `grok` startup. Uninstall strips only search-boost-owned permission lines and unlinks empty configs. If `[ui] permission_mode = "always-approve"` is already set, `--auto-allow` skips injecting `[permission]` (always-approve approves MCP tools globally). `search-boost doctor` warns on duplicate or redundant permission blocks.
 
 **From a git clone** (repo root):
 

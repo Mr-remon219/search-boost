@@ -1,6 +1,6 @@
 {
   "name": "search-boost-mcp",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Multi-engine web search MCP for Cursor, Codex, Claude Code, Grok Build, and Antigravity — fused search, fetch, X, deep research",
   "type": "module",
   "bin": {
