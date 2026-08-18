@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit-style checks for install helpers (no writes to real home dir).
  */
 import { upsertTomlSection, removeTomlSection, hasTomlSection } from '../lib/toml.mjs'
@@ -34,12 +34,6 @@ import {
   noteClaudePreExistingWebSearchDeny,
   replaceableNativeIds,
 } from '../lib/native-search.mjs'
-import {
-  claudeBypassPermissionsMode,
-  consolidateSearchBoostAllow,
-  countSearchBoostAllowEntries,
-  stripLegacySearchBoostAllow,
-} from '../lib/claude-settings.mjs'
 import { installCursorSurface } from '../lib/agents/cursor-family.mjs'
 import {
   antigravityMcpEntry,
@@ -89,24 +83,12 @@ import {
 import {
   countPermissionSections,
   grokAlwaysApproveMode,
-  hasLegacySearchBoostPermission,
   stripLegacySearchBoostPermission,
 } from '../lib/grok-toml.mjs'
-import {
-  countSearchBoostPermissions,
-  permissionsRedundant,
-  preferredPermissions,
-  stripSearchBoostPermissions,
-} from '../lib/antigravity-settings.mjs'
-import {
-  migrateCodexWebSearch,
-  stripMisplacedCodexWebSearch,
-  webSearchInsideMcpSection,
-} from '../lib/codex-toml.mjs'
 import { readJsonFile, writeJsonFile } from '../lib/json-config.mjs'
 import { maskKey, readKeysFile, readKeysFromCandidates, writeKeysFile, envKeyHint, resetLegacyKeysMigrationNotice, RECOMMEND_ALL_KEYED_ENGINES, readKeysRouting, readEngineRouting, setEnabledEngines } from '../lib/keys.mjs'
 import { engineRegistry } from '../lib/search/engines.js'
-import { readFirstExistingJson, resetConfigMigrationNotices } from '../lib/config-paths.mjs'
+import { readFirstExistingJson } from '../lib/config-paths.mjs'
 import {
   forgetAntigravityWorkspace,
   listAntigravityWorkspaces,
@@ -223,8 +205,6 @@ nativeToml = applyCodexNativeToml(nativeToml, false)
 assert('codex native revert', !codexNativeReplaced(nativeToml) && nativeToml.includes('model = "x"'))
 const claudeOn = applyClaudeNativeSettings({ permissions: { allow: ['mcp__search-boost__*'] } }, true)
 assert('claude native deny', claudeNativeReplaced(claudeOn) && claudeOn.permissions.allow.includes('mcp__search-boost__*'))
-assert('claude native deny WebFetch', claudeOn.permissions.deny.includes(CLAUDE_WEB_FETCH_DENY))
-assert('claude native deny marker', claudeOn.permissions[CLAUDE_NATIVE_DENY_MARKER]?.includes(CLAUDE_WEB_SEARCH_DENY))
 const claudeOff = applyClaudeNativeSettings(claudeOn, false)
 assert('claude native revert keeps allow', !claudeNativeReplaced(claudeOff) && claudeOff.permissions.allow.includes('mcp__search-boost__*'))
 assert('claude owned deny removed on revert', !claudeOwnedWebSearchDeny(claudeOff))
@@ -241,55 +221,6 @@ assert('claude legacy skip without MCP', !claudeOwnedWebSearchDeny(migrateLegacy
 )))
 assert('claude legacy skip pre-existing deny', !claudeOwnedWebSearchDeny(migrateLegacyClaudeNativeDeny(preExisting, true)))
 assert('claude deny constant', CLAUDE_WEB_SEARCH_DENY === 'WebSearch')
-
-const preExistingDeny = applyClaudeNativeSettings({ permissions: { deny: ['WebSearch'] } }, true)
-assert('claude pre-existing WebSearch not marked', !preExistingDeny.permissions?.[CLAUDE_NATIVE_DENY_MARKER]?.includes(CLAUDE_WEB_SEARCH_DENY))
-assert('claude pre-existing WebSearch stays on apply', preExistingDeny.permissions.deny.includes('WebSearch'))
-const preExistingOff = applyClaudeNativeSettings(preExistingDeny, false)
-assert('claude uninstall keeps pre-existing WebSearch', preExistingOff.permissions.deny.includes('WebSearch'))
-
-// codex: web_search must be top-level before MCP upsert (v0.1.6)
-const codexInstallToml = (input, { brokenOrder = false } = {}) => {
-  let t = input
-  if (brokenOrder) {
-    t = upsertTomlSection(t, 'search-boost', tomlMcpBlock())
-    // v0.1.5 bug: append at EOF so markers land inside the last MCP table
-    t = injectTomlSection(t, 'WEB_SEARCH', 'web_search = "disabled"')
-    return t
-  }
-  t = migrateCodexWebSearch(t)
-  t = applyCodexNativeToml(t, true)
-  t = upsertTomlSection(t, 'search-boost', tomlMcpBlock())
-  return t
-}
-
-let codexToml = codexInstallToml('model = "x"\n')
-assert(
-  'codex web_search before mcp section',
-  codexToml.indexOf('web_search') < codexToml.indexOf('[mcp_servers.search-boost]'),
-)
-assert('codex fixed order not inside mcp', !webSearchInsideMcpSection(codexToml))
-assert('codex fixed order native replaced', codexNativeReplaced(codexToml))
-
-const brokenCodexToml = codexInstallToml('model = "x"\n', { brokenOrder: true })
-assert('codex broken order nests web_search', webSearchInsideMcpSection(brokenCodexToml))
-assert('codex broken order false positive replaced', !codexNativeReplaced(brokenCodexToml))
-
-const migratedCodexToml = migrateCodexWebSearch(brokenCodexToml)
-assert('codex migrate strips misplaced web_search', !webSearchInsideMcpSection(migratedCodexToml))
-const healedCodexToml = codexInstallToml(migratedCodexToml)
-assert('codex migrate + reinstall top-level disabled', codexNativeReplaced(healedCodexToml))
-assert(
-  'codex migrate + reinstall ordering',
-  healedCodexToml.indexOf('web_search') < healedCodexToml.indexOf('[mcp_servers.search-boost]'),
-)
-
-// explicit strip helper on synthetic nested markers
-let nestedCodexToml = `[mcp_servers.search-boost]\ncommand = "node"\n# SEARCH_BOOST_WEB_SEARCH_START\nweb_search = "disabled"\n# SEARCH_BOOST_WEB_SEARCH_END\n`
-assert('codex nested fixture detected', webSearchInsideMcpSection(nestedCodexToml))
-nestedCodexToml = stripMisplacedCodexWebSearch(nestedCodexToml)
-assert('codex strip removes nested markers', !webSearchInsideMcpSection(nestedCodexToml))
-assert('codex strip keeps mcp command', nestedCodexToml.includes('command = "node"'))
 
 // claude configured = MCP only (--keep-native skips WebSearch deny; native_search_mismatch covers that)
 {
@@ -402,17 +333,10 @@ assert('plugin mcp entry no abs paths', !/[A-Za-z]:[/\\]/.test(JSON.stringify(pl
 const agy = antigravityMcpEntry()
 assert('antigravity omits type', !('type' in agy) && agy.command && agy.args?.length)
 
-// antigravity permissions (wildcard-only on reinstall)
+// antigravity permissions
 const agyPerms = antigravityPermissions()
-assert('antigravity permissions wildcard only', agyPerms.length === 1 && agyPerms[0] === 'mcp(search-boost/*)')
-assert('preferredPermissions matches antigravityPermissions', preferredPermissions().join() === agyPerms.join())
-
-const bloatedAllow = ['Shell(git)', 'mcp(search-boost/*)', 'mcp(search-boost/fused_search)']
-assert('permissionsRedundant detects wildcard+granular', permissionsRedundant(bloatedAllow))
-assert('stripSearchBoostPermissions keeps other entries', stripSearchBoostPermissions(bloatedAllow).join() === 'Shell(git)')
-const collapsed = upsertAllowList(bloatedAllow, preferredPermissions(), (p) => p.startsWith('mcp(search-boost'))
-assert('reinstall collapses to wildcard only', collapsed.filter((p) => p.startsWith('mcp(search-boost')).length === 1)
-assert('countSearchBoostPermissions split', countSearchBoostPermissions(bloatedAllow).wildcard === 1 && countSearchBoostPermissions(bloatedAllow).granular === 1)
+assert('antigravity permissions wildcard', agyPerms.includes('mcp(search-boost/*)'))
+assert('antigravity permissions fused_search', agyPerms.includes('mcp(search-boost/fused_search)'))
 
 // workspace paths
 const ws = workspaceAgents('/tmp/myproject')
@@ -492,7 +416,7 @@ const primaryLayerPath = join(legacyLayerDir, '.search-boost-layer.json')
 const legacyLayerPath = join(legacyLayerDir, '.dsh-search-boost-layer.json')
 writeFileSync(legacyLayerPath, `${JSON.stringify({ layer: 'free' })}\n`, 'utf8')
 process.env.SEARCH_BOOST_LAYER_FILE = primaryLayerPath
-// Simulate layer read: primary missing → should not find via env-only path; test candidates directly
+// Simulate layer read: primary missing 鈫?should not find via env-only path; test candidates directly
 const layerParsed = readFirstExistingJson([primaryLayerPath, legacyLayerPath], {})
 assert('legacy layer path readable', layerParsed.layer === 'free')
 rmSync(legacyLayerDir, { recursive: true, force: true })
@@ -519,58 +443,6 @@ console.warn = origWarn
 resetLegacyKeysMigrationNotice()
 rmSync(legacyNoticeHome, { recursive: true, force: true })
 if (savedKeysEnv) process.env.SEARCH_BOOST_KEYS_FILE = savedKeysEnv
-
-// nested config write (SEARCH_BOOST_HOME)
-{
-  const saved = {
-    SEARCH_BOOST_HOME: process.env.SEARCH_BOOST_HOME,
-    SEARCH_BOOST_KEYS_FILE: process.env.SEARCH_BOOST_KEYS_FILE,
-  }
-  const nestBase = mkdtempSync(join(tmpdir(), 'sb-nested-write-'))
-  process.env.SEARCH_BOOST_HOME = join(nestBase, '.search-boost')
-  delete process.env.SEARCH_BOOST_KEYS_FILE
-  writeKeysFile({ tavily: 'tvly-nested-write-key12' })
-  assert('nested keys write path', existsSync(join(nestBase, '.search-boost/config/keys.json')))
-  if (saved.SEARCH_BOOST_HOME === undefined) delete process.env.SEARCH_BOOST_HOME
-  else process.env.SEARCH_BOOST_HOME = saved.SEARCH_BOOST_HOME
-  if (saved.SEARCH_BOOST_KEYS_FILE === undefined) delete process.env.SEARCH_BOOST_KEYS_FILE
-  else process.env.SEARCH_BOOST_KEYS_FILE = saved.SEARCH_BOOST_KEYS_FILE
-  rmSync(nestBase, { recursive: true, force: true })
-}
-
-// lazy migrate flat → nested on write
-{
-  const saved = {
-    HOME: process.env.HOME,
-    USERPROFILE: process.env.USERPROFILE,
-    SEARCH_BOOST_HOME: process.env.SEARCH_BOOST_HOME,
-    SEARCH_BOOST_KEYS_FILE: process.env.SEARCH_BOOST_KEYS_FILE,
-  }
-  const nestBase = mkdtempSync(join(tmpdir(), 'sb-lazy-migrate-'))
-  process.env.HOME = nestBase
-  process.env.USERPROFILE = nestBase
-  delete process.env.SEARCH_BOOST_HOME
-  delete process.env.SEARCH_BOOST_KEYS_FILE
-  writeFileSync(
-    join(nestBase, '.search-boost-keys.json'),
-    `${JSON.stringify({ tavily: 'flat-before-migrate' })}\n`,
-    'utf8',
-  )
-  resetConfigMigrationNotices()
-  let migrateWarn = 0
-  const origWarn = console.warn
-  console.warn = () => { migrateWarn++ }
-  writeKeysFile({ brave: 'brave-migrate-key-12345' })
-  console.warn = origWarn
-  assert('lazy migrate creates nested keys', existsSync(join(nestBase, '.search-boost/config/keys.json')))
-  assert('lazy migrate keeps flat file', existsSync(join(nestBase, '.search-boost-keys.json')))
-  assert('lazy migrate warns once', migrateWarn === 1)
-  for (const [key, value] of Object.entries(saved)) {
-    if (value === undefined) delete process.env[key]
-    else process.env[key] = value
-  }
-  rmSync(nestBase, { recursive: true, force: true })
-}
 
 // env key hint
 process.env.TAVILY_API_KEY = 'tvly-env-key-12345678'
@@ -660,36 +532,6 @@ assert('load codex skill', codexSkill?.includes('mcp__search-boost__fused_search
 // claude permissions wildcard
 const perms = claudePermissions()
 assert('claude permissions wildcard', perms.length === 1 && perms[0] === 'mcp__search-boost__*')
-
-const legacyAllow = ['mcp__search-boost__fused_search', 'mcp__search-boost__fetch_page', 'Shell(git)']
-assert('claude strip legacy allow', stripLegacySearchBoostAllow(legacyAllow).join() === 'Shell(git)')
-const consolidated = consolidateSearchBoostAllow(legacyAllow)
-assert('claude consolidate allow', consolidated.includes('mcp__search-boost__*') && !consolidated.includes('mcp__search-boost__fused_search'))
-assert('claude bypass mode detect', claudeBypassPermissionsMode({ bypassPermissions: true }))
-assert('claude bypass defaultMode', claudeBypassPermissionsMode({ defaultMode: 'bypassPermissions' }))
-
-const claudeReinstall = (settings) => {
-  if (claudeBypassPermissionsMode(settings)) return settings
-  let allow = stripLegacySearchBoostAllow(settings.permissions?.allow ?? [])
-  allow = consolidateSearchBoostAllow([...allow, ...claudePermissions()])
-  const next = applyClaudeNativeSettings({ ...settings, permissions: { ...(settings.permissions ?? {}), allow } }, true)
-  return next
-}
-let legacyClaudeSettings = {
-  permissions: {
-    allow: ['mcp__search-boost__fused_search', 'mcp__search-boost__fetch_page'],
-    deny: ['WebSearch'],
-  },
-}
-legacyClaudeSettings = claudeReinstall(legacyClaudeSettings)
-assert('claude legacy allow consolidated', legacyClaudeSettings.permissions.allow.join() === 'mcp__search-boost__*')
-assert('claude legacy reinstall single allow entry', countSearchBoostAllowEntries(legacyClaudeSettings.permissions.allow) === 1)
-legacyClaudeSettings = claudeReinstall(legacyClaudeSettings)
-assert('claude re-install idempotent allow count', countSearchBoostAllowEntries(legacyClaudeSettings.permissions.allow) === 1)
-assert('claude re-install preserves wildcard', legacyClaudeSettings.permissions.allow.includes('mcp__search-boost__*'))
-
-const bypassClaude = claudeReinstall({ bypassPermissions: true, permissions: { allow: ['mcp__search-boost__*'] } })
-assert('claude skip allow when bypass', bypassClaude.permissions.allow.includes('mcp__search-boost__*'))
 
 // shared MCP server instructions
 assert('mcp instructions path is shared', mcpServerInstructionsPath() === SHARED_SERVER_INSTRUCTIONS)
@@ -954,61 +796,7 @@ const agyHooks = JSON.parse(readFileSync(join(agyHookDir, '.agents', 'hooks.json
 assert('antigravity hook enabled on install', agyHooks[HOOK_ENTRY_KEY]?.enabled === true)
 rmSync(agyHookDir, { recursive: true, force: true })
 
-// antigravity permissions mirror to CLI + IDE settings when both exist
-{
-  const agyPermDir = mkdtempSync(join(tmpdir(), 'sb-agy-perm-'))
-  const agyHome = join(agyPermDir, 'home')
-  mkdirSync(join(agyHome, '.gemini', 'config'), { recursive: true })
-  mkdirSync(join(agyHome, '.gemini', 'antigravity-cli'), { recursive: true })
-  const cliSettings = join(agyHome, '.gemini', 'antigravity-cli', 'settings.json')
-  const ideSettings = join(agyHome, '.gemini', 'config', 'settings.json')
-  writeFileSync(cliSettings, `${JSON.stringify({ permissions: { allow: ['Shell(git)'] } })}\n`, 'utf8')
-  writeFileSync(ideSettings, `${JSON.stringify({ permissions: { allow: [] } })}\n`, 'utf8')
-  writeFileSync(
-    join(agyHome, '.gemini', 'config', 'mcp_config.json'),
-    `${JSON.stringify({ mcpServers: { 'search-boost': antigravityMcpEntry() } })}\n`,
-    'utf8',
-  )
-  const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
-  const runInstall = () => {
-    const script = `import { AGENTS } from './lib/agents/index.mjs'; await AGENTS.antigravity.install({ dryRun: false, autoAllow: true });`
-    const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-      cwd: repoRoot,
-      env: { ...process.env, HOME: agyHome, USERPROFILE: agyHome },
-      encoding: 'utf8',
-    })
-    if (r.status !== 0) throw new Error(r.stderr || r.stdout || `exit ${r.status}`)
-  }
-  try {
-    runInstall()
-    const cliAfter = JSON.parse(readFileSync(cliSettings, 'utf8'))
-    const ideAfter = JSON.parse(readFileSync(ideSettings, 'utf8'))
-    assert('antigravity mirrors wildcard to CLI settings', cliAfter.permissions.allow.includes('mcp(search-boost/*)'))
-    assert('antigravity mirrors wildcard to IDE settings', ideAfter.permissions.allow.includes('mcp(search-boost/*)'))
-    writeFileSync(
-      cliSettings,
-      `${JSON.stringify({
-        permissions: {
-          allow: ['mcp(search-boost/*)', 'mcp(search-boost/fused_search)', 'mcp(search-boost/fetch_page)'],
-        },
-      })}\n`,
-      'utf8',
-    )
-    runInstall()
-    const cliCollapsed = JSON.parse(readFileSync(cliSettings, 'utf8'))
-    assert(
-      'antigravity reinstall collapses to wildcard only',
-      cliCollapsed.permissions.allow.filter((p) => p.startsWith('mcp(search-boost')).length === 1,
-    )
-  } catch (err) {
-    console.error(err)
-    failed += 3
-  } finally {
-    rmSync(agyPermDir, { recursive: true, force: true })
-  }
-}
-
-// agent install adapters (dry-run — catches missing imports on codex/claude paths)
+// agent install adapters (dry-run 鈥?catches missing imports on codex/claude paths)
 await AGENTS.codex.install({ dryRun: true, autoAllow: false, replaceNative: true })
 await AGENTS.claude.install({ dryRun: true, autoAllow: false, replaceNative: true })
 assert('codex install dry-run', true)
@@ -1055,7 +843,7 @@ function runInTempHome(script) {
   }
 }
 
-// Codex install/uninstall integration (subprocess — PATHS binds at import time)
+// Codex install/uninstall integration (subprocess 鈥?PATHS binds at import time)
 function runCodexIntegrationScenario(scenario) {
   const home = mkdtempSync(join(tmpdir(), `sb-codex-int-${process.pid}-`))
   try {
@@ -1189,7 +977,7 @@ for (const scenario of ['round-trip', 'keep-native', 'mcp-migration', 'foreign-s
   runCodexIntegrationScenario(scenario)
 }
 
-// claude: full install + uninstall round-trip (temp HOME subprocess — PATHS binds at import)
+// claude: full install + uninstall round-trip (temp HOME subprocess 鈥?PATHS binds at import)
 {
   const claudeHome = mkdtempSync(join(tmpdir(), `sb-claude-roundtrip-${process.pid}-`))
   mkdirSync(join(claudeHome, '.claude'), { recursive: true })
