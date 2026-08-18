@@ -24,9 +24,14 @@ import {
   applyClaudeNativeSettings,
   applyCodexNativeToml,
   autoAllowAgentIds,
+  claudeOwnedWebSearchDeny,
+  claudePriorInstallArtifacts,
   CLAUDE_WEB_SEARCH_DENY,
   claudeNativeReplaced,
   codexNativeReplaced,
+  markClaudeOwnedWebSearchDeny,
+  migrateLegacyClaudeNativeDeny,
+  noteClaudePreExistingWebSearchDeny,
   replaceableNativeIds,
 } from '../lib/native-search.mjs'
 import { installCursorSurface } from '../lib/agents/cursor-family.mjs'
@@ -104,7 +109,7 @@ import {
   removeCliPermissionAllow,
 } from '../lib/cli-config.mjs'
 import { stripSearchBoostPermissions } from '../lib/antigravity-settings.mjs'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -202,6 +207,19 @@ const claudeOn = applyClaudeNativeSettings({ permissions: { allow: ['mcp__search
 assert('claude native deny', claudeNativeReplaced(claudeOn) && claudeOn.permissions.allow.includes('mcp__search-boost__*'))
 const claudeOff = applyClaudeNativeSettings(claudeOn, false)
 assert('claude native revert keeps allow', !claudeNativeReplaced(claudeOff) && claudeOff.permissions.allow.includes('mcp__search-boost__*'))
+assert('claude owned deny removed on revert', !claudeOwnedWebSearchDeny(claudeOff))
+const preExisting = noteClaudePreExistingWebSearchDeny({ permissions: { deny: ['WebSearch'] } })
+assert('claude pre-existing deny flagged', preExisting.searchBoost?.preExistingWebSearchDeny === true)
+const legacyMigrated = migrateLegacyClaudeNativeDeny(
+  { permissions: { deny: ['WebSearch'], allow: ['mcp__search-boost__*'] } },
+  true,
+)
+assert('claude legacy deny migrated when MCP+allow', claudeOwnedWebSearchDeny(legacyMigrated))
+assert('claude legacy skip without MCP', !claudeOwnedWebSearchDeny(migrateLegacyClaudeNativeDeny(
+  { permissions: { deny: ['WebSearch'], allow: ['mcp__search-boost__*'] } },
+  false,
+)))
+assert('claude legacy skip pre-existing deny', !claudeOwnedWebSearchDeny(migrateLegacyClaudeNativeDeny(preExisting, true)))
 assert('claude deny constant', CLAUDE_WEB_SEARCH_DENY === 'WebSearch')
 
 // claude configured = MCP only (--keep-native skips WebSearch deny; native_search_mismatch covers that)
@@ -785,7 +803,6 @@ assert('codex install dry-run', true)
 assert('claude install dry-run', true)
 
 // antigravity-settings strip helper
-{
   const stripped = stripSearchBoostPermissions({
     permissions: { allow: ['Shell(git)', 'mcp(search-boost/*)', 'mcp(other)'] },
   })
@@ -953,6 +970,101 @@ assert('agy uninstall no orphan AGENTS/GEMINI when never existed', runInTempHome
 
 for (const scenario of ['round-trip', 'keep-native', 'mcp-migration', 'foreign-skill', 'empty-config', 'write-unlink']) {
   runCodexIntegrationScenario(scenario)
+}
+
+// claude: full install + uninstall round-trip (temp HOME subprocess — PATHS binds at import)
+{
+  const claudeHome = mkdtempSync(join(tmpdir(), `sb-claude-roundtrip-${process.pid}-`))
+  mkdirSync(join(claudeHome, '.claude'), { recursive: true })
+
+  /** @param {string} script */
+  function runClaudeHomeScript(script) {
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      cwd: repoRoot,
+      env: { ...process.env, HOME: claudeHome, USERPROFILE: claudeHome },
+      encoding: 'utf8',
+    })
+    if (r.status !== 0) {
+      throw new Error(r.stderr || r.stdout || `subprocess exit ${r.status}`)
+    }
+    return r.stdout.trim()
+  }
+
+  try {
+    runClaudeHomeScript(`
+import { AGENTS, removeClaudePermissions } from './lib/agents/index.mjs';
+await AGENTS.claude.install({ dryRun: false, autoAllow: true, replaceNative: true });
+process.stdout.write('ok');
+`)
+    assert('claude roundtrip MCP configured', existsSync(join(claudeHome, '.claude.json')))
+    assert('claude roundtrip skill installed', existsSync(join(claudeHome, '.claude', 'skills', 'search-boost', 'SKILL.md')))
+    assert('claude roundtrip agents marker', readFileSync(join(claudeHome, '.claude', 'CLAUDE.md'), 'utf8').includes(MARKER_START))
+    const settingsAfterInstall = JSON.parse(readFileSync(join(claudeHome, '.claude', 'settings.json'), 'utf8'))
+    assert('claude roundtrip owned deny', claudeOwnedWebSearchDeny(settingsAfterInstall))
+
+    runClaudeHomeScript(`
+import { AGENTS } from './lib/agents/index.mjs';
+await AGENTS.claude.uninstall({ dryRun: false });
+process.stdout.write('ok');
+`)
+    const cfg = JSON.parse(readFileSync(join(claudeHome, '.claude.json'), 'utf8'))
+    assert('claude roundtrip MCP removed', !cfg.mcpServers?.['search-boost'])
+    assert('claude roundtrip skill removed', !existsSync(join(claudeHome, '.claude', 'skills', 'search-boost', 'SKILL.md')))
+    assert('claude roundtrip empty CLAUDE.md removed', !existsSync(join(claudeHome, '.claude', 'CLAUDE.md')))
+    const settingsAfterUninstall = JSON.parse(readFileSync(join(claudeHome, '.claude', 'settings.json'), 'utf8'))
+    assert('claude roundtrip allow stripped', !(settingsAfterUninstall.permissions?.allow ?? []).some((p) => p.startsWith('mcp__search-boost__')))
+    assert('claude roundtrip owned deny stripped', !claudeNativeReplaced(settingsAfterUninstall))
+
+    writeFileSync(
+      join(claudeHome, '.claude', 'settings.json'),
+      `${JSON.stringify(markClaudeOwnedWebSearchDeny({
+        permissions: { allow: ['mcp__search-boost__*'], deny: ['WebSearch', 'Shell(rm)'] },
+      }, true))}\n`,
+      'utf8',
+    )
+    runClaudeHomeScript(`
+import { removeClaudePermissions } from './lib/agents/index.mjs';
+await removeClaudePermissions(false);
+process.stdout.write('ok');
+`)
+    const cleaned = JSON.parse(readFileSync(join(claudeHome, '.claude', 'settings.json'), 'utf8'))
+    assert('removeClaudePermissions strips allow', !(cleaned.permissions?.allow ?? []).some((p) => p.startsWith('mcp__search-boost__')))
+    assert('removeClaudePermissions strips owned deny', !cleaned.permissions?.deny?.includes('WebSearch'))
+    assert('removeClaudePermissions keeps unrelated deny', cleaned.permissions?.deny?.includes('Shell(rm)'))
+
+    rmSync(join(claudeHome, '.claude.json'), { force: true })
+    writeFileSync(
+      join(claudeHome, '.claude', 'settings.json'),
+      `${JSON.stringify({ permissions: { deny: ['WebSearch'] } })}\n`,
+      'utf8',
+    )
+    runClaudeHomeScript(`
+import { AGENTS } from './lib/agents/index.mjs';
+await AGENTS.claude.install({ dryRun: false, autoAllow: true, replaceNative: false });
+await AGENTS.claude.install({ dryRun: false, autoAllow: true, replaceNative: true });
+await AGENTS.claude.uninstall({ dryRun: false });
+process.stdout.write('ok');
+`)
+    const pre = JSON.parse(readFileSync(join(claudeHome, '.claude', 'settings.json'), 'utf8'))
+    assert('claude pre-existing WebSearch survives uninstall', claudeNativeReplaced(pre))
+    assert('claude replace-after-keep not owned', !claudeOwnedWebSearchDeny(pre))
+
+    writeFileSync(
+      join(claudeHome, '.claude', 'CLAUDE.md'),
+      'User notes mention SEARCH_BOOST block in skill docs but no inject marker.\n',
+      'utf8',
+    )
+    const artifacts = claudePriorInstallArtifacts(claudeHome)
+    assert('claudePriorInstallArtifacts ignores prose SEARCH_BOOST', artifacts.agentsBlock === false)
+    writeFileSync(
+      join(claudeHome, '.claude', 'CLAUDE.md'),
+      `${MARKER_START}\nbody\n${MARKER_END}\n`,
+      'utf8',
+    )
+    assert('claudePriorInstallArtifacts detects marker', claudePriorInstallArtifacts(claudeHome).agentsBlock === true)
+  } finally {
+    rmSync(claudeHome, { recursive: true, force: true })
+  }
 }
 
 if (failed) {
