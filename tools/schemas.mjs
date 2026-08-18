@@ -25,6 +25,8 @@ export const fusedSearchOutput = {
   tookMs: z.number(),
   cacheHit: z.boolean(),
   resultCount: z.number(),
+  enginesRequested: z.array(z.string()).optional(),
+  enginesUsed: z.array(z.string()).optional(),
   engineStats: z.record(z.object({
     used: z.boolean(),
     errors: z.number(),
@@ -62,6 +64,7 @@ export const deepResearchInput = {
   max_sources: z.number().int().min(2).max(12).optional(),
   recency: z.enum(['day', 'week', 'month', 'year']).optional(),
   layer: z.enum(['free', 'api']).optional(),
+  round: z.number().int().min(1).optional().describe('Research round number (auto-increments when omitted)'),
 }
 
 export const deepResearchOutput = {

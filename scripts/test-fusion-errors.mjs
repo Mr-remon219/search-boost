@@ -4,6 +4,9 @@
 import { fusedSearch } from '../lib/search/fusion.js'
 import {
   allAttemptedEnginesFailed,
+  annotateFusedLayerEngines,
+  apiLayerFreeOnlyWarning,
+  allocateResearchRound,
   formatAllEnginesFailedMessage,
   formatEngineStatsLine,
   formatFusedSummary,
@@ -56,6 +59,38 @@ const summary = formatFusedSummary({
 })
 assert('summary includes engines line', summary.includes('engines: bing: FAIL'))
 assert('summary includes warnings', summary.includes('warnings: ddg slow'))
+
+const freeOnlyWarn = apiLayerFreeOnlyWarning('api', ['bing', 'ddg', 'yahoo', 'exa-free'])
+assert('apiLayerFreeOnlyWarning on api+free', freeOnlyWarn?.includes('layer api but using free engines only'))
+assert('apiLayerFreeOnlyWarning null on free layer', apiLayerFreeOnlyWarning('free', ['bing']) === null)
+assert('apiLayerFreeOnlyWarning null when keyed used', apiLayerFreeOnlyWarning('api', ['bing', 'tavily']) === null)
+
+const annotated = annotateFusedLayerEngines(
+  { query: 'q', warnings: [], results: [], tier: 'simple', tookMs: 1 },
+  'api',
+  ['bing', 'ddg', 'tavily', 'brave'],
+  ['bing', 'ddg', 'exa-free'],
+)
+assert('annotateFusedLayerEngines sets enginesRequested', annotated.enginesRequested?.includes('tavily'))
+assert('annotateFusedLayerEngines sets enginesUsed', annotated.enginesUsed?.includes('exa-free'))
+assert('annotateFusedLayerEngines adds api warning', annotated.warnings?.some((w) => w.includes('free engines only')))
+
+const apiSummary = formatFusedSummary({
+  query: 'q',
+  layer: 'api',
+  tier: 'simple',
+  results: [],
+  tookMs: 12,
+  cacheHit: false,
+  engineStats: partialStats,
+  warnings: [freeOnlyWarn],
+})
+assert('summary warns api free-only', apiSummary.includes('layer api but using free engines only'))
+
+assert('allocateResearchRound explicit', allocateResearchRound(3) === 3)
+const autoA = allocateResearchRound()
+const autoB = allocateResearchRound()
+assert('allocateResearchRound auto-increment', autoA >= 1 && autoB === autoA + 1)
 
 const fused = await fusedSearch({
   query: 'node mcp test',
