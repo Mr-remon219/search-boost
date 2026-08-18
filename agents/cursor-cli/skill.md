@@ -13,7 +13,7 @@ Use search-boost when **you** judge that verifiable web facts would help — ver
 | `fused_search` | Quick lookup (start with `complexity=simple` if searching) |
 | `fetch_page` | Full page when snippets fail; `focus` saves tokens |
 | `x_search` | X/Twitter |
-| `deep_research` | Multi-source synthesis |
+| `deep_research` | Multi-source synthesis — one round per call; repeat with `suggested_queries` until gaps empty (~3 rounds max) |
 | `search_layer` | free vs api |
 | `search_stats` | Diagnostics |
 

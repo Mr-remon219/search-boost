@@ -34,7 +34,8 @@ MCP: **`~/.grok/config.toml`** (user) or **`./.grok/config.toml`** (project) →
 | `fused_search` | Web facts, docs, benchmarks (precision path) |
 | `fetch_page` | Long-form page text |
 | `x_search` | Posts/users/threads — merged ranking vs duplicate native X lookup |
-| `deep_research` | Evidence gaps / comparisons |
+| `deep_research` | Evidence gaps / comparisons — one round per call; repeat with `suggested_queries` until gaps empty (~3 rounds max) |
+| `search_layer` | Show or set `free` vs `api` |
 | `search_stats` | Engine availability debug |
 
 ## Grok-specific

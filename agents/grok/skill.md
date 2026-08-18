@@ -22,7 +22,8 @@ If you do search: one tool path per query (don't duplicate search-boost + generi
 | `fused_search` | Web facts, docs, benchmarks |
 | `fetch_page` | Long-form page text |
 | `x_search` | X/Twitter (merged ranking) |
-| `deep_research` | Compare / survey |
+| `deep_research` | Multi-source synthesis — one round per call; repeat with `suggested_queries` until gaps empty (~3 rounds max) |
+| `search_layer` | Show or set `free` (keyless) vs `api` (keyed engines) |
 | `search_stats` | Diagnostics |
 
 ## Policy

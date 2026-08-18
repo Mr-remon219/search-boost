@@ -87,7 +87,7 @@ For full onboarding (API keys + layer choice), run `search-boost setup` or `sear
 | `fused_search` | Multi-engine parallel search, dedupe, cross-ranking |
 | `fetch_page` | Full page text (Jina + HTML fallback, optional `focus`) |
 | `x_search` | X/Twitter keyword / user / thread |
-| `deep_research` | One research round — gaps + suggested follow-ups |
+| `deep_research` | One round per call — repeat with `suggested_queries` until gaps empty, then synthesize (~3 rounds max) |
 | `search_layer` | Show or set `free` (keyless) vs `api` (keyed engines) |
 | `search_stats` | Cache hits, engine availability, diagnostics |
 
@@ -100,7 +100,11 @@ Also: resource `search-boost://policy` · prompt `search_routing`
 
 Keys: `search-boost config keys` → `~/.search-boost-keys.json` (legacy `~/.dsh-search-boost-keys.json` still read; or env `TAVILY_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`).
 
-**Config file overrides:** `SEARCH_BOOST_KEYS_FILE`, `SEARCH_BOOST_LAYER_FILE` (optional env vars pointing at custom paths).
+Obtain keys: [Tavily](https://app.tavily.com/) · [Brave Search API](https://brave.com/search/api/) · [Exa](https://dashboard.exa.ai/)
+
+**X/Twitter auth (optional):** improves official `x_search` when credentials are present. Stored at `~/.search-boost-xauth.json` (legacy `~/.dsh-search-boost-xauth.json` still read) or via `XAI_API_KEY` / Grok `/x-login`. Override file path: `SEARCH_BOOST_XAUTH_FILE`.
+
+**Config file overrides:** `SEARCH_BOOST_KEYS_FILE`, `SEARCH_BOOST_LAYER_FILE`, `SEARCH_BOOST_XAUTH_FILE` (optional env vars pointing at custom paths).
 
 ---
 
@@ -125,7 +129,8 @@ Keys: `search-boost config keys` → `~/.search-boost-keys.json` (legacy `~/.dsh
 
 | Agent | MCP config | Also installs |
 |-------|------------|---------------|
-| Cursor IDE / CLI | `~/.cursor/mcp.json` | hook, skill, optional CLI auto-allow |
+| Cursor IDE | `~/.cursor/mcp.json` | hook, skill |
+| Cursor CLI | `~/.cursor/mcp.json` | hook, skill (CLI variant), optional CLI auto-allow |
 | Codex CLI | `~/.codex/config.toml` | AGENTS.md, skill |
 | Claude Code | `~/.claude.json` | CLAUDE.md, skill, permissions |
 | Grok Build | `~/.grok/config.toml` | rule, skill · [grok-plugin](./grok-plugin/) |

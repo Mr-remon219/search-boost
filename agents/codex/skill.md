@@ -27,7 +27,7 @@ Search is **available, not required**. Use it when web evidence would improve co
 | `mcp__search-boost__fused_search` | Quick lookup (`complexity=simple` first) |
 | `mcp__search-boost__fetch_page` | Full page when snippets fail; `focus` saves tokens |
 | `mcp__search-boost__x_search` | X/Twitter |
-| `mcp__search-boost__deep_research` | Multi-source compare |
+| `mcp__search-boost__deep_research` | Multi-source synthesis — one round per call; repeat with `suggested_queries` until gaps empty (~3 rounds max) |
 | `mcp__search-boost__search_layer` | free vs api |
 | `mcp__search-boost__search_stats` | Diagnostics |
 
