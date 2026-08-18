@@ -2,7 +2,7 @@
 
 Install **search-boost MCP** and **skill** into [Grok Build](https://x.ai/grok).
 
-> Siblings: [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost) (DSH) · [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost) (pi) · [search-boost-mcp](https://github.com/Mr-remon219/search-boost-mcp) (Cursor / Codex / Claude / …)
+> Siblings: [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost) (DSH) · [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost) (pi) · [search-boost](https://github.com/Mr-remon219/search-boost) (Cursor / Codex / Claude / …)
 
 ---
 
@@ -49,7 +49,7 @@ To publish on the Grok plugin marketplace: open a PR to [xai-org/plugin-marketpl
 
 把 **search-boost 的 MCP 服务**和 **skill** 装进 [Grok Build](https://x.ai/grok)。
 
-> 同系列的另外两个插件：[dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)（给 DSH 用）· [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost)（给 pi 用）· [search-boost-mcp](https://github.com/Mr-remon219/search-boost-mcp)（Cursor / Codex / Claude 等）
+> 同系列的另外两个插件：[dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)（给 DSH 用）· [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost)（给 pi 用）· [search-boost](https://github.com/Mr-remon219/search-boost)（Cursor / Codex / Claude 等）
 
 ### 怎么装
 

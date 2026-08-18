@@ -6,7 +6,7 @@ Multi-engine web search **MCP server** for coding agents. One CLI install wires 
 >
 > | Project | For | Link |
 > |---------|-----|------|
-> | **search-boost-mcp** *(this repo)* | Cursor · Codex · Claude · Grok · Antigravity via MCP | you are here |
+> | [**search-boost**](https://github.com/Mr-remon219/search-boost) *(this repo)* | Cursor · Codex · Claude · Grok · Antigravity via MCP | you are here |
 > | [**dsh-search-boost**](https://github.com/Mr-remon219/dsh-search-boost) | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle plugin | [GitHub](https://github.com/Mr-remon219/dsh-search-boost) · [npm](https://www.npmjs.com/package/dsh-search-boost) |
 > | [**pi-search-boost**](https://github.com/Mr-remon219/pi-search-boost) | [pi](https://github.com/earendil-works/pi-coding-agent) extension | [GitHub](https://github.com/Mr-remon219/pi-search-boost) · [npm](https://www.npmjs.com/package/pi-search-boost) |
 
@@ -207,8 +207,8 @@ Details → [grok-plugin/README.md](./grok-plugin/README.md)
 ## Development
 
 ```bash
-git clone https://github.com/Mr-remon219/search-boost-mcp.git
-cd search-boost-mcp && npm install
+git clone https://github.com/Mr-remon219/search-boost.git
+cd search-boost && npm install
 npm run check && npm run test:install && npm run smoke
 node cli.mjs install --dry-run -y
 ```
@@ -223,6 +223,6 @@ MIT
 
 ---
 
-**Links:** [Issues](https://github.com/Mr-remon219/search-boost-mcp/issues) · [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost) · [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost)
+**Links:** [Issues](https://github.com/Mr-remon219/search-boost/issues) · [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost) · [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost)
 
 **Friendly link:** [LINUX DO 社区](https://linux.do/)

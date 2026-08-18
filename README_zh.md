@@ -6,7 +6,7 @@
 >
 > | 项目 | 用在哪 | 链接 |
 > |------|--------|------|
-> | **search-boost-mcp**（本仓库） | Cursor · Codex · Claude · Grok · Antigravity | 当前仓库 |
+> | [**search-boost**](https://github.com/Mr-remon219/search-boost)（本仓库） | Cursor · Codex · Claude · Grok · Antigravity | 当前仓库 |
 > | [**dsh-search-boost**](https://github.com/Mr-remon219/dsh-search-boost) | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | [GitHub](https://github.com/Mr-remon219/dsh-search-boost) · [npm](https://www.npmjs.com/package/dsh-search-boost) |
 > | [**pi-search-boost**](https://github.com/Mr-remon219/pi-search-boost) | [pi](https://github.com/earendil-works/pi-coding-agent) | [GitHub](https://github.com/Mr-remon219/pi-search-boost) · [npm](https://www.npmjs.com/package/pi-search-boost) |
 
@@ -207,8 +207,8 @@ search-boost install -t grok -y --auto-allow
 ## 本地开发
 
 ```bash
-git clone https://github.com/Mr-remon219/search-boost-mcp.git
-cd search-boost-mcp && npm install
+git clone https://github.com/Mr-remon219/search-boost.git
+cd search-boost && npm install
 npm run check && npm run test:install && npm run smoke
 node cli.mjs install --dry-run -y
 ```
@@ -223,6 +223,6 @@ MIT
 
 ---
 
-**相关链接：** [Issues](https://github.com/Mr-remon219/search-boost-mcp/issues) · [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost) · [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost)
+**相关链接：** [Issues](https://github.com/Mr-remon219/search-boost/issues) · [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost) · [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost)
 
 **友情链接：** [LINUX DO 社区](https://linux.do/)

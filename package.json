@@ -54,10 +54,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Mr-remon219/search-boost-mcp.git"
+    "url": "git+https://github.com/Mr-remon219/search-boost.git"
   },
   "bugs": {
-    "url": "https://github.com/Mr-remon219/search-boost-mcp/issues"
+    "url": "https://github.com/Mr-remon219/search-boost/issues"
   },
-  "homepage": "https://github.com/Mr-remon219/search-boost-mcp#readme"
+  "homepage": "https://github.com/Mr-remon219/search-boost#readme"
 }
