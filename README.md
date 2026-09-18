@@ -10,7 +10,7 @@ Multi-engine web search **MCP server** for coding agents. One CLI install wires 
 > | [**dsh-search-boost**](https://github.com/Mr-remon219/dsh-search-boost) | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle plugin | [GitHub](https://github.com/Mr-remon219/dsh-search-boost) · [npm](https://www.npmjs.com/package/dsh-search-boost) |
 > | [**pi-search-boost**](https://github.com/Mr-remon219/pi-search-boost) | [pi](https://github.com/earendil-works/pi-coding-agent) extension | [GitHub](https://github.com/Mr-remon219/pi-search-boost) · [npm](https://www.npmjs.com/package/pi-search-boost) |
 
-Search engines are **vendored in [`lib/search/`](./lib/search/)** (originally from [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)): on the **free** layer, Bing, DuckDuckGo, Yahoo, and Exa-free run in parallel; the **api** layer adds Antigravity CLI (when available) and **whichever keyed Tavily / Brave / Exa engines you configure** (one key is enough; all three recommended for best fusion). Also included: X/Twitter fallback, Jina page fetch, and deep-research rounds.
+Search engines are **vendored in [`lib/search/`](./lib/search/)** (originally from [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)): on the **free** layer, Bing, DuckDuckGo, Yahoo, and Exa-free run in parallel; the **api** layer adds **whichever keyed Tavily / Brave / Exa engines you configure** (one key is enough; all three recommended for best fusion). Also included: X/Twitter fallback, Jina page fetch, and deep-research rounds.
 
 中文文档 → [README_zh.md](./README_zh.md)
 
@@ -121,7 +121,7 @@ Also: resource `search-boost://policy` · prompt `search_routing`
 **Layers**
 
 - **free** — Bing + DuckDuckGo + Yahoo + Exa-free; no API keys.
-- **api** — free-layer engines plus Antigravity CLI (when available) and **any** of Tavily / Brave / Exa that you configure (one key works; all three recommended for best cross-engine fusion)
+- **api** — free-layer engines plus **any** of Tavily / Brave / Exa that you configure (one key works; all three recommended for best cross-engine fusion)
 
 Keys: `search-boost config keys` → `~/.search-boost/config/keys.json` (flat `~/.search-boost-keys.json` and legacy `~/.dsh-search-boost-keys.json` still read; or env `TAVILY_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`). Optional routing: `enabledEngines: ["exa"]` or `"engines": { "brave": { "enabled": false } }` in the keys file.
 
@@ -177,8 +177,6 @@ Prompts use **model-discretion** wording (search when you choose — not forced 
 
 **Cursor + Cursor CLI:** Both targets share one `~/.cursor/` surface. Installing `-t cursor,cursor-cli` merges IDE + CLI prompts into a single write; uninstall clears the shared surface.
 
-**Antigravity + `agy` CLI:** On the **api** layer, the optional Antigravity CLI engine (`agy` on PATH) joins **medium** and **complex** `fused_search` tiers only — not simple lookups. It depends on local sign-in and platform quota; timeouts are ~45s.
-
 **Grok Build:** `search-boost install -t grok -y --auto-allow` runs `grok plugin install <bundled grok-plugin> --trust` when the Grok CLI is on PATH, then writes `config.toml`, rule, and skill. If `grok` is not on PATH, the plugin step is skipped with a warning and the config install still proceeds. Use `--skip-grok-plugin` for config/rule/skill only. Re-install is idempotent for `[permission]` blocks (marked or legacy); uninstall strips search-boost-owned permission lines. If `[ui] permission_mode = "always-approve"`, `--auto-allow` skips injecting `[permission]`. The plugin's `.mcp.json` uses portable `npx`; `config.toml` uses `resolveMcpLaunch()` (local `node` when developing from a clone) — both can coexist. Manual plugin install: `grok plugin install ./grok-plugin --trust` (advanced) → [grok-plugin/README.md](./grok-plugin/README.md).
 
 ---
@@ -196,7 +194,6 @@ Prompts use **model-discretion** wording (search when you choose — not forced 
 | MCP won't start | `search-boost doctor` → `mcp_launch_command`, `node_version`; then `search-boost serve` |
 | Grok plugin MCP won't start | `grok mcp doctor search-boost`; ensure `npx` and network access work |
 | `grok` fails on config.toml parse | Duplicate `[permission]` — run `search-boost install -t grok -y --auto-allow` |
-| Antigravity `agy` never runs | Requires **api** layer, `agy` on PATH, and `complexity` medium/complex — not simple |
 | Timeouts / fetch errors | Corporate proxy or firewall may block Bing/DDG/Jina; try `search-boost serve` locally to read stderr |
 
 ---

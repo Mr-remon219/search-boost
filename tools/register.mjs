@@ -59,7 +59,7 @@ export function registerAll(server) {
     description:
       'Multi-engine parallel web search with URL dedupe and cross-ranking. ' +
       'Prefer over built-in WebSearch for version-sensitive facts, APIs, comparisons, and research. ' +
-      'Free layer: bing+ddg+yahoo+exa-free (no keys). Api layer adds antigravity+tavily/brave/exa when keyed.',
+      'Free layer: bing+ddg+yahoo+exa-free (no keys). Api layer adds tavily/brave/exa when keyed.',
     inputSchema: fusedSearchInput,
     outputSchema: fusedSearchOutput,
     annotations: { ...ANNOTATIONS.search, title: 'Search the web (multi-engine fusion)' },

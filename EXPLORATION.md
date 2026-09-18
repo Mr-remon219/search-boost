@@ -65,7 +65,7 @@ Layer 默认读 `~/.search-boost-layer.json`（旧 `~/.dsh-search-boost-layer.js
 | | search-boost-mcp (lib/search) | pi |
 |--|-------------------------------|-----|
 | free 层 | bing+ddg+yahoo+exa-free | exa-free 单引擎 |
-| api 层 | +antigravity+tavily+brave+exa | tavily+brave+exa |
+| api 层 | +tavily+brave+exa | tavily+brave+exa |
 | audit | search_stats 简版 | JSONL 完整 audit |
 
 Phase 2：可选从 pi lib 合并 Tavily advanced 全文、CJK 分词。
