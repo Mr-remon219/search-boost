@@ -48,4 +48,4 @@ Free layer: no keys. Api: **≥1** of tavily/brave/exa via `~/.search-boost-keys
 
 ## Runtime
 
-Search engines are **vendored in `lib/search/`** — this MCP server runs standalone (`node cli.mjs serve`); no sibling checkout or external search-boost runtime is required.
+Search engines live in **SearchBoost Core (`lib/search/`, facade `lib/runtime.mjs`)** — this MCP server (`adapters/mcp`) runs standalone (`node cli.mjs serve`). The same core also powers the pi extension (`adapters/pi`) and the DeepSeek Harness bundle (`adapters/dsh`); no sibling checkout is required.

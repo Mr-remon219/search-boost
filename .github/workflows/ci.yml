@@ -33,4 +33,5 @@ jobs:
             exit "$ec"
           fi
       - run: npm run test:fusion
+      - run: npm run test:adapters
       - run: npm run smoke

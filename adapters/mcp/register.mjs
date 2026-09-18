@@ -1,43 +1,29 @@
 /**
- * MCP tool / resource / prompt registration (protocol-native registerTool API).
+ * MCP host adapter — tool / resource / prompt registration (protocol-native
+ * registerTool API). All search logic comes from SearchBoost Core
+ * (lib/runtime.mjs); this file only maps MCP arguments in and renders
+ * CallToolResult (text + structuredContent) out.
  */
 import * as z from 'zod'
-import { abortSignal, toolErr, toolOk } from '../lib/mcp-result.mjs'
-import { MCP_POLICY_TEXT } from '../lib/mcp-policy.mjs'
+import { abortSignal, toolErr, toolOk } from './result.mjs'
+import { MCP_POLICY_TEXT } from './policy.mjs'
 import {
   X_MODES,
-  X_CACHE,
-  activeLayer,
-  authStatus,
-  availableEngines,
-  bumpEngines,
-  cleanJsonValue,
   collectSearchStats,
-  domainSearch,
-  ENGINE_ORDER,
-  fallbackXSearch,
-  fetchPage,
-  filterResearchGaps,
+  describeLayer,
   formatFusedSummary,
   formatAllEnginesFailedMessage,
   allAttemptedEnginesFailed,
   fusedHitToJson,
   getLayer,
-  hitToPost,
-  layerTierTable,
   LAYER_LABELS,
-  PAGE_CACHE,
-  persistLayer,
   renderXItem,
-  researchRound,
-  allocateResearchRound,
-  runEngine,
+  runFetchPage,
   runFused,
-  runXTool,
-  stats,
-  xAuthAvailableSync,
-} from '../lib/runtime.mjs'
-import { readKeysRouting } from '../lib/keys.mjs'
+  runResearchRound,
+  runXSearch,
+  switchLayer,
+} from '../../lib/runtime.mjs'
 import {
   ANNOTATIONS,
   deepResearchInput,
@@ -113,8 +99,9 @@ export function registerAll(server) {
       const url = String(args.url ?? '').trim()
       if (!url) return toolErr('fetch_page: url is required')
       const signal = abortSignal(extra, 60_000)
-      const page = await fetchPage(url, args.focus, PAGE_CACHE, signal)
-      const summary = `fetch_page: ${page.url} — via ${page.via}, ${page.word_count} words, ${page.tookMs}ms`
+      const page = await runFetchPage(url, args.focus, signal)
+      const focusNote = page.focusMiss ? ' (focus matched nothing — content omitted; retry without focus)' : ''
+      const summary = `fetch_page: ${page.url} — via ${page.via}, ${page.word_count} words, ${page.tookMs}ms${focusNote}`
       return toolOk(`${summary}\n\n${page.content}`, {
         url: page.url,
         via: page.via,
@@ -140,21 +127,16 @@ export function registerAll(server) {
     try {
       if (!String(args.query ?? '').trim()) return toolErr('deep_research: query is required')
       const signal = abortSignal(extra, 120_000)
-      const engines = bumpEngines()
-      const active = activeLayer(args.layer)
-      const round = allocateResearchRound(args.round)
-      const result = await researchRound({
+      const result = await runResearchRound({
         query: args.query,
         queries: args.queries,
-        maxSources: Math.min(args.max_sources ?? 8, 12),
+        maxSources: args.max_sources ?? 8,
         recency: args.recency,
-        layer: active,
-        round,
-        engines: availableEngines(engines, layerTierTable(active).complex),
-        runOne: (engineName, q, n, o) => runEngine(engines, engineName, q, n, o),
+        layer: args.layer,
+        round: args.round,
         signal,
       })
-      const gaps = filterResearchGaps(result.gaps)
+      const gaps = result.gaps
       const lines = [
         `deep_research round ${result.round}: "${result.query}" — ${result.tookMs}ms`,
         `gaps: ${gaps.length === 0 ? 'none' : gaps.join(', ')}`,
@@ -192,72 +174,28 @@ export function registerAll(server) {
     annotations: { ...ANNOTATIONS.search, title: 'Search X/Twitter' },
   }, async (args, extra) => {
     try {
-      const started = Date.now()
       const kind = X_MODES.includes(args.type) ? args.type : 'keyword'
       const subj = args.query ?? args.username ?? args.post_id ?? ''
       if (!subj) return toolErr('x_search: provide query, username, or post_id')
-      const maxResults = Math.min(Math.max(args.max_results ?? 5, 1), 10)
-      const engines = bumpEngines()
-      const cacheKey = JSON.stringify({ kind, q: args.query, u: args.username, pid: args.post_id, m: maxResults })
-      const cached = X_CACHE[kind].get(cacheKey)
-      if (cached) {
-        const items = cached.items ?? []
-        return toolOk(`x_search (cache) — ${items.length} results\n\n${items.map(renderXItem).join('\n')}`, {
-          via: cached.via ?? 'cache',
-          results: items.length,
-          tookMs: 0,
-          cacheHit: true,
-          items,
-        })
+      const out = await runXSearch({ ...args, type: kind }, { signal: abortSignal(extra, 180_000) })
+      if (out.via === 'error') {
+        return toolErr(`x_search: no results (${out.error ?? 'primary and fallback failed'})`)
       }
-
-      const engineSearch = (q, n) => domainSearch(engines, { query: q, maxResults: n, signal: abortSignal(extra, 180_000) })
-      const webSearch = (q, n) => engineSearch(q, n).then((hits) =>
-        hits.map((h) => ({ title: h.title, url: h.url, snippet: h.snippet, domain: h.domain })))
-
-      const finish = (via, items, note) => {
-        const out = { via, items, results: items.length, tookMs: Date.now() - started }
-        if (items.length) X_CACHE[kind].set(cacheKey, out)
-        const text = [`x_search via ${via} — ${items.length} results`, note ?? '', '', items.map(renderXItem).join('\n')].filter(Boolean).join('\n')
-        return toolOk(text, { via, results: items.length, tookMs: out.tookMs, cacheHit: false, items })
+      const items = out.items ?? []
+      if (items.length === 0) {
+        return toolErr(`x_search: no results (${out.via}${out.note ? `; ${out.note.slice(0, 120)}` : ''})`)
       }
-
-      const runFallback = async (primaryErr) => {
-        const fb = await fallbackXSearch({ type: kind, query: args.query, username: args.username, post_id: args.post_id, limit: maxResults, webSearch })
-        const items = Array.isArray(fb.data) ? fb.data : [fb.data]
-        if (!items.length) {
-          return toolErr(`x_search: no results (${fb.via ?? 'fallback'}; ${String(primaryErr).slice(0, 120)})`)
-        }
-        return finish(`fallback:${fb.via}`, items, `primary: ${String(primaryErr).slice(0, 200)}`)
-      }
-
-      if (!xAuthAvailableSync()) return runFallback('no xAI credentials')
-
-      if (kind === 'keyword' || kind === 'semantic') {
-        const engQuery = args.query ?? (args.username ? `from:${args.username}` : subj)
-        const [xOutcome, engOutcome] = await Promise.allSettled([
-          runXTool({ type: kind, query: args.query, username: args.username, from_date: args.from_date, to_date: args.to_date, max_results: maxResults }),
-          engineSearch(engQuery, maxResults),
-        ])
-        if (xOutcome.status === 'fulfilled') {
-          const xPosts = Array.isArray(xOutcome.value.data) ? xOutcome.value.data : []
-          const extra = engOutcome.status === 'fulfilled'
-            ? engOutcome.value.filter((h) => h.title || h.snippet).map(hitToPost)
-                .filter((p) => !xPosts.some((x) => (x.id && p.id && x.id === p.id) || (x.url && p.url && x.url === p.url)))
-            : []
-          const merged = cleanJsonValue([...xPosts, ...extra])
-          return finish('parallel:' + xOutcome.value.credential, merged)
-        }
-        return runFallback(xOutcome.reason instanceof Error ? xOutcome.reason.message : String(xOutcome.reason))
-      }
-
-      try {
-        const res = await runXTool({ type: kind, query: args.query, username: args.username, post_id: args.post_id, max_results: maxResults })
-        const items = Array.isArray(res.data) ? res.data : [res.data]
-        return finish(res.credential, items)
-      } catch (err) {
-        return runFallback(err instanceof Error ? err.message : String(err))
-      }
+      const header = out.cacheHit
+        ? `x_search (cache) — ${items.length} results`
+        : `x_search via ${out.via === 'parallel' ? `parallel:${out.credential}` : out.via} — ${items.length} results`
+      const text = [header, out.cacheHit ? '' : out.note ?? '', '', items.map(renderXItem).join('\n')].filter(Boolean).join('\n')
+      return toolOk(text, {
+        via: out.cacheHit ? (out.via ?? 'cache') : out.via,
+        results: items.length,
+        tookMs: out.tookMs,
+        cacheHit: Boolean(out.cacheHit),
+        items,
+      })
     } catch (err) {
       return toolErr(err instanceof Error ? err.message : String(err))
     }
@@ -272,36 +210,25 @@ export function registerAll(server) {
     try {
       const cmd = args.layer ?? 'show'
       if (cmd === 'free' || cmd === 'api') {
-        persistLayer(cmd)
+        switchLayer(cmd)
         return toolOk(`layer → ${cmd} (${LAYER_LABELS[cmd]})`, { layer: cmd })
       }
-      const engines = bumpEngines()
-      const layer = getLayer()
-      const { summary } = readKeysRouting()
-      const tierTable = layerTierTable(layer)
-      const names = [...new Set(Object.values(tierTable).flat())]
-      const actual = availableEngines(engines, names)
-      const x = authStatus()
-      const keyedLine = layer === 'api'
-        ? `keyed: ${summary.enabled}/${summary.total} enabled (${summary.enabledNames.join(', ') || 'none'})`
+      const info = describeLayer()
+      const keyedLine = info.layer === 'api'
+        ? `keyed: ${info.keyedEngines.enabled}/${info.keyedEngines.total} enabled (${info.keyedEngines.enabledNames.join(', ') || 'none'})`
         : null
       const text = [
-        `layer: ${layer} — ${LAYER_LABELS[layer]}`,
+        `layer: ${info.layer} — ${info.label}`,
         keyedLine,
-        `engines: ${actual.join(', ') || '(none)'}`,
-        `x_search: ${xAuthAvailableSync() ? 'official' : 'fallback'} (${x.source})`,
+        `engines: ${info.engines.join(', ') || '(none)'}`,
+        `x_search: ${info.xOfficial ? 'official' : 'fallback'} (${info.xSource})`,
       ].filter(Boolean).join('\n')
       return toolOk(text, {
-        layer,
-        engines: actual,
-        keyedEngines: layer === 'api' ? {
-          configured: summary.configured,
-          enabled: summary.enabled,
-          total: summary.total,
-          enabledNames: summary.enabledNames,
-        } : undefined,
-        xOfficial: xAuthAvailableSync(),
-        xSource: x.source,
+        layer: info.layer,
+        engines: info.engines,
+        keyedEngines: info.layer === 'api' ? info.keyedEngines : undefined,
+        xOfficial: info.xOfficial,
+        xSource: info.xSource,
       })
     } catch (err) {
       return toolErr(err instanceof Error ? err.message : String(err))

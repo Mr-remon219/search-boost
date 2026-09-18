@@ -13,6 +13,10 @@
  * The stdio server's own instructions are agent-neutral and live in
  * agents/shared/server-instructions.md — one server process serves every agent.
  *
+ * Host-runtime agents (pi, dsh) do not go through MCP: their adapters under
+ * adapters/pi and adapters/dsh register tools in-process and read their
+ * host-level prompt policy from here (injectKind 'host-runtime').
+ *
  * Install adapters in lib/agents/index.mjs read paths through here — do not hard-code filenames.
  */
 import { join, dirname } from 'node:path'
@@ -25,7 +29,7 @@ export const SHARED_SERVER_INSTRUCTIONS = join(AGENTS_ROOT, 'shared', 'server-in
 
 /** @typedef {{ description?: string, allowedTools?: string[] }} SkillFrontmatter */
 
-/** @typedef {'agents-block'|'rule-file'} InjectKind */
+/** @typedef {'agents-block'|'rule-file'|'host-runtime'} InjectKind */
 
 /**
  * @typedef {Object} AgentRoute
@@ -133,9 +137,32 @@ export const ROUTES = {
         'Multi-engine web search before external API/integration work. Use when verifying versions, SDK signatures, cloud quotas, or comparing libraries. Prefer over built-in search_web.',
     },
   },
+  pi: {
+    label: 'pi coding agent (extension)',
+    dir: 'pi',
+    injectKind: 'host-runtime',
+    // <search_balance> block appended to pi's system prompt by adapters/pi on before_agent_start
+    prompt: 'inject.md',
+    skill: null,
+    mergeWith: null,
+    mcp: null,
+  },
+  dsh: {
+    label: 'DeepSeek Harness (bundle plugin)',
+    dir: 'dsh',
+    injectKind: 'host-runtime',
+    // systemPrompt.section('search:policy') body registered by adapters/dsh
+    prompt: 'policy.md',
+    skill: null,
+    mergeWith: null,
+    mcp: null,
+  },
 }
 
 export const ROUTE_IDS = Object.keys(ROUTES)
+
+/** Agents whose search tools run in the host process (no MCP server). */
+export const HOST_RUNTIME_IDS = ROUTE_IDS.filter((id) => ROUTES[id].injectKind === 'host-runtime')
 
 /** @param {string} id */
 export function getRoute(id) {

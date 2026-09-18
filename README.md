@@ -1,16 +1,21 @@
 # search-boost-mcp
 
-Multi-engine web search **MCP server** for coding agents. One CLI install wires it into **Cursor**, **Cursor CLI**, **Codex**, **Claude Code**, **Grok Build**, and **Antigravity**.
+Multi-engine web search for coding agents — **one SearchBoost core, three host adapters**. The MCP server wires into **Cursor**, **Cursor CLI**, **Codex**, **Claude Code**, **Grok Build**, and **Antigravity**; the same package is also a **[pi](https://github.com/earendil-works/pi-coding-agent) extension** and a **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle plugin**.
 
-> **search-boost family**
->
-> | Project | For | Link |
-> |---------|-----|------|
-> | [**search-boost**](https://github.com/Mr-remon219/search-boost) *(this repo)* | Cursor · Codex · Claude · Grok · Antigravity via MCP | you are here |
-> | [**dsh-search-boost**](https://github.com/Mr-remon219/dsh-search-boost) | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle plugin | [GitHub](https://github.com/Mr-remon219/dsh-search-boost) · [npm](https://www.npmjs.com/package/dsh-search-boost) |
-> | [**pi-search-boost**](https://github.com/Mr-remon219/pi-search-boost) | [pi](https://github.com/earendil-works/pi-coding-agent) extension | [GitHub](https://github.com/Mr-remon219/pi-search-boost) · [npm](https://www.npmjs.com/package/pi-search-boost) |
+```text
+                SearchBoost Core  (lib/runtime.mjs + lib/search/)
+                        │
+          ┌─────────────┼─────────────┐
+          │             │             │
+     adapters/mcp   adapters/pi   adapters/dsh
+     (stdio MCP)   (pi extension) (Cordis bundle)
+          │             │             │
+          └── agents/<host> prompt policy ──┘
+```
 
-Search engines are **vendored in [`lib/search/`](./lib/search/)** (originally from [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)): on the **free** layer, Bing, DuckDuckGo, Yahoo, and Exa-free run in parallel; the **api** layer adds **whichever keyed Tavily / Brave / Exa engines you configure** (one key is enough; all three recommended for best fusion). Also included: X/Twitter fallback, Jina page fetch, and deep-research rounds.
+> The former standalone repos **pi-search-boost** and **dsh-search-boost** are merged here as host adapters. Search engines, fusion, fetch, X search and research are maintained **only** in this repo's core.
+
+**Core** ([`lib/search/`](./lib/search/)): on the **free** layer, Bing, DuckDuckGo, Yahoo, and Exa-free run in parallel; the **api** layer adds **whichever keyed Tavily / Brave / Exa engines you configure** (one key is enough; all three recommended for best fusion). Also included: X/Twitter (hosted xAI tool ∥ multi-engine, credential-free fallback), Jina page fetch with `focus`, single-round `deep_research`, and the multi-round evidence loop with claim-level corroboration.
 
 中文文档 → [README_zh.md](./README_zh.md)
 
@@ -50,9 +55,13 @@ search-boost install -t cursor -y
 search-boost install -t codex,claude -y --auto-allow
 search-boost install -t grok -y --auto-allow   # plugin + config when grok CLI on PATH
 search-boost install -t antigravity --workspace --auto-allow -y
+search-boost install -t pi -y                  # pi extension shim → ~/.pi/agent/extensions/search-boost.js
+search-boost install -t dsh -y --profile web   # dsh plugin --profile web add … (needs dsh + pnpm)
 ```
 
 Preview without writing: `search-boost install --dry-run -y`
+
+**pi / DSH without the CLI:** `pi install npm:search-boost-mcp` (package manifest `pi.extensions`) or `dsh plugin --profile web add search-boost-mcp` (package manifest `dsh.bundle`). See [Host adapters](#host-adapters-pi--deepseek-harness).
 
 ### Verify install
 
@@ -83,7 +92,8 @@ If tools appear but calls fail, run `search-boost serve` in a terminal to see st
 
 | Flag | Effect |
 |------|--------|
-| `-t`, `--target` | Which agent(s) to wire (`cursor`, `codex`, `claude`, `grok`, `antigravity`, `cursor-cli`, `auto`, `all`) |
+| `-t`, `--target` | Which agent(s) to wire (`cursor`, `codex`, `claude`, `grok`, `antigravity`, `cursor-cli`, `pi`, `dsh`, `auto`, `all`) |
+| `--profile <name>` | DSH only: profile under `$DSH_HOME/profiles` (default `web`) |
 | `-y`, `--yes` | Non-interactive: skips keys/layer wizard, uses `--target=auto`, **implies** `--auto-allow` and `--replace-native` |
 | `-t` **without** `-y` | Still non-interactive for that target and still **replaces native search by default** — but does **not** imply `--auto-allow`; add it explicitly if you want no permission prompts |
 | `--auto-allow` | Pre-approve search-boost MCP tools in agent config (Cursor CLI allowlist, Codex `default_tools_approval_mode`, Claude/Grok/Antigravity permission rules) so the agent does not prompt every session |
@@ -170,8 +180,24 @@ search-boost config x --logout            # remove local copy
 | Claude Code | `~/.claude.json` | CLAUDE.md, skill, permissions |
 | Grok Build | `~/.grok/config.toml` | rule, skill, bundled [grok-plugin](./grok-plugin/) (when `grok` on PATH) |
 | Antigravity | `~/.gemini/config/mcp_config.json` | AGENTS.md, GEMINI.md, skill, optional workspace |
+| pi | — (in-process extension, [`adapters/pi`](./adapters/pi/)) | `~/.pi/agent/extensions/search-boost.js` shim |
+| DeepSeek Harness | — (in-process bundle, [`adapters/dsh`](./adapters/dsh/)) | `dsh plugin --profile <p> add` → profile `package.json` |
 
-Prompts use **model-discretion** wording (search when you choose — not forced every turn). See [`agents/`](./agents/) for per-agent templates.
+Prompts use **model-discretion** wording (search when you choose — not forced every turn) for the MCP agents. pi and DSH keep the proactive "search-first" policies they shipped with ([`agents/pi/inject.md`](./agents/pi/inject.md), [`agents/dsh/policy.md`](./agents/dsh/policy.md)). See [`agents/`](./agents/) for per-agent templates.
+
+## Host adapters (pi / DeepSeek Harness)
+
+Both hosts run the search tools **in-process** on the same core the MCP server uses — no second engine implementation, no MCP hop.
+
+| | pi (`adapters/pi`) | DSH (`adapters/dsh`) |
+|---|---|---|
+| Load | `pi install npm:search-boost-mcp`, `pi -e adapters/pi/index.js`, or the shim written by `search-boost install -t pi` | `dsh plugin --profile web add search-boost-mcp` (auto-wires `adapters/dsh/cordis.patch.yml`; repoints built-in `web_search` / `web_fetch`) |
+| Tools | `fused_search` (+`site`/`min_score`/`depth`, up to 20 results), `fetch_page` (`max_chars`), `deep_research` (multi-round evidence loop, `auto`/`step`, `goal`), `research_parallel` (pi child processes), `x_search` | `fused_search`, `fetch_page`, `x_search`, `deep_research` (one round), `research_parallel` (DSH native subagents), `search_stats`; native citation cards |
+| Commands | `/web_change`, `/x-login`, `/x-logout`, `/search-cache`, `/search-audit` | `/web_change`, `/x-login`, `/x-logout` |
+| Prompt | `<search_balance>` appended on `before_agent_start` + daily search budget note | `systemPrompt.section` `search:policy` (115) + live `search:status` (116) |
+| State | audit log `~/.pi/agent/search-boost-audit.jsonl`; legacy `~/.pi/agent/search-boost-layer.json` / `xsearch-auth.json` still read | — |
+
+Keys, layer and X credentials are shared with the MCP server: `search-boost config keys|layer|x` (or the TUI) — `PI_SEARCH_*` env vars and `~/.dsh-search-boost-*.json` are no longer written (legacy files are still read).
 
 **Native web search:** With `--replace-native` (default when non-interactive), Codex gets a marked top-level `web_search = "disabled"` in `config.toml` (never inside `[mcp_servers.*]`); Claude gets an ownership-marked `WebSearch` deny in `settings.json`. Uninstall removes only search-boost-owned entries and restores native search when safe. Cursor / Antigravity rely on skill + hook preference only. Grok native browse is left on.
 
@@ -203,11 +229,13 @@ Prompts use **model-discretion** wording (search when you choose — not forced 
 ```bash
 git clone https://github.com/Mr-remon219/search-boost.git
 cd search-boost && npm install
-npm run check && npm run test:install && npm run smoke
+npm run check && npm run test:install && npm run test:adapters && npm run smoke
 node cli.mjs install --dry-run -y
 ```
 
 Local clone installs write `node /path/to/cli.mjs serve` (not npx). No sibling checkout or `SEARCH_BOOST_DSH_ROOT` is required.
+
+Layout: `lib/runtime.mjs` + `lib/search/` are the core (host-neutral); `adapters/{mcp,pi,dsh}` are the host adapters (registration, rendering, lifecycle only); `agents/<host>/` holds host-level prompt policy; `lib/agents/` is the installer. Search logic belongs in the core — adapters must not reimplement it.
 
 ---
 
@@ -217,6 +245,6 @@ MIT
 
 ---
 
-**Links:** [Issues](https://github.com/Mr-remon219/search-boost/issues) · [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost) · [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost)
+**Links:** [Issues](https://github.com/Mr-remon219/search-boost/issues) · former repos merged here: [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost) · [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost)
 
 **Friendly link:** [LINUX DO 社区](https://linux.do/)

@@ -1,18 +1,37 @@
 {
   "name": "search-boost-mcp",
   "version": "0.1.7",
-  "description": "Multi-engine web search MCP for Cursor, Codex, Claude Code, Grok Build, and Antigravity — fused search, fetch, X, deep research",
+  "description": "Multi-engine web search for coding agents — one SearchBoost core (fused search, fetch, X, deep research) with MCP (Cursor, Codex, Claude Code, Grok Build, Antigravity), pi extension, and DeepSeek Harness bundle adapters",
   "type": "module",
   "bin": {
     "search-boost": "./cli.mjs",
     "search-boost-mcp": "./cli.mjs"
   },
   "main": "./cli.mjs",
+  "exports": {
+    ".": "./cli.mjs",
+    "./pi": "./adapters/pi/index.js",
+    "./dsh": "./adapters/dsh/index.js",
+    "./adapters/*": "./adapters/*",
+    "./lib/*": "./lib/*",
+    "./agents/*": "./agents/*",
+    "./package.json": "./package.json"
+  },
+  "pi": {
+    "extensions": [
+      "./adapters/pi/index.js"
+    ]
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./adapters/dsh/cordis.patch.yml"
+    }
+  },
   "files": [
     "cli.mjs",
     "server.mjs",
     "lib/",
-    "tools/",
+    "adapters/",
     "agents/",
     "grok-plugin/",
     "templates/",
@@ -26,11 +45,12 @@
     "smoke": "node scripts/smoke.mjs",
     "test:install": "node scripts/test-install.mjs",
     "test:doctor": "node scripts/test-doctor.mjs",
+    "test:adapters": "node scripts/test-adapters.mjs",
     "plugin:sync-grok": "node scripts/sync-grok-plugin.mjs",
     "build:plugin": "node scripts/build-plugin.mjs",
     "check": "node scripts/check-syntax.mjs",
     "test:fusion": "node scripts/test-fusion-errors.mjs",
-    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:install && npm run test:doctor && npm run test:fusion && npm run smoke"
+    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:install && npm run test:doctor && npm run test:fusion && npm run test:adapters && npm run smoke"
   },
   "dependencies": {
     "@clack/prompts": "^0.10.1",
@@ -48,7 +68,11 @@
     "claude-code",
     "grok",
     "antigravity",
+    "pi-package",
+    "dsh-plugin",
+    "deepseek-harness",
     "web-search",
+    "x-search",
     "search-boost"
   ],
   "license": "MIT",

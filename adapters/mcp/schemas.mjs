@@ -2,7 +2,7 @@
  * Zod input/output schemas for MCP tools (JSON Schema via MCP SDK).
  */
 import * as z from 'zod'
-import { ENGINE_ORDER } from '../lib/runtime.mjs'
+import { ENGINE_ORDER } from '../../lib/runtime.mjs'
 
 const engineEnum = z.enum(ENGINE_ORDER)
 

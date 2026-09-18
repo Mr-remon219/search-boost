@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Syntax-check shipped source — .mjs tree-wide plus vendored lib/search/*.js.
+ * Syntax-check shipped source — .mjs tree-wide plus Core lib/search/*.js and
+ * the host adapters' *.js (adapters/pi, adapters/dsh).
  */
 import { execFileSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
@@ -19,8 +20,9 @@ function collect(dir) {
       out.push(...collect(join(dir, entry.name)))
     } else if (entry.name.endsWith('.mjs')) {
       out.push(join(dir, entry.name))
-    } else if (entry.name.endsWith('.js') && relative(ROOT, dir).replace(/\\/g, '/') === 'lib/search') {
-      out.push(join(dir, entry.name))
+    } else if (entry.name.endsWith('.js')) {
+      const rel = relative(ROOT, dir).replace(/\\/g, '/')
+      if (rel === 'lib/search' || rel.startsWith('adapters/')) out.push(join(dir, entry.name))
     }
   }
   return out

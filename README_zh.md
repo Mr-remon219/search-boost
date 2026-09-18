@@ -1,16 +1,21 @@
 # search-boost-mcp
 
-面向编程 Agent 的**多引擎联网搜索 MCP 服务**。安装 CLI 后即可接入 **Cursor**、**Cursor CLI**、**Codex**、**Claude Code**、**Grok Build** 和 **Antigravity**。
+面向编程 Agent 的**多引擎联网搜索** —— **一份 SearchBoost 核心，三种宿主适配**。MCP 服务接入 **Cursor**、**Cursor CLI**、**Codex**、**Claude Code**、**Grok Build** 和 **Antigravity**；同一个包同时也是 **[pi](https://github.com/earendil-works/pi-coding-agent) 扩展**和 **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle 插件**。
 
-> **search-boost 系列**
->
-> | 项目 | 用在哪 | 链接 |
-> |------|--------|------|
-> | [**search-boost**](https://github.com/Mr-remon219/search-boost)（本仓库） | Cursor · Codex · Claude · Grok · Antigravity | 当前仓库 |
-> | [**dsh-search-boost**](https://github.com/Mr-remon219/dsh-search-boost) | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | [GitHub](https://github.com/Mr-remon219/dsh-search-boost) · [npm](https://www.npmjs.com/package/dsh-search-boost) |
-> | [**pi-search-boost**](https://github.com/Mr-remon219/pi-search-boost) | [pi](https://github.com/earendil-works/pi-coding-agent) | [GitHub](https://github.com/Mr-remon219/pi-search-boost) · [npm](https://www.npmjs.com/package/pi-search-boost) |
+```text
+                SearchBoost Core  (lib/runtime.mjs + lib/search/)
+                        │
+          ┌─────────────┼─────────────┐
+          │             │             │
+     adapters/mcp   adapters/pi   adapters/dsh
+     (stdio MCP)     (pi 扩展)    (Cordis bundle)
+          │             │             │
+          └── agents/<host> 宿主级提示词策略 ──┘
+```
 
-底层搜索引擎**内置于 [`lib/search/`](./lib/search/)**（源自 [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)）：**free** 层并行调用 Bing、DuckDuckGo、Yahoo 与 Exa-free；**api** 层在此基础上增加**你已配置**的 Tavily / Brave / Exa（配一个 Key 即可运行；建议配齐三个以获得最佳融合）。此外还提供 X 搜索降级、Jina 正文抓取和深度研究多轮检索。
+> 原独立仓库 **pi-search-boost** 与 **dsh-search-boost** 已并入本仓库，退化为两个宿主适配层。搜索引擎、融合排序、正文抓取、X 搜索、深度研究**只在本仓库的核心维护一份**。
+
+**核心**（[`lib/search/`](./lib/search/)）：**free** 层并行调用 Bing、DuckDuckGo、Yahoo 与 Exa-free；**api** 层在此基础上增加**你已配置**的 Tavily / Brave / Exa（配一个 Key 即可运行；建议配齐三个以获得最佳融合）。此外还提供 X 搜索（xAI 托管工具 ∥ 多引擎，无凭据也可降级使用）、带 `focus` 的 Jina 正文抓取、单轮 `deep_research`，以及带 claim 级佐证的多轮证据研究循环。
 
 English → [README.md](./README.md)
 
@@ -50,9 +55,13 @@ search-boost install -t cursor -y
 search-boost install -t codex,claude -y --auto-allow
 search-boost install -t grok -y --auto-allow   # grok CLI 在 PATH 时自动装插件 + 配置
 search-boost install -t antigravity --workspace --auto-allow -y
+search-boost install -t pi -y                  # 写入 pi 扩展 shim → ~/.pi/agent/extensions/search-boost.js
+search-boost install -t dsh -y --profile web   # 执行 dsh plugin --profile web add …（需要 dsh + pnpm）
 ```
 
 只想看看会改哪些文件、不真正写入：加 `--dry-run`。
+
+**不经 CLI 直接装 pi / DSH：** `pi install npm:search-boost-mcp`（包清单 `pi.extensions`）或 `dsh plugin --profile web add search-boost-mcp`（包清单 `dsh.bundle`）。详见下文「宿主适配层」。
 
 ### 验证安装
 
@@ -83,7 +92,8 @@ search-boost status          # 安装态仪表盘（密钥、搜索层、各 Age
 
 | 参数 | 作用 |
 |------|------|
-| `-t`, `--target` | 指定 Agent（`cursor`、`codex`、`claude`、`grok`、`antigravity`、`cursor-cli`、`auto`、`all`） |
+| `-t`, `--target` | 指定 Agent（`cursor`、`codex`、`claude`、`grok`、`antigravity`、`cursor-cli`、`pi`、`dsh`、`auto`、`all`） |
+| `--profile <name>` | 仅 DSH：`$DSH_HOME/profiles` 下的 profile（默认 `web`） |
 | `-y`, `--yes` | 非交互：跳过密钥/搜索层向导、默认 `--target=auto`，**同时隐含** `--auto-allow` 与 `--replace-native` |
 | 仅 `-t`、不加 `-y` | 对该目标非交互安装，**默认仍会替换内置搜索**，但**不会**自动加 `--auto-allow`；需要免审批请显式加上 |
 | `--auto-allow` | 在 Agent 配置里预批准 search-boost 的 MCP 工具（Cursor CLI 白名单、Codex 自动审批、Claude/Grok/Antigravity 权限规则），避免每轮都弹审批 |
@@ -170,8 +180,24 @@ search-boost config x --logout            # 删除本地副本
 | Claude Code | `~/.claude.json` | CLAUDE.md、skill、权限规则 |
 | Grok Build | `~/.grok/config.toml` | rule、skill、随包 [grok-plugin](./grok-plugin/)（`grok` 在 PATH 时自动安装） |
 | Antigravity | `~/.gemini/config/mcp_config.json` | AGENTS.md、GEMINI.md、skill，可选工作区配置 |
+| pi | —（进程内扩展，[`adapters/pi`](./adapters/pi/)） | `~/.pi/agent/extensions/search-boost.js` shim |
+| DeepSeek Harness | —（进程内 bundle，[`adapters/dsh`](./adapters/dsh/)） | `dsh plugin --profile <p> add` → profile 的 `package.json` |
 
-提示词的设计是**让模型自己决定要不要搜**，不是每轮都强制联网。各 Agent 的模板在 [`agents/`](./agents/) 里。
+MCP 各 Agent 的提示词设计是**让模型自己决定要不要搜**，不是每轮都强制联网；pi 与 DSH 沿用它们原有的"搜索优先"主动策略（[`agents/pi/inject.md`](./agents/pi/inject.md)、[`agents/dsh/policy.md`](./agents/dsh/policy.md)）。各 Agent 的模板在 [`agents/`](./agents/) 里。
+
+## 宿主适配层（pi / DeepSeek Harness）
+
+两个宿主都在**进程内**直接调用与 MCP 服务相同的核心 —— 没有第二套引擎实现，也不经过 MCP。
+
+| | pi（`adapters/pi`） | DSH（`adapters/dsh`） |
+|---|---|---|
+| 加载方式 | `pi install npm:search-boost-mcp`、`pi -e adapters/pi/index.js`，或 `search-boost install -t pi` 写入的 shim | `dsh plugin --profile web add search-boost-mcp`（自动应用 `adapters/dsh/cordis.patch.yml`，接管内置 `web_search` / `web_fetch`） |
+| 工具 | `fused_search`（含 `site`/`min_score`/`depth`，最多 20 条）、`fetch_page`（`max_chars`）、`deep_research`（多轮证据循环，`auto`/`step`、`goal`）、`research_parallel`（pi 子进程）、`x_search` | `fused_search`、`fetch_page`、`x_search`、`deep_research`（单轮）、`research_parallel`（DSH 原生 subagents）、`search_stats`；原生引用卡片 |
+| 命令 | `/web_change`、`/x-login`、`/x-logout`、`/search-cache`、`/search-audit` | `/web_change`、`/x-login`、`/x-logout` |
+| 提示词 | `before_agent_start` 追加 `<search_balance>` + 当日搜索预算 | `systemPrompt.section` `search:policy`（115）+ 动态 `search:status`（116） |
+| 状态 | 审计日志 `~/.pi/agent/search-boost-audit.jsonl`；旧的 `~/.pi/agent/search-boost-layer.json` / `xsearch-auth.json` 仍可读 | — |
+
+Key、搜索层与 X 凭据与 MCP 服务共用：`search-boost config keys|layer|x`（或 TUI）—— 不再写 `PI_SEARCH_*` 环境变量与 `~/.dsh-search-boost-*.json`（旧文件仍会读取）。
 
 **和内置搜索的关系：** 非交互安装且使用 `--replace-native`（默认）时，Codex 会在 `config.toml` **顶层**写入带标记的 `web_search = "disabled"`（不会写进 `[mcp_servers.*]`）；Claude 会在 `settings.json` 写入带 ownership 标记的 `WebSearch` deny。卸载时只移除 search-boost 拥有的项，并在安全时恢复内置搜索。想保留内置搜索就加 `--keep-native`。Cursor、Antigravity 没有硬开关，靠 skill 和 hook 引导优先用 search-boost。Grok 自带的 browse **不会动**。
 
@@ -202,11 +228,13 @@ search-boost config x --logout            # 删除本地副本
 ```bash
 git clone https://github.com/Mr-remon219/search-boost.git
 cd search-boost && npm install
-npm run check && npm run test:install && npm run smoke
+npm run check && npm run test:install && npm run test:adapters && npm run smoke
 node cli.mjs install --dry-run -y
 ```
 
 从源码安装时，MCP 启动命令会写成 `node /你的路径/cli.mjs serve`。无需 sibling checkout 或 `SEARCH_BOOST_DSH_ROOT`。
+
+目录边界：`lib/runtime.mjs` + `lib/search/` 是核心（与宿主无关）；`adapters/{mcp,pi,dsh}` 是宿主适配层（只做注册、渲染、生命周期）；`agents/<host>/` 放宿主级提示词策略；`lib/agents/` 是安装器。搜索逻辑只允许出现在核心里，适配层不得重新实现。
 
 ---
 
@@ -216,6 +244,6 @@ MIT
 
 ---
 
-**相关链接：** [Issues](https://github.com/Mr-remon219/search-boost/issues) · [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost) · [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost)
+**相关链接：** [Issues](https://github.com/Mr-remon219/search-boost/issues) · 已并入本仓库的旧仓库：[dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost) · [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost)
 
 **友情链接：** [LINUX DO 社区](https://linux.do/)
