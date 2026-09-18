@@ -3,7 +3,7 @@
 // Loaded by pi via package.json `pi.extensions` (pi install npm:search-boost-mcp),
 // by `pi -e <this file>`, or through the ~/.pi/agent/extensions shim written by
 // `search-boost install -t pi`. Registers the search tools (fused_search,
-// fetch_page, deep_research, research_parallel, x_search), the TUI commands
+// fetch_page, deep_research, search-parallel-subagent, x_search), the TUI commands
 // (/web_change, /x-login, /x-logout, /search-cache, /search-audit) and injects
 // the <search_balance> policy (agents/pi/inject.md) into pi's system prompt.
 //
@@ -31,13 +31,13 @@ import {
   jwtTier,
   runFetchPage,
   runFused,
-  runResearchLoop,
+  runResearchRound,
   runXSearch,
   switchLayer,
   tierName,
   xAuthCommands,
 } from '../../lib/runtime.mjs'
-import { runParallelResearch } from './parallel.js'
+import { normalizeTasks, runSearchParallel } from './search-parallel-subagent.js'
 
 const RECENCY_ENUM = ['day', 'week', 'month', 'year', 'any']
 
@@ -266,52 +266,55 @@ export default function searchBoostExtension(pi) {
     },
   })
 
-  /* ------------------------ research_parallel (pi child processes) ------------------------ */
+  /* ----------------- search-parallel-subagent (pi child processes) ----------------- */
 
   pi.registerTool({
-    name: 'research_parallel',
-    label: 'Parallel Multi-Agent Research',
+    name: 'search-parallel-subagent',
+    label: 'Search Parallel Subagent',
     description:
-      'Multi-agent research (Grok Deep Research pattern): decompose the question into 2-4 subtasks, then each subtask runs as an independent pi child process (own context window, own search budget) with fused_search + fetch_page. Subtasks run in parallel (bounded by max_parallel), and the results are returned as per-subtask reports for you to synthesize and cross-check. Use for questions that have clearly separable angles (e.g. compare X vs Y, investigate components of a system, gather evidence from different source types). For a single-angle deep dive, use deep_research instead.',
-    promptSnippet: 'Run parallel multi-agent research with independent subtask agents',
+      'Spawn isolated searcher or summarizer child agents. You choose how many and which role. Single mode: { agent, task }. Parallel mode: { tasks: [{ agent, task }, ...] } — every task starts at once, no concurrency cap. Prefer /fast-parallel (one searcher wave, then you continue) or /complex-parallel (searchers → summarizer → more searchers, few waves). For a single-angle deep dive without subagents, use deep_research.',
+    promptSnippet: 'Spawn searcher/summarizer subagents (parallelism is your choice)',
     promptGuidelines: [
-      'research_parallel: decompose the question into 2-4 well-separated subtasks yourself and pass them in `subtasks` — the quality of the decomposition determines the quality of the result. Each subtask gets an independent agent with its own search budget.',
-      'research_parallel citations: synthesize the subtask reports with citations; require >=2 independent domains for key claims, mark single-source claims as unverified.',
-      'research_parallel: prefer it over deep_research when the question has separable angles (comparisons, multi-component systems, conflicting viewpoints); prefer deep_research for a single deep dive.',
+      'search-parallel-subagent: you decide the task list and size — the tool does not cap concurrency. Pass { agent, task } for one child or tasks[] for a parallel wave.',
+      'search-parallel-subagent agents: searcher (fused_search + fetch_page) or summarizer (--no-tools; gap check for the next wave).',
+      'Workflows: /fast-parallel = one searcher wave then you synthesize. /complex-parallel = searchers → summarizer → more searchers; default 1–2 waves, hard cap 3; stop when the summarizer says no or gaps are marginal.',
+      'search-parallel-subagent citations: require >=2 independent domains for key claims; mark single-source claims as unverified.',
     ],
     parameters: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'The overall research question' },
-        subtasks: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 4, description: '2-4 well-separated subtasks; each runs as an independent agent' },
-        max_parallel: { type: 'integer', minimum: 1, maximum: 4, default: 2, description: 'Concurrent subtask agents (default 2; 3-4 is faster but hits search rate limits sooner)' },
-        per_subtask_sources: { type: 'integer', minimum: 1, maximum: 8, default: 3, description: 'Max sources each subtask agent may cite' },
-        timeout_seconds: { type: 'integer', minimum: 30, maximum: 600, default: 150, description: 'Per-subtask timeout; killed on expiry' },
+        agent: { type: 'string', enum: ['searcher', 'summarizer'], description: 'Single-mode agent' },
+        task: { type: 'string', description: 'Single-mode task for that agent' },
+        tasks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              agent: { type: 'string', enum: ['searcher', 'summarizer'] },
+              task: { type: 'string' },
+            },
+            required: ['agent', 'task'],
+          },
+          description: 'Parallel wave — all items run concurrently; you choose how many',
+        },
       },
-      required: ['query', 'subtasks'],
     },
-    async execute(_toolCallId, params, signal, onUpdate) {
+    async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const progress = onProgress(onUpdate)
-      if (!Array.isArray(params.subtasks) || params.subtasks.length < 2) {
-        throw new Error('research_parallel requires at least 2 subtasks (pass 2-4 well-separated angles)')
-      }
+      const tasks = normalizeTasks(params)
       const started = Date.now()
-      const res = await runParallelResearch({
-        query: params.query,
-        subtasks: params.subtasks.slice(0, 4),
-        maxParallel: params.max_parallel,
-        perSubtaskSources: params.per_subtask_sources,
-        timeoutSeconds: params.timeout_seconds,
-        signal,
-        progress,
-      })
+      const dispatch = {
+        model: ctx?.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
+        thinkingLevel: ctx?.thinkingLevel,
+      }
+      const res = await runSearchParallel({ tasks, signal, progress, dispatch })
       audit.write({
         type: 'research',
         ts: new Date().toISOString(),
-        query: params.query,
-        mode: 'parallel',
+        query: tasks.map((t) => t.task).join(' | ').slice(0, 240),
+        mode: 'search-parallel-subagent',
         rounds: 1,
-        stopReason: `${res.okCount}/${res.results.length} subtasks ok`,
+        stopReason: `${res.okCount}/${res.results.length} tasks ok`,
         sources: res.sourceUrls.length,
         domains: res.domains.length,
         uncovered: [],
@@ -319,13 +322,14 @@ export default function searchBoostExtension(pi) {
         subtasks: res.results.length,
         successfulSubtasks: res.okCount,
         turns: res.totalTurns,
+        agents: [...new Set(tasks.map((t) => t.agent))],
       })
       const lines = [
-        `Parallel research: "${res.query}" — ${res.okCount}/${res.results.length} subtasks completed in ${(res.totalMs / 1000).toFixed(1)}s`,
+        `search-parallel-subagent: ${res.okCount}/${res.results.length} tasks completed in ${(res.totalMs / 1000).toFixed(1)}s`,
         '',
       ]
       res.results.forEach((r, i) => {
-        lines.push(`### Subtask ${i + 1}: ${r.subtask}`)
+        lines.push(`### ${i + 1}. ${r.agent}: ${r.task}`)
         if (!r.ok) {
           lines.push(`[FAILED in ${(r.tookMs / 1000).toFixed(1)}s: ${r.error}]`)
         } else {
@@ -334,12 +338,11 @@ export default function searchBoostExtension(pi) {
         lines.push(r.result)
         lines.push('')
       })
-      lines.push('Synthesize these reports into the final answer, with cross-source verification.')
       return {
         content: [text(lines.join('\n').trim())],
         details: {
           results: res.results.map((r) => ({
-            subtask: r.subtask, ok: r.ok, tookMs: r.tookMs, turns: r.turns,
+            agent: r.agent, task: r.task, ok: r.ok, tookMs: r.tookMs, turns: r.turns,
             attempts: r.attempts, sources: r.sources, domains: r.domains, error: r.error,
           })),
           sourceUrls: res.sourceUrls,
@@ -349,112 +352,74 @@ export default function searchBoostExtension(pi) {
     },
   })
 
-  /* --------------------------- deep_research (evidence loop) --------------------------- */
+  /* --------------------------- deep_research (one round) --------------------------- */
 
   pi.registerTool({
     name: 'deep_research',
-    label: 'Deep Research',
+    label: 'Deep Research (one round)',
     description:
-      'Multi-round research loop for questions needing depth and multiple sources. Each round: fused search -> fetch top unseen pages -> extract query/goal-relevant evidence -> evidence coverage check -> follow-up queries. Query coverage is based only on selected excerpts; goal terms require >=2 independent domains. Time-sensitive goals additionally require recent dated, claim-aligned evidence. The loop does not perform an LLM semantic goal check and never claims that word coverage alone proves the goal. `corroboratedBy` is conservative claim-segment alignment using shared factual anchors, not proof.\n\nMode auto runs up to max_rounds. Mode step runs one round and returns gaps + suggested queries. Cite source URLs and independently verify key claims; treat single-source claims as unverified.',
-    promptSnippet: 'Run a multi-round deep research loop with coverage checking and corroboration',
+      'One research round: complex fused search + coverage analysis + gaps + suggested follow-up queries. ' +
+      'Call again with suggested_queries until gaps is empty, then synthesize with citations.',
+    promptSnippet: 'Run one deep-research round and return coverage gaps',
     promptGuidelines: [
-      'deep_research: use it for questions that need depth and multiple independent sources — it iterates search+fetch rounds until coverage, then reports per-source excerpts with corroboration.',
-      'deep_research citations: every factual claim in your answer must cite source URL(s) from the research report; do not cite pages that are not in the report.',
-      'deep_research corroboration: corroboratedBy is heuristic claim alignment, not proof. For key claims inspect the excerpts and require >=2 independent domains; mark single-source claims as unverified.',
-      'deep_research source hierarchy: prefer primary sources (official documentation, papers, raw data, .gov/.edu) over secondary ones (news, blogs); note when a claim rests on a secondary source.',
-      'deep_research freshness: for time-sensitive facts, state the access date (fetchedAt) and prefer recently fetched sources.',
-      'deep_research step mode: when mode=step, the report lists uncovered terms and suggested queries — call deep_research again with those queries in `queries` to continue until coverage is reached.',
+      'deep_research: one round per call — fused search plus which query terms each source covers, gaps, and suggested follow-ups.',
+      'deep_research loop: you drive it. Call again with suggested_queries (or your own) until gaps is empty, then synthesize with citations. Stop after about 3 rounds or when the same query repeats.',
+      'deep_research citations: cite source URLs from this report; treat single-source claims as unverified. Use fetch_page when a snippet is too thin.',
     ],
     parameters: {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'The research question' },
-        queries: { type: 'array', items: { type: 'string' }, description: 'Keyword variants for this round (step-mode continuation). If omitted, variants are derived from query.' },
-        goal: { type: 'string', description: 'What the final answer must establish; drives search, excerpt selection, and multi-domain evidence coverage. Semantic goal satisfaction is left to the calling model.' },
-        mode: { type: 'string', enum: ['auto', 'step'], default: 'auto' },
-        max_rounds: { type: 'integer', minimum: 1, maximum: 5, default: 3 },
-        max_sources: { type: 'integer', minimum: 2, maximum: 15, default: 8 },
-        per_round: { type: 'integer', minimum: 2, maximum: 6, default: 4, description: 'Pages fetched per round' },
-        engines: { type: 'array', items: { type: 'string', enum: ENGINE_ORDER }, description: 'Engine subset override (default: active layer\'s engines; run /web_change to switch layers)' },
-        include_domains: { type: 'array', items: { type: 'string' }, description: 'Only research these domains (strict client-side filter)' },
-        exclude_domains: { type: 'array', items: { type: 'string' }, description: 'Skip these domains during research' },
-        recency: { type: 'string', enum: RECENCY_ENUM, description: 'Only recent results are favored' },
+        queries: { type: 'array', items: { type: 'string' }, description: 'Optional extra query variants for this round' },
+        max_sources: { type: 'integer', minimum: 2, maximum: 12, default: 8 },
+        recency: { type: 'string', enum: RECENCY_ENUM, description: 'Recency window for this round' },
+        engines: { type: 'array', items: { type: 'string', enum: ENGINE_ORDER }, description: 'Engine subset override (default: active layer complex tier)' },
+        layer: { type: 'string', enum: ['free', 'api'], description: 'Override the active layer for this call' },
+        round: { type: 'integer', minimum: 1, description: 'Research round number (auto-increments when omitted)' },
       },
       required: ['query'],
     },
     async execute(_toolCallId, params, signal, onUpdate) {
       const progress = onProgress(onUpdate)
-      progress(`deep_research (${params.mode ?? 'auto'}): "${params.query}"`)
-      const res = await runResearchLoop({
+      progress(`deep_research: "${params.query}"`)
+      const res = await runResearchRound({
         query: params.query,
         queries: params.queries,
-        goal: params.goal,
-        mode: params.mode === 'step' ? 'step' : 'auto',
-        maxRounds: params.max_rounds,
-        maxSources: params.max_sources,
-        perRound: params.per_round,
-        engines: params.engines,
-        includeDomains: params.include_domains,
-        excludeDomains: params.exclude_domains,
+        maxSources: params.max_sources ?? 8,
         recency: params.recency,
+        layer: params.layer,
+        round: params.round,
+        engineList: params.engines,
         signal,
-        progress,
       })
       audit.write({
         type: 'research',
         ts: new Date().toISOString(),
         query: params.query,
-        mode: res.mode,
-        rounds: res.rounds,
-        stopReason: res.stopReason,
-        sources: res.coverage.totalSources,
-        domains: res.coverage.distinctDomains,
-        uncovered: [...res.coverage.uncoveredTerms, ...res.coverage.uncoveredGoalTerms],
+        round: res.round,
+        sources: res.sources.length,
+        gaps: res.gaps,
         tookMs: res.tookMs,
       })
 
+      const gaps = res.gaps ?? []
       const lines = [
-        `Research report: "${res.query}"`,
-        res.goal ? `Goal: ${res.goal}` : '',
-        `Rounds: ${res.rounds} — stopped: ${res.stopReason} — sources: ${res.coverage.totalSources} — domains: ${res.coverage.distinctDomains} — ${res.tookMs}ms`,
-        `Query evidence terms covered: ${res.coverage.coveredTerms.join(', ') || '(none)'}`,
-        `Query evidence terms uncovered: ${res.coverage.uncoveredTerms.join(', ') || '(none)'}`,
-        res.goal ? `Goal evidence terms (>=2 domains): ${res.coverage.coveredGoalTerms.join(', ') || '(none)'}` : '',
-        res.goal ? `Goal evidence gaps: ${res.coverage.uncoveredGoalTerms.join(', ') || '(none)'}` : '',
-        res.goal ? `Goal evidence covered: ${res.coverage.goalEvidenceCovered ? 'yes' : 'no'}; semantic goal check: not performed` : '',
-        `Corroboration method: ${res.corroborationMethod}`,
-        res.coverage.primaryDomains.length > 0 ? `Primary/authoritative domains: ${res.coverage.primaryDomains.join(', ')}` : '',
+        `deep_research round ${res.round}: "${res.query}" — ${res.tookMs}ms`,
+        `gaps: ${gaps.length === 0 ? 'none' : gaps.join(', ')}`,
+        res.suggested_queries?.length ? `suggested: ${res.suggested_queries.join(' | ')}` : '',
+        res.note ?? '',
         '',
-        'Sources:',
+        ...res.sources.map((s, i) => `${i + 1}. [${s.covered}/${s.total}] ${s.title}\n   ${s.url}`),
       ]
-      res.sources.forEach((s, i) => {
-        lines.push(
-          `${i + 1}. ${s.title} — ${s.domain} [via ${s.via}, ${String(s.fetchedAt ?? '').slice(0, 10)}, ${s.wordCount} words]`,
-          `   URL: ${s.url}`,
-          s.corroboratedBy.length > 0
-            ? `   claim-aligned domains (heuristic): ${s.corroboratedBy.join(', ')}`
-            : '   claim-aligned domains: (none — single-source claim, treat as unverified)',
-          s.excerpt ? `   Evidence excerpt used for coverage/alignment: ${s.excerpt}` : '',
-          '',
-        )
-      })
-      if (res.suggestedQueries.length > 0) {
-        lines.push(`Suggested follow-up queries: ${res.suggestedQueries.join(' | ')}`)
-      }
-      if (params.mode === 'step') {
-        lines.push('', 'STEP MODE: this was one round. Call deep_research again with the suggested queries (or your own) to continue until coverage is reached.')
-      }
       return {
-        content: [text(lines.join('\n').trim())],
+        content: [text(lines.filter(Boolean).join('\n'))],
         details: {
-          coverage: res.coverage,
-          sources: res.sources.map((s) => ({
-            title: s.title, url: s.url, domain: s.domain, fetchedAt: s.fetchedAt,
-            excerpt: s.excerpt, corroboratedBy: s.corroboratedBy,
-            freshCorroboratedBy: s.freshCorroboratedBy ?? [],
-          })),
-          engineStats: res.engineStats,
-          suggestedQueries: res.suggestedQueries,
+          round: res.round,
+          query: res.query,
+          tookMs: res.tookMs,
+          gaps,
+          suggested_queries: res.suggested_queries ?? [],
+          sources: res.sources,
         },
       }
     },
@@ -503,7 +468,7 @@ export default function searchBoostExtension(pi) {
           if (e.type === 'xsearch') {
             return `[${e.ts.slice(11, 19)}] x_search ${e.subtype} "${(e.query ?? e.postId ?? '').slice(0, 60)}" -> ${e.results} results${e.error ? ` ERROR: ${e.error.slice(0, 80)}` : ''}, ${e.tookMs}ms${e.cacheHit ? ' (cache)' : ''}`
           }
-          return `[${e.ts.slice(11, 19)}] research "${e.query.slice(0, 60)}" ${e.rounds}r ${e.stopReason} ${e.sources}s/${e.domains}d ${e.tookMs}ms`
+          return `[${e.ts.slice(11, 19)}] research "${e.query.slice(0, 60)}" r${e.round ?? e.rounds ?? '?'} ${e.sources}s ${e.tookMs}ms`
         })
         ctx.ui.notify(`search-boost audit (last ${recent.length}):\n${lines.join('\n')}`, 'info')
         return
