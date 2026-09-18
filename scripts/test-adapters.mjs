@@ -28,6 +28,7 @@ const {
 } = await import('../lib/search/xsearch.js')
 const { fusedSearch, makeCache } = await import('../lib/search/fusion.js')
 const { makePageCache } = await import('../lib/search/fetch.js')
+const { envProxyUrl } = await import('../lib/search/ipv4-fetch.js')
 const { containsSearchTerm, countWords, tokenize } = await import('../lib/search/text.js')
 const { pickExcerpts, pickParagraphs, excerptForTool } = await import('../lib/search/evidence.js')
 const { runResearchLoop, evaluateCoverage, mergeInitialQueries } = await import('../lib/search/research-loop.js')
@@ -114,6 +115,29 @@ const pc = makePageCache()
 pc.set('p', 'x')
 pc.clear()
 assert('makePageCache.clear empties', pc.size() === 0)
+
+// ---------------------------------------------------------------------------
+// Core: env proxy selection (HTTP(S)_PROXY / ALL_PROXY → ipv4Fetch)
+// ---------------------------------------------------------------------------
+{
+  const saved = {}
+  for (const k of ['http_proxy', 'https_proxy', 'all_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY']) {
+    saved[k] = process.env[k]
+    delete process.env[k]
+  }
+  assert('envProxyUrl empty without proxy env', envProxyUrl() === '' && envProxyUrl('http') === '')
+  process.env.ALL_PROXY = 'http://127.0.0.1:7890'
+  assert('envProxyUrl falls back to ALL_PROXY', envProxyUrl() === 'http://127.0.0.1:7890')
+  process.env.http_proxy = 'http://127.0.0.1:7890'
+  process.env.HTTPS_PROXY = 'http://example.invalid:9'
+  assert('envProxyUrl lowercase http_proxy beats HTTPS_PROXY', envProxyUrl('http') === 'http://127.0.0.1:7890')
+  process.env.https_proxy = 'http://127.0.0.1:7890'
+  assert('envProxyUrl prefers https_proxy for https', envProxyUrl('https') === 'http://127.0.0.1:7890')
+  for (const [k, v] of Object.entries(saved)) {
+    if (v === undefined) delete process.env[k]
+    else process.env[k] = v
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Core: text / evidence (ported from pi)
