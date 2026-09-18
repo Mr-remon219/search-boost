@@ -24,7 +24,7 @@
 ```
                     SearchBoost Core
         lib/runtime.mjs (facade) + lib/search/*.js
-   engines / fusion / fetch / evidence / research / research-loop
+   engines / fusion / fetch / evidence / research
             xsearch / xauth / xfallback / audit / text / ssrf
                             │
         ┌───────────────────┼───────────────────┐
@@ -36,15 +36,15 @@
         └── agents/<host>/  宿主级 prompt 策略 ──┘
 ```
 
-**边界规则**：搜索算法只在 `lib/search/`；`lib/runtime.mjs` 是唯一 facade（`runFused` / `runFetchPage` / `runResearchRound` / `runResearchLoop` / `runXSearch` / `describeLayer` / `switchLayer` / `xAuthCommands`）；adapter 只做宿主注册、参数映射、渲染、生命周期；`agents/pi/inject.md`、`agents/dsh/policy.md` 是照抄旧仓库的宿主定制，不影响 MCP 路径的 model-discretion 文案。
+**边界规则**：搜索算法只在 `lib/search/`；`lib/runtime.mjs` 是唯一 facade（`runFused` / `runFetchPage` / `runResearchRound` / `runXSearch` / `describeLayer` / `switchLayer` / `xAuthCommands`）；adapter 只做宿主注册、参数映射、渲染、生命周期；`agents/pi/inject.md`、`agents/dsh/policy.md` 是照抄旧仓库的宿主定制，不影响 MCP 路径的 model-discretion 文案。
 
-**由旧仓库反向迁入 Core 的能力**：DSH `xsearch.js`（hosted-tool filters、`salvageJsonForKind`、`readGrokClientInfo`、entitlement 拒绝、`reasoning_effort`）、DSH `fetch.js`（`focusMiss`、Jina URL encode、短正文不缓存）、pi `research.ts`（多轮证据循环 → `research-loop.js`）、pi `extract.ts`（`pickParagraphs` / `pickExcerpts` → `evidence.js`）、pi `util.ts`（CJK 分词 / `countWords` → `text.js`）、pi `audit.ts`（→ `audit.js`）、x_search 编排（三份 → `runXSearch`，含按 kind TTL 缓存 + auth 指纹 + single-flight）。
+**由旧仓库反向迁入 Core 的能力**：DSH `xsearch.js`（hosted-tool filters、`salvageJsonForKind`、`readGrokClientInfo`、entitlement 拒绝、`reasoning_effort`）、DSH `fetch.js`（`focusMiss`、Jina URL encode、短正文不缓存）、pi `extract.ts`（`pickParagraphs` / `pickExcerpts` → `evidence.js`）、pi `util.ts`（CJK 分词 / `countWords` → `text.js`）、pi `audit.ts`（→ `audit.js`）、x_search 编排（三份 → `runXSearch`，含按 kind TTL 缓存 + auth 指纹 + single-flight）。三宿主的 `deep_research` 都走 Core `runResearchRound`（单轮，模型自己决定要不要再调）。
 
-**留在 adapter 的宿主差异**：pi `research_parallel` 派生 `pi` 子进程（`adapters/pi/parallel.js`）；DSH `research_parallel` 走 `ctx.get('subagents')`（Core `parallelResearch`）；DSH `web` seam provider / presentCall 卡片 / `cleanJsonValue`；pi `promptGuidelines` / `onUpdate` 进度 / `/search-cache` `/search-audit`。
+**留在 adapter 的宿主差异**：pi `search-parallel-subagent` 派生 `pi` 子进程（`adapters/pi/search-parallel-subagent.js`；install 把 `agents/pi/agents/*.md` / `prompts/*.md` 注入 `~/.pi/agent/{agents,prompts}`）；DSH `research_parallel` 走 `ctx.get('subagents')`（Core `parallelResearch`）；DSH `web` seam provider / presentCall 卡片 / `cleanJsonValue`；pi `promptGuidelines` / `onUpdate` 进度 / `/search-cache` `/search-audit`。
 
 **不迁**：DSH `plugin-host.js`（会话级动态插件，完整复制一份核心）、pi 的持久化 `JsonCache`（Core 统一内存缓存）、pi `PI_SEARCH_*` env / Windows 注册表读 key（key 只经 TUI 写入 Core keys 文件）、DSH `antigravity/agy` 引擎（本仓库已移除）。
 
-**安装面**：`search-boost install -t pi` 写 `~/.pi/agent/extensions/search-boost.js` shim（re-export `adapters/pi/index.js`，pi 支持纯 JSON Schema 参数，adapter 零 pi 依赖）；`-t dsh --profile <p>` 转发 `dsh plugin --profile <p> add <pkg>`（DSH 通过包 `dsh.bundle.patch` 发现 bundle，patch 行 `name: search-boost-mcp/dsh` 由 Cordis loader 直接 `import()`）。
+**安装面**：`search-boost install -t pi` 写 `~/.pi/agent/extensions/search-boost.js` shim（re-export `adapters/pi/index.js`，pi 支持纯 JSON Schema 参数，adapter 零 pi 依赖），并把 searcher/summarizer 与 `/fast-parallel` `/complex-parallel` 注入 `~/.pi/agent/{agents,prompts}`；`-t dsh --profile <p>` 转发 `dsh plugin --profile <p> add <pkg>`（DSH 通过包 `dsh.bundle.patch` 发现 bundle，patch 行 `name: search-boost-mcp/dsh` 由 Cordis loader 直接 `import()`）。
 
 ## 配置路径（独立 + 向后兼容）
 

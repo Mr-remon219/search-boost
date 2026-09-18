@@ -31,14 +31,13 @@ const { makePageCache } = await import('../lib/search/fetch.js')
 const { envProxyUrl } = await import('../lib/search/ipv4-fetch.js')
 const { containsSearchTerm, countWords, tokenize } = await import('../lib/search/text.js')
 const { pickExcerpts, pickParagraphs, excerptForTool } = await import('../lib/search/evidence.js')
-const { runResearchLoop, evaluateCoverage, mergeInitialQueries } = await import('../lib/search/research-loop.js')
 const { AuditLog } = await import('../lib/search/audit.js')
 const { configPiLegacyPath, configReadCandidates, piAgentDir } = await import('../lib/config-paths.mjs')
 const runtime = await import('../lib/runtime.mjs')
-const { ROUTES, HOST_RUNTIME_IDS, promptPath } = await import('../agents/router.mjs')
+const { ROUTES, HOST_RUNTIME_IDS, promptPath, piSubagentTemplatePaths, piWorkflowPromptPaths } = await import('../agents/router.mjs')
 const dsh = await import('../adapters/dsh/index.js')
 const pi = await import('../adapters/pi/index.js')
-const piParallel = await import('../adapters/pi/parallel.js')
+const piSub = await import('../adapters/pi/search-parallel-subagent.js')
 const hostRuntime = await import('../lib/agents/host-runtime.mjs')
 const { AGENTS, AGENT_IDS, parseTargetSpec } = await import('../lib/agents/index.mjs')
 const { PATHS, agentConfigured, agentDetected } = await import('../lib/paths.mjs')
@@ -159,50 +158,6 @@ assert('pickParagraphs drops link-list boilerplate', !paras.some((p) => p.starts
 assert('excerptForTool truncates at boundary', excerptForTool('a\n\n'.repeat(2000), 100).endsWith('[content truncated]'))
 
 // ---------------------------------------------------------------------------
-// Core: research loop (hermetic search/fetch)
-// ---------------------------------------------------------------------------
-const doc = (domain, text) => ({ url: `https://${domain}/doc`, via: 'jina', content: text, fetched_at: '2026-09-18T00:00:00.000Z', word_count: countWords(text) })
-const corpus = {
-  'nodejs.org': 'Node.js 24 is the Active LTS release as of October 2026. Node.js 24 became LTS in 2026 with V8 upgrades and stable permission model improvements.',
-  'endoflife.date': 'Node.js 24 Active LTS started in October 2026. Node.js 24 will move to maintenance in October 2027 according to the release schedule.',
-  'blog.example.com': 'Node.js 24 Active LTS in 2026 brings a faster runtime; many teams upgraded in 2026 to Node.js 24 after the LTS promotion.',
-}
-const calls = { search: 0, fetch: 0 }
-const deps = {
-  search: async (o) => {
-    calls.search++
-    assert('research loop asks for complex/advanced', o.complexity === 'complex' && o.depth === 'advanced')
-    return { results: Object.keys(corpus).map((d) => ({ title: `${d} page`, url: `https://${d}/doc`, snippet: 'Node.js 24 LTS' })), engineStats: { bing: { used: true, errors: 0 } } }
-  },
-  fetch: async (url) => {
-    calls.fetch++
-    const domain = new URL(url).hostname
-    return doc(domain, corpus[domain])
-  },
-}
-const step = await runResearchLoop({ query: 'Node.js 24 LTS', mode: 'step', maxSources: 4, perRound: 3, ...deps })
-assert('research loop step mode = one round', step.rounds === 1 && step.stopReason === 'step')
-assert('research loop fetched pages and built excerpts', step.sources.length === 3 && step.sources.every((s) => s.excerpt.length > 0))
-assert('research loop corroborates across domains', step.sources.some((s) => s.corroboratedBy.length >= 1))
-assert('research loop coverage covers query terms', step.coverage.uncoveredTerms.length === 0)
-const auto = await runResearchLoop({ query: 'Node.js 24 LTS', mode: 'auto', maxRounds: 3, maxSources: 6, perRound: 3, ...deps })
-assert('research loop auto stops when covered', auto.stopReason === 'query_evidence_covered' && auto.rounds === 1)
-assert('research loop skips fetch when engine content is rich', await (async () => {
-  const seen = { fetch: 0 }
-  const r = await runResearchLoop({
-    query: 'tokio runtime', mode: 'step', perRound: 2,
-    search: async () => ({ results: [{ title: 'rich', url: 'https://tokio.rs/x', content: 'tokio runtime '.repeat(200) }], engineStats: {} }),
-    fetch: async () => { seen.fetch++; return doc('tokio.rs', 'x') },
-  })
-  return seen.fetch === 0 && r.sources[0].via === 'search'
-})())
-await rejects('research loop requires query', () => runResearchLoop({ query: '', ...deps }), /query is required/)
-assert('evaluateCoverage flags goal terms needing two domains', evaluateCoverage('q', 'establish tokio maturity', [
-  { domain: 'a.com', excerpt: 'tokio maturity is high' },
-]).uncoveredGoalTerms.includes('tokio'))
-assert('mergeInitialQueries keeps goal participation', mergeInitialQueries('q', 'g', ['custom'])[0] === 'q g')
-
-// ---------------------------------------------------------------------------
 // Core: audit log
 // ---------------------------------------------------------------------------
 const auditFile = join(TMP, 'audit', 'a.jsonl')
@@ -231,7 +186,7 @@ runtime.switchLayer('free')
 // ---------------------------------------------------------------------------
 // runtime facade contracts
 // ---------------------------------------------------------------------------
-for (const fn of ['runFused', 'runFetchPage', 'runResearchRound', 'runResearchLoop', 'runXSearch', 'describeLayer', 'switchLayer', 'invalidateSearchCaches', 'clearAllCaches', 'cacheSizes', 'xAuthCommands']) {
+for (const fn of ['runFused', 'runFetchPage', 'runResearchRound', 'runXSearch', 'describeLayer', 'switchLayer', 'invalidateSearchCaches', 'clearAllCaches', 'cacheSizes', 'xAuthCommands']) {
   assert(`runtime exports ${fn}`, fn in runtime)
 }
 const info = runtime.describeLayer()
@@ -260,6 +215,16 @@ assert('xAuthCommands.logout is a no-op without creds', runtime.xAuthCommands.lo
 assert('router has pi and dsh host-runtime routes', HOST_RUNTIME_IDS.includes('pi') && HOST_RUNTIME_IDS.includes('dsh') && ROUTES.pi.injectKind === 'host-runtime')
 assert('pi prompt asset exists', existsSync(promptPath('pi')) && readFileSync(promptPath('pi'), 'utf8').includes('<search_balance>'))
 assert('dsh policy asset exists', existsSync(promptPath('dsh')) && readFileSync(promptPath('dsh'), 'utf8').startsWith('# 搜索政策'))
+assert('pi subagent templates exist', piSubagentTemplatePaths().length === 2 && piSubagentTemplatePaths().every((p) => existsSync(p)))
+assert('pi workflow prompts exist', piWorkflowPromptPaths().length === 2 && piWorkflowPromptPaths().every((p) => existsSync(p)))
+const searcherMd = piSub.parseAgentMarkdown(readFileSync(piSub.resolveAgentPath('searcher'), 'utf8'), 'searcher.md')
+const summarizerMd = piSub.parseAgentMarkdown(readFileSync(piSub.resolveAgentPath('summarizer'), 'utf8'), 'summarizer.md')
+assert('pi searcher md name+tools', searcherMd?.name === 'searcher' && searcherMd.tools.join(',') === 'fused_search,fetch_page')
+assert('pi summarizer md has no tools', summarizerMd?.name === 'summarizer' && summarizerMd.tools.length === 0)
+const searcherArgs = piSub.buildChildCliArgs(searcherMd, 'q', '/tmp/p.md')
+const summarizerArgs = piSub.buildChildCliArgs(summarizerMd, 'q', '/tmp/p.md')
+assert('searcher child gets tools whitelist', searcherArgs.includes('--tools') && searcherArgs.includes('fused_search,fetch_page') && searcherArgs.includes('-e'))
+assert('summarizer child gets --no-tools', summarizerArgs.includes('--no-tools') && !summarizerArgs.includes('--tools') && !summarizerArgs.includes('-e'))
 
 // ---------------------------------------------------------------------------
 // adapters/dsh — mock Cordis ctx
@@ -325,12 +290,14 @@ function mockDshCtx() {
   const handlers = new Map()
   const mockPi = { registerTool: (t) => tools.set(t.name, t), registerCommand: (n, c) => commands.set(n, c), on: (ev, fn) => handlers.set(ev, fn) }
   pi.default(mockPi)
-  assert('pi registers all tools', ['fused_search', 'fetch_page', 'deep_research', 'research_parallel', 'x_search'].every((n) => tools.has(n)))
+  assert('pi registers all tools', ['fused_search', 'fetch_page', 'deep_research', 'search-parallel-subagent', 'x_search'].every((n) => tools.has(n)))
   assert('pi registers all commands', ['web_change', 'x-login', 'x-logout', 'search-cache', 'search-audit'].every((n) => commands.has(n)))
   for (const t of tools.values()) {
     assert(`pi ${t.name} parameters are plain JSON schema`, t.parameters.type === 'object' && typeof t.parameters.properties === 'object' && Array.isArray(t.promptGuidelines))
   }
   assert('pi fused_search keeps pi-only params', ['site', 'min_score', 'depth'].every((k) => k in tools.get('fused_search').parameters.properties) && tools.get('fused_search').parameters.properties.max_results.maximum === 20)
+  const deep = tools.get('deep_research').parameters.properties
+  assert('pi deep_research is one-round like MCP/DSH', !('mode' in deep) && !('max_rounds' in deep) && !('per_round' in deep) && !('goal' in deep) && 'round' in deep)
   assert('pi x_search requires type', tools.get('x_search').parameters.required.includes('type'))
   const injected = await handlers.get('before_agent_start')({ systemPrompt: 'BASE' })
   assert('pi injects <search_balance> once', injected.systemPrompt.startsWith('BASE\n<search_balance>') && Object.keys(await handlers.get('before_agent_start')({ systemPrompt: '<search_balance>' })).length === 0)
@@ -354,10 +321,13 @@ function mockDshCtx() {
   assert('pi x_search thread without post_id reports error', /post_id required/.test(bad.content[0].text))
   const both = await tools.get('x_search').execute('id', { type: 'keyword', query: 'q', allowed_x_handles: ['a'], excluded_x_handles: ['b'] })
   assert('pi x_search rejects allowed+excluded', both.details.error === 'mutually_exclusive_handles')
-  await rejects('pi research_parallel needs 2 subtasks', () => tools.get('research_parallel').execute('id', { query: 'q', subtasks: ['one'] }), /at least 2 subtasks/)
-  assert('pi parallel extracts cited URLs', piParallel.extractSourceUrls('see (https://en.wikipedia.org/wiki/Foo_(bar)) and https://a.com/x).').length === 2)
-  assert('pi parallel entry points at adapter', piParallel.SEARCH_BOOST_EXT.endsWith(join('adapters', 'pi', 'index.js')))
-  assert('pi parallel transient detection', piParallel.isTransientProviderTransportError('WebSocket closed') && !piParallel.isTransientProviderTransportError('bad prompt'))
+  const parallel = tools.get('search-parallel-subagent')
+  await rejects('pi parallel rejects missing mode', () => parallel.execute('id', { query: 'q' }), /exactly one of/)
+  await rejects('pi parallel rejects empty tasks', () => parallel.execute('id', { tasks: [] }), /must not be empty/)
+  await rejects('pi parallel rejects unknown agent', () => parallel.execute('id', { agent: 'scout', task: 'x' }), /unknown agent/)
+  assert('pi parallel extracts cited URLs', piSub.extractSourceUrls('see (https://en.wikipedia.org/wiki/Foo_(bar)) and https://a.com/x).').length === 2)
+  assert('pi parallel entry points at adapter', piSub.SEARCH_BOOST_EXT.endsWith(join('adapters', 'pi', 'index.js')))
+  assert('pi parallel transient detection', piSub.isTransientProviderTransportError('WebSocket closed') && !piSub.isTransientProviderTransportError('bad prompt'))
 }
 
 // ---------------------------------------------------------------------------
@@ -369,14 +339,19 @@ const shim = hostRuntime.piShimSource()
 assert('pi shim re-exports adapter via file URL', shim.includes('search-boost pi extension shim') && /export \{ default \} from 'file:\/\/.*adapters\/pi\/index\.js'/.test(shim))
 const piFiles = await AGENTS.pi.install({ dryRun: false })
 assert('pi install writes shim under PI_CODING_AGENT_DIR', piFiles[0] === PATHS.pi.extension && existsSync(PATHS.pi.extension) && agentConfigured('pi'))
+const injected = hostRuntime.piInjectPairs().map((p) => p.dest)
+assert('pi install injects owned agents+prompts', injected.length === 4 && injected.every((f) => existsSync(f) && readFileSync(f, 'utf8').includes('search-boost: owned')))
+const userPrompt = join(PATHS.pi.promptsDir, 'user-own.md')
+writeFileSync(userPrompt, '# mine\n')
 writeFileSync(join(process.env.PI_CODING_AGENT_DIR, 'extensions', 'other.js'), '// user file')
 await AGENTS.pi.uninstall({ dryRun: false })
 assert('pi uninstall removes only our shim', !existsSync(PATHS.pi.extension) && existsSync(join(process.env.PI_CODING_AGENT_DIR, 'extensions', 'other.js')))
+assert('pi uninstall removes owned md and keeps user prompts', injected.every((f) => !existsSync(f)) && existsSync(userPrompt))
 writeFileSync(PATHS.pi.extension, '// user-owned file')
 await AGENTS.pi.uninstall({ dryRun: false })
 assert('pi uninstall leaves foreign file at shim path', existsSync(PATHS.pi.extension))
 rmSync(PATHS.pi.extension)
-assert('pi print config mentions pi install', AGENTS.pi.printConfig().includes('pi install npm:search-boost-mcp'))
+assert('pi print config mentions injected prompts', AGENTS.pi.printConfig().includes('/fast-parallel') && AGENTS.pi.printConfig().includes('pi install npm:search-boost-mcp'))
 assert('dsh plugin add args', hostRuntime.dshPluginArgs('add', 'web').slice(0, 4).join(' ') === 'plugin --profile web add')
 assert('dsh plugin remove args use package name', hostRuntime.dshPluginArgs('remove', 'headless').join(' ') === 'plugin --profile headless remove search-boost-mcp')
 assert('dsh print config uses profile', AGENTS.dsh.printConfig({ profile: 'sdk' }).includes('--profile sdk add'))

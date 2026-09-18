@@ -15,7 +15,7 @@ Multi-engine web search for coding agents — **one SearchBoost core, three host
 
 > The former standalone repos **pi-search-boost** and **dsh-search-boost** are merged here as host adapters. Search engines, fusion, fetch, X search and research are maintained **only** in this repo's core.
 
-**Core** ([`lib/search/`](./lib/search/)): on the **free** layer, Bing, DuckDuckGo, Yahoo, and Exa-free run in parallel; the **api** layer adds **whichever keyed Tavily / Brave / Exa engines you configure** (one key is enough; all three recommended for best fusion). Also included: X/Twitter (hosted xAI tool ∥ multi-engine, credential-free fallback), Jina page fetch with `focus`, single-round `deep_research`, and the multi-round evidence loop with claim-level corroboration.
+**Core** ([`lib/search/`](./lib/search/)): on the **free** layer, Bing, DuckDuckGo, Yahoo, and Exa-free run in parallel; the **api** layer adds **whichever keyed Tavily / Brave / Exa engines you configure** (one key is enough; all three recommended for best fusion). Also included: X/Twitter (hosted xAI tool ∥ multi-engine, credential-free fallback), Jina page fetch with `focus`, and single-round `deep_research` (the model repeats until gaps are empty).
 
 中文文档 → [README_zh.md](./README_zh.md)
 
@@ -55,7 +55,7 @@ search-boost install -t cursor -y
 search-boost install -t codex,claude -y --auto-allow
 search-boost install -t grok -y --auto-allow   # plugin + config when grok CLI on PATH
 search-boost install -t antigravity --workspace --auto-allow -y
-search-boost install -t pi -y                  # pi extension shim → ~/.pi/agent/extensions/search-boost.js
+search-boost install -t pi -y                  # pi shim + searcher/summarizer + /fast-parallel /complex-parallel
 search-boost install -t dsh -y --profile web   # dsh plugin --profile web add … (needs dsh + pnpm)
 ```
 
@@ -180,7 +180,7 @@ search-boost config x --logout            # remove local copy
 | Claude Code | `~/.claude.json` | CLAUDE.md, skill, permissions |
 | Grok Build | `~/.grok/config.toml` | rule, skill, bundled [grok-plugin](./grok-plugin/) (when `grok` on PATH) |
 | Antigravity | `~/.gemini/config/mcp_config.json` | AGENTS.md, GEMINI.md, skill, optional workspace |
-| pi | — (in-process extension, [`adapters/pi`](./adapters/pi/)) | `~/.pi/agent/extensions/search-boost.js` shim |
+| pi | — (in-process extension, [`adapters/pi`](./adapters/pi/)) | `~/.pi/agent/extensions/search-boost.js` shim; `agents/` + `prompts/` (searcher, summarizer, `/fast-parallel`, `/complex-parallel`) |
 | DeepSeek Harness | — (in-process bundle, [`adapters/dsh`](./adapters/dsh/)) | `dsh plugin --profile <p> add` → profile `package.json` |
 
 Prompts use **model-discretion** wording (search when you choose — not forced every turn) for the MCP agents. pi and DSH keep the proactive "search-first" policies they shipped with ([`agents/pi/inject.md`](./agents/pi/inject.md), [`agents/dsh/policy.md`](./agents/dsh/policy.md)). See [`agents/`](./agents/) for per-agent templates.
@@ -192,7 +192,7 @@ Both hosts run the search tools **in-process** on the same core the MCP server u
 | | pi (`adapters/pi`) | DSH (`adapters/dsh`) |
 |---|---|---|
 | Load | `pi install npm:search-boost-mcp`, `pi -e adapters/pi/index.js`, or the shim written by `search-boost install -t pi` | `dsh plugin --profile web add search-boost-mcp` (auto-wires `adapters/dsh/cordis.patch.yml`; repoints built-in `web_search` / `web_fetch`) |
-| Tools | `fused_search` (+`site`/`min_score`/`depth`, up to 20 results), `fetch_page` (`max_chars`), `deep_research` (multi-round evidence loop, `auto`/`step`, `goal`), `research_parallel` (pi child processes), `x_search` | `fused_search`, `fetch_page`, `x_search`, `deep_research` (one round), `research_parallel` (DSH native subagents), `search_stats`; native citation cards |
+| Tools | `fused_search` (+`site`/`min_score`/`depth`, up to 20 results), `fetch_page` (`max_chars`), `deep_research` (one round), `search-parallel-subagent` (searcher/summarizer children; `/fast-parallel` `/complex-parallel`), `x_search` | `fused_search`, `fetch_page`, `x_search`, `deep_research` (one round), `research_parallel` (DSH native subagents), `search_stats`; native citation cards |
 | Commands | `/web_change`, `/x-login`, `/x-logout`, `/search-cache`, `/search-audit` | `/web_change`, `/x-login`, `/x-logout` |
 | Prompt | `<search_balance>` appended on `before_agent_start` + daily search budget note | `systemPrompt.section` `search:policy` (115) + live `search:status` (116) |
 | State | audit log `~/.pi/agent/search-boost-audit.jsonl`; legacy `~/.pi/agent/search-boost-layer.json` / `xsearch-auth.json` still read | — |

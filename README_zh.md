@@ -15,7 +15,7 @@
 
 > 原独立仓库 **pi-search-boost** 与 **dsh-search-boost** 已并入本仓库，退化为两个宿主适配层。搜索引擎、融合排序、正文抓取、X 搜索、深度研究**只在本仓库的核心维护一份**。
 
-**核心**（[`lib/search/`](./lib/search/)）：**free** 层并行调用 Bing、DuckDuckGo、Yahoo 与 Exa-free；**api** 层在此基础上增加**你已配置**的 Tavily / Brave / Exa（配一个 Key 即可运行；建议配齐三个以获得最佳融合）。此外还提供 X 搜索（xAI 托管工具 ∥ 多引擎，无凭据也可降级使用）、带 `focus` 的 Jina 正文抓取、单轮 `deep_research`，以及带 claim 级佐证的多轮证据研究循环。
+**核心**（[`lib/search/`](./lib/search/)）：**free** 层并行调用 Bing、DuckDuckGo、Yahoo 与 Exa-free；**api** 层在此基础上增加**你已配置**的 Tavily / Brave / Exa（配一个 Key 即可运行；建议配齐三个以获得最佳融合）。此外还提供 X 搜索（xAI 托管工具 ∥ 多引擎，无凭据也可降级使用）、带 `focus` 的 Jina 正文抓取，以及单轮 `deep_research`（由模型重复调用直到 gaps 为空）。
 
 English → [README.md](./README.md)
 
@@ -55,7 +55,7 @@ search-boost install -t cursor -y
 search-boost install -t codex,claude -y --auto-allow
 search-boost install -t grok -y --auto-allow   # grok CLI 在 PATH 时自动装插件 + 配置
 search-boost install -t antigravity --workspace --auto-allow -y
-search-boost install -t pi -y                  # 写入 pi 扩展 shim → ~/.pi/agent/extensions/search-boost.js
+search-boost install -t pi -y                  # pi shim + searcher/summarizer + /fast-parallel /complex-parallel
 search-boost install -t dsh -y --profile web   # 执行 dsh plugin --profile web add …（需要 dsh + pnpm）
 ```
 
@@ -180,7 +180,7 @@ search-boost config x --logout            # 删除本地副本
 | Claude Code | `~/.claude.json` | CLAUDE.md、skill、权限规则 |
 | Grok Build | `~/.grok/config.toml` | rule、skill、随包 [grok-plugin](./grok-plugin/)（`grok` 在 PATH 时自动安装） |
 | Antigravity | `~/.gemini/config/mcp_config.json` | AGENTS.md、GEMINI.md、skill，可选工作区配置 |
-| pi | —（进程内扩展，[`adapters/pi`](./adapters/pi/)） | `~/.pi/agent/extensions/search-boost.js` shim |
+| pi | —（进程内扩展，[`adapters/pi`](./adapters/pi/)） | `~/.pi/agent/extensions/search-boost.js` shim；`agents/` + `prompts/`（searcher、summarizer、`/fast-parallel`、`/complex-parallel`） |
 | DeepSeek Harness | —（进程内 bundle，[`adapters/dsh`](./adapters/dsh/)） | `dsh plugin --profile <p> add` → profile 的 `package.json` |
 
 MCP 各 Agent 的提示词设计是**让模型自己决定要不要搜**，不是每轮都强制联网；pi 与 DSH 沿用它们原有的"搜索优先"主动策略（[`agents/pi/inject.md`](./agents/pi/inject.md)、[`agents/dsh/policy.md`](./agents/dsh/policy.md)）。各 Agent 的模板在 [`agents/`](./agents/) 里。
@@ -192,7 +192,7 @@ MCP 各 Agent 的提示词设计是**让模型自己决定要不要搜**，不�
 | | pi（`adapters/pi`） | DSH（`adapters/dsh`） |
 |---|---|---|
 | 加载方式 | `pi install npm:search-boost-mcp`、`pi -e adapters/pi/index.js`，或 `search-boost install -t pi` 写入的 shim | `dsh plugin --profile web add search-boost-mcp`（自动应用 `adapters/dsh/cordis.patch.yml`，接管内置 `web_search` / `web_fetch`） |
-| 工具 | `fused_search`（含 `site`/`min_score`/`depth`，最多 20 条）、`fetch_page`（`max_chars`）、`deep_research`（多轮证据循环，`auto`/`step`、`goal`）、`research_parallel`（pi 子进程）、`x_search` | `fused_search`、`fetch_page`、`x_search`、`deep_research`（单轮）、`research_parallel`（DSH 原生 subagents）、`search_stats`；原生引用卡片 |
+| 工具 | `fused_search`（含 `site`/`min_score`/`depth`，最多 20 条）、`fetch_page`（`max_chars`）、`deep_research`（单轮）、`search-parallel-subagent`（searcher/summarizer 子进程；`/fast-parallel` `/complex-parallel`）、`x_search` | `fused_search`、`fetch_page`、`x_search`、`deep_research`（单轮）、`research_parallel`（DSH 原生 subagents）、`search_stats`；原生引用卡片 |
 | 命令 | `/web_change`、`/x-login`、`/x-logout`、`/search-cache`、`/search-audit` | `/web_change`、`/x-login`、`/x-logout` |
 | 提示词 | `before_agent_start` 追加 `<search_balance>` + 当日搜索预算 | `systemPrompt.section` `search:policy`（115）+ 动态 `search:status`（116） |
 | 状态 | 审计日志 `~/.pi/agent/search-boost-audit.jsonl`；旧的 `~/.pi/agent/search-boost-layer.json` / `xsearch-auth.json` 仍可读 | — |
