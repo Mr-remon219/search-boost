@@ -1,16 +1,16 @@
 # search-boost-mcp
 
-面向编程 Agent 的**多引擎联网搜索 MCP 服务**。安装 CLI 后即可接入 **Cursor**、**Cursor CLI**、**Codex**、**Claude Code**、**Grok Build** 和 **Antigravity**。
+面向编程 Agent 的**多引擎联网搜索 MCP 服务**。安装 CLI 后即可接入 **Cursor**、**Cursor CLI**、**Codex**、**Claude Code** 和 **Grok Build**。
 
 > **search-boost 系列**
 >
 > | 项目 | 用在哪 | 链接 |
 > |------|--------|------|
-> | [**search-boost**](https://github.com/Mr-remon219/search-boost)（本仓库） | Cursor · Codex · Claude · Grok · Antigravity | 当前仓库 |
+> | [**search-boost**](https://github.com/Mr-remon219/search-boost)（本仓库） | Cursor · Codex · Claude · Grok | 当前仓库 |
 > | [**dsh-search-boost**](https://github.com/Mr-remon219/dsh-search-boost) | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | [GitHub](https://github.com/Mr-remon219/dsh-search-boost) · [npm](https://www.npmjs.com/package/dsh-search-boost) |
 > | [**pi-search-boost**](https://github.com/Mr-remon219/pi-search-boost) | [pi](https://github.com/earendil-works/pi-coding-agent) | [GitHub](https://github.com/Mr-remon219/pi-search-boost) · [npm](https://www.npmjs.com/package/pi-search-boost) |
 
-底层搜索引擎**内置于 [`lib/search/`](./lib/search/)**（源自 [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)）：**free** 层并行调用 Bing、DuckDuckGo、Yahoo 与 Exa-free；**api** 层在此基础上增加 Antigravity CLI（本机可用时）以及**你已配置**的 Tavily / Brave / Exa（配一个 Key 即可运行；建议配齐三个以获得最佳融合）。此外还提供 X 搜索降级、Jina 正文抓取和深度研究多轮检索。
+底层搜索引擎**内置于 [`lib/search/`](./lib/search/)**（源自 [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)）：**free** 层并行调用 Bing、DuckDuckGo、Yahoo 与 Exa-free；**api** 层在此基础上增加**你已配置**的 Tavily / Brave / Exa（配一个 Key 即可运行；建议配齐三个以获得最佳融合）。此外还提供 X 搜索降级、Jina 正文抓取和深度研究多轮检索。
 
 English → [README.md](./README.md)
 
@@ -49,7 +49,6 @@ search-boost doctor
 search-boost install -t cursor -y
 search-boost install -t codex,claude -y --auto-allow
 search-boost install -t grok -y --auto-allow   # grok CLI 在 PATH 时自动装插件 + 配置
-search-boost install -t antigravity --workspace --auto-allow -y
 ```
 
 只想看看会改哪些文件、不真正写入：加 `--dry-run`。
@@ -75,7 +74,6 @@ search-boost status          # 安装态仪表盘（密钥、搜索层、各 Age
 | **Codex** | 会话中能看到 `mcp__search-boost__*` 工具 |
 | **Claude Code** | MCP 面板有 `search-boost`；若用了 `--auto-allow` 则无需每次审批 |
 | **Grok Build** | `grok mcp doctor search-boost` · `grok inspect` |
-| **Antigravity** | MCP 配置含 `search-boost`；安装后需重启 IDE |
 
 工具能列出但调用失败时，可在终端跑 `search-boost serve` 看启动报错。
 
@@ -83,10 +81,10 @@ search-boost status          # 安装态仪表盘（密钥、搜索层、各 Age
 
 | 参数 | 作用 |
 |------|------|
-| `-t`, `--target` | 指定 Agent（`cursor`、`codex`、`claude`、`grok`、`antigravity`、`cursor-cli`、`auto`、`all`） |
+| `-t`, `--target` | 指定 Agent（`cursor`、`codex`、`claude`、`grok`、`cursor-cli`、`auto`、`all`） |
 | `-y`, `--yes` | 非交互：跳过密钥/搜索层向导、默认 `--target=auto`，**同时隐含** `--auto-allow` 与 `--replace-native` |
 | 仅 `-t`、不加 `-y` | 对该目标非交互安装，**默认仍会替换内置搜索**，但**不会**自动加 `--auto-allow`；需要免审批请显式加上 |
-| `--auto-allow` | 在 Agent 配置里预批准 search-boost 的 MCP 工具（Cursor CLI 白名单、Codex 自动审批、Claude/Grok/Antigravity 权限规则），避免每轮都弹审批 |
+| `--auto-allow` | 在 Agent 配置里预批准 search-boost 的 MCP 工具（Cursor CLI 白名单、Codex 自动审批、Claude/Grok 权限规则），避免每轮都弹审批 |
 | `--replace-native` / `--keep-native` | 关闭或保留内置联网（Codex `web_search`、Claude `WebSearch`）。非交互安装时默认替换 |
 | `--scope user\|project\|all` | 仅 Grok：user（`~/.grok`）、project（cwd 下 `.grok/`），卸载时可选 both |
 | `--skip-grok-plugin` | 仅 Grok：跳过 bundled `grok plugin install`；仍会写入 config.toml、rule、skill |
@@ -121,11 +119,11 @@ search-boost uninstall -t cursor,codex,claude -y
 **两种搜索层**
 
 - **free**：Bing + DuckDuckGo + Yahoo + Exa-free，**无需 API Key**。
-- **api**：在 free 层基础上增加 Antigravity CLI（本机可用时）以及**任意已配置**的 Tavily / Brave / Exa（一个 Key 即可；建议配齐三个以获得最佳多引擎融合）
+- **api**：在 free 层基础上增加**任意已配置**的 Tavily / Brave / Exa（一个 Key 即可；建议配齐三个以获得最佳多引擎融合）
 
 配 Key：`search-boost config keys`，写到 `~/.search-boost/config/keys.json`（仍会读取 flat `~/.search-boost-keys.json` 与 legacy `~/.dsh-search-boost-keys.json`）；也可以设环境变量 `TAVILY_API_KEY`、`BRAVE_API_KEY`、`EXA_API_KEY`。可选路由：`enabledEngines: ["exa"]` 或 `"engines": { "brave": { "enabled": false } }`。
 
-**配置目录：** 运行时数据位于 `~/.search-boost/` — `config/`（keys、layer、xauth）、`cache/`（xguest token）、`state/`（Antigravity 工作区注册表）。首次写入时从 flat `~/.search-boost-*.json` 与 legacy `~/.dsh-*` 懒迁移（旧文件保留）。覆盖根目录：`SEARCH_BOOST_HOME`；单文件：`SEARCH_BOOST_*_FILE`。
+**配置目录：** 运行时数据位于 `~/.search-boost/` — `config/`（keys、layer、xauth）、`cache/`（xguest token）、`state/`（Cursor 安装状态）。首次写入时从 flat `~/.search-boost-*.json` 与 legacy `~/.dsh-*` 懒迁移（旧文件保留）。覆盖根目录：`SEARCH_BOOST_HOME`；单文件：`SEARCH_BOOST_*_FILE`。
 
 获取 Key：[Tavily](https://app.tavily.com/) · [Brave Search API](https://brave.com/search/api/) · [Exa](https://dashboard.exa.ai/)
 
@@ -156,7 +154,7 @@ search-boost config x --logout            # 删除本地副本
 | `search-boost print <agent>` | 只打印 MCP 配置片段，不改文件 |
 | `search-boost agents` | 列出 Agent（适合脚本读） |
 
-**安装时常用参数：** `-t` 指定 Agent · `-y` 非交互（隐含 `--auto-allow` 与 `--replace-native`）· `--dry-run` 预览 · `--auto-allow` 预批准 MCP 工具（见上表）· `--replace-native` / `--keep-native` · `--scope user|project|all`（Grok）· `--skip-grok-plugin`（Grok）· `--workspace`（Antigravity `.agents/`）
+**安装时常用参数：** `-t` 指定 Agent · `-y` 非交互（隐含 `--auto-allow` 与 `--replace-native`）· `--dry-run` 预览 · `--auto-allow` 预批准 MCP 工具（见上表）· `--replace-native` / `--keep-native` · `--scope user|project|all`（Grok）· `--skip-grok-plugin`（Grok）
 
 ---
 
@@ -169,15 +167,12 @@ search-boost config x --logout            # 删除本地副本
 | Codex CLI | `~/.codex/config.toml` | AGENTS.md、skill |
 | Claude Code | `~/.claude.json` | CLAUDE.md、skill、权限规则 |
 | Grok Build | `~/.grok/config.toml` | rule、skill、随包 [grok-plugin](./grok-plugin/)（`grok` 在 PATH 时自动安装） |
-| Antigravity | `~/.gemini/config/mcp_config.json` | AGENTS.md、GEMINI.md、skill，可选工作区配置 |
 
 提示词的设计是**让模型自己决定要不要搜**，不是每轮都强制联网。各 Agent 的模板在 [`agents/`](./agents/) 里。
 
-**和内置搜索的关系：** 非交互安装且使用 `--replace-native`（默认）时，Codex 会在 `config.toml` **顶层**写入带标记的 `web_search = "disabled"`（不会写进 `[mcp_servers.*]`）；Claude 会在 `settings.json` 写入带 ownership 标记的 `WebSearch` deny。卸载时只移除 search-boost 拥有的项，并在安全时恢复内置搜索。想保留内置搜索就加 `--keep-native`。Cursor、Antigravity 没有硬开关，靠 skill 和 hook 引导优先用 search-boost。Grok 自带的 browse **不会动**。
+**和内置搜索的关系：** 非交互安装且使用 `--replace-native`（默认）时，Codex 会在 `config.toml` **顶层**写入带标记的 `web_search = "disabled"`（不会写进 `[mcp_servers.*]`）；Claude 会在 `settings.json` 写入带 ownership 标记的 `WebSearch` deny。卸载时只移除 search-boost 拥有的项，并在安全时恢复内置搜索。想保留内置搜索就加 `--keep-native`。Cursor 没有硬开关，靠 skill 和 hook 引导优先用 search-boost。Grok 自带的 browse **不会动**。
 
 **Cursor + Cursor CLI：** 两个 target 共用一套 `~/.cursor/` 配置。`-t cursor,cursor-cli` 会把 IDE 与 CLI 提示词合并写入一次；卸载会清理整份共用 surface。
-
-**Antigravity + `agy` CLI：** 在 **api** 层且本机 PATH 有 `agy` 时，Antigravity CLI 引擎仅在 **medium** / **complex** 档位的 `fused_search` 中参与，简单查询不会走它；依赖本机登录与平台配额，超时约 45 秒。
 
 **Grok Build：** `search-boost install -t grok -y --auto-allow` 在 Grok CLI 位于 PATH 时会执行 `grok plugin install <bundled grok-plugin> --trust`，随后写入 `config.toml`、rule 与 skill。若 PATH 中没有 `grok`，插件步骤会跳过并给出警告，配置安装仍会继续。仅需 config/rule/skill 时加 `--skip-grok-plugin`。重复安装对 `[permission]` 块（带标记或 legacy）是幂等的；卸载只剥离 search-boost 拥有的 permission 行。若已设 `[ui] permission_mode = "always-approve"`，`--auto-allow` 会跳过注入 `[permission]`。插件 `.mcp.json` 使用可移植的 `npx`；`config.toml` 使用 `resolveMcpLaunch()`（源码开发时为本地 `node`）——两者可并存。手动装插件（进阶）：`grok plugin install ./grok-plugin --trust` → [grok-plugin/README.md](./grok-plugin/README.md)。
 
@@ -195,7 +190,6 @@ search-boost config x --logout            # 删除本地副本
 | 网络/代理问题 | Phase 2：`search-boost doctor --probe`（尚未实现） |
 | MCP 起不来 | `search-boost doctor` → `mcp_launch_command`、`node_version`；再跑 `search-boost serve` |
 | Grok 插件 MCP 起不来 | `grok mcp doctor search-boost`；确认 `npx` 与网络可用 |
-| Antigravity 的 `agy` 从不运行 | 需 **api** 层、PATH 中有 `agy`，且 `complexity` 为 medium/complex |
 | 超时 / 抓取失败 | 公司代理或防火墙可能拦截 Bing/DDG/Jina；本地跑 `search-boost serve` 看 stderr |
 
 ---

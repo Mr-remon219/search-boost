@@ -1,16 +1,16 @@
 # search-boost-mcp
 
-Multi-engine web search **MCP server** for coding agents. One CLI install wires it into **Cursor**, **Cursor CLI**, **Codex**, **Claude Code**, **Grok Build**, and **Antigravity**.
+Multi-engine web search **MCP server** for coding agents. One CLI install wires it into **Cursor**, **Cursor CLI**, **Codex**, **Claude Code**, and **Grok Build**.
 
 > **search-boost family**
 >
 > | Project | For | Link |
 > |---------|-----|------|
-> | [**search-boost**](https://github.com/Mr-remon219/search-boost) *(this repo)* | Cursor · Codex · Claude · Grok · Antigravity via MCP | you are here |
+> | [**search-boost**](https://github.com/Mr-remon219/search-boost) *(this repo)* | Cursor · Codex · Claude · Grok via MCP | you are here |
 > | [**dsh-search-boost**](https://github.com/Mr-remon219/dsh-search-boost) | [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle plugin | [GitHub](https://github.com/Mr-remon219/dsh-search-boost) · [npm](https://www.npmjs.com/package/dsh-search-boost) |
 > | [**pi-search-boost**](https://github.com/Mr-remon219/pi-search-boost) | [pi](https://github.com/earendil-works/pi-coding-agent) extension | [GitHub](https://github.com/Mr-remon219/pi-search-boost) · [npm](https://www.npmjs.com/package/pi-search-boost) |
 
-Search engines are **vendored in [`lib/search/`](./lib/search/)** (originally from [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)): on the **free** layer, Bing, DuckDuckGo, Yahoo, and Exa-free run in parallel; the **api** layer adds Antigravity CLI (when available) and **whichever keyed Tavily / Brave / Exa engines you configure** (one key is enough; all three recommended for best fusion). Also included: X/Twitter fallback, Jina page fetch, and deep-research rounds.
+Search engines are **vendored in [`lib/search/`](./lib/search/)** (originally from [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)): on the **free** layer, Bing, DuckDuckGo, Yahoo, and Exa-free run in parallel; the **api** layer adds **whichever keyed Tavily / Brave / Exa engines you configure** (one key is enough; all three recommended for best fusion). Also included: X/Twitter fallback, Jina page fetch, and deep-research rounds.
 
 中文文档 → [README_zh.md](./README_zh.md)
 
@@ -49,7 +49,6 @@ Restart each agent after reinstall. Config lazy-migrates from older flat `~/.sea
 search-boost install -t cursor -y
 search-boost install -t codex,claude -y --auto-allow
 search-boost install -t grok -y --auto-allow   # plugin + config when grok CLI on PATH
-search-boost install -t antigravity --workspace --auto-allow -y
 ```
 
 Preview without writing: `search-boost install --dry-run -y`
@@ -75,7 +74,6 @@ Then confirm in your agent:
 | **Codex** | `codex` session lists `mcp__search-boost__*` tools |
 | **Claude Code** | MCP panel shows `search-boost`; tools callable without deny prompt (if `--auto-allow`) |
 | **Grok Build** | `grok mcp doctor search-boost` · `grok inspect` |
-| **Antigravity** | MCP config includes `search-boost`; restart IDE after install |
 
 If tools appear but calls fail, run `search-boost serve` in a terminal to see startup errors.
 
@@ -83,10 +81,10 @@ If tools appear but calls fail, run `search-boost serve` in a terminal to see st
 
 | Flag | Effect |
 |------|--------|
-| `-t`, `--target` | Which agent(s) to wire (`cursor`, `codex`, `claude`, `grok`, `antigravity`, `cursor-cli`, `auto`, `all`) |
+| `-t`, `--target` | Which agent(s) to wire (`cursor`, `codex`, `claude`, `grok`, `cursor-cli`, `auto`, `all`) |
 | `-y`, `--yes` | Non-interactive: skips keys/layer wizard, uses `--target=auto`, **implies** `--auto-allow` and `--replace-native` |
 | `-t` **without** `-y` | Still non-interactive for that target and still **replaces native search by default** — but does **not** imply `--auto-allow`; add it explicitly if you want no permission prompts |
-| `--auto-allow` | Pre-approve search-boost MCP tools in agent config (Cursor CLI allowlist, Codex `default_tools_approval_mode`, Claude/Grok/Antigravity permission rules) so the agent does not prompt every session |
+| `--auto-allow` | Pre-approve search-boost MCP tools in agent config (Cursor CLI allowlist, Codex `default_tools_approval_mode`, Claude/Grok permission rules) so the agent does not prompt every session |
 | `--replace-native` / `--keep-native` | Disable or keep built-in web search where the agent supports a switch (Codex `web_search`, Claude `WebSearch`). Default is replace when non-interactive |
 | `--scope user\|project\|all` | Grok only: user (`~/.grok`), project (`.grok/` in cwd), or both on uninstall |
 | `--skip-grok-plugin` | Grok only: skip bundled `grok plugin install`; still writes config.toml, rule, and skill |
@@ -121,11 +119,11 @@ Also: resource `search-boost://policy` · prompt `search_routing`
 **Layers**
 
 - **free** — Bing + DuckDuckGo + Yahoo + Exa-free; no API keys.
-- **api** — free-layer engines plus Antigravity CLI (when available) and **any** of Tavily / Brave / Exa that you configure (one key works; all three recommended for best cross-engine fusion)
+- **api** — free-layer engines plus **any** of Tavily / Brave / Exa that you configure (one key works; all three recommended for best cross-engine fusion)
 
 Keys: `search-boost config keys` → `~/.search-boost/config/keys.json` (flat `~/.search-boost-keys.json` and legacy `~/.dsh-search-boost-keys.json` still read; or env `TAVILY_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`). Optional routing: `enabledEngines: ["exa"]` or `"engines": { "brave": { "enabled": false } }` in the keys file.
 
-**Config layout:** runtime data lives under `~/.search-boost/` — `config/` (keys, layer, xauth), `cache/` (xguest token), `state/` (Antigravity workspace registry). First write lazy-migrates from flat `~/.search-boost-*.json` and legacy `~/.dsh-*` files (old copies kept). Override base: `SEARCH_BOOST_HOME`; per-file: `SEARCH_BOOST_*_FILE`.
+**Config layout:** runtime data lives under `~/.search-boost/` — `config/` (keys, layer, xauth), `cache/` (xguest token), `state/` (Cursor install state). First write lazy-migrates from flat `~/.search-boost-*.json` and legacy `~/.dsh-*` files (old copies kept). Override base: `SEARCH_BOOST_HOME`; per-file: `SEARCH_BOOST_*_FILE`.
 
 Obtain keys: [Tavily](https://app.tavily.com/) · [Brave Search API](https://brave.com/search/api/) · [Exa](https://dashboard.exa.ai/)
 
@@ -156,7 +154,7 @@ search-boost config x --logout            # remove local copy
 | `search-boost print <agent>` | Print MCP snippet without writing |
 | `search-boost agents` | Machine-readable agent list |
 
-**Install flags:** `-t cursor,codex,…|auto|all` · `-y` (non-interactive; implies `--auto-allow` + `--replace-native`) · `--dry-run` · `--auto-allow` (pre-approve MCP tools — see table above) · `--replace-native` / `--keep-native` · `--scope user|project|all` (Grok) · `--skip-grok-plugin` (Grok) · `--workspace` (Antigravity `.agents/`)
+**Install flags:** `-t cursor,codex,…|auto|all` · `-y` (non-interactive; implies `--auto-allow` + `--replace-native`) · `--dry-run` · `--auto-allow` (pre-approve MCP tools — see table above) · `--replace-native` / `--keep-native` · `--scope user|project|all` (Grok) · `--skip-grok-plugin` (Grok)
 
 ---
 
@@ -169,15 +167,12 @@ search-boost config x --logout            # remove local copy
 | Codex CLI | `~/.codex/config.toml` | AGENTS.md, skill |
 | Claude Code | `~/.claude.json` | CLAUDE.md, skill, permissions |
 | Grok Build | `~/.grok/config.toml` | rule, skill, bundled [grok-plugin](./grok-plugin/) (when `grok` on PATH) |
-| Antigravity | `~/.gemini/config/mcp_config.json` | AGENTS.md, GEMINI.md, skill, optional workspace |
 
 Prompts use **model-discretion** wording (search when you choose — not forced every turn). See [`agents/`](./agents/) for per-agent templates.
 
-**Native web search:** With `--replace-native` (default when non-interactive), Codex gets a marked top-level `web_search = "disabled"` in `config.toml` (never inside `[mcp_servers.*]`); Claude gets an ownership-marked `WebSearch` deny in `settings.json`. Uninstall removes only search-boost-owned entries and restores native search when safe. Cursor / Antigravity rely on skill + hook preference only. Grok native browse is left on.
+**Native web search:** With `--replace-native` (default when non-interactive), Codex gets a marked top-level `web_search = "disabled"` in `config.toml` (never inside `[mcp_servers.*]`); Claude gets an ownership-marked `WebSearch` deny in `settings.json`. Uninstall removes only search-boost-owned entries and restores native search when safe. Cursor relies on skill + hook preference only. Grok native browse is left on.
 
 **Cursor + Cursor CLI:** Both targets share one `~/.cursor/` surface. Installing `-t cursor,cursor-cli` merges IDE + CLI prompts into a single write; uninstall clears the shared surface.
-
-**Antigravity + `agy` CLI:** On the **api** layer, the optional Antigravity CLI engine (`agy` on PATH) joins **medium** and **complex** `fused_search` tiers only — not simple lookups. It depends on local sign-in and platform quota; timeouts are ~45s.
 
 **Grok Build:** `search-boost install -t grok -y --auto-allow` runs `grok plugin install <bundled grok-plugin> --trust` when the Grok CLI is on PATH, then writes `config.toml`, rule, and skill. If `grok` is not on PATH, the plugin step is skipped with a warning and the config install still proceeds. Use `--skip-grok-plugin` for config/rule/skill only. Re-install is idempotent for `[permission]` blocks (marked or legacy); uninstall strips search-boost-owned permission lines. If `[ui] permission_mode = "always-approve"`, `--auto-allow` skips injecting `[permission]`. The plugin's `.mcp.json` uses portable `npx`; `config.toml` uses `resolveMcpLaunch()` (local `node` when developing from a clone) — both can coexist. Manual plugin install: `grok plugin install ./grok-plugin --trust` (advanced) → [grok-plugin/README.md](./grok-plugin/README.md).
 
@@ -196,7 +191,6 @@ Prompts use **model-discretion** wording (search when you choose — not forced 
 | MCP won't start | `search-boost doctor` → `mcp_launch_command`, `node_version`; then `search-boost serve` |
 | Grok plugin MCP won't start | `grok mcp doctor search-boost`; ensure `npx` and network access work |
 | `grok` fails on config.toml parse | Duplicate `[permission]` — run `search-boost install -t grok -y --auto-allow` |
-| Antigravity `agy` never runs | Requires **api** layer, `agy` on PATH, and `complexity` medium/complex — not simple |
 | Timeouts / fetch errors | Corporate proxy or firewall may block Bing/DDG/Jina; try `search-boost serve` locally to read stderr |
 
 ---

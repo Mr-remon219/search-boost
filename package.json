@@ -1,7 +1,7 @@
 {
   "name": "search-boost-mcp",
   "version": "0.1.7",
-  "description": "Multi-engine web search MCP for Cursor, Codex, Claude Code, Grok Build, and Antigravity — fused search, fetch, X, deep research",
+  "description": "Multi-engine web search MCP for Cursor, Codex, Claude Code, and Grok Build — fused search, fetch, X, deep research",
   "type": "module",
   "bin": {
     "search-boost": "./cli.mjs",
@@ -27,7 +27,6 @@
     "test:install": "node scripts/test-install.mjs",
     "test:doctor": "node scripts/test-doctor.mjs",
     "plugin:sync-grok": "node scripts/sync-grok-plugin.mjs",
-    "build:plugin": "node scripts/build-plugin.mjs",
     "check": "node scripts/check-syntax.mjs",
     "test:fusion": "node scripts/test-fusion-errors.mjs",
     "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:install && npm run test:doctor && npm run test:fusion && npm run smoke"
@@ -47,7 +46,6 @@
     "codex",
     "claude-code",
     "grok",
-    "antigravity",
     "web-search",
     "search-boost"
   ],

@@ -42,7 +42,6 @@ lib/search/                          (vendored; independent MCP runtime)
 | 搜索层 | `~/.search-boost-layer.json` | `~/.dsh-search-boost-layer.json` |
 | X 凭据 | `~/.search-boost-xauth.json` | `~/.dsh-search-boost-xauth.json` |
 | X guest 缓存 | `~/.search-boost-xguest.json` | `~/.dsh-search-boost-xguest.json` |
-| Antigravity workspace 标记 | `~/.search-boost-antigravity-workspaces.json` | — |
 
 环境变量：`SEARCH_BOOST_KEYS_FILE`、`SEARCH_BOOST_LAYER_FILE`（可选覆盖文件路径）。
 
@@ -65,7 +64,7 @@ Layer 默认读 `~/.search-boost-layer.json`（旧 `~/.dsh-search-boost-layer.js
 | | search-boost-mcp (lib/search) | pi |
 |--|-------------------------------|-----|
 | free 层 | bing+ddg+yahoo+exa-free | exa-free 单引擎 |
-| api 层 | +antigravity+tavily+brave+exa | tavily+brave+exa |
+| api 层 | +tavily+brave+exa | tavily+brave+exa |
 | audit | search_stats 简版 | JSONL 完整 audit |
 
 Phase 2：可选从 pi lib 合并 Tavily advanced 全文、CJK 分词。
