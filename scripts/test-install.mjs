@@ -63,6 +63,8 @@ import {
   hooksConfigPath,
   hookScriptPath,
   mcpServerInstructionsPath,
+  piSubagentTemplatePaths,
+  piWorkflowPromptPaths,
   promptPath,
   ROUTE_IDS,
   rulePath,
@@ -565,6 +567,12 @@ assert('parseFlags --enable', parseFlags(['--enable', 'brave']).enable[0] === 'b
 for (const id of ROUTE_IDS) {
   assert(`route ${id} prompt exists`, promptPath(id).includes(getRoute(id).dir))
 }
+assert(
+  'pi route lists subagent + workflow templates',
+  getRoute('pi').subagentTemplates?.length === 2 && getRoute('pi').workflowPrompts?.length === 2,
+)
+assert('pi subagent templates on disk', piSubagentTemplatePaths().every((p) => existsSync(p) && readFileSync(p, 'utf8').includes('search-boost: owned')))
+assert('pi workflow prompts on disk', piWorkflowPromptPaths().every((p) => existsSync(p) && readFileSync(p, 'utf8').includes('search-boost: owned')))
 const cursorPrompt = await loadAgentPrompt('cursor')
 assert(
   'load cursor inject',

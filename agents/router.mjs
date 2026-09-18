@@ -9,6 +9,8 @@
  *   rule.md                → workspace Always-on rule body (antigravity)
  *   gemini-snippet.md      → GEMINI.md override snippet (antigravity)
  *   hooks/                 → PreInvocation hook (antigravity)
+ *   agents/*.md            → pi subagent templates (install → ~/.pi/agent/agents)
+ *   prompts/*.md           → pi slash-prompt templates (install → ~/.pi/agent/prompts)
  *
  * The stdio server's own instructions are agent-neutral and live in
  * agents/shared/server-instructions.md — one server process serves every agent.
@@ -46,6 +48,8 @@ export const SHARED_SERVER_INSTRUCTIONS = join(AGENTS_ROOT, 'shared', 'server-in
  * @property {string[]|null} mergeWith Other agent ids merged into this prompt on install
  * @property {{ serverUseInstructions?: string }|null} mcp MCP entry extras
  * @property {SkillFrontmatter|null} skillFrontmatter Optional SKILL.md frontmatter overrides
+ * @property {string[]|null} subagentTemplates Relative md paths under agents/<dir>/ (pi)
+ * @property {string[]|null} workflowPrompts Relative slash-prompt md paths under agents/<dir>/ (pi)
  */
 
 /** @type {Record<string, AgentRoute>} */
@@ -146,6 +150,8 @@ export const ROUTES = {
     skill: null,
     mergeWith: null,
     mcp: null,
+    subagentTemplates: ['agents/searcher.md', 'agents/summarizer.md'],
+    workflowPrompts: ['prompts/fast-parallel.md', 'prompts/complex-parallel.md'],
   },
   dsh: {
     label: 'DeepSeek Harness (bundle plugin)',
@@ -234,6 +240,21 @@ export function hookScriptPath(id) {
   const route = getRoute(id)
   if (!route.hookScript) return null
   return assetPath(id, route.hookScript)
+}
+
+/** @param {string} id @param {'subagentTemplates'|'workflowPrompts'} field */
+export function assetList(id, field) {
+  const list = getRoute(id)[field]
+  if (!Array.isArray(list)) return []
+  return list.map((filename) => assetPath(id, filename))
+}
+
+export function piSubagentTemplatePaths() {
+  return assetList('pi', 'subagentTemplates')
+}
+
+export function piWorkflowPromptPaths() {
+  return assetList('pi', 'workflowPrompts')
 }
 
 export const CURSOR_HOOK_SCRIPT_NAME = 'search-boost-session.mjs'
