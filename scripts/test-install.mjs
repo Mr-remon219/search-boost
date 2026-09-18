@@ -8,10 +8,12 @@ import {
 } from '../lib/codex-toml.mjs'
 import {
   injectBlock,
+  injectGeminiBlock,
   injectTomlSection,
   MARKER_END,
   MARKER_START,
   removeBlock,
+  removeGeminiBlock,
   removeMarked,
   removeTomlSection as removeMarkedToml,
 } from '../lib/inject.mjs'
@@ -34,6 +36,8 @@ import {
 } from '../lib/native-search.mjs'
 import { installCursorSurface } from '../lib/agents/cursor-family.mjs'
 import {
+  antigravityMcpEntry,
+  antigravityPermissions,
   claudePermissions,
   grokPermissionAllows,
   formatPrintConfig,
@@ -45,17 +49,23 @@ import {
 } from '../lib/mcp-entry.mjs'
 import {
   buildSkillHeader,
+  HOOK_ENTRY_KEY,
+  injectAntigravityRule,
   injectSkill,
+  installAntigravityHook,
   isOwnedSearchBoostSkill,
   loadAgentPrompt,
   loadAgentSkill,
 } from '../lib/agents/shared.mjs'
 import {
+  geminiSnippetPath,
   getRoute,
+  hooksConfigPath,
   hookScriptPath,
   mcpServerInstructionsPath,
   promptPath,
   ROUTE_IDS,
+  rulePath,
   SHARED_SERVER_INSTRUCTIONS,
   skillPath,
 } from '../agents/router.mjs'
@@ -68,6 +78,7 @@ import {
   grokUninstallScopes,
   MCP_SERVER_ID,
   PATHS,
+  workspaceAgents,
 } from '../lib/paths.mjs'
 import {
   countPermissionSections,
@@ -85,9 +96,15 @@ import {
   uninstallGrokPlugin,
 } from '../lib/grok-plugin.mjs'
 import { PKG_ROOT } from '../lib/pkg.mjs'
+import { readJsonFile, writeJsonFile } from '../lib/json-config.mjs'
 import { maskKey, readKeysFile, readKeysFromCandidates, writeKeysFile, envKeyHint, resetLegacyKeysMigrationNotice, RECOMMEND_ALL_KEYED_ENGINES, readKeysRouting, readEngineRouting, setEnabledEngines } from '../lib/keys.mjs'
 import { engineRegistry } from '../lib/search/engines.js'
 import { readFirstExistingJson, resetConfigMigrationNotices, prepareConfigWrite } from '../lib/config-paths.mjs'
+import {
+  forgetAntigravityWorkspace,
+  listAntigravityWorkspaces,
+  recordAntigravityWorkspace,
+} from '../lib/workspace-marker.mjs'
 import { getLayer, setLayer, shouldPersistDefaultLayer } from '../lib/layer-config.mjs'
 import { formatKeyStatusLines } from '../lib/installer/keys-wizard.mjs'
 import { layerApiNoKeysWarning } from '../lib/installer/status.mjs'
@@ -102,6 +119,7 @@ import {
   mergeCliPermissionAllow,
   removeCliPermissionAllow,
 } from '../lib/cli-config.mjs'
+import { stripSearchBoostPermissions } from '../lib/antigravity-settings.mjs'
 import { countSearchBoostAllowEntries, isSearchBoostAllow } from '../lib/claude-settings.mjs'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -263,6 +281,14 @@ assert('remove block', !md.includes('SEARCH_BOOST_START'))
 const broken = `${MARKER_START}\nbody\n<!-- user edited away end -->`
 assert('removeMarked strips when end missing', !removeMarked(broken, MARKER_START, MARKER_END).includes('SEARCH_BOOST_START'))
 
+// GEMINI block round-trip
+let gem = injectGeminiBlock('', '## search routing')
+assert('inject gemini empty', gem.includes('SEARCH_BOOST_GEMINI_START'))
+gem = injectGeminiBlock(gem, '## search routing\nupdated')
+assert('inject gemini replace', gem.includes('updated'))
+gem = removeGeminiBlock(gem)
+assert('remove gemini block', !gem.includes('SEARCH_BOOST_GEMINI_START'))
+
 // normalize targets
 const n1 = normalizeTargets(['cursor', 'cursor-cli', 'codex'])
 assert('merge cursor family', n1.mergeCursorCli && n1.targets.join() === 'cursor,codex')
@@ -316,14 +342,49 @@ assert('mcp launch prefers bin or node cli over npx', launch.command !== 'npx' &
 const plugin = pluginMcpEntry()
 assert('plugin mcp entry is npx', plugin.command === 'npx' && plugin.args?.includes('-y') && plugin.args?.includes('search-boost-mcp'))
 assert('plugin mcp entry no abs paths', !/[A-Za-z]:[/\\]/.test(JSON.stringify(plugin)))
+const agy = antigravityMcpEntry()
+assert('antigravity omits type', !('type' in agy) && agy.command && agy.args?.length)
 
-// skill inject (temp dir)
+// antigravity permissions
+const agyPerms = antigravityPermissions()
+assert('antigravity permissions wildcard', agyPerms.includes('mcp(search-boost/*)'))
+
+// workspace paths
+const ws = workspaceAgents('/tmp/myproject')
+assert('workspace mcp path', ws.mcp.endsWith('.agents/mcp_config.json') || ws.mcp.includes('.agents\\mcp_config.json'))
+assert('workspace rule path', ws.rule.includes('search-boost.md'))
+
+// antigravity route assets
+const agyRoute = getRoute('antigravity')
+assert('antigravity has rule template', agyRoute.rule === 'rule.md' && rulePath('antigravity').includes('rule.md'))
+assert('antigravity has gemini snippet', agyRoute.geminiSnippet && geminiSnippetPath('antigravity'))
+assert('antigravity has hooks', agyRoute.hooks && hooksConfigPath('antigravity'))
+assert('antigravity skill description', (agyRoute.skillFrontmatter?.description ?? '').length > 20)
+
+// skill + rule inject (temp dir)
 const tempRoot = join(tmpdir(), `search-boost-install-test-${process.pid}`)
 await mkdir(tempRoot, { recursive: true })
 const skillFile = join(tempRoot, 'SKILL.md')
-await injectSkill('cursor', skillFile)
+const ruleFile = join(tempRoot, 'search-boost.md')
+await injectSkill('antigravity', skillFile)
 const skillText = await readFile(skillFile, 'utf8')
-assert('cursor skill has description', skillText.includes('description:') && skillText.includes('fused_search'))
+assert('antigravity skill has description', skillText.includes('description:') && skillText.includes('search_web'))
+await injectAntigravityRule(ruleFile)
+const ruleText = await readFile(ruleFile, 'utf8')
+assert('antigravity rule always_on', ruleText.includes('trigger: always_on'))
+
+// hooks.json merge preserves other entries
+const hooksFile = join(tempRoot, 'hooks.json')
+await writeJsonFile(hooksFile, {
+  'user-hook': { PreToolUse: [{ matcher: 'run_command', hooks: [{ command: './x.sh' }] }] },
+})
+const incoming = await readJsonFile(hooksConfigPath('antigravity'), {})
+const merged = await readJsonFile(hooksFile, {})
+merged[HOOK_ENTRY_KEY] = incoming[HOOK_ENTRY_KEY]
+await writeJsonFile(hooksFile, merged)
+const afterMerge = await readJsonFile(hooksFile, {})
+assert('hooks merge keeps user-hook', !!afterMerge['user-hook'])
+assert('hooks merge adds search-boost', !!afterMerge[HOOK_ENTRY_KEY])
 await rm(tempRoot, { recursive: true, force: true })
 
 // keys + layer round-trip (isolated temp files)
@@ -757,6 +818,9 @@ if (grokCliAvailable()) {
 // shared instructions cover per-agent routing notes
 assert('mcp instructions mention grok', readFileSync(mcpServerInstructionsPath(), 'utf8').includes('Grok Build'))
 
+const agyPrompt = await loadAgentPrompt('antigravity')
+assert('load antigravity inject mentions search_web', agyPrompt.includes('search_web'))
+
 // hooks-config round-trip
 const hooksDir = mkdtempSync(join(tmpdir(), 'sb-hooks-'))
 const hooksPath = join(hooksDir, 'hooks.json')
@@ -841,13 +905,70 @@ rmSync(cliDir, { recursive: true, force: true })
   }
 }
 
-// agent install adapters (dry-run — catches missing imports on codex/claude paths)
+// antigravity workspace marker round-trip
+process.env.SEARCH_BOOST_WORKSPACES_FILE = join(tmpdir(), `search-boost-workspaces-${process.pid}.json`)
+await recordAntigravityWorkspace('/tmp/project-a', false)
+await recordAntigravityWorkspace('/tmp/project-b', false)
+assert('workspace marker records', (await listAntigravityWorkspaces()).length === 2)
+await forgetAntigravityWorkspace('/tmp/project-a', false)
+assert('workspace marker forgets', (await listAntigravityWorkspaces()).length === 1)
+delete process.env.SEARCH_BOOST_WORKSPACES_FILE
+
+// antigravity workspace hook enables on install
+const agyHookDir = mkdtempSync(join(tmpdir(), 'sb-agy-hook-'))
+await installAntigravityHook(agyHookDir, false)
+const agyHooks = JSON.parse(readFileSync(join(agyHookDir, '.agents', 'hooks.json'), 'utf8'))
+assert('antigravity hook enabled on install', agyHooks[HOOK_ENTRY_KEY]?.enabled === true)
+rmSync(agyHookDir, { recursive: true, force: true })
+
+// agent install adapters (dry-run 鈥?catches missing imports on codex/claude paths)
 await AGENTS.codex.install({ dryRun: true, autoAllow: false, replaceNative: true })
 await AGENTS.claude.install({ dryRun: true, autoAllow: false, replaceNative: true })
 assert('codex install dry-run', true)
 assert('claude install dry-run', true)
 
-// Codex install/uninstall integration (subprocess — PATHS binds at import time)
+// antigravity-settings strip helper
+{
+  const stripped = stripSearchBoostPermissions({
+    permissions: { allow: ['Shell(git)', 'mcp(search-boost/*)', 'mcp(other)'] },
+  })
+  assert(
+    'stripSearchBoostPermissions removes ours',
+    stripped.permissions.allow.join() === 'Shell(git),mcp(other)',
+  )
+  const pruned = stripSearchBoostPermissions({ permissions: { allow: ['mcp(search-boost/*)'] } })
+  assert('stripSearchBoostPermissions prunes empty', !pruned.permissions)
+}
+
+// antigravity install/uninstall integration (isolated temp HOME via subprocess)
+function runInTempHome(script) {
+  const home = mkdtempSync(join(tmpdir(), `sb-agy-home-${process.pid}-`))
+  try {
+    execFileSync(
+      process.execPath,
+      ['--input-type=module', '-e', script],
+      {
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          HOME: home,
+          USERPROFILE: home,
+          SEARCH_BOOST_WORKSPACES_FILE: join(home, '.search-boost-antigravity-workspaces.json'),
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    )
+    return true
+  } catch (err) {
+    const stderr = err && typeof err === 'object' && 'stderr' in err ? String(err.stderr) : String(err)
+    console.error(stderr)
+    return false
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// Codex install/uninstall integration (subprocess 鈥?PATHS binds at import time)
 function runCodexIntegrationScenario(scenario) {
   const home = mkdtempSync(join(tmpdir(), `sb-codex-int-${process.pid}-`))
   try {
@@ -867,6 +988,115 @@ function runCodexIntegrationScenario(scenario) {
     rmSync(home, { recursive: true, force: true })
   }
 }
+
+assert('agy install+uninstall round-trip subprocess', runInTempHome(`
+  import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+  import { join } from 'node:path'
+  import { AGENTS } from './lib/agents/index.mjs'
+  import { PATHS, antigravityMcpPaths, preferredAntigravityMcpPath } from './lib/paths.mjs'
+  import { antigravityPermissions } from './lib/mcp-entry.mjs'
+  import { HOOK_ENTRY_KEY } from './lib/agents/shared.mjs'
+
+  const home = process.env.HOME
+  mkdirSync(join(home, '.gemini', 'config'), { recursive: true })
+  mkdirSync(join(home, '.gemini', 'antigravity'), { recursive: true })
+  mkdirSync(join(home, '.gemini', 'antigravity-cli'), { recursive: true })
+
+  const preferredMcp = preferredAntigravityMcpPath()
+  const legacyMcp = preferredMcp === PATHS.antigravity.mcp
+    ? PATHS.antigravity.legacyMcp
+    : PATHS.antigravity.mcp
+  const mcpBody = JSON.stringify({ mcpServers: { 'search-boost': { command: 'node', args: ['serve'] } } })
+  writeFileSync(preferredMcp, mcpBody + '\\n', 'utf8')
+  writeFileSync(legacyMcp, mcpBody + '\\n', 'utf8')
+  writeFileSync(
+    PATHS.antigravity.settingsCli,
+    JSON.stringify({ permissions: { allow: ['Shell(git)', ...antigravityPermissions()] } }) + '\\n',
+    'utf8',
+  )
+
+  const wsRoot = join(home, 'project')
+  mkdirSync(join(wsRoot, '.agents'), { recursive: true })
+  writeFileSync(
+    join(wsRoot, '.agents', 'hooks.json'),
+    JSON.stringify({
+      'user-hook': { PreToolUse: [{ matcher: 'run_command', hooks: [{ command: './x.sh' }] }] },
+    }) + '\\n',
+    'utf8',
+  )
+
+  const keysPath = join(home, '.search-boost-keys.json')
+  const layerPath = join(home, '.search-boost-layer.json')
+  writeFileSync(keysPath, JSON.stringify({ tavily: 'tvly-bootstrap-key-12345678' }) + '\\n', 'utf8')
+  writeFileSync(layerPath, JSON.stringify({ layer: 'api' }) + '\\n', 'utf8')
+
+  await AGENTS.antigravity.install({ dryRun: false, autoAllow: true, workspace: wsRoot })
+
+  const checks = []
+  checks.push(['dual mcp preferred', existsSync(preferredMcp)])
+  checks.push(['permissions', readFileSync(PATHS.antigravity.settingsCli, 'utf8').includes('mcp(search-boost')])
+  checks.push(['AGENTS inject', readFileSync(PATHS.antigravity.agents, 'utf8').includes('SEARCH_BOOST_START')])
+  checks.push(['GEMINI inject', readFileSync(PATHS.antigravity.gemini, 'utf8').includes('SEARCH_BOOST_GEMINI_START')])
+  checks.push(['skill', existsSync(PATHS.antigravity.skill)])
+  checks.push(['workspace skill', existsSync(join(wsRoot, '.agents', 'skills', 'search-boost', 'SKILL.md'))])
+  checks.push(['workspace hook', existsSync(join(wsRoot, '.agents', 'hooks', 'search-boost-pre-invocation.mjs'))])
+
+  await AGENTS.antigravity.uninstall({ dryRun: false, workspace: wsRoot })
+
+  for (const mcpPath of antigravityMcpPaths()) {
+    if (!existsSync(mcpPath)) {
+      checks.push([\`mcp clean \${mcpPath}\`, true])
+      continue
+    }
+    const cfg = JSON.parse(readFileSync(mcpPath, 'utf8'))
+    checks.push([\`mcp clean \${mcpPath}\`, !cfg.mcpServers?.['search-boost']])
+  }
+  const settingsAfter = JSON.parse(readFileSync(PATHS.antigravity.settingsCli, 'utf8'))
+  checks.push(['strip perms', !settingsAfter.permissions?.allow?.some((p) => p.startsWith('mcp(search-boost'))])
+  checks.push(['keep other perms', settingsAfter.permissions?.allow?.includes('Shell(git)')])
+  checks.push(['remove AGENTS inject', !existsSync(PATHS.antigravity.agents) || !readFileSync(PATHS.antigravity.agents, 'utf8').includes('SEARCH_BOOST_START')])
+  checks.push(['remove GEMINI inject', !existsSync(PATHS.antigravity.gemini) || !readFileSync(PATHS.antigravity.gemini, 'utf8').includes('SEARCH_BOOST_GEMINI_START')])
+  checks.push(['remove skill', !existsSync(PATHS.antigravity.skill)])
+  checks.push(['remove workspace skill', !existsSync(join(wsRoot, '.agents', 'skills', 'search-boost', 'SKILL.md'))])
+  checks.push(['remove hook script', !existsSync(join(wsRoot, '.agents', 'hooks', 'search-boost-pre-invocation.mjs'))])
+  const hooksAfter = JSON.parse(readFileSync(join(wsRoot, '.agents', 'hooks.json'), 'utf8'))
+  checks.push(['preserve user-hook', !!hooksAfter['user-hook']])
+  checks.push(['remove hook entry', !hooksAfter[HOOK_ENTRY_KEY]])
+  checks.push(['keys preserved', readFileSync(keysPath, 'utf8').includes('tvly-bootstrap-key-12345678')])
+  checks.push(['layer preserved', readFileSync(layerPath, 'utf8').includes('"api"')])
+
+  const failed = checks.filter(([, ok]) => !ok).map(([name]) => name)
+  if (failed.length) {
+    console.error('FAIL subprocess checks:', failed.join(', '))
+    process.exit(1)
+  }
+  console.log('SUBPROCESS_OK')
+`))
+
+assert('agy uninstall no orphan AGENTS/GEMINI when never existed', runInTempHome(`
+  import { mkdirSync, writeFileSync, existsSync } from 'node:fs'
+  import { join } from 'node:path'
+  import { AGENTS } from './lib/agents/index.mjs'
+  import { PATHS, preferredAntigravityMcpPath } from './lib/paths.mjs'
+
+  const home = process.env.HOME
+  mkdirSync(join(home, '.gemini', 'config'), { recursive: true })
+  mkdirSync(join(home, '.gemini', 'antigravity'), { recursive: true })
+  writeFileSync(preferredAntigravityMcpPath(), JSON.stringify({ mcpServers: {} }) + '\\n', 'utf8')
+
+  if (existsSync(PATHS.antigravity.agents) || existsSync(PATHS.antigravity.gemini)) {
+    console.error('FAIL orphan pre-check')
+    process.exit(1)
+  }
+
+  await AGENTS.antigravity.uninstall({ dryRun: false })
+
+  if (existsSync(PATHS.antigravity.agents) || existsSync(PATHS.antigravity.gemini)) {
+    console.error('FAIL orphan post-check')
+    process.exit(1)
+  }
+  console.log('SUBPROCESS_OK')
+`))
 
 for (const scenario of ['round-trip', 'keep-native', 'mcp-migration', 'foreign-skill', 'empty-config', 'write-unlink']) {
   runCodexIntegrationScenario(scenario)
