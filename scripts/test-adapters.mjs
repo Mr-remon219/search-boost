@@ -302,6 +302,16 @@ assert('excerptForTool truncates at boundary', excerptForTool('a\n\n'.repeat(200
   assert('pre decodes entities inside a backtick span', preTemplateOut.includes('`<div>`') && !preTemplateOut.includes('&lt;'))
   assert('pre leaks no code placeholder', !preTemplateOut.includes('SBCODE'))
 
+  // A markdown document that *shows* HTML in an indented example must stay markdown:
+  // sniffing it as HTML stripped the example as if it were page chrome.
+  const mdHtmlExample = '# HTML example\n\n    <html>\n    <body>\n    <script>alert("keep me")</script>\n    </body>\n    </html>\n\nEnd.\n'
+  assert('looksLikeHtml ignores HTML shown in an indented markdown example', !looksLikeHtml(mdHtmlExample))
+  assert('indented HTML example survives preprocessing', preprocessPage(mdHtmlExample, base).includes('alert("keep me")'))
+
+  // A caller that already knows the format must override sniffing — in both directions.
+  assert('explicit markdown format skips HTML conversion', preprocessPage('<!doctype html>\n    <script>keep()</script>\n', base, { format: 'markdown' }).includes('keep()'))
+  assert('explicit html format still drops indented script chrome', !preprocessPage(htmlIndentedScript, base, { format: 'html' }).includes('evil()'))
+
   const long = 'word '.repeat(20_000)
   const shaped = toFetchPageResult('https://example.com/doc', 'jina', long, undefined, false, Date.now())
   assert('fetch result is not clipped', shaped.content === long && shaped.truncated === false && shaped.word_count > 10_000)
