@@ -26,8 +26,16 @@ async function checked(command, args, options = {}) {
   assert.equal(result.code, 0, `${command} ${args[0]}:\n${result.stdout}\n${result.stderr}`)
   return result.stdout
 }
+// Drive npm through its own CLI entry instead of the PATH shim: on Windows the
+// npm.cmd shim resolves node_modules\npm\bin\npm-*.js relative to itself, which
+// cannot work from inside fixture directories. npm_execpath is set whenever npm
+// runs this script; running the file directly still falls back to the shim.
+const npmCli = process.env.npm_execpath
+const checkedNpm = (args, options = {}) => (
+  npmCli ? checked(process.execPath, [npmCli, ...args], options) : checked('npm', args, options)
+)
 async function pack(dir) {
-  const result = JSON.parse(await checked('npm', ['pack', '--ignore-scripts', '--json'], { cwd: dir }))
+  const result = JSON.parse(await checkedNpm(['pack', '--ignore-scripts', '--json'], { cwd: dir }))
   return join(dir, (Array.isArray(result) ? result[0] : Object.values(result)[0]).filename)
 }
 const bin = (name) => process.platform === 'win32' ? join(prefix, `${name}.cmd`) : join(prefix, 'bin', name)
@@ -52,8 +60,8 @@ try {
   const original = join(temp, 'original')
   write(join(original, 'package.json'), { name: 'search-boost-mcp', version: '9.0.0', bin: { 'search-boost': './cli.mjs', 'search-boost-mcp': './cli.mjs' } })
   write(join(original, 'cli.mjs'), '#!/usr/bin/env node\nconsole.log("old fixture")\n')
-  await checked('npm', ['install', '--global', '--ignore-scripts', '--force=false', '--no-audit', '--no-fund', await pack(original)])
-  const root = (await checked('npm', ['root', '--global'])).trim()
+  await checkedNpm(['install', '--global', '--ignore-scripts', '--force=false', '--no-audit', '--no-fund', await pack(original)])
+  const root = (await checkedNpm(['root', '--global'])).trim()
   const currentRoot = join(root, 'search-boost'), legacyRoot = join(root, 'search-boost-mcp')
   assert.ok(existsSync(bin('search-boost')) && existsSync(bin('search-boost-mcp')))
 
@@ -105,12 +113,12 @@ writeFileSync(file,JSON.stringify(pkg,null,2));`)
 
   // Prewarm exactly as npx would, without requiring a transition version.
   const npx = (command, ...args) => ['exec', '--yes', '--ignore-scripts', '--package=search-boost@2.0.0', '--', 'search-boost', command, ...args]
-  assert.equal((await checked('npm', npx('--version'))).trim(), '2.0.0')
+  assert.equal((await checkedNpm(npx('--version'))).trim(), '2.0.0')
   const cacheDir = join(env.npm_config_cache, '_npx')
   const cachedRoot = readdirSync(cacheDir).map((name) => join(cacheDir, name, 'node_modules', 'search-boost')).find((dir) => existsSync(join(dir, 'cli.mjs')))
   assert.ok(cachedRoot)
   const initialClaude = bytes(claude)
-  const preview = await checked('npm', npx('migrate', '--dry-run'))
+  const preview = await checkedNpm(npx('migrate', '--dry-run'))
   assert.ok(preview.includes('uninstall global search-boost-mcp') && preview.includes('configuration and credentials remain unchanged'))
   assert.ok(!existsSync(currentRoot) && existsSync(legacyRoot))
   assert.equal(bytes(claude), initialClaude)
@@ -135,7 +143,7 @@ writeFileSync(file,JSON.stringify(pkg,null,2));`)
   // An unrelated agent conflict must not turn npm rename into an agent updater.
   const foreign = join(home, '.claude', 'skills', 'search-boost', 'SKILL.md')
   write(foreign, '# User-owned skill\n')
-  const migrated = await checked('npm', npx('migrate', '-y'))
+  const migrated = await checkedNpm(npx('migrate', '-y'))
   assert.match(migrated, /Migration complete/)
   assert.ok(!existsSync(legacyRoot) && !existsSync(bin('search-boost-mcp')))
   assert.ok(existsSync(bin('search-boost')))
