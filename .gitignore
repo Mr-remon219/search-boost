@@ -3,3 +3,6 @@ node_modules/
 *.log
 .agent-html/
 dist/
+
+# local npm pack output must not be committed
+*.tgz
