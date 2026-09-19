@@ -22,6 +22,8 @@ for (const key of Object.keys(env)) if (/^SEARCH_BOOST_.*_FILE$/.test(key) || /^
 const write = (path, value) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, typeof value === 'string' ? value : JSON.stringify(value, null, 2)) }
 const json = (path) => JSON.parse(readFileSync(path, 'utf8'))
 const bytes = (path) => readFileSync(path, 'utf8')
+/** Config files normalise or escape separators; compare paths ignoring that. */
+const asPath = (value) => String(value).replace(/[\\/]+/g, '/')
 async function checked(command, args, options = {}) {
   const result = await runCommand(command, args, { env, cwd, ...options })
   assert.equal(result.code, 0, `${command} ${args[0]}:\n${result.stdout}\n${result.stderr}`)
@@ -197,7 +199,10 @@ writeFileSync(file,JSON.stringify(pkg,null,2));`)
   assert.equal(json(claude).mcpServers['search-boost'].args[0], join(currentRoot, 'cli.mjs'))
   assert.equal(json(claude).mcpServers['search-boost'].disabled, true)
   assert.equal(json(claude).custom, true)
-  assert.ok(bytes(codex).includes(currentRoot) && bytes(codex).includes('enabled=false'))
+  // The Codex TOML escapes Windows backslashes, so compare separator-agnostically.
+  const codexText = bytes(codex)
+  assert.ok(asPath(codexText).includes(asPath(currentRoot)), `codex must reference the refreshed root:\n${codexText}`)
+  assert.ok(codexText.includes('enabled=false'), 'codex must keep the server disabled')
   assert.equal(json(cursor).mcpServers['search-boost'].disabled, true)
   assert.deepEqual(json(piSettings).packages[0], { source: currentRoot, extensions: [], autoload: false })
   assert.equal(json(piSettings).defaultModel, 'keep-model')
