@@ -66,7 +66,8 @@ try {
   delete current.dependencies
   delete current.scripts
   write(join(newDir, 'package.json'), current)
-  await install(await pack(newDir))
+  const newTar = await pack(newDir)
+  await install(newTar)
   const root = (await checked('npm', ['root', '--global'])).trim()
   assert(existsSync(join(root, 'search-boost-mcp')) && existsSync(join(root, 'search-boost')), 'both packages must remain installed')
   assert(existsSync(bin('search-boost')) && existsSync(bin('search-boost-mcp')))
@@ -91,4 +92,72 @@ try {
   assert(preview.includes(`Would install search-boost@${getVersion()}`))
   assert(!readFileSync(join(root, 'search-boost-mcp', 'lib', 'upgrade', 'index.mjs'), 'utf8').includes('retireGlobalPackages'))
   console.log('ok: real npm update releases the old shared bin; old/new packages coexist under separate commands without force, routing plugin, automatic uninstall, or credential/config changes')
+
+  // Shipped entrypoints work independently of shell aliases and reject unsafe modes.
+  const legacyRoot = join(root, 'search-boost-mcp')
+  assert(existsSync(join(legacyRoot, 'migrate.mjs')))
+  for (const args of [[join(legacyRoot, 'cli.mjs'), 'migrate', '--help'], [join(legacyRoot, 'migrate.mjs'), '--help']]) {
+    assert((await checked(process.execPath, args)).includes('search-boost-mcp migrate'))
+  }
+  const unsafe = await runCommand(process.execPath, [join(legacyRoot, 'migrate.mjs'), '--sync-only', '-y'], { env, cwd })
+  assert.equal(unsafe.code, 1)
+  assert(unsafe.stderr.includes('--sync-only is not supported'))
+
+  // Remove only the disposable fixture's new package, to exercise a true first migration.
+  await checked('npm', ['uninstall', '--global', '--ignore-scripts', '--no-audit', '--no-fund', 'search-boost'])
+  const migrationUrl = pathToFileURL(join(legacyRoot, 'lib', 'upgrade', 'migrate.mjs')).href
+  const processUrl = pathToFileURL(join(legacyRoot, 'lib', 'upgrade', 'process.mjs')).href
+  const unavailableScript = `import {runMigrationCli} from ${JSON.stringify(migrationUrl)};
+    let calls=0;
+    try { await runMigrationCli(['-y'], {run:async(command,args)=>{
+      if(command!=='npm'||args[0]!=='view') throw Error('unexpected mutation');
+      calls++; return {code:1,stdout:'',stderr:'offline-fixture-secret'};
+    }}); process.exitCode=2; }
+    catch(err) { console.error(err.message); process.exitCode=calls===1 ? 1 : 2; }`;
+  const unavailable = await runCommand(process.execPath, ['--input-type=module', '-e', unavailableScript], { env, cwd })
+  assert.equal(unavailable.code, 1)
+  assert(unavailable.stderr.includes('may not be published yet'))
+  assert(!unavailable.stderr.includes('offline-fixture-secret'))
+  assert(!existsSync(join(root, 'search-boost')))
+  assert.equal(readFileSync(settingsPath, 'utf8'), settingsBytes)
+  assert.equal(readFileSync(tokenPath, 'utf8'), tokenBytes)
+
+  // Only registry discovery/specification is substituted with a local tarball.
+  // npm installation, replacement verification, new-process handoff and config migration are real.
+  const migrateScript = `import {runMigrationCli} from ${JSON.stringify(migrationUrl)};
+    import {runCommand} from ${JSON.stringify(processUrl)};
+    let installs=0, handoffs=0;
+    const result=await runMigrationCli(['-y'], {run:async(command,args,options)=>{
+      if(command==='npm'&&args[0]==='view') return {code:0,stdout:JSON.stringify(${JSON.stringify(getVersion())})};
+      if(command==='npm'&&args[0]==='install') {
+        if(!args.includes(${JSON.stringify('search-boost@' + getVersion())})) throw Error('unexpected package');
+        installs++; args=args.map(a=>a===${JSON.stringify('search-boost@' + getVersion())}?${JSON.stringify(newTar)}:a);
+      }
+      if(command===process.execPath) {
+        if(args[0]!==${JSON.stringify(join(root, 'search-boost', 'cli.mjs'))}) throw Error('stale handoff');
+        handoffs++;
+      }
+      return runCommand(command,args,options);
+    }});
+    if(!result.ok||installs!==1||handoffs!==1) process.exitCode=2;`;
+  const foreignSkill = join(home, '.claude', 'skills', 'search-boost', 'SKILL.md')
+  write(foreignSkill, '# User-owned skill\n')
+  const partial = await runCommand(process.execPath, ['--input-type=module', '-e', migrateScript], { env, cwd })
+  assert.equal(partial.code, 1)
+  assert(partial.stdout.includes('Upgrade incomplete'))
+  assert(existsSync(join(root, 'search-boost')) && existsSync(legacyRoot))
+  assert.equal(readFileSync(settingsPath, 'utf8'), settingsBytes)
+  assert.equal(readFileSync(tokenPath, 'utf8'), tokenBytes)
+  rmSync(foreignSkill)
+
+  const migrated = await checked(process.execPath, ['--input-type=module', '-e', migrateScript])
+  assert(migrated.includes('Upgrade complete'))
+  const migratedSettings = json(settingsPath)
+  assert.equal(migratedSettings.mcpServers['search-boost'].args[0], join(root, 'search-boost', 'cli.mjs'))
+  assert.equal(migratedSettings.custom, true)
+  assert.equal(readFileSync(tokenPath, 'utf8'), tokenBytes)
+  assert(existsSync(bin('search-boost-mcp')) && existsSync(bin('search-boost')))
+  assert(!migrated.includes('offline-fixture-secret'))
+  console.log('ok: shipped one-click migration fails safely before publication, reports partial failure, and retries through real npm install/new-code handoff without deleting the old global package or credentials')
+
 } finally { rmSync(temp, { recursive: true, force: true }) }

@@ -48,7 +48,15 @@ search-boost                         # TUI → One-click upgrade / 一键升级
 search-boost upgrade -y
 ```
 
-也可以从过渡版本运行 `search-boost-mcp upgrade`：显式安装新包，并由新包处理集成迁移。不是转发插件，也没有 postinstall 自动迁移。
+**过渡版也提供一键迁移脚本**，无需手工安装新包：
+
+```bash
+search-boost-mcp migrate -y
+# 先预览：search-boost-mcp migrate --dry-run
+# 不依赖 PATH：node /path/to/search-boost-mcp/migrate.mjs -y
+```
+
+它安装并验证 `search-boost@latest`，再由新包处理集成迁移；新包尚未发布时安全停止，部分失败明确报错，可修复后重试。`search-boost-mcp upgrade` 仍可用。不是转发插件，也没有 postinstall 自动迁移。
 
 已有新包用户直接在 TUI 选择一键升级：检查 `search-boost@latest`，需要时更新程序，再刷新**已经安装**的集成；不会因为检测到某个 Agent 就为它新增安装。
 

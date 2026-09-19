@@ -28,6 +28,7 @@
   },
   "files": [
     "cli.mjs",
+    "migrate.mjs",
     "server.mjs",
     "lib/",
     "adapters/",

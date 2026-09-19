@@ -48,7 +48,15 @@ search-boost                         # TUI → One-click upgrade
 search-boost upgrade -y
 ```
 
-Alternatively, `search-boost-mcp upgrade` from the transition release explicitly installs the new package and hands migration to its code. There is no forwarding plugin or postinstall migration.
+The transition release also ships a **one-command migration script**, without a separate manual installation step:
+
+```bash
+search-boost-mcp migrate -y
+# Preview: search-boost-mcp migrate --dry-run
+# Without PATH: node /path/to/search-boost-mcp/migrate.mjs -y
+```
+
+It installs and verifies `search-boost@latest`, then hands integration migration to the new package. If the future package is not published yet, it stops before installation/config changes. Partial failures return nonzero and can be retried after resolving blockers. `search-boost-mcp upgrade` remains available. There is no forwarding plugin or postinstall migration.
 
 The new TUI checks `search-boost@latest`, updates the program when necessary, then refreshes **existing** integrations rather than installing every detected host.
 
