@@ -57,7 +57,8 @@
     "check": "node scripts/check-syntax.mjs",
     "test:fusion": "node scripts/test-fusion-errors.mjs",
     "test:x": "node scripts/test-x-pipeline.mjs",
-    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:install && npm run test:doctor && npm run test:fusion && npm run test:x && npm run test:search && npm run test:adapters && npm run test:parallel && npm run test:upgrade && npm run test:mcp && npm run smoke",
+    "test:engines": "node scripts/test-engine-requests.mjs",
+    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:install && npm run test:doctor && npm run test:fusion && npm run test:x && npm run test:engines && npm run test:search && npm run test:adapters && npm run test:parallel && npm run test:upgrade && npm run test:mcp && npm run smoke",
     "test:search": "node scripts/test-search-routing.mjs"
   },
   "dependencies": {
