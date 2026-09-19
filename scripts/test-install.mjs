@@ -806,7 +806,8 @@ assert(
     const linux = grokInstallFailureHint(dir, 'linux')
     return (
       win.includes(`(${dir.length} characters)`) &&
-      win.includes('short ASCII path') &&
+      win.includes('shorter path') &&
+      win.includes('~55') &&
       win.includes('C:\\sb\\grok-plugin') &&
       linux === ''
     )
