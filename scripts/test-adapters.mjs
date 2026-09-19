@@ -267,6 +267,29 @@ assert('excerptForTool truncates at boundary', excerptForTool('a\n\n'.repeat(200
   const preTicksOut = preprocessPage(preTicks, base)
   assert('pre fence avoids backtick collision', /use ``` fences/.test(preTicksOut) && /after-pre/.test(preTicksOut))
 
+  // Regression: code in the page is evidence, and must not decide the format
+  // either — a fenced HTML example used to flip the whole document to the HTML
+  // path, where its content was then rewritten as markup.
+  const fencedDoctype = '# Example\n\n```html\n<!doctype html>\n<pre><code>&lt;important&gt;</code></pre>\n```\n\nEnd.\n'
+  assert('looksLikeHtml ignores a doctype that only appears inside a fence', !looksLikeHtml(fencedDoctype))
+  const fencedDoctypeOut = preprocessPage(fencedDoctype, base)
+  assert('fenced html example survives intact', fencedDoctypeOut.includes('&lt;important&gt;') && fencedDoctypeOut.includes('<!doctype html>'))
+  assert('fenced html example does not gain extra fences', (fencedDoctypeOut.match(/```/g) || []).length === 2)
+
+  const fencedComment = '<!doctype html><html><body>\n<p>intro</p>\n```html\n<!-- keep this comment example -->\n<div>x</div>\n```\n<p>after</p>\n</body></html>'
+  assert('html page keeps a comment inside a fenced example', preprocessPage(fencedComment, base).includes('keep this comment example'))
+
+  const preComment = '<!doctype html><html><body><pre><code><!-- keep-pre-comment --></code></pre><p>after-pre</p></body></html>'
+  const preCommentOut = preprocessPage(preComment, base)
+  assert('html page keeps a comment inside <pre>', preCommentOut.includes('keep-pre-comment') && preCommentOut.includes('after-pre'))
+
+  const indentedScript = '# Guide\n\nExample:\n\n    <script>console.log("keep")</script>\n    more code\n\nAfter.\n'
+  const indentedScriptOut = preprocessPage(indentedScript)
+  assert('markdown keeps <script> inside 4-space indented code', indentedScriptOut.includes('console.log("keep")') && indentedScriptOut.includes('more code'))
+
+  const htmlIndentedScript = '<!doctype html><html><body>\n<p>intro</p>\n\n    <script>evil()</script>\n\n<p>after</p>\n</body></html>'
+  assert('html indentation stays layout, not code: indented script chrome is still dropped', !preprocessPage(htmlIndentedScript, base).includes('evil()'))
+
   const long = 'word '.repeat(20_000)
   const shaped = toFetchPageResult('https://example.com/doc', 'jina', long, undefined, false, Date.now())
   assert('fetch result is not clipped', shaped.content === long && shaped.truncated === false && shaped.word_count > 10_000)
