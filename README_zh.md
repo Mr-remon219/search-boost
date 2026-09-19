@@ -128,7 +128,7 @@ search-boost uninstall -t codex -y
 search-boost uninstall -t cursor,codex,claude -y
 ```
 
-卸载只移除 **search-boost 拥有** 的配置块（带标记的 MCP、skill、hook、权限规则）。在 Agent 支持的情况下会恢复内置联网（Codex 顶层 `web_search`、Claude `WebSearch` deny），除非你安装时用了 `--keep-native`，或原本就有未标记的用户设置。若文件仅因 search-boost 而存在且清理后为空，会被删除。Grok 的 `grok plugin uninstall` 为**尽力而为**（CLI 缺失或失败时会警告并继续）。预览：加 `--dry-run`。
+卸载只移除 **search-boost 拥有** 的配置块（带标记的 MCP、skill、hook、权限规则）。在 Agent 支持的情况下会恢复内置联网（Codex 顶层 `web_search`、Claude `WebSearch` deny），除非你安装时用了 `--keep-native`，或原本就有未标记的用户设置。若文件仅因 search-boost 而存在且清理后为空，会被删除；安装时新建的空目录不回收（无法判断该目录是我们创建的，还是用户或其他工具本来就有的，因此不做删除）。Grok 的 `grok plugin uninstall` 为**尽力而为**（CLI 缺失或失败时会警告并继续）。预览：加 `--dry-run`。
 
 ---
 

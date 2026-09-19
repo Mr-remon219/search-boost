@@ -128,7 +128,7 @@ search-boost uninstall -t codex -y
 search-boost uninstall -t cursor,codex,claude -y
 ```
 
-Uninstall removes only **search-boost-owned** blocks (marked MCP entries, skills, hooks, permission rules). Where the agent supports it, native web search is restored (Codex top-level `web_search`, Claude `WebSearch` deny) unless you used `--keep-native` at install time or had pre-existing unmarked settings. Config files created solely for search-boost are unlinked when empty after cleanup. For Grok, plugin removal via `grok plugin uninstall` is **best-effort** (warns and continues if the CLI is missing or uninstall fails). Preview: `--dry-run`.
+Uninstall removes only **search-boost-owned** blocks (marked MCP entries, skills, hooks, permission rules). Where the agent supports it, native web search is restored (Codex top-level `web_search`, Claude `WebSearch` deny) unless you used `--keep-native` at install time or had pre-existing unmarked settings. Config files created solely for search-boost are unlinked when empty after cleanup; empty directories created during install are left in place (a directory cannot be attributed to us rather than to the user or another tool, so it is not removed). For Grok, plugin removal via `grok plugin uninstall` is **best-effort** (warns and continues if the CLI is missing or uninstall fails). Preview: `--dry-run`.
 
 ---
 
