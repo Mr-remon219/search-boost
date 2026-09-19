@@ -917,13 +917,29 @@ rmSync(cliDir, { recursive: true, force: true })
 }
 
 // antigravity workspace marker round-trip
-process.env.SEARCH_BOOST_WORKSPACES_FILE = join(tmpdir(), `search-boost-workspaces-${process.pid}.json`)
-await recordAntigravityWorkspace('/tmp/project-a', false)
-await recordAntigravityWorkspace('/tmp/project-b', false)
-assert('workspace marker records', (await listAntigravityWorkspaces()).length === 2)
-await forgetAntigravityWorkspace('/tmp/project-a', false)
-assert('workspace marker forgets', (await listAntigravityWorkspaces()).length === 1)
-delete process.env.SEARCH_BOOST_WORKSPACES_FILE
+// Isolated HOME: reads also fall back to the real ~/.search-boost state file, so a
+// developer machine with existing markers would otherwise fail the counts below.
+{
+  const markerHome = mkdtempSync(join(tmpdir(), `sb-workspaces-home-${process.pid}-`))
+  const savedMarkerHome = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE }
+  process.env.HOME = markerHome
+  process.env.USERPROFILE = markerHome
+  process.env.SEARCH_BOOST_WORKSPACES_FILE = join(markerHome, '.search-boost-antigravity-workspaces.json')
+  try {
+    await recordAntigravityWorkspace('/tmp/project-a', false)
+    await recordAntigravityWorkspace('/tmp/project-b', false)
+    assert('workspace marker records', (await listAntigravityWorkspaces()).length === 2)
+    await forgetAntigravityWorkspace('/tmp/project-a', false)
+    assert('workspace marker forgets', (await listAntigravityWorkspaces()).length === 1)
+  } finally {
+    delete process.env.SEARCH_BOOST_WORKSPACES_FILE
+    if (savedMarkerHome.HOME === undefined) delete process.env.HOME
+    else process.env.HOME = savedMarkerHome.HOME
+    if (savedMarkerHome.USERPROFILE === undefined) delete process.env.USERPROFILE
+    else process.env.USERPROFILE = savedMarkerHome.USERPROFILE
+    rmSync(markerHome, { recursive: true, force: true })
+  }
+}
 
 // antigravity workspace hook enables on install
 const agyHookDir = mkdtempSync(join(tmpdir(), 'sb-agy-hook-'))
