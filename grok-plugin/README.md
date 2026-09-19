@@ -1,6 +1,6 @@
 # search-boost · Grok Build Plugin
 
-Install **search-boost MCP** and **skill** into [Grok Build](https://x.ai/grok).
+Install **search-boost MCP**, a lightweight **workflow router** and a capability-gated **parallel-research skill** into [Grok Build](https://x.ai/grok).
 
 > Siblings: [dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost) (DSH) · [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost) (pi) · [search-boost](https://github.com/Mr-remon219/search-boost) (Cursor / Codex / Claude / …)
 
@@ -45,7 +45,7 @@ grok mcp doctor search-boost
 
 ## Sync skill after edits
 
-After editing `agents/grok/skill.md`, run:
+After editing the router `agents/grok/skill.md` or registered workflow templates in `agents/shared/skills/`, run:
 
 ```bash
 npm run plugin:sync-grok
@@ -57,7 +57,7 @@ To publish on the Grok plugin marketplace: open a PR to [xai-org/plugin-marketpl
 
 ## 安装 · Grok Build 插件
 
-把 **search-boost 的 MCP 服务**和 **skill** 装进 [Grok Build](https://x.ai/grok)。
+把 **search-boost 的 MCP 服务**、轻量的 **工作流 router** 和按能力检查的 **并行研究 skill** 装进 [Grok Build](https://x.ai/grok)。
 
 > 同系列的另外两个插件：[dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost)（给 DSH 用）· [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost)（给 pi 用）· [search-boost](https://github.com/Mr-remon219/search-boost)（Cursor / Codex / Claude 等）
 
@@ -96,7 +96,7 @@ grok mcp doctor search-boost
 
 ### 改 skill 后怎么同步
 
-编辑完 `agents/grok/skill.md`，跑：
+编辑完 router `agents/grok/skill.md` 或 `agents/shared/skills/` 下已注册的工作流模板，跑：
 
 ```bash
 npm run plugin:sync-grok

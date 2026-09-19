@@ -13,9 +13,9 @@
           └── agents/<host> 宿主级提示词策略 ──┘
 ```
 
-> 原独立仓库 **pi-search-boost** 与 **dsh-search-boost** 已并入本仓库，退化为两个宿主适配层。搜索引擎、融合排序、正文抓取、X 搜索、深度研究**只在本仓库的核心维护一份**。
+> 原独立仓库 **pi-search-boost** 与 **dsh-search-boost** 已并入本仓库，退化为两个宿主适配层。搜索引擎、融合排序、正文抓取与 X 搜索**只在本仓库的核心维护一份**。
 
-**核心**（[`lib/search/`](./lib/search/)）：**free** 层并行调用 Bing、DuckDuckGo、Yahoo 与 Exa-free；**api** 层在此基础上增加**你已配置**的 Tavily / Brave / Exa（配一个 Key 即可运行；建议配齐三个以获得最佳融合）。此外还提供 X 搜索（xAI 托管工具 ∥ 多引擎，无凭据也可降级使用）、带 `focus` 的 Jina 正文抓取，以及单轮 `deep_research`（由模型重复调用直到 gaps 为空）。
+**核心**（[`lib/search/`](./lib/search/)）：**free** 层并行调用 Bing、DuckDuckGo、Yahoo 与 Exa-free；**api** 层在此基础上增加**你已配置**的 Tavily / Brave / Exa（配一个 Key 即可运行；建议配齐三个以获得最佳融合）。此外还提供 X 搜索（xAI 托管工具 ∥ 多引擎，无凭据也可降级使用），以及带 `focus` 的 Jina 正文抓取。
 
 English → [README.md](./README.md)
 
@@ -120,9 +120,8 @@ search-boost uninstall -t cursor,codex,claude -y
 | MCP 工具 | 干什么用 |
 |----------|----------|
 | `fused_search` | 多引擎并行搜、去重、综合排序 |
-| `fetch_page` | 拉网页正文（Jina 优先，失败走 HTML；`focus` 可只留相关段落，省 token） |
+| `fetch_page` | 拉网页正文（Jina 优先，失败走 HTML；先去掉样式/广告，不裁剪；`focus` 可只留相关段落） |
 | `x_search` | 搜 X / Twitter：关键词、用户、帖子串 |
-| `deep_research` | 每轮一次深度研究 — 按 `suggested_queries` 重复调用直到 gaps 为空，再综合结论（建议最多 ~3 轮） |
 | `search_layer` | 查看或切换搜索层：`free`（免 Key）/ `api`（带 Key 的引擎） |
 | `search_stats` | 看缓存、各引擎是否可用等诊断信息 |
 
@@ -176,14 +175,73 @@ search-boost config x --logout            # 删除本地副本
 |-------|------------|--------------|
 | Cursor IDE | `~/.cursor/mcp.json` | hook、skill |
 | Cursor CLI | `~/.cursor/mcp.json`（与 IDE 共用 surface） | hook、skill（CLI 版）、可选 CLI 免审批 |
-| Codex CLI | `~/.codex/config.toml` | AGENTS.md、skill |
-| Claude Code | `~/.claude.json` | CLAUDE.md、skill、权限规则 |
+| Codex CLI | `~/.codex/config.toml` | SessionStart hook、AGENTS.md、skill |
+| Claude Code | `~/.claude.json` | SessionStart hook、CLAUDE.md、skill、权限规则 |
 | Grok Build | `~/.grok/config.toml` | rule、skill、随包 [grok-plugin](./grok-plugin/)（`grok` 在 PATH 时自动安装） |
-| Antigravity | `~/.gemini/config/mcp_config.json` | AGENTS.md、GEMINI.md、skill，可选工作区配置 |
+| Antigravity | `~/.gemini/config/mcp_config.json` | 首次调用 hook、AGENTS.md、GEMINI.md、skill，可选工作区配置 |
 | pi | —（进程内扩展，[`adapters/pi`](./adapters/pi/)） | `~/.pi/agent/extensions/search-boost.js` shim；`agents/` + `prompts/`（searcher、summarizer、`/fast-parallel`、`/complex-parallel`） |
 | DeepSeek Harness | —（进程内 bundle，[`adapters/dsh`](./adapters/dsh/)） | `dsh plugin --profile <p> add` → profile 的 `package.json` |
 
-MCP 各 Agent 的提示词设计是**让模型自己决定要不要搜**，不是每轮都强制联网；pi 与 DSH 沿用它们原有的"搜索优先"主动策略（[`agents/pi/inject.md`](./agents/pi/inject.md)、[`agents/dsh/policy.md`](./agents/dsh/policy.md)）。各 Agent 的模板在 [`agents/`](./agents/) 里。
+MCP 接入现在会在启动时提醒模型**主动核实外部事实**：版本、API、不确定的技术行为、比较与选型，不必等用户要求搜索。纯本地代码、稳定概念、写作及用户禁止联网时跳过，不要求每轮搜索。共享策略在 [`agents/shared/startup-search.md`](./agents/shared/startup-search.md)；pi / DSH 的原有策略不变。
+
+### 提示词职责与扩展入口
+
+```text
+hook：主动核实提醒       inject.md：简短的能力与宿主说明
+                ↓
+普通任务 → MCP description + schema → 直接调用
+需要详细参考 → 可选 resource：search-boost://policy
+复杂扩展流程 → search-boost skill router → 已注册的专项 skill
+```
+
+**MCP 宿主安装 `search-boost` router 和 `search-boost-parallel-research` 工作流 skill，两者都不是普通搜索的前置步骤。** 原来的 search/fetch/x/diagnostics 四个工具说明型 skill 已撤下：工具选择与参数说明归 MCP description/schema，示例、证据注意事项和排障归可选 resource。`search_routing` MCP prompt 保留为显式请求的规划助手，不在每次调用前自动运行。Resource 是否被读取、注入上下文由宿主决定。
+
+Router 模板位于 `agents/<agent>/skill.md`；六份 `inject.md` 只提供基本认知。扩展注册表是 [`agents/router.mjs`](./agents/router.mjs) 的 `SKILL_EXTENSIONS`，目前登记了并行研究工作流。安装器和插件据此安装 skill 并生成 router 链接，支持宿主限制；具体宿主的委派说明渲染进 skill。支持 skill 不等于具备 subagent 能力。开发说明见 [`agents/shared/skills/README.md`](./agents/shared/skills/README.md)。Skill 只能编排宿主已有且获授权的能力，不能凭提示词创建 subagent 工具。
+
+重新安装会保留 router、清理属于 search-boost 的旧工具说明型技能及其 Codex 元数据，保留用户文件；卸载也处理旧技能残留。插件同步：`npm run plugin:sync-grok` / `npm run build:plugin`。模板变更需重新安装目标。pi / DSH 保留原生集成；Grok 仍通过启动 rule 承载主动提醒。
+
+### 共享并行研究
+
+Pi、DSH 和 MCP 宿主的 skill 共用 [`agents/shared/research/`](./agents/shared/research/) 中的角色与流程规范，普通单点查询仍直接调用工具。
+
+| 宿主 | 入口 | 执行方式 |
+|------|------|----------|
+| Pi | `search-parallel-subagent`；`/fast-parallel`、`/complex-parallel` | Pi 子进程；searcher 仅有 `fused_search` / `fetch_page`，summarizer 无工具 |
+| DSH | 已有原生 `research_parallel` | DSH `spawn` provider；角色提示、工具白名单、深度限制、整波取消和资源释放；**不依赖 Pi** |
+| Claude / Codex / Cursor IDE 与 CLI | `search-boost-parallel-research` skill | 使用当前会话真实且获授权的原生委派工具，先确认子代理 MCP 可用 |
+| Grok / Antigravity | 同一 skill，按能力检查 | 不预设子代理 API；有可调用的原生能力才并行，否则明确说明串行研究 |
+
+Pi 与 DSH 支持相同的角色/任务调用形状；DSH 也兼容旧的 `query` / `sub_queries`：
+
+```json
+{"tasks":[{"agent":"searcher","task":"目标版本的官方 API 行为"},{"agent":"searcher","task":"已知限制和冲突证据"}]}
+```
+
+```json
+{"agent":"summarizer","task":"主问题、所有报告与执行状态、已有结论、剩余预算"}
+```
+
+快速模式只做一波，由主代理综合；复杂模式由 summarizer 判断重要缺口，默认 1–2 波，流程要求最多 3 波。原生工具一次只执行**一波**，不是自动循环研究。主代理负责最终验收，不能隐藏超时、拒绝、截断报告或单源证据。
+
+DSH provider 必须声明独立上下文和 `toolFilter` / `depthLimit` / `persona` 能力，默认 `spawn`，可通过插件配置 `researchProvider` 显式指定其他兼容 provider。旧版或能力缺失时明确报错，不降为无限制子代理。`max_seconds`（1–300，默认 120）覆盖整波启动和执行；取消会请求宿主清理，不把未响应的 provider 宣称为已成功停止。`max_sources` 是提示词预算，不是强制工具调用配额。
+
+Skill 不安装自定义宿主 agent，不开启被禁用的委派功能，也不能单靠文字强制隔离或取消。缺少委派或子代理 MCP 时，仅在仍符合用户要求的情况下明确转为串行；权限拒绝、运行故障和取消应报告为阻塞，不能启动另一个 CLI 绕过。详见[实现契约、宿主资料与验证边界](./agents/shared/research/README.md)。
+
+### MCP 启动注入
+
+| Agent | 注入机制与配置位置 |
+|-------|--------------------|
+| Claude Code | `~/.claude/settings.json` → `SessionStart` → `hookSpecificOutput.additionalContext` |
+| Codex CLI | `~/.codex/hooks.json` → `SessionStart` → `hookSpecificOutput.additionalContext` |
+| Cursor IDE / CLI | 复用 `~/.cursor/hooks.json` 的 `sessionStart`，合并提示词时只加入一份主动搜索策略 |
+| Antigravity | `~/.gemini/config/hooks.json` 的 `PreInvocation`，仅 `invocationNum = 0` 时注入；`--workspace` 同步安装工作区副本，启用全局 hook 时副本不重复提醒 |
+| Grok Build | 启动读取的 `search-boost.md` rule；官方规定被动 hook 的 stdout 被忽略，因此不安装无效的 SessionStart 注入 |
+
+Hook 只读取本地提示词，不联网、不授予工具权限；提示词缺失或运行输入异常时放行。重复安装不会叠加 hook，卸载保留其他用户 hook。安装不会覆盖宿主禁用 hook 的设置，也不会绕过信任确认。**Codex 新版需要在 `/hooks` 中审阅并信任 hook；旧版可能需要升级或手动启用其实验 hooks 功能。** Cursor cloud agent 不支持这里的 `sessionStart`。
+
+更新源码或提示词后，重新安装目标并重启对应 Agent（例如 `node cli.mjs install -t claude -y --keep-native`）。仅手工添加 MCP 配置或使用 `search-boost print` 不会安装 hook。
+
+协议依据：[Claude](https://code.claude.com/docs/en/hooks)、[Codex](https://developers.openai.com/codex/hooks)、[Cursor](https://cursor.com/docs/agent/hooks)、[Antigravity](https://antigravity.google/docs/hooks)、[Grok](https://docs.x.ai/build/features/hooks)。
 
 ## 宿主适配层（pi / DeepSeek Harness）
 
@@ -192,7 +250,7 @@ MCP 各 Agent 的提示词设计是**让模型自己决定要不要搜**，不�
 | | pi（`adapters/pi`） | DSH（`adapters/dsh`） |
 |---|---|---|
 | 加载方式 | `pi install npm:search-boost-mcp`、`pi -e adapters/pi/index.js`，或 `search-boost install -t pi` 写入的 shim | `dsh plugin --profile web add search-boost-mcp`（自动应用 `adapters/dsh/cordis.patch.yml`，接管内置 `web_search` / `web_fetch`） |
-| 工具 | `fused_search`（含 `site`/`min_score`/`depth`，最多 20 条）、`fetch_page`（`max_chars`）、`deep_research`（单轮）、`search-parallel-subagent`（searcher/summarizer 子进程；`/fast-parallel` `/complex-parallel`）、`x_search` | `fused_search`、`fetch_page`、`x_search`、`deep_research`（单轮）、`research_parallel`（DSH 原生 subagents）、`search_stats`；原生引用卡片 |
+| 工具 | `fused_search`（含 `site`/`min_score`/`depth`，最多 20 条）、`fetch_page`（不裁剪）、`search-parallel-subagent`（searcher/summarizer 子进程；`/fast-parallel` `/complex-parallel`）、`x_search` | `fused_search`、`fetch_page`、`x_search`、`research_parallel`（DSH 原生 subagents）、`search_stats`；原生引用卡片 |
 | 命令 | `/web_change`、`/x-login`、`/x-logout`、`/search-cache`、`/search-audit` | `/web_change`、`/x-login`、`/x-logout` |
 | 提示词 | `before_agent_start` 追加 `<search_balance>` + 当日搜索预算 | `systemPrompt.section` `search:policy`（115）+ 动态 `search:status`（116） |
 | 状态 | 审计日志 `~/.pi/agent/search-boost-audit.jsonl`；旧的 `~/.pi/agent/search-boost-layer.json` / `xsearch-auth.json` 仍可读 | — |

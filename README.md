@@ -13,9 +13,9 @@ Multi-engine web search for coding agents — **one SearchBoost core, three host
           └── agents/<host> prompt policy ──┘
 ```
 
-> The former standalone repos **pi-search-boost** and **dsh-search-boost** are merged here as host adapters. Search engines, fusion, fetch, X search and research are maintained **only** in this repo's core.
+> The former standalone repos **pi-search-boost** and **dsh-search-boost** are merged here as host adapters. Search engines, fusion, fetch, and X search are maintained **only** in this repo's core.
 
-**Core** ([`lib/search/`](./lib/search/)): on the **free** layer, Bing, DuckDuckGo, Yahoo, and Exa-free run in parallel; the **api** layer adds **whichever keyed Tavily / Brave / Exa engines you configure** (one key is enough; all three recommended for best fusion). Also included: X/Twitter (hosted xAI tool ∥ multi-engine, credential-free fallback), Jina page fetch with `focus`, and single-round `deep_research` (the model repeats until gaps are empty).
+**Core** ([`lib/search/`](./lib/search/)): on the **free** layer, Bing, DuckDuckGo, Yahoo, and Exa-free run in parallel; the **api** layer adds **whichever keyed Tavily / Brave / Exa engines you configure** (one key is enough; all three recommended for best fusion). Also included: X/Twitter (hosted xAI tool ∥ multi-engine, credential-free fallback) and Jina page fetch with `focus`.
 
 中文文档 → [README_zh.md](./README_zh.md)
 
@@ -120,9 +120,8 @@ Uninstall removes only **search-boost-owned** blocks (marked MCP entries, skills
 | MCP tool | Purpose |
 |----------|---------|
 | `fused_search` | Multi-engine parallel search, dedupe, cross-ranking |
-| `fetch_page` | Full page text (Jina + HTML fallback, optional `focus`) |
+| `fetch_page` | Full page text (Jina + HTML fallback, chrome stripped, no clip; optional `focus`) |
 | `x_search` | X/Twitter keyword / user / thread |
-| `deep_research` | One round per call — repeat with `suggested_queries` until gaps empty, then synthesize (~3 rounds max) |
 | `search_layer` | Show or set `free` (keyless) vs `api` (keyed engines) |
 | `search_stats` | Cache hits, engine availability, diagnostics |
 
@@ -176,14 +175,73 @@ search-boost config x --logout            # remove local copy
 |-------|------------|---------------|
 | Cursor IDE | `~/.cursor/mcp.json` | hook, skill |
 | Cursor CLI | `~/.cursor/mcp.json` (same surface as IDE) | hook, skill (CLI variant), optional CLI auto-allow |
-| Codex CLI | `~/.codex/config.toml` | AGENTS.md, skill |
-| Claude Code | `~/.claude.json` | CLAUDE.md, skill, permissions |
+| Codex CLI | `~/.codex/config.toml` | SessionStart hook, AGENTS.md, skill |
+| Claude Code | `~/.claude.json` | SessionStart hook, CLAUDE.md, skill, permissions |
 | Grok Build | `~/.grok/config.toml` | rule, skill, bundled [grok-plugin](./grok-plugin/) (when `grok` on PATH) |
-| Antigravity | `~/.gemini/config/mcp_config.json` | AGENTS.md, GEMINI.md, skill, optional workspace |
+| Antigravity | `~/.gemini/config/mcp_config.json` | first-invocation hook, AGENTS.md, GEMINI.md, skill, optional workspace |
 | pi | — (in-process extension, [`adapters/pi`](./adapters/pi/)) | `~/.pi/agent/extensions/search-boost.js` shim; `agents/` + `prompts/` (searcher, summarizer, `/fast-parallel`, `/complex-parallel`) |
 | DeepSeek Harness | — (in-process bundle, [`adapters/dsh`](./adapters/dsh/)) | `dsh plugin --profile <p> add` → profile `package.json` |
 
-Prompts use **model-discretion** wording (search when you choose — not forced every turn) for the MCP agents. pi and DSH keep the proactive "search-first" policies they shipped with ([`agents/pi/inject.md`](./agents/pi/inject.md), [`agents/dsh/policy.md`](./agents/dsh/policy.md)). See [`agents/`](./agents/) for per-agent templates.
+MCP installs now supply a startup reminder to **proactively verify external facts**: versions, APIs, uncertain technical behavior, comparisons, and recommendations, without waiting for the user to request a search. Skip local-only questions, stable fundamentals, creative writing, and user opt-outs; this does not require searching every turn. Shared policy: [`agents/shared/startup-search.md`](./agents/shared/startup-search.md). pi / DSH retain their host-native search policies.
+
+### Prompt responsibilities and extension entry point
+
+```text
+hook: proactive verification       inject.md: basic host/capability context
+                      ↓
+Ordinary tasks → MCP descriptions + schemas → direct calls
+Detailed reference → optional resource: search-boost://policy
+Extended workflows → search-boost skill router → registered workflow skills
+```
+
+**MCP hosts install the lightweight `search-boost` router and the `search-boost-parallel-research` workflow skill. Neither is a prerequisite for ordinary searches.** The four search/fetch/x/diagnostics tool-manual skills are retired: selection and parameters belong in MCP descriptions/schemas; examples, evidence caveats, and troubleshooting belong in the optional resource. The `search_routing` MCP prompt remains an explicitly requested planning aid, not an automatic stage before each call. Resource reading and context inclusion are controlled by the host.
+
+Router templates live at `agents/<agent>/skill.md`; the six `inject.md` files provide basic orientation only. `SKILL_EXTENSIONS` in [`agents/router.mjs`](./agents/router.mjs) is the extension registry. It registers the parallel-research workflow and drives installation, plugin packaging, and generated router links, with optional host restrictions. Host-specific delegation notes are rendered into the skill; supporting a skill does not imply supporting subagents. See [`agents/shared/skills/README.md`](./agents/shared/skills/README.md). Skills can orchestrate existing, authorized host capabilities; they cannot create subagent tools.
+
+Reinstall keeps the router and removes owned retired tool-manual skills and Codex metadata, preserving user files. Uninstall also handles retired-skill leftovers. Sync plugins with `npm run plugin:sync-grok` / `npm run build:plugin`, then reinstall target hosts after template changes. pi / DSH retain native integration; Grok still carries the proactive reminder in its startup rule.
+
+### Shared parallel research
+
+Pi, DSH, and MCP-host skills share the role prompts and bounded workflow in [`agents/shared/research/`](./agents/shared/research/). Ordinary single-point searches still call tools directly.
+
+| Host | Entry | Execution |
+|------|-------|-----------|
+| Pi | `search-parallel-subagent`; `/fast-parallel`, `/complex-parallel` | Pi child processes; searcher gets only `fused_search`/`fetch_page`, summarizer gets no tools |
+| DSH | Existing native `research_parallel` tool | DSH `spawn` provider; role persona, tool allowlist, depth limit, whole-wave cancellation and handle disposal; **no Pi dependency** |
+| Claude / Codex / Cursor IDE & CLI | `search-boost-parallel-research` skill | Use the session's authorized native subagent tools; check child MCP access before fan-out |
+| Grok / Antigravity | Same skill, capability-gated | No subagent API is presumed; use native delegation only when actually exposed, otherwise disclose serial research |
+
+Pi and DSH accept the same role/task shapes (DSH also keeps its legacy `query` / `sub_queries` interface):
+
+```json
+{"tasks":[{"agent":"searcher","task":"Official API behavior for the target version"},{"agent":"searcher","task":"Known limitations and conflicting evidence"}]}
+```
+
+```json
+{"agent":"summarizer","task":"Research question, every report with execution status, prior synthesis, and remaining budget"}
+```
+
+Fast mode is one wave followed by parent synthesis. Complex mode uses a summarizer to identify material gaps, normally 1–2 waves and at most 3 by workflow policy; the parent remains in control. A native tool call executes **one wave**, not an autonomous research loop. Timeouts, permission failures, truncated reports, and single-source claims must remain visible.
+
+DSH requires a native provider that advertises fresh-context isolation plus `toolFilter`, `depthLimit`, and `persona` support. The default is `spawn`; plugin config `researchProvider` can explicitly select another compatible provider. Older/missing providers fail clearly instead of silently running unrestricted children. `max_seconds` (1–300, default 120) bounds startup and execution for the whole wave; cancellation requests host cleanup, and a non-cooperative provider is not reported as successfully stopped. `max_sources` is prompt guidance, not a hard tool-call quota.
+
+Skills do not install custom host agents, enable delegation features, or enforce runtime controls by themselves. If child delegation/MCP access is absent, serial research is labeled and permitted only when it still meets the user's request. Permission denial, runtime failure, and cancellation are blockers—not reasons to launch another CLI. See [contract, host references, and validation limits](./agents/shared/research/README.md).
+
+### MCP startup injection
+
+| Agent | Mechanism and configuration |
+|-------|-----------------------------|
+| Claude Code | `~/.claude/settings.json` → `SessionStart` → `hookSpecificOutput.additionalContext` |
+| Codex CLI | `~/.codex/hooks.json` → `SessionStart` → `hookSpecificOutput.additionalContext` |
+| Cursor IDE / CLI | Reuses `sessionStart` in `~/.cursor/hooks.json`; merged prompts include the proactive policy only once |
+| Antigravity | `PreInvocation` in `~/.gemini/config/hooks.json`, only when `invocationNum = 0`; `--workspace` also installs a workspace copy, which defers to the enabled global hook |
+| Grok Build | Startup-loaded `search-boost.md` rule; passive hook stdout is ignored by Grok, so no ineffective SessionStart injection is installed |
+
+Hooks read local policy only: no network requests or permission grants. Missing policy or malformed runtime input fails open. Reinstall does not accumulate hooks; uninstall preserves other user hooks. Installation respects host hook-disable settings and does not bypass trust review. **Current Codex requires reviewing and trusting the hook in `/hooks`; older versions may require upgrading or manually enabling their experimental hooks feature.** Cursor cloud agents do not support this `sessionStart` hook.
+
+After changing source or policy, reinstall the target and restart the agent (for example, `node cli.mjs install -t claude -y --keep-native`). Manually adding MCP configuration or using `search-boost print` does not install hooks.
+
+Protocol references: [Claude](https://code.claude.com/docs/en/hooks), [Codex](https://developers.openai.com/codex/hooks), [Cursor](https://cursor.com/docs/agent/hooks), [Antigravity](https://antigravity.google/docs/hooks), [Grok](https://docs.x.ai/build/features/hooks).
 
 ## Host adapters (pi / DeepSeek Harness)
 
@@ -192,7 +250,7 @@ Both hosts run the search tools **in-process** on the same core the MCP server u
 | | pi (`adapters/pi`) | DSH (`adapters/dsh`) |
 |---|---|---|
 | Load | `pi install npm:search-boost-mcp`, `pi -e adapters/pi/index.js`, or the shim written by `search-boost install -t pi` | `dsh plugin --profile web add search-boost-mcp` (auto-wires `adapters/dsh/cordis.patch.yml`; repoints built-in `web_search` / `web_fetch`) |
-| Tools | `fused_search` (+`site`/`min_score`/`depth`, up to 20 results), `fetch_page` (`max_chars`), `deep_research` (one round), `search-parallel-subagent` (searcher/summarizer children; `/fast-parallel` `/complex-parallel`), `x_search` | `fused_search`, `fetch_page`, `x_search`, `deep_research` (one round), `research_parallel` (DSH native subagents), `search_stats`; native citation cards |
+| Tools | `fused_search` (+`site`/`min_score`/`depth`, up to 20 results), `fetch_page` (no clip), `search-parallel-subagent` (searcher/summarizer children; `/fast-parallel` `/complex-parallel`), `x_search` | `fused_search`, `fetch_page`, `x_search`, `research_parallel` (DSH native subagents), `search_stats`; native citation cards |
 | Commands | `/web_change`, `/x-login`, `/x-logout`, `/search-cache`, `/search-audit` | `/web_change`, `/x-login`, `/x-logout` |
 | Prompt | `<search_balance>` appended on `before_agent_start` + daily search budget note | `systemPrompt.section` `search:policy` (115) + live `search:status` (116) |
 | State | audit log `~/.pi/agent/search-boost-audit.jsonl`; legacy `~/.pi/agent/search-boost-layer.json` / `xsearch-auth.json` still read | — |
