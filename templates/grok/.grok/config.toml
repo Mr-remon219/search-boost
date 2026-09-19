@@ -11,7 +11,6 @@ tool_timeout_sec = 180
 allow = [
   "MCPTool(search-boost__fused_search)",
   "MCPTool(search-boost__fetch_page)",
-  "MCPTool(search-boost__deep_research)",
   "MCPTool(search-boost__x_search)",
   "MCPTool(search-boost__search_layer)",
   "MCPTool(search-boost__search_stats)",

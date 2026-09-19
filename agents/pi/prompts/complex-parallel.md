@@ -14,4 +14,6 @@ Each wave:
    `{ "agent": "summarizer", "task": "Research question: ...\n\nReports:\n..." }`
 3. If `need_another_round` is yes and you are under the cap, launch only the summarizer's next tasks. Otherwise synthesize the final answer with citations and stop.
 
+{{RESEARCH_WORKFLOW}}
+
 Question: $@

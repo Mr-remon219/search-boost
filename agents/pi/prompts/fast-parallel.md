@@ -10,4 +10,6 @@ Use the search-parallel-subagent tool for a single parallel wave, then continue 
 2. Wait for the reports. Synthesize them yourself. Cite URLs. Mark single-source claims.
 3. Do not call summarizer. Do not start a second wave.
 
+{{RESEARCH_WORKFLOW}}
+
 Question: $@

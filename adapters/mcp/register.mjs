@@ -20,14 +20,11 @@ import {
   renderXItem,
   runFetchPage,
   runFused,
-  runResearchRound,
   runXSearch,
   switchLayer,
 } from '../../lib/runtime.mjs'
 import {
   ANNOTATIONS,
-  deepResearchInput,
-  deepResearchOutput,
   fetchPageInput,
   fetchPageOutput,
   fusedSearchInput,
@@ -43,9 +40,10 @@ export function registerAll(server) {
   server.registerTool('fused_search', {
     title: 'Fused Web Search',
     description:
-      'Multi-engine parallel web search with URL dedupe and cross-ranking. ' +
-      'Prefer over built-in WebSearch for version-sensitive facts, APIs, comparisons, and research. ' +
-      'Free layer: bing+ddg+yahoo+exa-free (no keys). Api layer adds tavily/brave/exa when keyed.',
+      'Find public web evidence for facts, versions, APIs, or comparisons using multi-engine search with URL deduplication. ' +
+      'Start with complexity=simple for one fact; use distinct queries for multiple angles. ' +
+      'Returns ranked URLs, snippets, dates, and engine warnings. Use fetch_page when snippets do not establish the claim; ' +
+      'use x_search for X/Twitter. Free mode needs no keys.',
     inputSchema: fusedSearchInput,
     outputSchema: fusedSearchOutput,
     annotations: { ...ANNOTATIONS.search, title: 'Search the web (multi-engine fusion)' },
@@ -90,7 +88,7 @@ export function registerAll(server) {
 
   server.registerTool('fetch_page', {
     title: 'Fetch Page',
-    description: 'Fetch readable page text via Jina Reader with local HTML fallback. Use focus to filter paragraphs.',
+    description: 'Read a known public webpage or official documentation URL directly, without searching again. Returns readable text via Jina Reader with HTML fallback; removes page chrome without clipping the body. Use focus for relevant paragraphs, or omit it for the full readable page. If focus matches nothing, retry without it. Not an authenticated browser or live account-state tool.',
     inputSchema: fetchPageInput,
     outputSchema: fetchPageOutput,
     annotations: { ...ANNOTATIONS.search, title: 'Fetch URL content' },
@@ -115,60 +113,13 @@ export function registerAll(server) {
     }
   })
 
-  server.registerTool('deep_research', {
-    title: 'Deep Research (one round)',
-    description:
-      'One research round: complex fused search + coverage analysis + gaps + suggested follow-up queries. ' +
-      'Call repeatedly with suggested_queries until gaps is empty, then synthesize with citations.',
-    inputSchema: deepResearchInput,
-    outputSchema: deepResearchOutput,
-    annotations: { ...ANNOTATIONS.search, title: 'Deep research round' },
-  }, async (args, extra) => {
-    try {
-      if (!String(args.query ?? '').trim()) return toolErr('deep_research: query is required')
-      const signal = abortSignal(extra, 120_000)
-      const result = await runResearchRound({
-        query: args.query,
-        queries: args.queries,
-        maxSources: args.max_sources ?? 8,
-        recency: args.recency,
-        layer: args.layer,
-        round: args.round,
-        signal,
-      })
-      const gaps = result.gaps
-      const lines = [
-        `deep_research round ${result.round}: "${result.query}" — ${result.tookMs}ms`,
-        `gaps: ${gaps.length === 0 ? 'none' : gaps.join(', ')}`,
-        result.suggested_queries?.length ? `suggested: ${result.suggested_queries.join(' | ')}` : '',
-        '',
-        ...result.sources.map((s, i) => `${i + 1}. [${s.covered}/${s.total}] ${s.title}\n   ${s.url}`),
-      ]
-      return toolOk(lines.filter(Boolean).join('\n'), {
-        round: result.round,
-        query: result.query,
-        tookMs: result.tookMs,
-        gaps,
-        suggested_queries: result.suggested_queries ?? [],
-        sources: result.sources.map((s) => ({
-          title: s.title,
-          url: s.url,
-          domain: s.domain,
-          covered: s.covered,
-          total: s.total,
-          corroborated: Boolean(s.corroborated),
-        })),
-      })
-    } catch (err) {
-      return toolErr(err instanceof Error ? err.message : String(err))
-    }
-  })
-
   server.registerTool('x_search', {
     title: 'X (Twitter) Search',
     description:
-      'Real-time X/Twitter search: keyword, semantic, user profile, or thread. ' +
-      'Works without credentials (multi-engine + oEmbed fallback). Official path via grok login / XAI_API_KEY.',
+      'Search X/Twitter posts, inspect an account, or retrieve a thread. ' +
+      'Choose keyword/semantic with query, user with username, or thread with post_id. ' +
+      'Credential-free web/oEmbed fallbacks are available; configured X authentication can improve coverage. ' +
+      'Results are not guaranteed to cover all posts or a complete thread; a sample does not establish platform-wide sentiment.',
     inputSchema: xSearchInput,
     outputSchema: xSearchOutput,
     annotations: { ...ANNOTATIONS.search, title: 'Search X/Twitter' },
@@ -203,7 +154,7 @@ export function registerAll(server) {
 
   server.registerTool('search_layer', {
     title: 'Search Layer',
-    description: `Switch or show search layer. free = ${LAYER_LABELS.free}. api = ${LAYER_LABELS.api}.`,
+    description: `Inspect the current search layer with layer=show (default, no change). layer=free or api persists a new default: only change it when authorized. free = ${LAYER_LABELS.free}. api = ${LAYER_LABELS.api}. For a single search, use fused_search.layer instead.`,
     inputSchema: searchLayerInput,
     annotations: { ...ANNOTATIONS.config, title: 'Configure search layer' },
   }, async (args) => {
@@ -237,7 +188,7 @@ export function registerAll(server) {
 
   server.registerTool('search_stats', {
     title: 'Search Stats',
-    description: 'Diagnostics: cache hits/misses, tier counts, engine availability, recent searches.',
+    description: 'Read-only diagnostics for failed or empty searches: cache hits/misses, tier counts, engine availability, and recent activity. Call with no arguments. Inspect tool warnings too; an empty result alone does not imply missing credentials or justify changing configuration.',
     inputSchema: {},
     outputSchema: searchStatsOutput,
     annotations: { ...ANNOTATIONS.stats, title: 'Search diagnostics' },
@@ -251,8 +202,8 @@ export function registerAll(server) {
   })
 
   server.registerResource('search-policy', 'search-boost://policy', {
-    title: 'Search policy',
-    description: 'When to search, tool routing, stop conditions (markdown)',
+    title: 'Search usage reference',
+    description: 'Optional examples, evidence limitations, and connection/layer troubleshooting. Not required before tool calls.',
     mimeType: 'text/markdown',
   }, async (uri) => ({
     contents: [{
@@ -264,7 +215,7 @@ export function registerAll(server) {
 
   server.registerPrompt('search_routing', {
     title: 'Search tool routing',
-    description: 'Optional tool pick when you choose to search; bounded ~3 rounds',
+    description: 'Explicitly requested search-plan helper for a task; not required for normal tool calls.',
     argsSchema: {
       task: z.string().describe('What the user is trying to find out'),
     },
@@ -276,15 +227,11 @@ export function registerAll(server) {
         text: [
           `Task: ${task}`,
           '',
-          'If external facts matter and repo context is not enough, consider search-boost MCP tools (your call):',
-          '- fused_search: quick lookup — versions, APIs, docs, comparisons (complexity=simple first)',
-          '- fetch_page: snippets insufficient; official doc body (+ focus)',
-          '- x_search: X/Twitter posts, accounts, threads',
-          '- deep_research: multi-source synthesis (repeat until gaps empty)',
-          '- search_layer: switch free (keyless) vs api (keyed engines)',
-          '',
-          'Often skip: stable fundamentals, local workspace code, pure creation, user opt-out.',
-          'Optional reference: resource search-boost://policy.',
+          'Propose the smallest evidence-gathering plan for this task using the available MCP tool descriptions and schemas.',
+          'Identify the external claims that need checking, any known source URLs, and what evidence would be sufficient.',
+          'If local evidence already answers the task or browsing is forbidden, say so rather than scheduling searches.',
+          'Do not change search layers, credentials, or permissions as part of planning. Do not assume subagent tools exist.',
+          'Tools can be called directly; neither this prompt nor a skill is a prerequisite. Optional detailed reference: search-boost://policy.',
         ].join('\n'),
       },
     }],

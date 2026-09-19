@@ -27,7 +27,8 @@ const {
   buildXToolConfig, parseFinalMessage, salvageJson, salvageJsonForKind, readGrokClientInfo, buildXSearchPrompt,
 } = await import('../lib/search/xsearch.js')
 const { fusedSearch, makeCache } = await import('../lib/search/fusion.js')
-const { makePageCache } = await import('../lib/search/fetch.js')
+const { makePageCache, toFetchPageResult } = await import('../lib/search/fetch.js')
+const { preprocessPage, looksLikeHtml } = await import('../lib/search/page-preprocess.js')
 const { envProxyUrl } = await import('../lib/search/ipv4-fetch.js')
 const { containsSearchTerm, countWords, tokenize } = await import('../lib/search/text.js')
 const { pickExcerpts, pickParagraphs, excerptForTool } = await import('../lib/search/evidence.js')
@@ -158,6 +159,120 @@ assert('pickParagraphs drops link-list boilerplate', !paras.some((p) => p.starts
 assert('excerptForTool truncates at boundary', excerptForTool('a\n\n'.repeat(2000), 100).endsWith('[content truncated]'))
 
 // ---------------------------------------------------------------------------
+// Core: fetch_page preprocess (keep evidence, drop chrome) + no clip
+// ---------------------------------------------------------------------------
+{
+  const base = 'https://docs.example.com/guide/intro'
+  const html = `<!doctype html><html><head>
+<style>.ad{color:red}</style>
+<script>window.ads=1</script>
+</head><body>
+<nav>Docs <a href="https://api.example/ref">API reference</a></nav>
+<h1>Release notes</h1>
+<p>Node.js 24 entered Active LTS in October 2026.</p>
+<pre><code>npm install foo</code></pre>
+<table><tr><th>Version</th><th>Status</th></tr><tr><td>24</td><td>Active LTS</td></tr></table>
+<iframe src="https://doubleclick.net/ad" title="ad"></iframe>
+<img width="1" height="1" src="https://tracker.example/pixel">
+<img alt="architecture diagram" src="/arch.png">
+</body></html>`
+  assert('looksLikeHtml detects documents', looksLikeHtml(html) && !looksLikeHtml('# Title\n\nA short markdown page.'))
+  const cleaned = preprocessPage(html, base)
+  assert('preprocess drops style and script', !/window\.ads|\.ad\{color/.test(cleaned))
+  assert('preprocess drops ad iframe and tracking pixel', !/doubleclick|tracker\.example/.test(cleaned))
+  assert('preprocess keeps heading', /# Release notes/.test(cleaned))
+  assert('preprocess keeps paragraph', /Active LTS/.test(cleaned))
+  assert('preprocess keeps code', /npm install foo/.test(cleaned))
+  assert('preprocess keeps table cells', /24/.test(cleaned) && /Active LTS/.test(cleaned))
+  assert('preprocess keeps nav link with href', /\[API reference\]\(https:\/\/api\.example\/ref\)/.test(cleaned))
+  assert('preprocess keeps image alt and resolves src', /!\[architecture diagram\]\(https:\/\/docs\.example\.com\/arch\.png\)/.test(cleaned))
+
+  const indented = `<!doctype html><html><body>
+<pre><code>def foo():
+    if x:
+        return 1
+</code></pre>
+<p>done</p>
+</body></html>`
+  const indentedOut = preprocessPage(indented, base)
+  assert('preprocess keeps python indent in pre', /def foo\(\):\n    if x:\n        return 1/.test(indentedOut))
+
+  const nested = `<!doctype html><html><body>
+<ul>
+<li><a href="https://docs.example.com/api">API Docs</a></li>
+<li><img alt="badge" src="./badge.svg"></li>
+</ul>
+<h2>See <a href="/docs/api">API</a></h2>
+<blockquote>Read the <a href="../reference/foo">reference</a></blockquote>
+<table><tr><td><a href="/api/foo">foo()</a></td></tr></table>
+<iframe title="Authentication Guide" src="/docs/auth.html"></iframe>
+<p>Show &amp;lt;literal&gt; and &#x27;quote&#39;.</p>
+<template>aaa<template>bbb</template>ccc</template>
+<p>keep-me</p>
+</body></html>`
+  const nestedOut = preprocessPage(nested, base)
+  assert('preprocess keeps list link href', /\- \[API Docs\]\(https:\/\/docs\.example\.com\/api\)/.test(nestedOut))
+  assert('preprocess keeps list image', /!\[badge\]\(https:\/\/docs\.example\.com\/guide\/badge\.svg\)/.test(nestedOut))
+  assert('preprocess keeps heading link', /#+\s*See \[API\]\(https:\/\/docs\.example\.com\/docs\/api\)/.test(nestedOut))
+  assert('preprocess keeps blockquote link', /\[reference\]\(https:\/\/docs\.example\.com\/reference\/foo\)/.test(nestedOut))
+  assert('preprocess keeps table cell link', /\[foo\(\)\]\(https:\/\/docs\.example\.com\/api\/foo\)/.test(nestedOut))
+  assert('preprocess keeps iframe src', /\[Embedded: Authentication Guide\]\(https:\/\/docs\.example\.com\/docs\/auth\.html\)/.test(nestedOut))
+  assert('preprocess decodes entities once', /Show &lt;literal> and 'quote'/.test(nestedOut) && !/Show <literal>/.test(nestedOut))
+  assert('preprocess drops nested template without leftover close', /keep-me/.test(nestedOut) && !/aaa|bbb|ccc|<\/template>/.test(nestedOut))
+
+  const relativeKeep = preprocessPage('<!doctype html><html><body><a href="/docs/api">API</a></body></html>')
+  assert('preprocess keeps relative href without baseUrl', /\[API\]\(\/docs\/api\)/.test(relativeKeep))
+
+  const md = '# Guide\n\nCall `fused_search` then `fetch_page`.\n\n<style>x{}</style>\n<script>evil()</script>\n\n| Col |\n|---|\n| val |\n'
+  const mdOut = preprocessPage(md)
+  assert('preprocess markdown keeps body and table', /fused_search/.test(mdOut) && /\| val \|/.test(mdOut))
+  assert('preprocess markdown drops embedded script/style', !/evil\(\)|x\{\}/.test(mdOut))
+
+  const mdCode = '# Example\n\n```python\ndef foo():\n    if x:\n        return 1\n```\n\n```html\n<script>\n  console.log("hello")\n</script>\n<style>x{}</style>\n```\n\nMore text.\n'
+  const mdCodeOut = preprocessPage(mdCode)
+  assert('preprocess markdown keeps fenced indent', /def foo\(\):\n    if x:\n        return 1/.test(mdCodeOut))
+  assert('preprocess markdown keeps fenced html examples', /<script>[\s\S]*console\.log\("hello"\)[\s\S]*<\/script>/.test(mdCodeOut) && /<style>x\{\}<\/style>/.test(mdCodeOut))
+
+  const mdHtmlFence = `# Guide\n\n\`\`\`html\n${'<div><span><section><article><p><table><tr><td><ul><ol><li>x</li></ol></ul></td></tr></table></p></article></section></span></div>\n'.repeat(2)}\`\`\`\n`
+  assert('looksLikeHtml ignores fenced html examples', !looksLikeHtml(mdHtmlFence))
+
+  const mdIndent = '- A\n  - B\n\n    indented code\n'
+  const mdIndentOut = preprocessPage(mdIndent)
+  assert('markdown keeps nested list indent', /^- A\n  - B/m.test(mdIndentOut))
+  assert('markdown keeps 4-space indented code', /\n    indented code/.test(mdIndentOut))
+
+  const dataHref = preprocessPage('<!doctype html><html><body><a data-href="/fake" href="/real">Real</a></body></html>', 'https://example.com/page')
+  assert('attr does not treat data-href as href', /\[Real\]\(https:\/\/example.com\/real\)/.test(dataHref) && !/\/fake/.test(dataHref))
+
+  const fallbackHtml = `<!doctype html><html><body><table><caption>${'KeepThisEvidence '.repeat(20)}<a href="/real">RealLink</a><img alt="UsefulAlt" src="/x.png"></caption><tr><td>tiny</td></tr></table></body></html>`
+  const fallbackOut = preprocessPage(fallbackHtml, 'https://example.com/page')
+  assert('fallback keeps link href', /\[RealLink\]\(https:\/\/example.com\/real\)/.test(fallbackOut))
+  assert('fallback keeps img alt and src', /UsefulAlt/.test(fallbackOut) && /https:\/\/example.com\/x\.png/.test(fallbackOut))
+
+  const nestedList = `<!doctype html><html><body>
+<ol>
+  <li>Step 1<ul><li>Sub A</li><li>Sub B</li></ul></li>
+  <li>Step 2</li>
+</ol>
+</body></html>`
+  const nestedListOut = preprocessPage(nestedList, base)
+  assert('preprocess keeps ordered + nested list structure', /1\.\s+Step 1\n\s+- Sub A\n\s+- Sub B\n2\.\s+Step 2/.test(nestedListOut))
+  assert('preprocess does not flatten nested list onto one line', !/Step 1 Sub A/.test(nestedListOut))
+
+  const longerClose = '```js\nkeep-this-code\n````\n\n<script>BAD()</script>\n'
+  const longerCloseOut = preprocessPage(longerClose)
+  assert('markdown longer closing fence still ends the block', /keep-this-code/.test(longerCloseOut) && !/BAD\(\)/.test(longerCloseOut))
+
+  const preTicks = `<!doctype html><html><body><pre><code>use \`\`\` fences</code></pre><p>after-pre</p></body></html>`
+  const preTicksOut = preprocessPage(preTicks, base)
+  assert('pre fence avoids backtick collision', /use ``` fences/.test(preTicksOut) && /after-pre/.test(preTicksOut))
+
+  const long = 'word '.repeat(20_000)
+  const shaped = toFetchPageResult('https://example.com/doc', 'jina', long, undefined, false, Date.now())
+  assert('fetch result is not clipped', shaped.content === long && shaped.truncated === false && shaped.word_count > 10_000)
+}
+
+// ---------------------------------------------------------------------------
 // Core: audit log
 // ---------------------------------------------------------------------------
 const auditFile = join(TMP, 'audit', 'a.jsonl')
@@ -186,7 +301,7 @@ runtime.switchLayer('free')
 // ---------------------------------------------------------------------------
 // runtime facade contracts
 // ---------------------------------------------------------------------------
-for (const fn of ['runFused', 'runFetchPage', 'runResearchRound', 'runXSearch', 'describeLayer', 'switchLayer', 'invalidateSearchCaches', 'clearAllCaches', 'cacheSizes', 'xAuthCommands']) {
+for (const fn of ['runFused', 'runFetchPage', 'runXSearch', 'describeLayer', 'switchLayer', 'invalidateSearchCaches', 'clearAllCaches', 'cacheSizes', 'xAuthCommands']) {
   assert(`runtime exports ${fn}`, fn in runtime)
 }
 const info = runtime.describeLayer()
@@ -250,7 +365,8 @@ function mockDshCtx() {
   const m = mockDshCtx()
   dsh.apply(m.ctx, {})
   assert('dsh plugin name + inject', dsh.name === 'search-boost' && dsh.inject.includes('web') && dsh.inject.includes('commands'))
-  assert('dsh registers all tools', ['fused_search', 'fetch_page', 'x_search', 'deep_research', 'research_parallel', 'search_stats'].every((n) => m.tools.has(n)))
+  assert('dsh registers all tools', ['fused_search', 'fetch_page', 'x_search', 'research_parallel', 'search_stats'].every((n) => m.tools.has(n)))
+  assert('dsh does not register deep_research', !m.tools.has('deep_research'))
   assert('dsh registers commands', ['web_change', 'x-login', 'x-logout'].every((n) => m.commands.has(n)))
   assert('dsh registers both web providers with shared id', m.providers.search?.id === dsh.PROVIDER_ID && m.providers.fetch?.id === dsh.PROVIDER_ID)
   const policy = m.sections.find((s) => s.name === 'search:policy')
@@ -290,14 +406,13 @@ function mockDshCtx() {
   const handlers = new Map()
   const mockPi = { registerTool: (t) => tools.set(t.name, t), registerCommand: (n, c) => commands.set(n, c), on: (ev, fn) => handlers.set(ev, fn) }
   pi.default(mockPi)
-  assert('pi registers all tools', ['fused_search', 'fetch_page', 'deep_research', 'search-parallel-subagent', 'x_search'].every((n) => tools.has(n)))
+  assert('pi registers all tools', ['fused_search', 'fetch_page', 'search-parallel-subagent', 'x_search'].every((n) => tools.has(n)))
+  assert('pi does not register deep_research', !tools.has('deep_research'))
   assert('pi registers all commands', ['web_change', 'x-login', 'x-logout', 'search-cache', 'search-audit'].every((n) => commands.has(n)))
   for (const t of tools.values()) {
     assert(`pi ${t.name} parameters are plain JSON schema`, t.parameters.type === 'object' && typeof t.parameters.properties === 'object' && Array.isArray(t.promptGuidelines))
   }
   assert('pi fused_search keeps pi-only params', ['site', 'min_score', 'depth'].every((k) => k in tools.get('fused_search').parameters.properties) && tools.get('fused_search').parameters.properties.max_results.maximum === 20)
-  const deep = tools.get('deep_research').parameters.properties
-  assert('pi deep_research is one-round like MCP/DSH', !('mode' in deep) && !('max_rounds' in deep) && !('per_round' in deep) && !('goal' in deep) && 'round' in deep)
   assert('pi x_search requires type', tools.get('x_search').parameters.required.includes('type'))
   const injected = await handlers.get('before_agent_start')({ systemPrompt: 'BASE' })
   assert('pi injects <search_balance> once', injected.systemPrompt.startsWith('BASE\n<search_balance>') && Object.keys(await handlers.get('before_agent_start')({ systemPrompt: '<search_balance>' })).length === 0)

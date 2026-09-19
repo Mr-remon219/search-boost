@@ -14,7 +14,7 @@ function loadInstructions() {
     const path = loadMcpServerInstructionsPath()
     if (path) return readFileSync(path, 'utf8').trim()
   } catch { /* fall through */ }
-  return 'search-boost MCP: fused_search, fetch_page, x_search, deep_research. Use when you need verifiable external facts — at your discretion.'
+  return 'search-boost MCP: call tools directly using their descriptions and schemas. No skill or resource read is required.'
 }
 
 /** Build a configured McpServer (no transport attached) — used by serve and tests. */

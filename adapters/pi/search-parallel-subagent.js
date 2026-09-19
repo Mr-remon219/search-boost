@@ -12,13 +12,14 @@ import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { piSubagentTemplatePaths } from '../../agents/router.mjs'
 import { PATHS } from '../../lib/paths.mjs'
-import { hostOf, normalizeUrl } from '../../lib/runtime.mjs'
+import { RESEARCH_ROLES, RESEARCH_TOOLS, normalizeResearchTasks, renderResearchTemplate, researchResult, researchSummary } from '../../lib/search/parallel-contract.mjs'
+export { extractSourceUrls } from '../../lib/search/parallel-contract.mjs'
 
 /** Extension entry loaded into each searcher child. */
 export const SEARCH_BOOST_EXT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'index.js')
 
-export const SEARCHER_TOOLS = 'fused_search,fetch_page'
-export const ALLOWED_AGENTS = new Set(['searcher', 'summarizer'])
+export const SEARCHER_TOOLS = RESEARCH_TOOLS.join(',')
+export const ALLOWED_AGENTS = RESEARCH_ROLES
 
 function findPiCliScript() {
   const relative = path.join('node_modules', '@earendil-works', 'pi-coding-agent', 'dist', 'bundle', 'cli.js')
@@ -93,7 +94,7 @@ export function loadAgentConfig(name) {
   const filePath = resolveAgentPath(name)
   if (!filePath) return null
   try {
-    return parseAgentMarkdown(fs.readFileSync(filePath, 'utf8'), filePath)
+    return parseAgentMarkdown(renderResearchTemplate(fs.readFileSync(filePath, 'utf8')), filePath)
   } catch {
     return null
   }
@@ -118,49 +119,11 @@ export function buildChildCliArgs(agent, task, promptFile, dispatch = {}) {
   return args
 }
 
-export function normalizeTasks(params) {
-  const hasSingle = Boolean(params?.agent && params?.task)
-  const tasks = params?.tasks
-  const hasTasks = Array.isArray(tasks)
-  if (hasSingle === hasTasks) {
-    throw new Error('search-parallel-subagent: provide exactly one of { agent, task } or tasks[]')
-  }
-  const items = hasSingle ? [{ agent: params.agent, task: params.task }] : tasks
-  if (items.length === 0) {
-    throw new Error('search-parallel-subagent: tasks must not be empty')
-  }
-  for (const item of items) {
-    const agent = String(item?.agent ?? '').trim()
-    const task = String(item?.task ?? '').trim()
-    if (!agent || !task) {
-      throw new Error('search-parallel-subagent: each item needs agent and task')
-    }
-    if (!ALLOWED_AGENTS.has(agent)) {
-      throw new Error(`search-parallel-subagent: unknown agent "${agent}"`)
-    }
-  }
-  return items.map((item) => ({ agent: String(item.agent).trim(), task: String(item.task).trim() }))
-}
+export const normalizeTasks = normalizeResearchTasks
 
 function appendBounded(current, chunk, maxChars = 12_000) {
   const combined = current + chunk
   return combined.length <= maxChars ? combined : combined.slice(-maxChars)
-}
-
-/** Parse actual cited HTTP(S) URLs from a subagent's final report. */
-export function extractSourceUrls(text) {
-  const urls = new Set()
-  for (const match of String(text ?? '').matchAll(/https?:\/\/[^\s<>"'`\]}]+/g)) {
-    let cleaned = match[0]
-      .replace(/[.,;:!?]+$/, '')
-      .replace(/(?:\*{1,3}|_{1,3}|~{1,2})$/, '')
-    while (cleaned.endsWith(')') && (cleaned.match(/\)/g)?.length ?? 0) > (cleaned.match(/\(/g)?.length ?? 0)) {
-      cleaned = cleaned.slice(0, -1)
-    }
-    const normalized = normalizeUrl(cleaned)
-    if (normalized.startsWith('http') && hostOf(normalized)) urls.add(normalized)
-  }
-  return [...urls]
 }
 
 export function isTransientProviderTransportError(text) {
@@ -189,18 +152,7 @@ function writePromptToTempFile(agentName, prompt) {
 }
 
 function abortedTask(item, started = Date.now(), error = 'aborted by caller') {
-  return {
-    agent: item.agent,
-    task: item.task,
-    ok: false,
-    result: error,
-    error,
-    tookMs: Date.now() - started,
-    turns: 0,
-    attempts: 1,
-    sources: [],
-    domains: [],
-  }
+  return researchResult(item, { status: 'aborted', result: error, error, tookMs: Date.now() - started })
 }
 
 async function runAgentAttempt(item, timeoutMs, signal, dispatch) {
@@ -320,19 +272,11 @@ async function runAgentAttempt(item, timeoutMs, signal, dispatch) {
     const stderrDetail = stderr.trim().split(/\r?\n/).slice(-8).join(' | ')
     const error = errorMessage || stderrDetail || `exit ${exitCode}, stop: ${stopReason || '?'}`
     const ok = childAttemptSucceeded({ exitCode, terminationRequested, errorMessage, stopReason, result })
-    const sources = extractSourceUrls(result)
-    return {
-      agent: item.agent,
-      task: item.task,
-      ok,
-      result: result || error || '(no output)',
-      tookMs: Date.now() - started,
-      turns,
-      attempts: 1,
-      sources,
-      domains: [...new Set(sources.map(hostOf).filter(Boolean))],
-      error: ok ? undefined : error,
-    }
+    return researchResult(item, {
+      status: ok ? 'completed' : terminationRequested ? (signal?.aborted ? 'aborted' : 'timeout') : 'error',
+      result: result || error || '(no output)', error: ok ? undefined : error,
+      tookMs: Date.now() - started, turns,
+    })
   } finally {
     if (tmpPrompt) {
       try { fs.unlinkSync(tmpPrompt) } catch { /* ignore */ }
@@ -382,14 +326,5 @@ export async function runSearchParallel(opts) {
     (item) => runAgentAttempt(item, timeoutMs, opts.signal, dispatch),
   )
 
-  const sourceUrls = [...new Set(results.flatMap((result) => result.sources))]
-  const domains = [...new Set(sourceUrls.map(hostOf).filter(Boolean))]
-  return {
-    results,
-    okCount: results.filter((result) => result.ok).length,
-    sourceUrls,
-    domains,
-    totalTurns: results.reduce((sum, result) => sum + result.turns, 0),
-    totalMs: Date.now() - started,
-  }
+  return researchSummary(results, started)
 }

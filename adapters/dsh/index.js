@@ -4,7 +4,7 @@
 // one row mounts this plugin, one repoints the `web` seam's searchProvider /
 // fetchProvider at it, so the built-in `web_search` / `web_fetch` run on
 // SearchBoost Core while keeping the native citation cards. Beside the
-// providers we register fused_search / fetch_page / x_search / deep_research /
+// providers we register fused_search / fetch_page / x_search /
 // research_parallel / search_stats, the proactive-search policy section, a
 // live status section, and the /web_change, /x-login, /x-logout commands.
 //
@@ -13,6 +13,7 @@
 // lossless-JSON output, commands, and the system-prompt sections.
 
 import { readFileSync } from 'node:fs'
+import { renderResearchTemplate } from '../../lib/search/parallel-contract.mjs'
 import { promptPath } from '../../agents/router.mjs'
 import {
   ENGINE_ORDER,
@@ -28,9 +29,7 @@ import {
   parallelResearch,
   runFetchPage,
   runFused,
-  runResearchRound,
   runXSearch,
-  setResearchTimer,
   switchLayer,
   xAuthAvailableSync,
   xAuthCommands,
@@ -48,7 +47,7 @@ const LOG_PREFIX = '[search-boost/dsh]'
 export function loadPolicySection() {
   let text = ''
   try {
-    text = readFileSync(promptPath('dsh'), 'utf8').trim()
+    text = renderResearchTemplate(readFileSync(promptPath('dsh'), 'utf8')).trim()
   } catch (err) {
     console.error(`${LOG_PREFIX} policy load failed:`, err instanceof Error ? err.message : String(err))
   }
@@ -73,23 +72,13 @@ export function apply(ctx, config = {}) {
   safe('fused_search', () => { if (config.fusedSearch !== false) registerFusedSearchTool(ctx) })
   safe('fetch_page', () => { if (config.fetchPage !== false) registerFetchPageTool(ctx) })
   safe('x_search', () => { if (config.xSearch !== false) registerXSearchTool(ctx) })
-  safe('deep_research', () => { if (config.deepResearch !== false) registerDeepResearchTool(ctx) })
-  safe('research_parallel', () => { if (config.researchParallel !== false) registerParallelTool(ctx) })
+  safe('research_parallel', () => { if (config.researchParallel !== false) registerParallelTool(ctx, config.researchProvider) })
   safe('search_stats', () => { if (config.searchStats !== false) registerStatsTool(ctx) })
   safe('policy section', () => { if (config.policy !== false) ctx.systemPrompt?.section(loadPolicySection()) })
   safe('search status section', () => registerStatusSection(ctx))
   safe('web_change command', () => registerWebChangeCommand(ctx))
   safe('x-login command', () => registerXLoginCommand(ctx))
   safe('x-logout command', () => registerXLogoutCommand(ctx))
-  try {
-    const timer =
-      typeof ctx.timeout === 'function'
-        ? (ms) => ctx.timeout(ms)
-        : ctx.get?.('timer')?.timeout?.bind(ctx.get('timer'))
-    if (typeof timer === 'function') setResearchTimer((ms) => timer(ms))
-  } catch (err) {
-    console.error(`${LOG_PREFIX} timer setup failed:`, err instanceof Error ? err.message : String(err))
-  }
 }
 
 // ---------- web seam providers (power the built-in web_search / web_fetch) ----------
@@ -302,7 +291,7 @@ function registerFetchPageTool(ctx) {
     name: 'fetch_page',
     description:
       'Fetch and extract the full text content of one URL (Jina Reader markdown first, local HTML extraction fallback for blocked sites like github.com). ' +
-      'Pass focus="<topic>" to keep only the paragraphs around that topic and save ~90% of tokens. Results are cached 24h.',
+      'Drops CSS/JS/ad chrome up front and does not clip the body. Pass focus="<topic>" to keep only the paragraphs around that topic. Results are cached 24h.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -536,139 +525,43 @@ function registerXLogoutCommand(ctx) {
   })
 }
 
-// ---------- deep_research ----------
-
-function registerDeepResearchTool(ctx) {
-  return ctx.tools.register({
-    name: 'deep_research',
-    description:
-      'Step-mode deep research: ONE round of complex fused search + coverage analysis (which query terms each source covers) ' +
-      '+ cross-domain corroboration stats + coverage gaps + suggested next queries. ' +
-      'You (the agent) drive the loop: call it again with suggested_queries until gaps is empty, then synthesize the final answer with citations. ' +
-      'For single-source claims or when a snippet is thin, verify with fetch_page on the top URLs before citing. ' +
-      'Use for multi-source synthesis, comparisons, surveys, or any question needing corroborated evidence. ' +
-      'Stop when gaps is empty or after max_rounds rounds (3 max) — do not loop on the same query.',
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        query: { type: 'string', description: 'The research question.' },
-        goal: { type: 'string', description: 'Optional: what the final answer must establish.' },
-        queries: { type: 'array', items: { type: 'string' }, description: 'Optional extra query variants for round 1.' },
-        max_sources: { type: 'number', description: 'Max sources to analyze (default 8).' },
-        recency: { type: 'string', enum: ['day', 'week', 'month', 'year'], description: 'Recency window for round 1.' },
-        layer: { type: 'string', enum: ['free', 'api'], description: 'Override the active layer for this call (default: current /web_change layer).' },
-        round: { type: 'number', description: 'Research round number (auto-increments when omitted).' },
-      },
-      required: ['query'],
-    },
-    presentCall: (args) => ({
-      card: 'generic',
-      title: `deep_research: "${String(args?.query ?? '').slice(0, 60)}"`,
-      kind: 'search',
-      rawInput: args?.query,
-    }),
-    output: {
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          round: { type: 'number' }, query: { type: 'string' }, layer: { type: 'string' },
-          queriesUsed: { type: 'array', items: { type: 'string' } },
-          tookMs: { type: 'number' },
-          sources: {
-            type: 'array',
-            items: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                title: { type: 'string' }, url: { type: 'string' }, domain: { type: 'string' },
-                snippet: { type: 'string' }, covered: { type: 'number' }, total: { type: 'number' },
-                corroborated: { type: 'boolean' }, engines: { type: 'array', items: { type: 'string' } },
-                published: { type: 'string' },
-              },
-              required: ['title', 'url', 'domain'],
-            },
-          },
-          gaps: { type: 'array', items: { type: 'string' } },
-          suggested_queries: { type: 'array', items: { type: 'string' } },
-          note: { type: 'string' },
-        },
-        required: ['query', 'sources', 'gaps', 'suggested_queries'],
-      },
-      render: (_args, value) => [{ type: 'text', text: renderResearch(value) }],
-      presentationMeta: (_args, value) => ({
-        round: value.round,
-        sourceCount: (value.sources ?? []).length,
-        gapsCount: (value.gaps ?? []).length,
-        suggestedCount: (value.suggested_queries ?? []).length,
-      }),
-    },
-    presentResult: (_args, result) => {
-      const meta = result.meta
-      if (!meta) return undefined
-      return {
-        card: 'generic',
-        title: `deep_research: round ${meta.round}, ${meta.sourceCount} sources, ${meta.gapsCount} gaps${meta.suggestedCount ? `, ${meta.suggestedCount} suggested` : ''}`,
-      }
-    },
-    timeoutMs: 120000,
-    isConcurrencySafe: () => true,
-    async execute(args, exec) {
-      return cleanJsonValue(await runResearchRound({
-        query: args.query,
-        queries: args.queries,
-        maxSources: args.max_sources ?? 8,
-        recency: args.recency,
-        layer: args.layer ?? null,
-        round: args.round,
-        signal: exec?.signal,
-      }))
-    },
-  })
-}
-
-function renderResearch(value) {
-  const lines = []
-  lines.push(`**deep_research round ${value.round}: "${value.query}"** — ${value.tookMs}ms`)
-  lines.push(`sources (${value.sources.length}):`)
-  for (const s of value.sources) {
-    lines.push(`- [${s.covered}/${s.total}] ${s.corroborated ? '✅佐证' : '⚠️单源'} ${s.title} — ${s.domain}${s.published ? ` (${s.published})` : ''}`)
-    lines.push(`  ${s.url}`)
-    if (s.snippet) lines.push(`  ${s.snippet}`)
-  }
-  lines.push(`gaps: ${value.gaps.length === 0 ? 'none' : value.gaps.join(', ')}`)
-  if (value.suggested_queries.length > 0) {
-    lines.push(`suggested next queries: ${value.suggested_queries.join(' | ')}`)
-  }
-  return lines.join('\n')
-}
-
 // ---------- research_parallel (DSH native subagents) ----------
 
-function registerParallelTool(ctx) {
+function registerParallelTool(ctx, provider = 'spawn') {
   return ctx.tools.register({
     name: 'research_parallel',
     description:
-      'Parallel multi-agent research: decompose a question into sub-queries (or take yours), spawn one subagent per sub-query ' +
-      '(each with its own context window, inheriting fused_search/fetch_page), run them in parallel under a time budget, ' +
-      'and merge their findings and sources. Use for large multi-angle research where one agent would be slow or shallow. ' +
-      'Pass 2-4 independent sub_queries covering different angles; when omitted, 3 heuristic angles are derived.',
+      'Native DSH research children using the same searcher/summarizer roles as Pi. ' +
+      'Use {agent, task} for one child or {tasks:[{agent,task},...]} for a concurrent wave. ' +
+      'Searchers get fused_search/fetch_page only; summarizers get no tools. Delegation must be authorized. ' +
+      'The parent owns synthesis: fast mode = one wave; complex mode = searchers then a summarizer, ' +
+      'follow only material gaps, at most 3 waves. Missing capabilities fail explicitly; no Pi CLI fallback. ' +
+      'Legacy {query, sub_queries} remains supported. Prefer explicit independent tasks; ordinary lookups use fused_search.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
-        query: { type: 'string', description: 'The research question.' },
-        goal: { type: 'string', description: 'Optional: what the final answer must establish.' },
-        sub_queries: { type: 'array', items: { type: 'string' }, description: 'Optional 2-4 independent sub-queries.' },
-        max_seconds: { type: 'number', description: 'Time budget in seconds (default 120, max 300).' },
-        max_sources: { type: 'number', description: 'Max results per subagent search (default 6).' },
+        agent: { type: 'string', enum: ['searcher', 'summarizer'], description: 'Single child role; use with task, not tasks/sub_queries.' },
+        task: { type: 'string', minLength: 1, description: 'Bounded research task or question + reports for a summarizer.' },
+        tasks: {
+          type: 'array', minItems: 1,
+          items: {
+            type: 'object', additionalProperties: false,
+            properties: { agent: { type: 'string', enum: ['searcher', 'summarizer'] }, task: { type: 'string', minLength: 1 } },
+            required: ['agent', 'task'],
+          },
+          description: 'One concurrent wave, usually 2–4 independent research tasks. Choose a size within the host budget.',
+        },
+        query: { type: 'string', description: 'Question context; required only for legacy query/sub_queries mode.' },
+        goal: { type: 'string', description: 'What the evidence must establish.' },
+        sub_queries: { type: 'array', minItems: 2, maxItems: 4, items: { type: 'string' }, description: 'Legacy independent angles; do not combine with tasks or agent/task.' },
+        max_seconds: { type: 'number', minimum: 1, maximum: 300, description: 'Whole-wave deadline, including startup (default 120 seconds). Cancellation requests host cleanup.' },
+        max_sources: { type: 'integer', minimum: 1, maximum: 10, description: 'Requested results per child search (default 6); prompt budget, not a hard tool-call cap.' },
       },
-      required: ['query'],
     },
     presentCall: (args) => ({
       card: 'generic',
-      title: `research_parallel: "${String(args?.query ?? '').slice(0, 60)}"`,
+      title: `research_parallel: "${String(args?.query ?? args?.task ?? `${args?.tasks?.length ?? 0} tasks`).slice(0, 60)}"`,
       kind: 'search',
       rawInput: args?.query,
     }),
@@ -679,6 +572,12 @@ function registerParallelTool(ctx) {
         properties: {
           query: { type: 'string' },
           sub_tasks: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          results: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          okCount: { type: 'number' },
+          sourceUrls: { type: 'array', items: { type: 'string' } },
+          domains: { type: 'array', items: { type: 'string' } },
+          totalTurns: { type: 'number' },
+          totalMs: { type: 'number' },
           merged_sources: { type: 'array', items: { type: 'string' } },
           took_ms: { type: 'number' },
           note: { type: 'string' },
@@ -705,6 +604,10 @@ function registerParallelTool(ctx) {
       const subagents = ctx.get('subagents')
       return cleanJsonValue(await parallelResearch({
         query: args.query,
+        agentRole: args.agent,
+        task: args.task,
+        tasks: args.tasks,
+        provider,
         goal: args.goal,
         subQueries: args.sub_queries,
         maxSeconds: args.max_seconds,
@@ -724,7 +627,9 @@ function renderParallel(value) {
   for (const u of value.merged_sources.slice(0, 12)) lines.push(`- ${u}`)
   for (const st of value.sub_tasks) {
     lines.push(`\n--- [${st.status}] ${st.title} ---`)
-    lines.push(String(st.output ?? '').slice(0, 1200))
+    lines.push(String(st.output ?? ''))
+    if (st.error) lines.push(`Error: ${st.error}`)
+    if (st.truncated) lines.push('[report truncated; do not treat missing text as evidence]')
   }
   return lines.join('\n')
 }

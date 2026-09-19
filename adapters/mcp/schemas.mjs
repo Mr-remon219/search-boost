@@ -8,14 +8,14 @@ const engineEnum = z.enum(ENGINE_ORDER)
 
 export const fusedSearchInput = {
   query: z.string().describe('Search query (site:, -site:, "phrase", A OR B)'),
-  queries: z.array(z.string()).optional().describe('Extra query variants (max 3)'),
+  queries: z.array(z.string()).optional().describe('Distinct query angles, not paraphrases; use up to 3 variants'),
   engines: z.array(engineEnum).optional().describe('Engine subset override'),
   max_results: z.number().int().min(1).max(10).optional().describe('Max results (default 6)'),
-  include_domains: z.array(z.string()).optional(),
-  exclude_domains: z.array(z.string()).optional(),
-  recency: z.enum(['day', 'week', 'month', 'year']).optional(),
-  complexity: z.enum(['auto', 'simple', 'medium', 'complex']).optional(),
-  layer: z.enum(['free', 'api']).optional(),
+  include_domains: z.array(z.string()).optional().describe('Restrict results to these hostnames, e.g. nodejs.org; useful for official sources'),
+  exclude_domains: z.array(z.string()).optional().describe('Exclude these hostnames from results'),
+  recency: z.enum(['day', 'week', 'month', 'year']).optional().describe('Favor recent dated results; omit for historical or version-pinned documentation'),
+  complexity: z.enum(['auto', 'simple', 'medium', 'complex']).optional().describe('Search budget: simple for a focused lookup, complex for multi-angle research; default auto'),
+  layer: z.enum(['free', 'api']).optional().describe('Override the search layer for this request only; does not persist configuration'),
 }
 
 export const fusedSearchOutput = {
@@ -46,7 +46,7 @@ export const fusedSearchOutput = {
 
 export const fetchPageInput = {
   url: z.string().url().describe('http(s) URL to fetch'),
-  focus: z.string().optional().describe('Keep paragraphs matching these terms (~90% token savings)'),
+  focus: z.string().optional().describe('Keep paragraphs matching these terms (optional; full page is returned when omitted)'),
 }
 
 export const fetchPageOutput = {
@@ -58,37 +58,12 @@ export const fetchPageOutput = {
   content: z.string(),
 }
 
-export const deepResearchInput = {
-  query: z.string(),
-  queries: z.array(z.string()).optional(),
-  max_sources: z.number().int().min(2).max(12).optional(),
-  recency: z.enum(['day', 'week', 'month', 'year']).optional(),
-  layer: z.enum(['free', 'api']).optional(),
-  round: z.number().int().min(1).optional().describe('Research round number (auto-increments when omitted)'),
-}
-
-export const deepResearchOutput = {
-  round: z.number(),
-  query: z.string(),
-  tookMs: z.number(),
-  gaps: z.array(z.string()),
-  suggested_queries: z.array(z.string()),
-  sources: z.array(z.object({
-    title: z.string(),
-    url: z.string(),
-    domain: z.string(),
-    covered: z.number(),
-    total: z.number(),
-    corroborated: z.boolean(),
-  })),
-}
-
 export const xSearchInput = {
-  type: z.enum(['keyword', 'semantic', 'user', 'thread']).optional(),
-  query: z.string().optional(),
-  username: z.string().optional(),
-  post_id: z.string().optional(),
-  max_results: z.number().int().min(1).max(10).optional(),
+  type: z.enum(['keyword', 'semantic', 'user', 'thread']).optional().describe('Mode: keyword (default) or semantic uses query; user uses username; thread uses post_id'),
+  query: z.string().optional().describe('Search terms and X filters (e.g. from:OpenAI), or a natural-language topic for semantic mode'),
+  username: z.string().optional().describe('X account handle for type=user'),
+  post_id: z.string().optional().describe('Real X post ID or status URL for type=thread'),
+  max_results: z.number().int().min(1).max(10).optional().describe('Requested result limit, 1–10'),
   from_date: z.string().optional().describe('YYYY-MM-DD'),
   to_date: z.string().optional().describe('YYYY-MM-DD'),
 }
@@ -102,7 +77,7 @@ export const xSearchOutput = {
 }
 
 export const searchLayerInput = {
-  layer: z.enum(['free', 'api', 'show']).optional(),
+  layer: z.enum(['free', 'api', 'show']).optional().describe('show (default) reads current state; free/api persist a new default and require authorization'),
 }
 
 export const searchStatsOutput = {
@@ -111,6 +86,12 @@ export const searchStatsOutput = {
   cacheHits: z.number(),
   cacheMisses: z.number(),
   tierCounts: z.record(z.number()),
+  keyedEngines: z.object({
+    configured: z.number(),
+    enabled: z.number(),
+    total: z.number(),
+    enabledNames: z.array(z.string()),
+  }),
   engines: z.record(z.boolean()),
   xOfficial: z.boolean(),
   xSource: z.string(),

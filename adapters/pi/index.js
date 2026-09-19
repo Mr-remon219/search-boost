@@ -3,7 +3,7 @@
 // Loaded by pi via package.json `pi.extensions` (pi install npm:search-boost-mcp),
 // by `pi -e <this file>`, or through the ~/.pi/agent/extensions shim written by
 // `search-boost install -t pi`. Registers the search tools (fused_search,
-// fetch_page, deep_research, search-parallel-subagent, x_search), the TUI commands
+// fetch_page, search-parallel-subagent, x_search), the TUI commands
 // (/web_change, /x-login, /x-logout, /search-cache, /search-audit) and injects
 // the <search_balance> policy (agents/pi/inject.md) into pi's system prompt.
 //
@@ -31,7 +31,6 @@ import {
   jwtTier,
   runFetchPage,
   runFused,
-  runResearchRound,
   runXSearch,
   switchLayer,
   tierName,
@@ -203,7 +202,7 @@ export default function searchBoostExtension(pi) {
     name: 'fetch_page',
     label: 'Fetch Page (Reader Mode)',
     description:
-      'Fetch a URL and extract its readable content as Markdown. Uses the Jina Reader service (keyless) with a local heuristic extractor as fallback. Returns content (truncated to max_chars), word count, fetch method and timestamp. Results are cached for 24h.',
+      'Fetch a URL and extract its readable content as Markdown. Uses the Jina Reader service (keyless) with a local heuristic extractor as fallback. Drops CSS/JS/ad chrome up front; the body is not clipped. Returns content, word count, fetch method and timestamp. Results are cached for 24h.',
     promptSnippet: 'Fetch a web page and extract readable content',
     promptGuidelines: [
       'fetch_page: use it to read full pages when search snippets are not enough — it returns clean article text.',
@@ -213,8 +212,7 @@ export default function searchBoostExtension(pi) {
       type: 'object',
       properties: {
         url: { type: 'string', description: 'Absolute http(s) URL to fetch' },
-        max_chars: { type: 'integer', minimum: 1000, maximum: 60000, default: 12000, description: 'Max content chars' },
-        focus: { type: 'string', description: 'Optional focus terms: when provided, only paragraphs relevant to these terms are returned (dynamic filtering) — typically drops 80-95% of tokens. Pass the research question or the specific thing you need from the page.' },
+        focus: { type: 'string', description: 'Optional focus terms: when provided, only paragraphs relevant to these terms are returned. Pass the research question or the specific thing you need from the page. Omit to keep the full preprocessed body.' },
       },
       required: ['url'],
     },
@@ -224,7 +222,7 @@ export default function searchBoostExtension(pi) {
       progress(`fetch_page: ${params.url}`)
       let page
       try {
-        page = await runFetchPage(params.url, params.focus, signal, { maxChars: params.max_chars ?? 12000 })
+        page = await runFetchPage(params.url, params.focus, signal)
       } catch (err) {
         audit.write({
           type: 'fetch',
@@ -272,7 +270,7 @@ export default function searchBoostExtension(pi) {
     name: 'search-parallel-subagent',
     label: 'Search Parallel Subagent',
     description:
-      'Spawn isolated searcher or summarizer child agents. You choose how many and which role. Single mode: { agent, task }. Parallel mode: { tasks: [{ agent, task }, ...] } — every task starts at once, no concurrency cap. Prefer /fast-parallel (one searcher wave, then you continue) or /complex-parallel (searchers → summarizer → more searchers, few waves). For a single-angle deep dive without subagents, use deep_research.',
+      'Spawn isolated searcher or summarizer child agents. You choose how many and which role. Single mode: { agent, task }. Parallel mode: { tasks: [{ agent, task }, ...] } — every task starts at once, no concurrency cap. Prefer /fast-parallel (one searcher wave, then you continue) or /complex-parallel (searchers → summarizer → more searchers, few waves). For a single-angle lookup without subagents, use fused_search.',
     promptSnippet: 'Spawn searcher/summarizer subagents (parallelism is your choice)',
     promptGuidelines: [
       'search-parallel-subagent: you decide the task list and size — the tool does not cap concurrency. Pass { agent, task } for one child or tasks[] for a parallel wave.',
@@ -336,90 +334,18 @@ export default function searchBoostExtension(pi) {
           lines.push(`(${(r.tookMs / 1000).toFixed(1)}s, ${r.turns} turns${r.attempts > 1 ? `, ${r.attempts} attempts` : ''}, ${r.sources.length} cited sources)`)
         }
         lines.push(r.result)
+        if (r.truncated) lines.push('[report truncated; do not treat missing text as evidence]')
         lines.push('')
       })
       return {
         content: [text(lines.join('\n').trim())],
         details: {
           results: res.results.map((r) => ({
-            agent: r.agent, task: r.task, ok: r.ok, tookMs: r.tookMs, turns: r.turns,
+            agent: r.agent, task: r.task, ok: r.ok, status: r.status, truncated: r.truncated, tookMs: r.tookMs, turns: r.turns,
             attempts: r.attempts, sources: r.sources, domains: r.domains, error: r.error,
           })),
           sourceUrls: res.sourceUrls,
           domains: res.domains,
-        },
-      }
-    },
-  })
-
-  /* --------------------------- deep_research (one round) --------------------------- */
-
-  pi.registerTool({
-    name: 'deep_research',
-    label: 'Deep Research (one round)',
-    description:
-      'One research round: complex fused search + coverage analysis + gaps + suggested follow-up queries. ' +
-      'Call again with suggested_queries until gaps is empty, then synthesize with citations.',
-    promptSnippet: 'Run one deep-research round and return coverage gaps',
-    promptGuidelines: [
-      'deep_research: one round per call — fused search plus which query terms each source covers, gaps, and suggested follow-ups.',
-      'deep_research loop: you drive it. Call again with suggested_queries (or your own) until gaps is empty, then synthesize with citations. Stop after about 3 rounds or when the same query repeats.',
-      'deep_research citations: cite source URLs from this report; treat single-source claims as unverified. Use fetch_page when a snippet is too thin.',
-    ],
-    parameters: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: 'The research question' },
-        queries: { type: 'array', items: { type: 'string' }, description: 'Optional extra query variants for this round' },
-        max_sources: { type: 'integer', minimum: 2, maximum: 12, default: 8 },
-        recency: { type: 'string', enum: RECENCY_ENUM, description: 'Recency window for this round' },
-        engines: { type: 'array', items: { type: 'string', enum: ENGINE_ORDER }, description: 'Engine subset override (default: active layer complex tier)' },
-        layer: { type: 'string', enum: ['free', 'api'], description: 'Override the active layer for this call' },
-        round: { type: 'integer', minimum: 1, description: 'Research round number (auto-increments when omitted)' },
-      },
-      required: ['query'],
-    },
-    async execute(_toolCallId, params, signal, onUpdate) {
-      const progress = onProgress(onUpdate)
-      progress(`deep_research: "${params.query}"`)
-      const res = await runResearchRound({
-        query: params.query,
-        queries: params.queries,
-        maxSources: params.max_sources ?? 8,
-        recency: params.recency,
-        layer: params.layer,
-        round: params.round,
-        engineList: params.engines,
-        signal,
-      })
-      audit.write({
-        type: 'research',
-        ts: new Date().toISOString(),
-        query: params.query,
-        round: res.round,
-        sources: res.sources.length,
-        gaps: res.gaps,
-        tookMs: res.tookMs,
-      })
-
-      const gaps = res.gaps ?? []
-      const lines = [
-        `deep_research round ${res.round}: "${res.query}" — ${res.tookMs}ms`,
-        `gaps: ${gaps.length === 0 ? 'none' : gaps.join(', ')}`,
-        res.suggested_queries?.length ? `suggested: ${res.suggested_queries.join(' | ')}` : '',
-        res.note ?? '',
-        '',
-        ...res.sources.map((s, i) => `${i + 1}. [${s.covered}/${s.total}] ${s.title}\n   ${s.url}`),
-      ]
-      return {
-        content: [text(lines.filter(Boolean).join('\n'))],
-        details: {
-          round: res.round,
-          query: res.query,
-          tookMs: res.tookMs,
-          gaps,
-          suggested_queries: res.suggested_queries ?? [],
-          sources: res.sources,
         },
       }
     },

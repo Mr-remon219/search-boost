@@ -14,7 +14,6 @@ import {
   allAttemptedEnginesFailed,
   annotateFusedLayerEngines,
   apiLayerFreeOnlyWarning,
-  allocateResearchRound,
   availableEngines,
   formatAllEnginesFailedMessage,
   formatEngineStatsLine,
@@ -144,11 +143,6 @@ const singleKeyedAnnotated = annotateFusedLayerEngines(
   ['bing', 'ddg', 'tavily'],
 )
 assert('single keyed engine no free-only warning', !singleKeyedAnnotated.warnings?.some((w) => w.includes('free engines only')))
-
-assert('allocateResearchRound explicit', allocateResearchRound(3) === 3)
-const autoA = allocateResearchRound()
-const autoB = allocateResearchRound()
-assert('allocateResearchRound auto-increment', autoA >= 1 && autoB === autoA + 1)
 
 const fused = await fusedSearch({
   query: 'node mcp test',
