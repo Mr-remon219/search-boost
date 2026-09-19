@@ -799,11 +799,17 @@ assert('parseFlags --skip-grok-plugin', parseFlags(['--skip-grok-plugin']).skipG
 assert('installGrokPlugin skip', installGrokPlugin({ skip: true }).skipped === true)
 assert('uninstallGrokPlugin skip', uninstallGrokPlugin({ skip: true }).skipped === true)
 assert(
-  'grok install failure hint names the path length and a short-path workaround',
+  'grok install failure hint is Windows-only and names path length plus a short-path workaround',
   (() => {
     const dir = '/tmp/' + 'a'.repeat(60) + '/grok-plugin'
-    const hint = grokInstallFailureHint(dir)
-    return hint.includes(`(${dir.length} characters)`) && hint.includes('short ASCII path') && hint.includes('C:\\sb\\grok-plugin')
+    const win = grokInstallFailureHint(dir, 'win32')
+    const linux = grokInstallFailureHint(dir, 'linux')
+    return (
+      win.includes(`(${dir.length} characters)`) &&
+      win.includes('short ASCII path') &&
+      win.includes('C:\\sb\\grok-plugin') &&
+      linux === ''
+    )
   })(),
 )
 
