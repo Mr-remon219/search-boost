@@ -4,8 +4,8 @@
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { isAuthEntryUsable } from '../lib/search/xauth.js'
-import { xAuthAvailableSync } from '../lib/search/xsearch.js'
+import { isAuthEntryUsable } from '../lib/search/x/xauth.js'
+import { xAuthAvailableSync } from '../lib/search/x/xsearch.js'
 
 let failed = 0
 

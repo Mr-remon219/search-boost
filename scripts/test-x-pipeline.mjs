@@ -14,9 +14,9 @@ process.env.SEARCH_BOOST_LAYER = 'free'
 for (const key of ['XAI_API_KEY', 'TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY']) delete process.env[key]
 mkdirSync(process.env.HOME, { recursive: true })
 
-const { createXPipeline, normalizePosts, normalizeUsers, snowflakeDate, xIdentity } = await import('../lib/search/x-pipeline.js')
-const { parseTweets, hitToPost, fallbackXSearch } = await import('../lib/search/xfallback.js')
-const { buildXSearchPrompt } = await import('../lib/search/xsearch.js')
+const { createXPipeline, normalizePosts, normalizeUsers, snowflakeDate, xIdentity } = await import('../lib/search/x/x-pipeline.js')
+const { parseTweets, hitToPost, fallbackXSearch } = await import('../lib/search/x/xfallback.js')
+const { buildXSearchPrompt } = await import('../lib/search/x/xsearch.js')
 const runtime = await import('../lib/runtime.mjs')
 let count = 0
 async function test(name, fn) { await fn(); count++; console.log(`ok: ${name}`) }

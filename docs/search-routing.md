@@ -26,8 +26,8 @@ MCP / Pi / DSH x_search
 
 - `lib/search/results.js`：Web URL/日期规范化、X URL 身份、域名过滤、通用去重、三态过滤、domain/author 多样性选择。
 - `lib/search/routing.js`：引擎池、9 组权重、路由校验、共用 description / 原生参数定义。
-- `lib/search/x-pipeline.js`：X 特有的数据结构、作者/日期/metadata operators；复用公共函数。
-- `lib/search/community.js`：只做 Web/X 最终聚合，不负责检索。
+- `lib/search/x/x-pipeline.js`：X 特有的数据结构、作者/日期/metadata operators；复用公共函数。
+- `lib/search/x/community.js`：只做 Web/X 最终聚合，不负责检索。
 - `lib/search/capability.js`：所有宿主与运行时共用的动态能力快照。
 - `lib/runtime.mjs`：网络编排、缓存和最终诊断；适配器只映射参数、注册接口和渲染。
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Syntax-check shipped source — .mjs tree-wide plus Core lib/search/*.js and
- * the host adapters' *.js (adapters/pi, adapters/dsh).
+ * Syntax-check shipped source — .mjs tree-wide plus Core lib/search .js files
+ * (recursive, including lib/search/x/) and the host adapters' .js (adapters/pi, adapters/dsh).
  */
 import { execFileSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
@@ -22,7 +22,7 @@ function collect(dir) {
       out.push(join(dir, entry.name))
     } else if (entry.name.endsWith('.js')) {
       const rel = relative(ROOT, dir).replace(/\\/g, '/')
-      if (rel === 'lib/search' || rel.startsWith('adapters/')) out.push(join(dir, entry.name))
+      if (rel === 'lib/search' || rel.startsWith('lib/search/') || rel.startsWith('adapters/')) out.push(join(dir, entry.name))
     }
   }
   return out

@@ -25,7 +25,7 @@ mkdirSync(process.env.HOME, { recursive: true })
 
 const {
   buildXToolConfig, parseFinalMessage, salvageJson, salvageJsonForKind, readGrokClientInfo, buildXSearchPrompt,
-} = await import('../lib/search/xsearch.js')
+} = await import('../lib/search/x/xsearch.js')
 const { fusedSearch, makeCache } = await import('../lib/search/fusion.js')
 const { makePageCache, toFetchPageResult } = await import('../lib/search/fetch.js')
 const { preprocessPage, looksLikeHtml } = await import('../lib/search/page-preprocess.js')
