@@ -60,8 +60,12 @@
     "test:engines": "node scripts/test-engine-requests.mjs",
     "test:xauth": "node scripts/test-xauth.mjs",
     "test:jev": "node scripts/test-jev.mjs",
+    "test:jev-client": "node scripts/test-jev-client.mjs",
+    "test:adaptive": "node scripts/test-adaptive-search.mjs",
+    "jev:probe": "node scripts/jev-probe.mjs",
+    "eval:adaptive": "node scripts/eval-adaptive-search.mjs",
     "test:cli": "node scripts/test-cli-surface.mjs",
-    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:cli && npm run test:install && npm run test:doctor && npm run test:fusion && npm run test:x && npm run test:engines && npm run test:xauth && npm run test:jev && npm run test:search && npm run test:adapters && npm run test:parallel && npm run test:upgrade && npm run test:mcp && npm run smoke",
+    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:cli && npm run test:install && npm run test:doctor && npm run test:fusion && npm run test:x && npm run test:engines && npm run test:xauth && npm run test:jev && npm run test:jev-client && npm run test:adaptive && npm run test:search && npm run test:adapters && npm run test:parallel && npm run test:upgrade && npm run test:mcp && npm run smoke",
     "test:search": "node scripts/test-search-routing.mjs"
   },
   "dependencies": {

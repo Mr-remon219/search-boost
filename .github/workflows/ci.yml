@@ -70,6 +70,14 @@ jobs:
         if: always()
         run: npm run test:xauth
 
+      - name: Jev client (System One transport)
+        if: always()
+        run: npm run test:jev-client
+
+      - name: Adaptive search (Jev loop)
+        if: always()
+        run: npm run test:adaptive
+
       - name: Search routing
         if: always()
         run: npm run test:search
