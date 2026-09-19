@@ -92,7 +92,12 @@ writeFileSync(file,JSON.stringify(pkg,null,2));`)
   if (process.platform === 'win32') write(join(tools, 'dsh.cmd'), `@"${process.execPath}" "${dsh}" %*\r\n`)
   else { write(join(tools, 'dsh'), `#!/bin/sh\nexec "${process.execPath}" "${dsh}" "$@"\n`); const { chmodSync } = await import('node:fs'); chmodSync(join(tools, 'dsh'), 0o755) }
   const sep = process.platform === 'win32' ? ';' : ':'
-  env.PATH = [tools, process.platform === 'win32' ? prefix : join(prefix, 'bin'), env.PATH].join(sep)
+  // Windows stores the variable as `Path`, so `env.PATH` is undefined there and
+  // this rewrite used to drop node itself: npm's generated bin shims start with
+  // `"node" ...`, which then fails with "not recognized as an internal command".
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path')
+  if (!pathKey) throw new Error('migration fixture needs PATH in the environment')
+  env[pathKey] = [tools, process.platform === 'win32' ? prefix : join(prefix, 'bin'), dirname(process.execPath), env[pathKey]].join(sep)
 
   const token = join(home, '.search-boost', 'config', 'xauth.json'), keys = join(home, '.dsh-search-boost-keys.json'), layer = join(home, '.search-boost', 'config', 'layer.json')
   write(token, { token: 'fixture-secret-not-real' }); write(keys, { tavily: 'fixture-key-not-real' }); write(layer, { layer: 'free' })
