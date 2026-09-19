@@ -692,6 +692,17 @@ assert('grok scope has artifacts project', grokScopeHasArtifacts('project') === 
 assert('grok uninstall scopes user only', grokUninstallScopes('user').join() === 'user')
 assert('grok uninstall scopes all', grokUninstallScopes('all').join() === 'user,project')
 await AGENTS.grok.uninstall({ scope: 'project', dryRun: false })
+assert('legacy pi package counts as configured and triggers the duplicate-tools warning', runInTempHome(`
+  import { mkdirSync, writeFileSync } from 'node:fs'
+  import { join } from 'node:path'
+  const home = process.env.HOME
+  mkdirSync(join(home, '.pi', 'agent'), { recursive: true })
+  writeFileSync(join(home, '.pi', 'agent', 'settings.json'), JSON.stringify({ packages: [{ source: 'npm:pi-search-boost@0.1.3' }] }), 'utf8')
+  const { agentConfigured, piRegistersLegacyPackage } = await import('./lib/paths.mjs')
+  const { piLegacyExtensionPresent } = await import('./lib/agents/host-runtime.mjs')
+  const state = { configured: agentConfigured('pi'), legacy: piRegistersLegacyPackage(), warns: piLegacyExtensionPresent() }
+  if (!state.configured || !state.legacy || !state.warns) throw new Error('legacy pi not recognized: ' + JSON.stringify(state))
+`))
 assert('grok uninstall project config', !existsSync(join(grokDir, '.grok', 'config.toml')))
 assert('grok uninstall project rule', !existsSync(join(grokDir, '.grok', 'rules', 'search-boost.md')))
 assert('grok uninstall project skill', !existsSync(join(grokDir, '.grok', 'skills', 'search-boost', 'SKILL.md')))
