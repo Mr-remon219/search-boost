@@ -192,6 +192,22 @@ try {
     assert.ok(posts.every((r) => r.published > '2020-01-01'))
     xPosts = saved; mode = 'web'
   })
+  await test('domain-restricted search puts the site: hint back for engines that cannot filter hosts', async () => {
+    const seen = []
+    const fake = {
+      bing: { available: () => true, search: (q) => { seen.push(['bing', q]); return [] } },
+      tavily: { available: () => true, nativeDomains: true, search: (q) => { seen.push(['tavily', q]); return [] } },
+    }
+    await runtime.runEngine(fake, 'bing', 'installation guide', 5, { includeDomains: ['nodejs.org'] })
+    await runtime.runEngine(fake, 'tavily', 'installation guide', 5, { includeDomains: ['nodejs.org'] })
+    await runtime.runEngine(fake, 'bing', 'installation guide', 5, {})
+    assert.deepEqual(seen, [
+      ['bing', 'site:nodejs.org installation guide'],
+      ['tavily', 'installation guide'],
+      ['bing', 'installation guide'],
+    ])
+  })
+
   await test('candidate-mode cache cannot leak unfiltered/unlimited results into public x_search', async () => {
     const args = { type: 'keyword', query: 'alpha beta', allowed_x_handles: ['alice'], max_results: 1, engineList: ['bing'] }
     const candidates = await xSearch(args, { candidateMode: true })
