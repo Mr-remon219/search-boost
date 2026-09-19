@@ -116,6 +116,14 @@ writeFileSync(file,JSON.stringify(pkg,null,2));`)
 
   const initialAgents = [claude, codex, cursor, piSettings, projectPi, dshProfile].map((file) => [file, bytes(file)])
 
+  // Precondition probe: the migration path resolves the global root/prefix through
+  // npm itself and deliberately never echoes npm output (it may contain secrets),
+  // so a broken child environment would only surface as a generic failure.
+  for (const args of [['--version'], ['root', '--global'], ['prefix', '--global']]) {
+    const probe = await runCommand('npm', args, { env, cwd })
+    assert.equal(probe.code, 0, `npm ${args.join(' ')} failed (exit ${probe.code})\n${probe.stdout}\n${probe.stderr}\nPATH=${env[pathKey]}`)
+  }
+
   // Prewarm exactly as npx would, without requiring a transition version.
   const npx = (command, ...args) => ['exec', '--yes', '--ignore-scripts', '--package=search-boost@2.0.0', '--', 'search-boost', command, ...args]
   assert.equal((await checkedNpm(npx('--version'))).trim(), '2.0.0')
