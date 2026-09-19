@@ -59,7 +59,8 @@
     "test:x": "node scripts/test-x-pipeline.mjs",
     "test:engines": "node scripts/test-engine-requests.mjs",
     "test:xauth": "node scripts/test-xauth.mjs",
-    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:install && npm run test:doctor && npm run test:fusion && npm run test:x && npm run test:engines && npm run test:xauth && npm run test:search && npm run test:adapters && npm run test:parallel && npm run test:upgrade && npm run test:mcp && npm run smoke",
+    "test:cli": "node scripts/test-cli-surface.mjs",
+    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:cli && npm run test:install && npm run test:doctor && npm run test:fusion && npm run test:x && npm run test:engines && npm run test:xauth && npm run test:search && npm run test:adapters && npm run test:parallel && npm run test:upgrade && npm run test:mcp && npm run smoke",
     "test:search": "node scripts/test-search-routing.mjs"
   },
   "dependencies": {

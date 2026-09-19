@@ -38,6 +38,10 @@ jobs:
         if: always()
         run: npm run check
 
+      - name: CLI surface
+        if: always()
+        run: npm run test:cli
+
       - name: Doctor CLI smoke
         if: always()
         run: node scripts/ci-doctor-smoke.mjs
