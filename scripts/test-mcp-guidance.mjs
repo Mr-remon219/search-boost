@@ -27,7 +27,7 @@ try {
   const instructions = client.getInstructions()
   assert(instructions.includes('No skill, resource read, or routing prompt is required'))
   const { tools } = await client.listTools()
-  assert.equal(tools.length, 5)
+  assert.equal(tools.length, 6)
   const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]))
   for (const tool of tools) assert(tool.description?.length > 40)
   for (const name of ['fused_search', 'fetch_page', 'x_search', 'search_layer']) {
@@ -35,6 +35,13 @@ try {
       assert(schema.description, `${name}.${field}: missing direct-call guidance`)
     }
   }
+  for (const [field, schema] of Object.entries(byName.adaptive_search.inputSchema.properties)) {
+    assert(schema.description, `adaptive_search.${field}: missing direct-call guidance`)
+  }
+  assert.deepEqual(byName.adaptive_search.inputSchema.required, ['questions'])
+  assert.equal(byName.adaptive_search.inputSchema.properties.questions.minItems, 1)
+  assert.equal(byName.adaptive_search.inputSchema.properties.questions.maxItems, 6)
+  assert.equal(byName.adaptive_search.inputSchema.properties.questions.items.maxLength, 400)
   assert.equal(byName.fused_search.inputSchema.properties.max_results.maximum, 10)
   assert.deepEqual(byName.fetch_page.inputSchema.required, ['url'])
   assert.equal(byName.x_search.inputSchema.properties.allowed_x_handles.maxItems, 20)
@@ -64,6 +71,25 @@ try {
   writeFileSync(join(home, 'keys.json'), JSON.stringify({ tavily: 'fixture-secret-tavily', enabledEngines: [] }))
   assert.ok(!(await capability()).availableEngines.includes('tavily'), 'Resource re-reads current routing each time')
   console.log('ok: live MCP capability resource and actual fused output metadata, without live engine calls')
+  // adaptive_search is registered unconditionally and stays honest without Jev.
+  const adaptive = await client.callTool({ name: 'adaptive_search', arguments: { questions: ['fixture question'] } })
+  assert.equal(adaptive.isError, true)
+  assert.equal(adaptive.structuredContent.stopReason, 'not_configured')
+  assert.equal(adaptive.structuredContent.questions.length, 1)
+  assert.match(adaptive.content[0].text, /search-boost config jev/)
+  assert.ok(!JSON.stringify(adaptive.structuredContent).includes('fixture-secret'), 'no credential material in the result')
+  let invalidRejected = false
+  try {
+    const invalid = await client.callTool({ name: 'adaptive_search', arguments: { questions: [] } })
+    invalidRejected = Boolean(invalid.isError)
+  } catch {
+    invalidRejected = true
+  }
+  assert.ok(invalidRejected, 'an empty question list is rejected at the protocol boundary')
+  const capabilityText = JSON.stringify(await capability())
+  assert.ok(capabilityText.includes('adaptive'), 'capability reports Jev readiness without a key')
+  assert.ok(!/adaptive_search is available/.test(capabilityText) || capabilityText.includes('"configured":false'), 'no advertising while unconfigured')
+  console.log('ok: adaptive_search registers honestly without Jev credentials and never exposes keys')
   const resource = await client.readResource({ uri: 'search-boost://policy' })
   const text = resource.contents[0].text
   const examples = [...text.matchAll(/```json\s*([\s\S]*?)```/g)]

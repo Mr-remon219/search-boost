@@ -18,15 +18,25 @@ import {
   allAttemptedEnginesFailed,
   fusedHitToJson,
   getLayer,
+  jevCapability,
   LAYER_LABELS,
   renderXItem,
+  runAdaptiveSearch,
   runFetchPage,
   runFused,
   runXSearch,
   switchLayer,
 } from '../../lib/runtime.mjs'
 import {
+  ADAPTIVE_DESCRIPTION,
+  ADAPTIVE_QUESTIONS_PARAM,
+  ADAPTIVE_TOOL_NAME,
+  renderAdaptiveSummary,
+} from '../../lib/search/adaptive/describe.js'
+import {
   ANNOTATIONS,
+  adaptiveSearchInput,
+  adaptiveSearchOutput,
   fetchPageInput,
   fetchPageOutput,
   fusedSearchInput,
@@ -37,8 +47,12 @@ import {
   xSearchOutput,
 } from './schemas.mjs'
 
-/** @param {import('@modelcontextprotocol/sdk/server/mcp.js').McpServer} server */
-export function registerAll(server) {
+/** Structured content for adaptive_search: the core result is the output contract. */
+function summarizeAdaptive(result) {
+  return result
+}
+
+/** @param {import('@modelcontextprotocol/sdk/server/mcp.js').McpServer} server */export function registerAll(server) {
   server.registerTool('fused_search', {
     title: 'Fused Web Search',
     description: FUSED_DESCRIPTION + ' Optional live status: search-boost://capabilities Resource.',
@@ -199,8 +213,35 @@ export function registerAll(server) {
     }
   })
 
-  server.registerResource('search-capabilities', 'search-boost://capabilities', {
-    title: 'Live search capabilities',
+  server.registerTool(ADAPTIVE_TOOL_NAME, {
+    title: 'Adaptive Search (Jev)',
+    description: ADAPTIVE_DESCRIPTION,
+    inputSchema: adaptiveSearchInput,
+    outputSchema: adaptiveSearchOutput,
+    annotations: { ...ANNOTATIONS.search, title: 'Multi-question adaptive evidence loop (Jev)' },
+  }, async (args, extra) => {
+    try {
+      const questions = args?.questions
+      if (!Array.isArray(questions) || questions.length === 0) {
+        return toolErr('adaptive_search: questions is required (1-6 non-empty strings)')
+      }
+      const result = await runAdaptiveSearch({ questions }, {
+        signal: abortSignal(extra, 150_000),
+        host: 'mcp',
+        audit: extra?.audit,
+      })
+      const isError = result.stopReason === 'invalid_input' || result.stopReason === 'not_configured' || result.stopReason === 'no_engines'
+      const suffix = result.stopReason === 'not_configured'
+        ? `\n\nJev is not configured: run \`${result.configurationHint ?? 'search-boost config jev'}\`, or use fused_search / fetch_page / x_search directly.`
+        : ''
+      const text = `${renderAdaptiveSummary(result)}${suffix}`
+      return isError ? toolErr(text, summarizeAdaptive(result)) : toolOk(text, summarizeAdaptive(result))
+    } catch (err) {
+      return toolErr(err instanceof Error ? err.message : String(err))
+    }
+  })
+
+  server.registerResource('search-capabilities', 'search-boost://capabilities', {    title: 'Live search capabilities',
     description: 'Current available engines, pool defaults, compatibility layer and X official/fallback readiness. Recomputed on every read; no credentials or live connectivity guarantee.',
     mimeType: 'application/json',
   }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(collectRuntimeCapabilities(), null, 2) }] }))

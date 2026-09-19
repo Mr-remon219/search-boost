@@ -17,6 +17,12 @@ import { readFileSync } from 'node:fs'
 import { renderResearchTemplate } from '../../lib/search/parallel-contract.mjs'
 import { promptPath } from '../../agents/router.mjs'
 import {
+  ADAPTIVE_DESCRIPTION,
+  ADAPTIVE_QUESTIONS_PARAM,
+  ADAPTIVE_TOOL_NAME,
+  renderAdaptiveSummary,
+} from '../../lib/search/adaptive/describe.js'
+import {
   ENGINE_ORDER,
   LAYER_LABELS,
   X_MODES,
@@ -29,6 +35,7 @@ import {
   hostOf,
   isSsrfError,
   parallelResearch,
+  runAdaptiveSearch,
   runFetchPage,
   runFused,
   runXSearch,
@@ -73,6 +80,7 @@ export function apply(ctx, config = {}) {
   safe('fetchProvider', () => { if (config.fetchProvider !== false) registerFetchProvider(ctx) })
   safe('fused_search', () => { if (config.fusedSearch !== false) registerFusedSearchTool(ctx) })
   safe('fetch_page', () => { if (config.fetchPage !== false) registerFetchPageTool(ctx) })
+  safe('adaptive_search', () => { if (config.adaptiveSearch !== false) registerAdaptiveSearchTool(ctx) })
   safe('x_search', () => { if (config.xSearch !== false) registerXSearchTool(ctx) })
   safe('research_parallel', () => { if (config.researchParallel !== false) registerParallelTool(ctx, config.researchProvider) })
   safe('search_stats', () => { if (config.searchStats !== false) registerStatsTool(ctx) })
@@ -339,6 +347,87 @@ function registerFetchPageTool(ctx) {
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       return cleanJsonValue(await runFetchPage(args.url, args.focus, exec?.signal))
+    },
+  })
+}
+
+// ---------- adaptive_search (Jev) ----------
+
+function registerAdaptiveSearchTool(ctx) {
+  return ctx.tools.register({
+    name: ADAPTIVE_TOOL_NAME,
+    description: ADAPTIVE_DESCRIPTION,
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        questions: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 6,
+          items: { type: 'string', maxLength: 400 },
+          description: ADAPTIVE_QUESTIONS_PARAM,
+        },
+      },
+      required: ['questions'],
+    },
+    presentCall: (args) => ({
+      card: 'generic',
+      title: `adaptive_search: ${Array.isArray(args?.questions) ? args.questions.length : 0} question(s)`,
+      kind: 'search',
+      rawInput: (args?.questions ?? []).join(' | ').slice(0, 60),
+    }),
+    output: {
+      schema: {
+        type: 'object',
+        properties: {
+          schemaVersion: { type: 'number' },
+          tool: { type: 'string' },
+          questions: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          uncovered: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          rounds: { type: 'number' },
+          stopReason: { type: 'string' },
+          stopDetail: { type: ['string', 'null'] },
+          evidence: { type: 'object', additionalProperties: true },
+          usage: { type: 'object', additionalProperties: true },
+          roundLog: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          jev: { type: 'object', additionalProperties: true },
+          limits: { type: 'object', additionalProperties: true },
+          warnings: { type: 'array', items: { type: 'string' } },
+          outputTruncated: { type: 'boolean' },
+          fallback: { type: 'object', additionalProperties: true },
+          configurationHint: { type: 'string' },
+        },
+        required: ['schemaVersion', 'tool', 'questions', 'rounds', 'stopReason'],
+      },
+      render: (_args, value) => [{ type: 'text', text: renderAdaptiveSummary(value) }],
+      presentationMeta: (_args, value) => ({
+        covered: (value.questions ?? []).filter((q) => q.status === 'covered').length,
+        total: (value.questions ?? []).length,
+        sources: (value.questions ?? [])
+          .flatMap((q) => (q.evidence ?? []).map((item) => ({
+            url: item.url,
+            ...(item.title ? { title: item.title } : {}),
+            ...(item.reviewedText ? { snippet: String(item.reviewedText).slice(0, 200) } : {}),
+          })))
+          .slice(0, 12),
+      }),
+    },
+    presentResult: (_args, result) => {
+      const meta = result.meta
+      if (!meta) return undefined
+      return {
+        card: 'web',
+        kind: 'search',
+        title: `adaptive_search: ${meta.covered}/${meta.total} questions covered`,
+        sources: meta.sources ?? [],
+        truncated: false,
+      }
+    },
+    timeoutMs: 180000,
+    isConcurrencySafe: () => false,
+    async execute(args, exec) {
+      return cleanJsonValue(await runAdaptiveSearch({ questions: args.questions }, { signal: exec?.signal, host: 'dsh' }))
     },
   })
 }

@@ -141,6 +141,7 @@ search-boost uninstall -t cursor,codex,claude -y
 | `x_search` | 搜 X / Twitter：关键词、用户、帖子串 |
 | `search_layer` | 查看/切换兼容默认值：`free → free`、`api → hybrid`；单次搜索用 `engine_pool` |
 | `search_stats` | 看缓存、各引擎是否可用等诊断信息 |
+| `adaptive_search` | 可选：1–6 个独立问题，逐题给出覆盖证据（由 Jev 驱动；需配置 Jev 凭据） |
 
 另外还有资源 `search-boost://policy` 和提示词 `search_routing`。
 
@@ -168,7 +169,7 @@ search-boost config x --set-xai-key KEY   # 保存 XAI API key
 search-boost config x --logout            # 删除本地副本
 ```
 
-**Jev 凭据（实验功能）：** TUI → **Jev credentials (experimental)**，或 `search-boost config jev`，保存 [TypeSafe Jev](https://console.typesafe.ai/settings/keys) System One 决策模型的 endpoint 与 API Key。`jev` 块与搜索引擎 Key 放在同一个 keys 文件里（便于统一处理），但 Jev **不是搜索引擎**：不会进入 `KEY_NAMES`、引擎路由或 api 层引擎池。目前仅记录凭据，尚无任何调用；配置后 `search-boost status` 与 TUI → Status 会显示该块。回退环境变量 `TYPESAFE_API_KEY`，默认 base URL `https://api.typesafe.ai/v1`。
+**Jev 凭据（实验功能）：** TUI → **Jev credentials (experimental)**，或 `search-boost config jev`，保存 [TypeSafe Jev](https://console.typesafe.ai/settings/keys) System One 决策模型的 endpoint 与 API Key。`jev` 块与搜索引擎 Key 放在同一个 keys 文件里（便于统一处理），但 Jev **不是搜索引擎**：不会进入 `KEY_NAMES`、引擎路由或 api 层引擎池。配置凭据后，可选工具 `adaptive_search` 会用 Jev 选引擎、逐题评价已收集的证据，并给出逐题覆盖结论（状态为 `covered` / `insufficient` / `unassessed` / `not_searched` / `failed`，同时返回送审片段）。问题文本与判断所需的证据片段会发往所配置的服务（默认 TypeSafe）；引擎 Key 与 fingerprint 永不发送，也不会写盘。未配置时该工具诚实返回 `not_configured` 且不发任何网络请求；`fused_search` / `fetch_page` / `x_search` 完全不受影响。配置后 `search-boost status` 与 TUI → Status 会显示该块。回退环境变量 `TYPESAFE_API_KEY`，默认 base URL `https://api.typesafe.ai/v1`。
 
 ```bash
 search-boost config jev --show                                     # 查看 Jev 状态
@@ -280,7 +281,7 @@ Hook 只读取本地提示词，不联网、不授予工具权限；提示词缺
 | | pi（`adapters/pi`） | DSH（`adapters/dsh`） |
 |---|---|---|
 | 加载方式 | `pi install npm:search-boost`、`pi -e adapters/pi/index.js`，或 `search-boost install -t pi` 写入的 shim | `dsh plugin --profile web add search-boost`（自动应用 `adapters/dsh/cordis.patch.yml`，接管内置 `web_search` / `web_fetch`） |
-| 工具 | `fused_search`（含 `site`/`min_score`/`depth`，最多 20 条）、`fetch_page`（不裁剪）、`search-parallel-subagent`（searcher/summarizer 子进程；`/fast-parallel` `/complex-parallel`）、`x_search` | `fused_search`、`fetch_page`、`x_search`、`research_parallel`（DSH 原生 subagents）、`search_stats`；原生引用卡片 |
+| 工具 | `fused_search`（含 `site`/`min_score`/`depth`，最多 20 条）、`fetch_page`（不裁剪）、`search-parallel-subagent`（searcher/summarizer 子进程；`/fast-parallel` `/complex-parallel`）、`x_search`、`adaptive_search`（Jev） | `fused_search`、`fetch_page`、`x_search`、`research_parallel`（DSH 原生 subagents）、`search_stats`、`adaptive_search`（Jev）；原生引用卡片 |
 | 命令 | `/web_change`、`/x-login`、`/x-logout`、`/search-cache`、`/search-audit` | `/web_change`、`/x-login`、`/x-logout` |
 | 提示词 | `before_agent_start` 追加 `<search_balance>` + 当日搜索预算 | `systemPrompt.section` `search:policy`（115）+ 动态 `search:status`（116） |
 | 状态 | 审计日志 `~/.pi/agent/search-boost-audit.jsonl`；旧的 `~/.pi/agent/search-boost-layer.json` / `xsearch-auth.json` 仍可读 | — |

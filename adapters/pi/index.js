@@ -31,6 +31,7 @@ import {
   getLayer,
   hostOf,
   jwtTier,
+  runAdaptiveSearch,
   runFetchPage,
   runFused,
   runXSearch,
@@ -39,6 +40,13 @@ import {
   xAuthCommands,
 } from '../../lib/runtime.mjs'
 import { normalizeTasks, runSearchParallel } from './search-parallel-subagent.js'
+import {
+  ADAPTIVE_DESCRIPTION,
+  ADAPTIVE_PROMPT_GUIDELINES,
+  ADAPTIVE_QUESTIONS_PARAM,
+  ADAPTIVE_TOOL_NAME,
+  renderAdaptiveSummary,
+} from '../../lib/search/adaptive/describe.js'
 
 const RECENCY_ENUM = ['day', 'week', 'month', 'year', 'any']
 
@@ -258,6 +266,75 @@ export default function searchBoostExtension(pi) {
           page.content,
         ].filter((l, i) => l !== '' || i === 3).join('\n'))],
         details: { via: page.via, fetchedAt: page.fetched_at, wordCount: page.word_count, focusMiss: Boolean(page.focusMiss) },
+      }
+    },
+  })
+
+  /* --------------------------- adaptive_search (Jev) --------------------------- */
+
+  pi.registerTool({
+    name: ADAPTIVE_TOOL_NAME,
+    label: 'Adaptive Search (Jev)',
+    description: ADAPTIVE_DESCRIPTION,
+    promptSnippet: 'Gather per-question coverage evidence for 1–6 independent questions (Jev-driven)',
+    promptGuidelines: ADAPTIVE_PROMPT_GUIDELINES,
+    parameters: {
+      type: 'object',
+      properties: {
+        questions: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 6,
+          items: { type: 'string', maxLength: 400 },
+          description: ADAPTIVE_QUESTIONS_PARAM,
+        },
+      },
+      required: ['questions'],
+    },
+    async execute(_toolCallId, params, signal, onUpdate) {
+      const progress = onProgress(onUpdate)
+      const started = Date.now()
+      const questions = Array.isArray(params?.questions) ? params.questions : []
+      progress(`adaptive_search: ${questions.length} question(s) — planning engines, judging per question…`)
+      const res = await runAdaptiveSearch({ questions }, {
+        signal,
+        host: 'pi',
+        audit,
+        onProgress: (message) => progress(`adaptive_search: ${message}`),
+      })
+      const domains = new Set()
+      for (const q of res.questions) for (const item of q.evidence ?? []) if (item.domain) domains.add(item.domain)
+      audit.write({
+        type: 'research',
+        ts: new Date().toISOString(),
+        query: questions.join(' | ').slice(0, 240),
+        mode: ADAPTIVE_TOOL_NAME,
+        rounds: res.rounds,
+        stopReason: res.stopReason,
+        sources: res.evidence?.total ?? 0,
+        domains: domains.size,
+        uncovered: (res.uncovered ?? []).map((entry) => entry.id),
+        tookMs: Date.now() - started,
+        subtasks: res.questions.length,
+        successfulSubtasks: res.questions.filter((q) => q.status === 'covered').length,
+      })
+      return {
+        content: [text(renderAdaptiveSummary(res))],
+        details: {
+          stopReason: res.stopReason,
+          questions: res.questions.map((q) => ({
+            id: q.id,
+            status: q.status,
+            assessed: q.assessed,
+            coverage: q.coverage?.probability ?? null,
+            basis: q.coverage?.textBasis ?? null,
+            evidenceCount: q.evidenceCount,
+            reasons: q.uncoveredReasons,
+          })),
+          jev: res.jev,
+          usage: res.usage,
+          warnings: res.warnings,
+        },
       }
     },
   })

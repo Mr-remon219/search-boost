@@ -141,6 +141,7 @@ Uninstall removes only **search-boost-owned** blocks (marked MCP entries, skills
 | `x_search` | X/Twitter keyword / user / thread |
 | `search_layer` | Show/set the compatibility default: `free → free`, `api → hybrid`; use `engine_pool` per search |
 | `search_stats` | Cache hits, engine availability, diagnostics |
+| `adaptive_search` | Optional 1–6 independent questions with per-question coverage evidence (Jev-driven; requires Jev credentials) |
 
 Also: resource `search-boost://policy` · prompt `search_routing`
 
@@ -164,7 +165,7 @@ search-boost config x --set-xai-key KEY   # store XAI API key
 search-boost config x --logout            # remove local copy
 ```
 
-**Jev credentials (experimental):** TUI → **Jev credentials (experimental)**, or `search-boost config jev`, stores the endpoint and API key for [TypeSafe's Jev](https://console.typesafe.ai/settings/keys) System One decision model. The `jev` block lives in the same keys file as the engine keys so every secret has one home, but Jev is **not a search engine**: it never joins `KEY_NAMES`, engine routing, or the api-layer pool. Nothing calls Jev yet — the option only records the credentials, and `search-boost status` / TUI → Status print the block once it is set. `TYPESAFE_API_KEY` is read as a fallback; default base URL `https://api.typesafe.ai/v1`.
+**Jev credentials (experimental):** TUI → **Jev credentials (experimental)**, or `search-boost config jev`, stores the endpoint and API key for [TypeSafe's Jev](https://console.typesafe.ai/settings/keys) System One decision model. The `jev` block lives in the same keys file as the engine keys so every secret has one home, but Jev is **not a search engine**: it never joins `KEY_NAMES`, engine routing, or the api-layer pool. With credentials set, the optional `adaptive_search` tool uses Jev to pick engines, judge each collected fragment for its own question and report per-question coverage (statuses `covered` / `insufficient` / `unassessed` / `not_searched` / `failed`, with the reviewed fragments). Question text and the necessary evidence fragments are sent to the configured service (default TypeSafe) — no engine key or fingerprint is ever sent, and nothing is written to disk. Without credentials the tool returns `not_configured` without any network request; `fused_search` / `fetch_page` / `x_search` are unaffected and always available. `search-boost status` / TUI → Status print the block once it is set. `TYPESAFE_API_KEY` is read as a fallback; default base URL `https://api.typesafe.ai/v1`.
 
 ```bash
 search-boost config jev --show                                     # Jev status
@@ -280,7 +281,7 @@ Both hosts run the search tools **in-process** on the same core the MCP server u
 | | pi (`adapters/pi`) | DSH (`adapters/dsh`) |
 |---|---|---|
 | Load | `pi install npm:search-boost`, `pi -e adapters/pi/index.js`, or the shim written by `search-boost install -t pi` | `dsh plugin --profile web add search-boost` (auto-wires `adapters/dsh/cordis.patch.yml`; repoints built-in `web_search` / `web_fetch`) |
-| Tools | `fused_search` (+`site`/`min_score`/`depth`, up to 20 results), `fetch_page` (no clip), `search-parallel-subagent` (searcher/summarizer children; `/fast-parallel` `/complex-parallel`), `x_search` | `fused_search`, `fetch_page`, `x_search`, `research_parallel` (DSH native subagents), `search_stats`; native citation cards |
+| Tools | `fused_search` (+`site`/`min_score`/`depth`, up to 20 results), `fetch_page` (no clip), `search-parallel-subagent` (searcher/summarizer children; `/fast-parallel` `/complex-parallel`), `x_search`, `adaptive_search` (Jev) | `fused_search`, `fetch_page`, `x_search`, `research_parallel` (DSH native subagents), `search_stats`, `adaptive_search` (Jev); native citation cards |
 | Commands | `/web_change`, `/x-login`, `/x-logout`, `/search-cache`, `/search-audit` | `/web_change`, `/x-login`, `/x-logout` |
 | Prompt | `<search_balance>` appended on `before_agent_start` + daily search budget note | `systemPrompt.section` `search:policy` (115) + live `search:status` (116) |
 | State | audit log `~/.pi/agent/search-boost-audit.jsonl`; legacy `~/.pi/agent/search-boost-layer.json` / `xsearch-auth.json` still read | — |
