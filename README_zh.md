@@ -282,7 +282,7 @@ Key、搜索层与 X 凭据与 MCP 服务共用：`search-boost config keys|laye
 
 **Cursor + Cursor CLI：** 两个 target 共用一套 `~/.cursor/` 配置。`-t cursor,cursor-cli` 会把 IDE 与 CLI 提示词合并写入一次；卸载会清理整份共用 surface。
 
-**Grok Build：** `search-boost install -t grok -y --auto-allow` 在 Grok CLI 位于 PATH 时会执行 `grok plugin install <bundled grok-plugin> --trust`，随后写入 `config.toml`、rule 与 skill。若 PATH 中没有 `grok`，插件步骤会跳过并给出警告，配置安装仍会继续。仅需 config/rule/skill 时加 `--skip-grok-plugin`。重复安装对 `[permission]` 块（带标记或 legacy）是幂等的；卸载只剥离 search-boost 拥有的 permission 行。若已设 `[ui] permission_mode = "always-approve"`，`--auto-allow` 会跳过注入 `[permission]`。插件 `.mcp.json` 使用可移植的 `npx`；`config.toml` 使用 `resolveMcpLaunch()`（源码开发时为本地 `node`）——两者可并存。手动装插件（进阶）：`grok plugin install ./grok-plugin --trust` → [grok-plugin/README.md](./grok-plugin/README.md)。
+**Grok Build：** `search-boost install -t grok -y --auto-allow` 在 Grok CLI 位于 PATH 时会执行 `grok plugin install <bundled grok-plugin> --trust`，随后写入 `config.toml`、rule 与 skill。若 PATH 中没有 `grok`，插件步骤会跳过并给出警告，配置安装仍会继续。仅需 config/rule/skill 时加 `--skip-grok-plugin`。重复安装对 `[permission]` 块（带标记或 legacy）是幂等的；卸载只剥离 search-boost 拥有的 permission 行。若已设 `[ui] permission_mode = "always-approve"`，`--auto-allow` 会跳过注入 `[permission]`。插件 `.mcp.json` 使用可移植的 `npx`；`config.toml` 使用 `resolveMcpLaunch()`（源码开发时为本地 `node`）——两者可并存。手动装插件（进阶）：`grok plugin install ./grok-plugin --trust` → [grok-plugin/README.md](./grok-plugin/README.md)。在 Windows 上，grok CLI 对**过长或非 ASCII 的插件源路径**会报 `no plugins found in the source`；把 `grok-plugin` 复制到短 ASCII 路径（如 `C:\sb\grok-plugin`）再从那里安装即可。无论哪种情况 search-boost 都只警告，`config.toml`、rule 与 skill 仍会写入。
 
 ---
 
