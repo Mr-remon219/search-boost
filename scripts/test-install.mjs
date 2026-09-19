@@ -1092,6 +1092,11 @@ assert('agy install+uninstall round-trip subprocess', runInTempHome(`
   checks.push(['keys preserved', readFileSync(keysPath, 'utf8').includes('tvly-bootstrap-key-12345678')])
   checks.push(['layer preserved', readFileSync(layerPath, 'utf8').includes('"api"')])
 
+  // A settings file holding only our entries must not survive uninstall as an empty object.
+  writeFileSync(PATHS.antigravity.settingsCli, JSON.stringify({ permissions: { allow: antigravityPermissions() } }) + '\\n', 'utf8')
+  await AGENTS.antigravity.uninstall({ dryRun: false, workspace: wsRoot })
+  checks.push(['remove our-only settings file', !existsSync(PATHS.antigravity.settingsCli)])
+
   const failed = checks.filter(([, ok]) => !ok).map(([name]) => name)
   if (failed.length) {
     console.error('FAIL subprocess checks:', failed.join(', '))
@@ -1171,9 +1176,12 @@ process.stdout.write('ok');
     )
     assert('claude roundtrip skill removed', !existsSync(join(claudeHome, '.claude', 'skills', 'search-boost', 'SKILL.md')))
     assert('claude roundtrip empty CLAUDE.md removed', !existsSync(join(claudeHome, '.claude', 'CLAUDE.md')))
-    const settingsAfterUninstall = JSON.parse(readFileSync(join(claudeHome, '.claude', 'settings.json'), 'utf8'))
-    assert('claude roundtrip allow stripped', !(settingsAfterUninstall.permissions?.allow ?? []).some((p) => p.startsWith('mcp__search-boost__')))
-    assert('claude roundtrip owned deny stripped', !claudeNativeReplaced(settingsAfterUninstall))
+    const claudeSettingsPath = join(claudeHome, '.claude', 'settings.json')
+    const settingsAfterUninstall = existsSync(claudeSettingsPath) ? JSON.parse(readFileSync(claudeSettingsPath, 'utf8')) : null
+    assert('claude roundtrip allow stripped', settingsAfterUninstall === null || !(settingsAfterUninstall.permissions?.allow ?? []).some((p) => p.startsWith('mcp__search-boost__')))
+    assert('claude roundtrip owned deny stripped', settingsAfterUninstall === null || !claudeNativeReplaced(settingsAfterUninstall))
+    // Uninstall must not leave behind a settings file that existed only for search-boost.
+    assert('claude roundtrip removes our-only settings file', !existsSync(claudeSettingsPath))
 
     writeFileSync(
       join(claudeHome, '.claude', 'settings.json'),
