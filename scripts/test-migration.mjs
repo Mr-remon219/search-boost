@@ -7,12 +7,12 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, existsSync, cpSync, rmSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join, dirname, isAbsolute } from 'node:path'
 import { tmpdir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { PKG_ROOT } from '../lib/pkg.mjs'
-import { runCommand } from '../lib/upgrade/process.mjs'
+import { runCommand, npmCliEntry } from '../lib/upgrade/process.mjs'
 
 const temp = mkdtempSync(join(tmpdir(), 'sb npm migration '))
 const home = join(temp, 'home'), prefix = join(temp, 'prefix'), cwd = join(temp, 'workspace'), tools = join(temp, 'tools')
@@ -120,6 +120,10 @@ writeFileSync(file,JSON.stringify(pkg,null,2));`)
   // Precondition probe: the migration path resolves the global root/prefix through
   // npm itself and deliberately never echoes npm output (it may contain secrets),
   // so a broken child environment would only surface as a generic failure.
+  if (process.platform === 'win32') {
+    const entry = npmCliEntry(env)
+    assert.ok(entry && isAbsolute(entry), `npm CLI entry must resolve absolutely, got: ${entry}`)
+  }
   const npmResolution = () => {
     const where = spawnSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', 'where npm'], { encoding: 'utf8', env, cwd })
     const shims = [
