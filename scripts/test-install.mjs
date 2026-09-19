@@ -703,6 +703,24 @@ assert('legacy pi package counts as configured and triggers the duplicate-tools 
   const state = { configured: agentConfigured('pi'), legacy: piRegistersLegacyPackage(), warns: piLegacyExtensionPresent() }
   if (!state.configured || !state.legacy || !state.warns) throw new Error('legacy pi not recognized: ' + JSON.stringify(state))
 `))
+assert('dsh bundle install drives a real launcher from PATH (a .cmd shim on Windows)', runInTempHome(`
+  import { mkdirSync, writeFileSync, chmodSync } from 'node:fs'
+  import { join } from 'node:path'
+  const home = process.env.HOME
+  const tools = join(home, 'tools')
+  mkdirSync(tools, { recursive: true })
+  const shim = join(tools, 'dsh-shim.mjs')
+  writeFileSync(shim, 'process.exit(0)\\n', 'utf8')
+  if (process.platform === 'win32') {
+    writeFileSync(join(tools, 'dsh.cmd'), '@"' + process.execPath + '" "' + shim + '" %*\\r\\n', 'utf8')
+  } else {
+    writeFileSync(join(tools, 'dsh'), '#!/bin/sh\\nexec "' + process.execPath + '" "' + shim + '" "$@"\\n', 'utf8')
+    chmodSync(join(tools, 'dsh'), 0o755)
+  }
+  process.env.PATH = tools + (process.platform === 'win32' ? ';' : ':') + process.env.PATH
+  const { installDshBundle } = await import('./lib/agents/host-runtime.mjs')
+  await installDshBundle({ dryRun: false })
+`))
 assert('grok uninstall project config', !existsSync(join(grokDir, '.grok', 'config.toml')))
 assert('grok uninstall project rule', !existsSync(join(grokDir, '.grok', 'rules', 'search-boost.md')))
 assert('grok uninstall project skill', !existsSync(join(grokDir, '.grok', 'skills', 'search-boost', 'SKILL.md')))
