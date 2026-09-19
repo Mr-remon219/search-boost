@@ -66,4 +66,4 @@ npm run test:upgrade
 - `test-migration.mjs`：临时 HOME/cache/global prefix、loopback fixture registry、真实 npm/npx 安装与卸载；从仍占用同名 bin 的旧包直接迁移，验证命令安装失败回滚、外部命令保护、新包可执行且旧包删除、所有 agent 配置字节未变；然后单独执行 Update，验证全部接入、已删除旧目录的注册、部分失败重试及后续普通版本更新。DSH CLI 是测试替身；不修改开发者的真实安装。
 - `test-update-tui.mjs`：沿用菜单语言/样式，Update 不缩小到某一个 agent，也不混入 npm 迁移菜单。
 
-npm 行为依据：[npm exec](https://docs.npmjs.com/cli/v11/commands/npm-exec)、[npm rebuild](https://docs.npmjs.com/cli/v11/commands/npm-rebuild)。Linux 下验证了真实 npm 链路；Windows shim 的全流程仍需 Windows 环境验证。
+npm 行为依据：[npm exec](https://docs.npmjs.com/cli/v11/commands/npm-exec)、[npm rebuild](https://docs.npmjs.com/cli/v11/commands/npm-rebuild)。Linux 与 Windows 均已验证真实 npm 链路（Windows 由 CI `windows-latest` 的 `test:upgrade`/`test-migration` 覆盖，含 `.cmd` shim 所有权校验与 junction 软链）。
