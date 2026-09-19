@@ -290,6 +290,18 @@ assert('excerptForTool truncates at boundary', excerptForTool('a\n\n'.repeat(200
   const htmlIndentedScript = '<!doctype html><html><body>\n<p>intro</p>\n\n    <script>evil()</script>\n\n<p>after</p>\n</body></html>'
   assert('html indentation stays layout, not code: indented script chrome is still dropped', !preprocessPage(htmlIndentedScript, base).includes('evil()'))
 
+  // Regression: a protected chunk must never leave a placeholder behind, and
+  // "blocks first, inline spans last" is what keeps that true.
+  const indentedTemplate = '# Example\n\n    const message = `keep me`;\n\nEnd.\n'
+  const indentedTemplateOut = preprocessPage(indentedTemplate)
+  assert('indented code keeps a template literal intact', indentedTemplateOut.includes('`keep me`'))
+  assert('indented code leaks no code placeholder', !indentedTemplateOut.includes('SBCODE'))
+
+  const preTemplate = '<!doctype html><html><body><pre><code>const s = `&lt;div&gt;`;</code></pre><p>after</p></body></html>'
+  const preTemplateOut = preprocessPage(preTemplate, base)
+  assert('pre decodes entities inside a backtick span', preTemplateOut.includes('`<div>`') && !preTemplateOut.includes('&lt;'))
+  assert('pre leaks no code placeholder', !preTemplateOut.includes('SBCODE'))
+
   const long = 'word '.repeat(20_000)
   const shaped = toFetchPageResult('https://example.com/doc', 'jina', long, undefined, false, Date.now())
   assert('fetch result is not clipped', shaped.content === long && shaped.truncated === false && shaped.word_count > 10_000)
