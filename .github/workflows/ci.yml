@@ -5,9 +5,20 @@ on:
     branches: [master, main, v0.2.0]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      # One platform failing must not hide the other platform's result.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -19,24 +30,62 @@ jobs:
       - run: npm ci
 
       - run: npm run plugin:sync-grok
-      - run: npm run check
-      - run: npm run test:install
-      - run: npm run test:doctor
+
+      # Every step below is `if: always()` on purpose: when a suite fails the
+      # remaining suites still run, so one CI run reports every failure on that
+      # platform instead of only the first. The job still fails if any step did.
+      - name: Syntax check
+        if: always()
+        run: npm run check
+
       - name: Doctor CLI smoke
-        run: |
-          if grep -q 'runDoctor' lib/cli/commands.mjs; then
-            set +e
-            node cli.mjs doctor --quick --json
-            ec=$?
-            set -e
-            if [ "$ec" -eq 2 ]; then exit 0; fi
-            exit "$ec"
-          fi
-      - run: npm run test:fusion
-      - run: npm run test:x
-      - run: npm run test:search
-      - run: npm run test:adapters
-      - run: npm run test:parallel
-      - run: npm run test:upgrade
-      - run: npm run test:mcp
-      - run: npm run smoke
+        if: always()
+        run: node scripts/ci-doctor-smoke.mjs
+
+      - name: Install, hooks and skill bundles
+        if: always()
+        run: npm run test:install
+
+      - name: Doctor
+        if: always()
+        run: npm run test:doctor
+
+      - name: Fusion errors
+        if: always()
+        run: npm run test:fusion
+
+      - name: X pipeline
+        if: always()
+        run: npm run test:x
+
+      - name: Engine requests
+        if: always()
+        run: npm run test:engines
+
+      - name: X auth
+        if: always()
+        run: npm run test:xauth
+
+      - name: Search routing
+        if: always()
+        run: npm run test:search
+
+      - name: Adapters
+        if: always()
+        run: npm run test:adapters
+
+      - name: Parallel research
+        if: always()
+        run: npm run test:parallel
+
+      - name: Upgrade and migration
+        if: always()
+        run: npm run test:upgrade
+
+      - name: MCP guidance
+        if: always()
+        run: npm run test:mcp
+
+      - name: MCP smoke
+        if: always()
+        run: npm run smoke
