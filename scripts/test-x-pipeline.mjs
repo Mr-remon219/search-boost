@@ -181,6 +181,68 @@ try {
     assert.equal(calls.length, before)
     assert.deepEqual(cached.items, out.items)
   })
+
+  // A shared x_search run must outlive a waiter that cancels, and a waiter must
+  // never be forced to keep waiting for a result it no longer wants.
+  const flight = (query) => {
+    let open
+    let seen
+    const gate = new Promise((resolve) => { open = resolve })
+    const fallbackSearch = async ({ signal }) => {
+      seen = signal
+      await gate
+      signal?.throwIfAborted()
+      return { via: 'fixture', data: [] }
+    }
+    return { query, open, fallbackSearch, sharedSignal: () => seen }
+  }
+  const flightSnapshot = () => ({ fingerprint: 'fixture', engines: {}, capability: { x: { official: { available: false } } } })
+  const waitTick = () => new Promise((resolve) => setImmediate(resolve))
+
+  await test('cancelling one waiter leaves the shared run other callers need alive', async () => {
+    runtime.invalidateSearchCaches()
+    const f = flight('flight-joiner-abort')
+    const owner = runtime.runXSearch({ type: 'keyword', query: f.query }, { snapshot: flightSnapshot, fallbackSearch: f.fallbackSearch })
+    await waitTick()
+    const joinerAbort = new AbortController()
+    const joiner = runtime.runXSearch({ type: 'keyword', query: f.query }, { signal: joinerAbort.signal, snapshot: flightSnapshot, fallbackSearch: f.fallbackSearch })
+    await waitTick()
+    joinerAbort.abort()
+    await assert.rejects(() => joiner, (err) => err.name === 'AbortError')
+    assert.equal(f.sharedSignal().aborted, false, 'the shared run must not be aborted by one leaving waiter')
+    f.open()
+    assert.equal((await owner).via, 'fallback:fixture')
+  })
+
+  await test('cancelling the first caller does not cancel joiners still waiting', async () => {
+    runtime.invalidateSearchCaches()
+    const f = flight('flight-owner-abort')
+    const ownerAbort = new AbortController()
+    const owner = runtime.runXSearch({ type: 'keyword', query: f.query }, { signal: ownerAbort.signal, snapshot: flightSnapshot, fallbackSearch: f.fallbackSearch })
+    await waitTick()
+    const joiner = runtime.runXSearch({ type: 'keyword', query: f.query }, { snapshot: flightSnapshot, fallbackSearch: f.fallbackSearch })
+    await waitTick()
+    ownerAbort.abort()
+    await assert.rejects(() => owner, (err) => err.name === 'AbortError')
+    assert.equal(f.sharedSignal().aborted, false, 'a joiner still needs the run the first caller abandoned')
+    f.open()
+    const joined = await joiner
+    assert.equal(joined.via, 'fallback:fixture')
+    assert.equal(joined.inFlight, true)
+  })
+
+  await test('the last waiter leaving aborts the shared run instead of wasting it', async () => {
+    runtime.invalidateSearchCaches()
+    const f = flight('flight-last-abort')
+    const onlyAbort = new AbortController()
+    const only = runtime.runXSearch({ type: 'keyword', query: f.query }, { signal: onlyAbort.signal, snapshot: flightSnapshot, fallbackSearch: f.fallbackSearch })
+    await waitTick()
+    onlyAbort.abort()
+    await assert.rejects(() => only, (err) => err.name === 'AbortError')
+    await waitTick()
+    assert.equal(f.sharedSignal().aborted, true, 'nobody is waiting, so the run must stop')
+  })
+
   await test('logged-in parallel path uses the identical filters, one web search, one final limit', async () => {
     runtime.invalidateSearchCaches()
     process.env.XAI_API_KEY = 'xai-fixture-not-a-real-secret'
