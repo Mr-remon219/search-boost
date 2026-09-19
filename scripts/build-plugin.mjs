@@ -5,19 +5,17 @@
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ANTIGRAVITY_RULE_DESCRIPTION, buildSkillHeader } from '../lib/agents/shared.mjs'
-import { antigravityMcpEntry } from '../lib/mcp-entry.mjs'
+import { ANTIGRAVITY_RULE_DESCRIPTION } from '../lib/agents/shared.mjs'
+import { pluginMcpEntry } from '../lib/mcp-entry.mjs'
+import { STARTUP_SEARCH_POLICY } from '../agents/router.mjs'
+import { installSkillBundle } from '../lib/agent-skills.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const AGY = join(ROOT, 'agents', 'antigravity')
 const PLUGIN = join(AGY, 'plugin')
 
 async function writeSkill() {
-  const body = await readFile(join(AGY, 'skill.md'), 'utf8')
-  const header = buildSkillHeader('antigravity')
-  const dest = join(PLUGIN, 'skills', 'search-boost', 'SKILL.md')
-  await mkdir(dirname(dest), { recursive: true })
-  await writeFile(dest, `${header}${body.trim()}\n`, 'utf8')
+  await installSkillBundle('antigravity', join(PLUGIN, 'skills', 'search-boost', 'SKILL.md'))
 }
 
 async function writeRule() {
@@ -29,7 +27,9 @@ async function writeRule() {
 }
 
 async function writeMcpConfig() {
-  const entry = antigravityMcpEntry()
+  // Shipped plugins must not embed the build machine's Node/repository paths.
+  // Antigravity rejects the stdio `type` field; local installs still use antigravityMcpEntry().
+  const { type: _type, ...entry } = pluginMcpEntry()
   const config = { mcpServers: { 'search-boost': entry } }
   await writeFile(join(PLUGIN, 'mcp_config.json'), `${JSON.stringify(config, null, 2)}\n`, 'utf8')
 }
@@ -47,6 +47,7 @@ async function writeHooks() {
   const hooksDir = join(PLUGIN, 'hooks')
   await mkdir(hooksDir, { recursive: true })
   await copyFile(join(AGY, 'hooks', 'pre-invocation.mjs'), join(hooksDir, 'pre-invocation.mjs'))
+  await copyFile(STARTUP_SEARCH_POLICY, join(hooksDir, 'search-boost-inject.md'))
   const hooks = {
     'search-boost-reminder': {
       enabled: true,

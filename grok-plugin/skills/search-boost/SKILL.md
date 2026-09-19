@@ -1,35 +1,17 @@
 ---
 name: search-boost
-description: Optional multi-engine web search with citations — use when you want fused results, structured URLs, or X data beyond native browse.
-when-to-use: user asks for sources/citations, version or API verification, benchmarks, X/Twitter threads — only when you judge search adds value
-disable-model-invocation: false
+description: Discover optional search-boost workflow extensions when a task needs more than direct MCP tool calls.
 ---
 
-# search-boost MCP @ Grok Build
+<!-- search-boost: skill -->
+# search-boost router
 
-Server id: `search-boost` in `~/.grok/config.toml` (user scope) or `./.grok/config.toml` (project scope).
+In Grok Build, select the `search-boost` MCP server. Native browse remains available; choose one path for each query.
 
-## Your choice
+For ordinary searches, page reads, X queries, and diagnostics, call MCP tools directly using their descriptions and input schemas. This router is not a prerequisite. The optional resource `search-boost://policy` covers detailed usage and troubleshooting.
 
-Search-boost is **available, not required**. Use it when precision and citations help; use native Grok browse when exploration is enough. **You decide** per turn.
+## Extension workflows
 
-If you do search: one tool path per query (don't duplicate search-boost + generic browse on the same question).
+- [search-boost-parallel-research](../search-boost-parallel-research/SKILL.md): Bounded parallel web research via authorized host subagents, with a disclosed serial fallback when unavailable.
 
-## Tools
-
-| Tool | Use |
-|------|-----|
-| `fused_search` | Web facts, docs, benchmarks |
-| `fetch_page` | Long-form page text |
-| `x_search` | X/Twitter (merged ranking) |
-| `deep_research` | Multi-source synthesis — one round per call; repeat with `suggested_queries` until gaps empty (~3 rounds max) |
-| `search_layer` | Show or set `free` (keyless) vs `api` (keyed engines) |
-| `search_stats` | Diagnostics |
-
-## Policy
-
-Rule: `~/.grok/rules/search-boost.md` (user) or `./.grok/rules/search-boost.md` (project) · optional resource `search-boost://policy`.
-
-## Keys
-
-Optional — run `search-boost config keys`. Api layer: ≥1 of tavily/brave/exa (all three recommended for best fusion).
+Load a listed workflow only when it matches the task. Host permissions still apply; a skill cannot create subagent capabilities that the host does not expose.

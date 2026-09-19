@@ -1,32 +1,12 @@
-# search-boost MCP @ Cursor CLI
+<!-- search-boost: skill -->
+# search-boost router
 
-Server id: `search-boost` in `~/.cursor/mcp.json`.
+In Cursor CLI, call the `search-boost` MCP tools directly, not as shell commands. The IDE shares this skill set.
 
-## Your call
+For ordinary searches, page reads, X queries, and diagnostics, call MCP tools directly using their descriptions and input schemas. This router is not a prerequisite. The optional resource `search-boost://policy` covers detailed usage and troubleshooting.
 
-Use search-boost when **you** judge that verifiable web facts would help — versions, API shapes, docs, comparisons. Memory and repo context are fine when sufficient. No obligation to search every turn.
+## Extension workflows
 
-## Tools
+{{EXTENSION_ROUTES}}
 
-| Tool | Use |
-|------|-----|
-| `fused_search` | Quick lookup (start with `complexity=simple` if searching) |
-| `fetch_page` | Full page when snippets fail; `focus` saves tokens |
-| `x_search` | X/Twitter |
-| `deep_research` | Multi-source synthesis — one round per call; repeat with `suggested_queries` until gaps empty (~3 rounds max) |
-| `search_layer` | free vs api |
-| `search_stats` | Diagnostics |
-
-## If you search
-
-1. `GetMcpTools` → server `search-boost`
-2. Pick the tool from the table above
-3. Prefer search-boost over built-in `WebSearch` when citations/structure matter
-
-## More detail
-
-MCP resource `search-boost://policy` · hook injects a short capability summary at session start.
-
-## Keys
-
-Optional — free layer: bing + ddg + yahoo + exa-free. Api: ≥1 of tavily/brave/exa via `search-boost config keys` (all three recommended).
+Load a listed workflow only when it matches the task. Host permissions still apply; a skill cannot create subagent capabilities that the host does not expose.

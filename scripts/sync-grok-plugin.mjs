@@ -2,19 +2,18 @@
 /**
  * Sync grok-plugin/ from agents/grok sources (avoid drift).
  */
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { pluginMcpEntry } from '../lib/mcp-entry.mjs'
+import { installSkillBundle } from '../lib/agent-skills.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGIN = join(ROOT, 'grok-plugin')
-const SKILL_SRC = join(ROOT, 'agents', 'grok', 'skill.md')
 const SKILL_DEST = join(PLUGIN, 'skills', 'search-boost', 'SKILL.md')
 const MCP_DEST = join(PLUGIN, '.mcp.json')
 
-mkdirSync(dirname(SKILL_DEST), { recursive: true })
-copyFileSync(SKILL_SRC, SKILL_DEST)
+await installSkillBundle('grok', SKILL_DEST)
 
 const mcp = {
   mcpServers: {

@@ -1,7 +1,5 @@
-## Search routing (Antigravity)
+# search-boost
 
-- **External facts**: MCP `search-boost` → `fused_search` — **not** built-in `search_web`
-- **Official docs**: `fetch_page` on the doc URL — not `read_url_content` alone
-- **Doubt → search** before multi-file edits that touch external APIs; max ~3 rounds
-- **Policy detail**: MCP resource `search-boost://policy` · prompt `search_routing`
-- **Subagents**: delegate with explicit queries; no duplicate `fused_search` across parallel agents
+search-boost provides web search, page reading, and X/Twitter through MCP, alongside Antigravity's built-in `search_web`. It supplies public web evidence, not live cloud-account state.
+
+Ordinary calls use the MCP tool descriptions and schemas directly. The `search-boost` skill is the entry point for optional workflow extensions, not a required step before searching.

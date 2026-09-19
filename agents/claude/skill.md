@@ -1,32 +1,12 @@
-# search-boost MCP @ Claude Code
+<!-- search-boost: skill -->
+# search-boost router
 
-Server id: `search-boost` in `~/.claude.json`. Tools: `mcp__search-boost__<tool>` (e.g. `mcp__search-boost__fused_search`).
+In Claude Code, use the `search-boost` MCP server (`mcp__search-boost__*`). `/search-boost` opens this router.
 
-## Use when it helps
+For ordinary searches, page reads, X queries, and diagnostics, call MCP tools directly using their descriptions and input schemas. This router is not a prerequisite. The optional resource `search-boost://policy` covers detailed usage and troubleshooting.
 
-Web search is **available, not required**. Reach for it when external facts matter and memory or local files are not enough.
+## Extension workflows
 
-**Good fits:** versions, APIs, comparisons, niche tech, anything you'd rather verify than guess.
+{{EXTENSION_ROUTES}}
 
-**Often skip:** stable fundamentals, workspace code, pure creation, user opt-out.
-
-**If you search:** start with one `fused_search`; ~3 rounds max; cite URLs.
-
-## Tools
-
-| Tool | Use |
-|------|-----|
-| `fused_search` | General lookup / verify |
-| `fetch_page` | Full page when snippets fail |
-| `x_search` | X/Twitter |
-| `deep_research` | Multi-source compare |
-| `search_layer` | free vs api |
-| `search_stats` | Diagnostics |
-
-## Reference
-
-`~/.claude/CLAUDE.md` (SEARCH_BOOST block) · resource `search-boost://policy` (optional detail).
-
-## Keys
-
-Optional — `search-boost config keys` or env vars. Api layer needs ≥1 keyed engine; all three recommended.
+Load a listed workflow only when it matches the task. Host permissions still apply; a skill cannot create subagent capabilities that the host does not expose.

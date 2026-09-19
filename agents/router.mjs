@@ -3,7 +3,7 @@
  *
  * Each subfolder under agents/ holds that agent's exploration artifacts:
  *   inject.md              → prompt block injected into the agent's rules file
- *   skill.md               → optional skill template; frontmatter comes from the route's
+ *   skill.md               → lightweight router skill template; frontmatter comes from the route's
  *                            skillFrontmatter unless the template declares its own
  *   openai.yaml            → optional Codex skill manifest
  *   rule.md                → workspace Always-on rule body (antigravity)
@@ -28,6 +28,58 @@ export const AGENTS_ROOT = join(dirname(fileURLToPath(import.meta.url)))
 
 /** Agent-neutral MCP handshake instructions (single stdio server for all agents). */
 export const SHARED_SERVER_INSTRUCTIONS = join(AGENTS_ROOT, 'shared', 'server-instructions.md')
+export const STARTUP_SEARCH_POLICY = join(AGENTS_ROOT, 'shared', 'startup-search.md')
+export const SESSION_START_SCRIPT = join(AGENTS_ROOT, 'shared', 'session-start.mjs')
+
+/** Retired tool-manual skills: retained only for owned-file migration/cleanup. */
+export const RETIRED_SKILL_NAMES = [
+  'search-boost-search', 'search-boost-fetch', 'search-boost-x', 'search-boost-diagnostics',
+]
+
+/**
+ * Optional workflows beyond individual MCP calls; registered once for all install surfaces.
+ * Entries: { name, description, path: absolute SKILL.md path, agents?: MCP host ids[] }.
+ * The installer, plugins, and router links all use this registry.
+ */
+export const SKILL_EXTENSIONS = [{
+  name: 'search-boost-parallel-research',
+  description: 'Bounded parallel web research via authorized host subagents, with a disclosed serial fallback when unavailable.',
+  path: join(AGENTS_ROOT, 'shared', 'skills', 'search-boost-parallel-research', 'SKILL.md'),
+}]
+
+/** Cursor IDE/CLI share installed skills, so use the same capability-gated notes. */
+export function parallelHostPath(id) {
+  return join(AGENTS_ROOT, id === 'cursor-cli' ? 'cursor' : id, 'parallel.md')
+}
+
+export function extensionSkills(id) {
+  if (!getRoute(id).skill) return []
+  const seen = new Set(['search-boost', ...RETIRED_SKILL_NAMES])
+  return SKILL_EXTENSIONS.filter((entry) => !entry.agents || entry.agents.includes(id)).map((entry) => {
+    if (!/^search-boost-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry.name)
+      || seen.has(entry.name) || !entry.description?.trim() || !entry.path) {
+      throw new Error(`Invalid or duplicate extension skill: ${entry.name}`)
+    }
+    seen.add(entry.name)
+    return entry
+  })
+}
+
+export function extensionSkillRoutes(id) {
+  const entries = extensionSkills(id)
+  return entries.length
+    ? entries.map(({ name, description }) => `- [${name}](../${name}/SKILL.md): ${description}`).join('\n')
+    : 'No extension workflows are bundled yet. Use the MCP tools directly; no subagent workflow is provided.'
+}
+
+export const SKILL_HOST_CONTEXT = {
+  claude: 'Claude Code: use the search-boost MCP tools (mcp__search-boost__*), not shell commands. Connection configuration is in ~/.claude.json; inspect /mcp if tools are missing.',
+  codex: 'Codex: use the native MCP channel for server search-boost, configured in ~/.codex/config.toml. Tool names below use the mcp__search-boost__ prefix; follow the actual registered name if your client presents it differently.',
+  cursor: 'Cursor IDE: discover tools from MCP server search-boost in ~/.cursor/mcp.json. Names below are server-local; call the actual registered MCP tool, not WebSearch. IDE and CLI share this skill set.',
+  'cursor-cli': 'Cursor CLI: discover tools from MCP server search-boost in ~/.cursor/mcp.json. Names below are server-local MCP calls, not shell commands. CLI and IDE share this skill set.',
+  grok: 'Grok Build: use MCP server search-boost from the active user or project config.toml. Native browse remains valid; do not duplicate the same query across both paths. Read the session spill file if a tool result is truncated.',
+  antigravity: 'Antigravity: use MCP server search-boost from global or workspace mcp_config.json, rather than search_web/read_url_content for these workflows. Use authorized cloud tools, not web search, for live account state.',
+}
 
 /** @typedef {{ description?: string, allowedTools?: string[] }} SkillFrontmatter */
 
@@ -62,11 +114,11 @@ export const ROUTES = {
     skill: 'skill.md',
     mergeWith: ['cursor-cli'],
     mcp: {
-      serverUseInstructions: 'Multi-engine web search when you need verifiable external facts. Use at your discretion.',
+      serverUseInstructions: 'Web search, page reading, and X/Twitter via MCP. The search-boost skill routes task-specific workflows.',
     },
     skillFrontmatter: {
       description:
-        'Multi-engine web search MCP for verifiable external facts (versions, APIs, docs). Use when you judge it helps — not required every turn.',
+        'Discover optional search-boost workflow extensions when a task needs more than direct MCP tool calls.',
     },
   },
   'cursor-cli': {
@@ -78,11 +130,11 @@ export const ROUTES = {
     hookScript: 'session-start.mjs',
     mergeWith: null,
     mcp: {
-      serverUseInstructions: 'Multi-engine web search when you need verifiable external facts. Use at your discretion.',
+      serverUseInstructions: 'Web search, page reading, and X/Twitter via MCP. The search-boost skill routes task-specific workflows.',
     },
     skillFrontmatter: {
       description:
-        'Terminal-agent web search MCP when external facts need verification. Your call whether to search; prefer over WebSearch when you do.',
+        'Discover optional search-boost workflow extensions when a task needs more than direct MCP tool calls.',
     },
   },
   codex: {
@@ -105,15 +157,7 @@ export const ROUTES = {
     mcp: null,
     skillFrontmatter: {
       description:
-        'Multi-engine web search when external facts need verification. Optional — use your judgment for versions, APIs, comparisons, or niche tech. Tools: fused_search, fetch_page, x_search, deep_research.',
-      allowedTools: [
-        'mcp__search-boost__fused_search',
-        'mcp__search-boost__fetch_page',
-        'mcp__search-boost__deep_research',
-        'mcp__search-boost__x_search',
-        'mcp__search-boost__search_layer',
-        'mcp__search-boost__search_stats',
-      ],
+        'Discover optional search-boost workflow extensions when a task needs more than direct MCP tool calls.',
     },
   },
   grok: {
@@ -138,7 +182,7 @@ export const ROUTES = {
     mcp: null,
     skillFrontmatter: {
       description:
-        'Multi-engine web search before external API/integration work. Use when verifying versions, SDK signatures, cloud quotas, or comparing libraries. Prefer over built-in search_web.',
+        'Discover optional search-boost workflow extensions when a task needs more than direct MCP tool calls.',
     },
   },
   pi: {
@@ -193,6 +237,16 @@ export function skillPath(id) {
   const route = getRoute(id)
   if (!route.skill) return null
   return assetPath(id, route.skill)
+}
+
+/** Router first, followed by shared specialist templates. Host runtimes have no MCP skills. */
+export function skillBundleSources(id) {
+  const router = skillPath(id)
+  if (!router) return []
+  return [
+    { name: 'search-boost', path: router },
+    ...extensionSkills(id).map(({ name, path }) => ({ name, path })),
+  ]
 }
 
 /** @param {string} id */

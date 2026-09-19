@@ -200,7 +200,7 @@ assert('web_search marker removed', !toml.includes('SEARCH_BOOST_WEB_SEARCH_STAR
   assert('stripMarkedWebSearchFromMcpToml keeps bare MCP web_search', codexToml.includes('web_search = "live"'))
 }
 
-assert('isOwnedSearchBoostSkill detects ours', isOwnedSearchBoostSkill('mcp__search-boost__fused_search'))
+assert('isOwnedSearchBoostSkill detects ours', isOwnedSearchBoostSkill('<!-- search-boost: skill -->'))
 assert('isOwnedSearchBoostSkill rejects foreign', !isOwnedSearchBoostSkill('# my unrelated skill\n'))
 
 // MCP toml block: auto approval only when opted in
@@ -576,14 +576,14 @@ assert('pi workflow prompts on disk', piWorkflowPromptPaths().every((p) => exist
 const cursorPrompt = await loadAgentPrompt('cursor')
 assert(
   'load cursor inject',
-  cursorPrompt.includes('search-boost @ Cursor IDE') && cursorPrompt.includes('when you choose'),
+  cursorPrompt.includes('MCP server') && cursorPrompt.includes('workflow extensions'),
 )
 assert('codex route has skill', getRoute('codex').skill === 'skill.md')
 assert('codex route has openai yaml', getRoute('codex').openaiYaml === 'openai.yaml')
 const codexPrompt = await loadAgentPrompt('codex')
-assert('load codex inject', codexPrompt.includes('search-boost @ Codex CLI'))
+assert('load codex inject', codexPrompt.includes('native MCP channel'))
 const codexSkill = await loadAgentSkill('codex')
-assert('load codex skill', codexSkill?.includes('mcp__search-boost__fused_search'))
+assert('load codex skill', codexSkill?.includes('{{EXTENSION_ROUTES}}'))
 
 // claude permissions wildcard
 const perms = claudePermissions()
@@ -596,8 +596,8 @@ assert('mcp instructions path is shared', mcpServerInstructionsPath() === SHARED
 
 // claude skill frontmatter
 const claudeHeader = buildSkillHeader('claude')
-assert('claude skill has description', claudeHeader.includes('description: Multi-engine web search'))
-assert('claude skill has allowed-tools', claudeHeader.includes('allowed-tools: mcp__search-boost__fused_search'))
+assert('claude skill has description', claudeHeader.includes('description: Discover optional search-boost workflow extensions'))
+assert('claude router does not grant tool permissions', !claudeHeader.includes('allowed-tools:'))
 assert('claude skill no agent field', !claudeHeader.includes('agent: claude'))
 
 // other agents: name only, no agent field
@@ -606,9 +606,9 @@ assert('cursor skill name only', cursorHeader.includes('name: search-boost') && 
 
 // grok: prompt, permissions, project scope
 const grokPrompt = await loadAgentPrompt('grok')
-assert('load grok inject', grokPrompt.includes('search-boost @ Grok Build'))
+assert('load grok inject', grokPrompt.includes('MCP server') && grokPrompt.includes('workflow extensions'))
 assert('load grok inject native browse', /native (Grok|browsing)/i.test(grokPrompt))
-assert('grok permission allows count', grokPermissionAllows().length === 6)
+assert('grok permission allows count', grokPermissionAllows().length === 5)
 assert('grok permission toml block', grokPermissionTomlBlock().includes('[permission]'))
 
 let grokToml = ''
@@ -681,7 +681,7 @@ mkdirSync(join(grokDir, '.grok', 'rules'), { recursive: true })
 mkdirSync(join(grokDir, '.grok', 'skills', 'search-boost'), { recursive: true })
 writeFileSync(join(grokDir, '.grok', 'config.toml'), '[mcp_servers.search-boost]\ncommand = "npx"\n')
 writeFileSync(join(grokDir, '.grok', 'rules', 'search-boost.md'), '# rule\n')
-writeFileSync(join(grokDir, '.grok', 'skills', 'search-boost', 'SKILL.md'), '# skill\n')
+writeFileSync(join(grokDir, '.grok', 'skills', 'search-boost', 'SKILL.md'), '<!-- search-boost: skill -->\n# skill\n')
 process.chdir(grokDir)
 assert('grok configured project scope', agentConfigured('grok') === true)
 assert('grok scope has artifacts project', grokScopeHasArtifacts('project') === true)
