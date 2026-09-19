@@ -1,0 +1,4 @@
+# Keep every checkout LF. Generated skill bundles, prompts and config files are
+# compared byte-for-byte, and Git for Windows defaults to core.autocrlf=true,
+# which otherwise turns every newline comparison into a platform failure.
+* text=auto eol=lf

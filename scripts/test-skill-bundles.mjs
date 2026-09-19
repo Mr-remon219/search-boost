@@ -22,7 +22,7 @@ if (!process.argv.includes('--isolated')) {
   const { AGENTS } = await import('../lib/agents/index.mjs')
   const { PATHS, grokInstallPaths, workspaceAgents } = await import('../lib/paths.mjs')
   const { installSkillBundle, uninstallSkillBundle, skillBundleFiles, renderSkillFile } = await import('../lib/agent-skills.mjs')
-  const { RETIRED_SKILL_NAMES, SKILL_EXTENSIONS, extensionSkills, promptPath, STARTUP_SEARCH_POLICY } = await import('../agents/router.mjs')
+  const { RETIRED_SKILL_NAMES, SKILL_EXTENSIONS, extensionSkills, promptPath, STARTUP_SEARCH_POLICY, skillBundleSources } = await import('../agents/router.mjs')
   const awaitRoles = await import('../lib/search/parallel-contract.mjs')
   const home = process.env.HOME
   function snapshot(dir = home) {
@@ -113,6 +113,20 @@ if (!process.argv.includes('--isolated')) {
     assert.equal(readFileSync(note, 'utf8'), 'keep me')
     console.log(`ok: ${id} router retained, retired skills migrated, idempotence and cleanup`)
   }
+  // Regression: Git for Windows checks out CRLF by default (core.autocrlf=true).
+  // A rendered bundle must stay LF or every frontmatter assertion flips to \r\n.
+  {
+    const source = skillBundleSources('claude').find((entry) => entry.name === 'search-boost-parallel-research')
+    assert(source, 'expected the shared parallel-research skill source')
+    const crlfPath = join(home, 'crlf-source.md')
+    write(crlfPath, readFileSync(source.path, 'utf8').replace(/\n/g, '\r\n'))
+    const fromCrlf = await renderSkillFile('claude', { name: source.name, source: crlfPath, metadata: false })
+    const fromLf = await renderSkillFile('claude', { name: source.name, source: source.path, metadata: false })
+    assert(!fromCrlf.includes('\r'), 'rendered bundle must not keep CRLF')
+    assert.equal(fromCrlf, fromLf, 'CRLF and LF sources must render identically')
+    console.log('ok: rendered bundles are LF regardless of checkout line endings')
+  }
+
   const cursorSkill = await renderSkillFile('cursor', skillBundleFiles('cursor', PATHS.cursor.skill).find((f) => f.name === 'search-boost-parallel-research'))
   const cliSkill = await renderSkillFile('cursor-cli', skillBundleFiles('cursor-cli', PATHS['cursor-cli'].skill).find((f) => f.name === 'search-boost-parallel-research'))
   assert.equal(cursorSkill.split('## Host execution')[1], cliSkill.split('## Host execution')[1], 'shared Cursor directory must not flip workflow semantics by installer order')
