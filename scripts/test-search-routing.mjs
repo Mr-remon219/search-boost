@@ -226,6 +226,17 @@ try {
     assert.match(out.warnings.join(' '), /1\/2 attempts failed/)
     mode = 'web'
   })
+
+  await test('a run with a failed engine is cached briefly instead of never', async () => {
+    mode = 'partial-variants'
+    const probe = ['alpha beta engine-cache probe']
+    const first = await fused({ engineList: ['bing'], complexity: 'medium', queries: probe })
+    assert.ok(first.results.length > 0, `fixture must return results: ${JSON.stringify(first.engineStats)}`)
+    const second = await fused({ engineList: ['bing'], complexity: 'medium', queries: probe })
+    assert.equal(second.cacheHit, true)
+    mode = 'web'
+  })
+
   await test('shared identity/filter helpers reject malformed evidence; stable X timestamps override model dates', () => {
     assert.equal(normalizeSearchHit({ url: 'javascript:alert(1)' }), null)
     assert.notEqual(normalizeUrl('https://example.com:8443/A?reference=X'), normalizeUrl('https://example.com/A?reference=X'))
