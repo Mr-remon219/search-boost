@@ -13,4 +13,4 @@
 
 - insert:
     - id: search-boost
-      name: search-boost-mcp/dsh
+      name: search-boost/dsh

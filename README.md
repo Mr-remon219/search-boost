@@ -1,4 +1,4 @@
-# search-boost-mcp
+# search-boost
 
 Multi-engine web search for coding agents — **one SearchBoost core, three host adapters**. The MCP server wires into **Cursor**, **Cursor CLI**, **Codex**, **Claude Code**, **Grok Build**, and **Antigravity**; the same package is also a **[pi](https://github.com/earendil-works/pi-coding-agent) extension** and a **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle plugin**.
 
@@ -26,7 +26,7 @@ Multi-engine web search for coding agents — **one SearchBoost core, three host
 **Requires Node ≥ 22.13.**
 
 ```bash
-npm install -g search-boost-mcp
+npm install -g search-boost
 search-boost setup          # interactive: keys → layer → agents
 # or non-interactive:
 search-boost install -y     # all detected agents
@@ -34,19 +34,37 @@ search-boost install -y     # all detected agents
 
 Restart each agent after install so MCP reloads.
 
-### Upgrade
+### Upgrade and legacy package transition
 
-Already using search-boost-mcp? Update the global CLI, then refresh agent configs (keys/layer under `~/.search-boost/` are kept):
+The new npm package **`search-boost`** owns the **`search-boost`** command. The transition release of **`search-boost-mcp`** owns **only `search-boost-mcp`**. Both packages can coexist without a shared global executable.
+
+**After the transition release is published, update the old package first**, releasing its old `search-boost` alias, then install the new package. No `--force` or early uninstall is needed.
 
 ```bash
-npm install -g search-boost-mcp@latest
-search-boost install -y                 # all detected agents
-# or pick targets, e.g. Grok one-step (plugin + config when grok on PATH):
-search-boost install -t grok -y --auto-allow
-search-boost doctor
+npm install -g search-boost-mcp@latest  # must be the command-renaming transition release
+npm install -g search-boost@latest
+search-boost                         # TUI → One-click upgrade
+# or:
+search-boost upgrade -y
 ```
 
-Restart each agent after reinstall. Config lazy-migrates from older flat `~/.search-boost-*.json` paths on first write.
+Alternatively, `search-boost-mcp upgrade` from the transition release explicitly installs the new package and hands migration to its code. There is no forwarding plugin or postinstall migration.
+
+The new TUI checks `search-boost@latest`, updates the program when necessary, then refreshes **existing** integrations rather than installing every detected host.
+
+```bash
+search-boost upgrade --dry-run
+search-boost upgrade --sync-only -y   # refresh this version's assets after npm update, or offline
+search-boost upgrade --workspace /path/to/project -y
+```
+
+Migration recognizes `pi-search-boost`, `dsh-search-boost`, and `search-boost-mcp`. Replacements are verified before retiring host registrations; manual Pi copies are archived and installed DSH profiles are handled individually. **Old global npm packages are not automatically uninstalled; there is no staged global takeover or bin rebuilding.** Credentials, auth files, search-layer preferences, existing permissions, and disabled settings are retained. Legacy `PI_SEARCH_*_KEY` environment variables remain supported.
+
+Private backups live under `~/.search-boost/backups/`; the latest receipt is `~/.search-boost/state/last-upgrade.json` (honoring `SEARCH_BOOST_HOME`). Conflicts and partial failures are reported, not labeled successful. Restart affected hosts afterward.
+
+Discovery covers known user configs, DSH profiles, the current/recorded projects, and an explicit workspace—not an entire disk. Run from an unrecorded historical project or pass `--workspace`. Filesystem checks do not prove authenticated host execution.
+
+Maintainers: see [transition release instructions](docs/legacy-release.md). Changes become available through npm `@latest` only after publishing.
 
 ### One-liners by agent
 
@@ -61,7 +79,7 @@ search-boost install -t dsh -y --profile web   # dsh plugin --profile web add �
 
 Preview without writing: `search-boost install --dry-run -y`
 
-**pi / DSH without the CLI:** `pi install npm:search-boost-mcp` (package manifest `pi.extensions`) or `dsh plugin --profile web add search-boost-mcp` (package manifest `dsh.bundle`). See [Host adapters](#host-adapters-pi--deepseek-harness).
+**pi / DSH without the CLI:** `pi install npm:search-boost` (package manifest `pi.extensions`) or `dsh plugin --profile web add search-boost` (package manifest `dsh.bundle`). See [Host adapters](#host-adapters-pi--deepseek-harness).
 
 ### Verify install
 
@@ -249,7 +267,7 @@ Both hosts run the search tools **in-process** on the same core the MCP server u
 
 | | pi (`adapters/pi`) | DSH (`adapters/dsh`) |
 |---|---|---|
-| Load | `pi install npm:search-boost-mcp`, `pi -e adapters/pi/index.js`, or the shim written by `search-boost install -t pi` | `dsh plugin --profile web add search-boost-mcp` (auto-wires `adapters/dsh/cordis.patch.yml`; repoints built-in `web_search` / `web_fetch`) |
+| Load | `pi install npm:search-boost`, `pi -e adapters/pi/index.js`, or the shim written by `search-boost install -t pi` | `dsh plugin --profile web add search-boost` (auto-wires `adapters/dsh/cordis.patch.yml`; repoints built-in `web_search` / `web_fetch`) |
 | Tools | `fused_search` (+`site`/`min_score`/`depth`, up to 20 results), `fetch_page` (no clip), `search-parallel-subagent` (searcher/summarizer children; `/fast-parallel` `/complex-parallel`), `x_search` | `fused_search`, `fetch_page`, `x_search`, `research_parallel` (DSH native subagents), `search_stats`; native citation cards |
 | Commands | `/web_change`, `/x-login`, `/x-logout`, `/search-cache`, `/search-audit` | `/web_change`, `/x-login`, `/x-logout` |
 | Prompt | `<search_balance>` appended on `before_agent_start` + daily search budget note | `systemPrompt.section` `search:policy` (115) + live `search:status` (116) |

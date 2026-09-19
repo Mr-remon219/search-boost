@@ -41,6 +41,11 @@ async function main() {
     case 'install':
       await runInstall(false, argv.slice(1))
       break
+    case 'upgrade': {
+      const { runUpgradeCli } = await import('./lib/upgrade/cli.mjs')
+      await runUpgradeCli(argv.slice(1))
+      break
+    }
     case 'uninstall':
       await runInstall(true, argv.slice(1))
       break

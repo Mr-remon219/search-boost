@@ -1,6 +1,6 @@
 // pi host adapter — pi coding agent extension.
 //
-// Loaded by pi via package.json `pi.extensions` (pi install npm:search-boost-mcp),
+// Loaded by pi via package.json `pi.extensions` (pi install npm:search-boost),
 // by `pi -e <this file>`, or through the ~/.pi/agent/extensions shim written by
 // `search-boost install -t pi`. Registers the search tools (fused_search,
 // fetch_page, search-parallel-subagent, x_search), the TUI commands

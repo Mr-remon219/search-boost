@@ -196,7 +196,7 @@ if (!process.argv.includes('--isolated')) {
     assert(retiredFiles(dest).every((path) => !existsSync(path)))
   }
   const pluginConfig = JSON.parse(readFileSync(new URL('../agents/antigravity/plugin/mcp_config.json', import.meta.url), 'utf8'))
-  assert.deepEqual(pluginConfig.mcpServers['search-boost'], { command: 'npx', args: ['-y', 'search-boost-mcp', 'serve'] }, 'shipped Antigravity plugin must be portable and omit type')
+  assert.deepEqual(pluginConfig.mcpServers['search-boost'], { command: 'npx', args: ['-y', 'search-boost', 'serve'] }, 'shipped Antigravity plugin must be portable and omit type')
   console.log('ok: plugin bundles contain the router, not retired tool manuals; launch configuration is portable')
   console.log('All router/extension tests passed.')
 }

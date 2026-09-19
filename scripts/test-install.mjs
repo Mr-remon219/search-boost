@@ -132,6 +132,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 
+// Legacy Pi environment names are credential inputs too; never inherit real keys in tests.
+for (const key of ['PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY']) delete process.env[key]
+
 let failed = 0
 
 function assert(name, cond) {
@@ -342,7 +345,7 @@ assert('mcp launch prefers bin or node cli over npx', launch.command !== 'npx' &
   launch.args.some((a) => a.endsWith('cli.mjs')) || launch.command.includes('search-boost')
 ))
 const plugin = pluginMcpEntry()
-assert('plugin mcp entry is npx', plugin.command === 'npx' && plugin.args?.includes('-y') && plugin.args?.includes('search-boost-mcp'))
+assert('plugin mcp entry is npx', plugin.command === 'npx' && plugin.args?.includes('-y') && plugin.args?.includes('search-boost'))
 assert('plugin mcp entry no abs paths', !/[A-Za-z]:[/\\]/.test(JSON.stringify(plugin)))
 const agy = antigravityMcpEntry()
 assert('antigravity omits type', !('type' in agy) && agy.command && agy.args?.length)

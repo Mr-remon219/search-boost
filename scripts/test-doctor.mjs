@@ -11,6 +11,9 @@ import { runDoctor } from '../lib/doctor/run.mjs'
 import { renderHuman } from '../lib/doctor/render.mjs'
 import { markClaudeOwnedWebSearchDeny } from '../lib/native-search.mjs'
 
+// Legacy Pi environment names are credential inputs too; never inherit real keys in tests.
+for (const key of ['PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY']) delete process.env[key]
+
 let failed = 0
 
 function assert(name, cond) {

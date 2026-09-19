@@ -20,7 +20,7 @@ process.env.PI_CODING_AGENT_DIR = join(TMP, 'pi-agent')
 process.env.DSH_HOME = join(TMP, 'dsh-home')
 delete process.env.XAI_API_KEY
 delete process.env.SEARCH_BOOST_LAYER
-for (const k of ['TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY']) delete process.env[k]
+for (const k of ['TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY']) delete process.env[k]
 mkdirSync(process.env.HOME, { recursive: true })
 
 const {
@@ -466,14 +466,14 @@ writeFileSync(PATHS.pi.extension, '// user-owned file')
 await AGENTS.pi.uninstall({ dryRun: false })
 assert('pi uninstall leaves foreign file at shim path', existsSync(PATHS.pi.extension))
 rmSync(PATHS.pi.extension)
-assert('pi print config mentions injected prompts', AGENTS.pi.printConfig().includes('/fast-parallel') && AGENTS.pi.printConfig().includes('pi install npm:search-boost-mcp'))
+assert('pi print config mentions injected prompts', AGENTS.pi.printConfig().includes('/fast-parallel') && AGENTS.pi.printConfig().includes('pi install npm:search-boost'))
 assert('dsh plugin add args', hostRuntime.dshPluginArgs('add', 'web').slice(0, 4).join(' ') === 'plugin --profile web add')
-assert('dsh plugin remove args use package name', hostRuntime.dshPluginArgs('remove', 'headless').join(' ') === 'plugin --profile headless remove search-boost-mcp')
+assert('dsh plugin remove args use package name', hostRuntime.dshPluginArgs('remove', 'headless').join(' ') === 'plugin --profile headless remove search-boost')
 assert('dsh print config uses profile', AGENTS.dsh.printConfig({ profile: 'sdk' }).includes('--profile sdk add'))
 const dshDry = await AGENTS.dsh.install({ dryRun: true, profile: 'web' })
 assert('dsh dry-run install returns profile manifest path', dshDry[0].endsWith(join('profiles', 'web', 'package.json')))
 mkdirSync(join(process.env.DSH_HOME, 'profiles', 'web'), { recursive: true })
-writeFileSync(join(process.env.DSH_HOME, 'profiles', 'web', 'package.json'), JSON.stringify({ dependencies: { 'search-boost-mcp': '^0.2.0' }, dsh: { profile: { bundles: ['search-boost-mcp'] } } }))
+writeFileSync(join(process.env.DSH_HOME, 'profiles', 'web', 'package.json'), JSON.stringify({ dependencies: { 'search-boost': '^0.2.0' }, dsh: { profile: { bundles: ['search-boost'] } } }))
 assert('dsh configured when a profile depends on the package', agentDetected('dsh') && agentConfigured('dsh'))
 assert('--profile flag parses', installOpts(parseFlags(['-t', 'dsh', '--profile', 'sdk'])).profile === 'sdk')
 
@@ -482,7 +482,7 @@ const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url),
 assert('package exports pi + dsh adapters', pkg.exports['./pi'] === './adapters/pi/index.js' && pkg.exports['./dsh'] === './adapters/dsh/index.js')
 assert('package declares pi extension manifest', pkg.pi.extensions[0] === './adapters/pi/index.js')
 assert('package declares dsh bundle patch', pkg.dsh.bundle.patch === './adapters/dsh/cordis.patch.yml' && existsSync(new URL('../adapters/dsh/cordis.patch.yml', import.meta.url)))
-assert('cordis patch imports the dsh export', readFileSync(new URL('../adapters/dsh/cordis.patch.yml', import.meta.url), 'utf8').includes('name: search-boost-mcp/dsh'))
+assert('cordis patch imports the dsh export', readFileSync(new URL('../adapters/dsh/cordis.patch.yml', import.meta.url), 'utf8').includes('name: search-boost/dsh'))
 assert('package files ship adapters', pkg.files.includes('adapters/') && !pkg.files.includes('tools/'))
 
 rmSync(TMP, { recursive: true, force: true })

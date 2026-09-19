@@ -1,4 +1,4 @@
-# search-boost-mcp
+# search-boost
 
 面向编程 Agent 的**多引擎联网搜索** —— **一份 SearchBoost 核心，三种宿主适配**。MCP 服务接入 **Cursor**、**Cursor CLI**、**Codex**、**Claude Code**、**Grok Build** 和 **Antigravity**；同一个包同时也是 **[pi](https://github.com/earendil-works/pi-coding-agent) 扩展**和 **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle 插件**。
 
@@ -13,7 +13,7 @@
           └── agents/<host> 宿主级提示词策略 ──┘
 ```
 
-> 原独立仓库 **pi-search-boost** 与 **dsh-search-boost** 已并入本仓库，退化为两个宿主适配层。搜索引擎、融合排序、正文抓取与 X 搜索**只在本仓库的核心维护一份**。
+> 原 npm 名称为 **search-boost-mcp**；原独立仓库 **pi-search-boost** 与 **dsh-search-boost** 已并入本仓库，退化为两个宿主适配层。搜索引擎、融合排序、正文抓取与 X 搜索**只在本仓库的核心维护一份**。
 
 **核心**（[`lib/search/`](./lib/search/)）：**free** 层并行调用 Bing、DuckDuckGo、Yahoo 与 Exa-free；**api** 层在此基础上增加**你已配置**的 Tavily / Brave / Exa（配一个 Key 即可运行；建议配齐三个以获得最佳融合）。此外还提供 X 搜索（xAI 托管工具 ∥ 多引擎，无凭据也可降级使用），以及带 `focus` 的 Jina 正文抓取。
 
@@ -26,7 +26,7 @@ English → [README.md](./README.md)
 环境要求：**Node ≥ 22.13**。
 
 ```bash
-npm install -g search-boost-mcp
+npm install -g search-boost
 search-boost setup          # 交互式：配密钥 → 选搜索层 → 选 Agent
 # 想省事、全自动：
 search-boost install -y     # 给所有能检测到的 Agent 装上
@@ -34,19 +34,37 @@ search-boost install -y     # 给所有能检测到的 Agent 装上
 
 装完后记得**重启**对应的 Agent，MCP 才会生效。
 
-### 升级
+### 升级与旧包过渡
 
-已经在用 search-boost-mcp？先更新全局 CLI，再重装到各 Agent（`~/.search-boost/` 下的密钥与搜索层会保留）：
+新 npm 包是 **`search-boost`**，命令是 **`search-boost`**。旧包 **`search-boost-mcp`** 的过渡版本只保留 **`search-boost-mcp`** 命令，不再注册 `search-boost`，两个包可以并存。
+
+**旧包用户：过渡版本发布后，先更新旧包释放同名命令，再安装新包。** 不需要 `--force`，也不需要先卸载旧包。
 
 ```bash
-npm install -g search-boost-mcp@latest
-search-boost install -y                 # 所有检测到的 Agent
-# 或按 Agent，例如 Grok 一键（grok CLI 在 PATH 时含插件 + 配置）：
-search-boost install -t grok -y --auto-allow
-search-boost doctor
+npm install -g search-boost-mcp@latest  # 必须是已改命令名的过渡版本
+npm install -g search-boost@latest
+search-boost                         # TUI → One-click upgrade / 一键升级
+# 或直接执行：
+search-boost upgrade -y
 ```
 
-重装后**重启** Agent。首次写入时会从旧的 flat `~/.search-boost-*.json` 路径懒迁移配置。
+也可以从过渡版本运行 `search-boost-mcp upgrade`：显式安装新包，并由新包处理集成迁移。不是转发插件，也没有 postinstall 自动迁移。
+
+已有新包用户直接在 TUI 选择一键升级：检查 `search-boost@latest`，需要时更新程序，再刷新**已经安装**的集成；不会因为检测到某个 Agent 就为它新增安装。
+
+```bash
+search-boost upgrade --dry-run        # 只预览，不改包、配置或凭据
+search-boost upgrade --sync-only -y   # npm 已更新后/离线时，只同步当前版本的集成
+search-boost upgrade --workspace /path/to/project -y
+```
+
+迁移识别 `pi-search-boost`、`dsh-search-boost` 和 `search-boost-mcp`。先验证替代包，再移除对应宿主的旧注册；Pi 手动复制目录先归档，DSH 逐个已安装 profile 处理。**不会自动卸载旧全局 npm 包，不暂存接管或重建全局命令。** API keys、X token、认证文件、搜索层、既有权限和禁用状态保留；旧 Pi 的 `PI_SEARCH_*_KEY` 环境变量也继续兼容。
+
+备份位于 `~/.search-boost/backups/`，执行记录位于 `~/.search-boost/state/last-upgrade.json`（支持 `SEARCH_BOOST_HOME`）。有冲突、权限不足或部分失败时明确报告，不能视为全部升级成功。完成后重启相关 Agent。
+
+扫描范围为已知用户级配置、DSH profiles、当前/已记录项目及指定 workspace；未记录的历史项目请在其目录执行或传入 `--workspace`。不会遍历整台机器，也不能代替宿主确认实际加载成功。
+
+维护者：旧包过渡版的独立生成/发布步骤见 [发布说明](docs/legacy-release.md)。本仓库改动只有发布到 npm 后才会通过 `@latest` 分发。
 
 ### 按 Agent 单独安装
 
@@ -61,7 +79,7 @@ search-boost install -t dsh -y --profile web   # 执行 dsh plugin --profile web
 
 只想看看会改哪些文件、不真正写入：加 `--dry-run`。
 
-**不经 CLI 直接装 pi / DSH：** `pi install npm:search-boost-mcp`（包清单 `pi.extensions`）或 `dsh plugin --profile web add search-boost-mcp`（包清单 `dsh.bundle`）。详见下文「宿主适配层」。
+**不经 CLI 直接装 pi / DSH：** `pi install npm:search-boost`（包清单 `pi.extensions`）或 `dsh plugin --profile web add search-boost`（包清单 `dsh.bundle`）。详见下文「宿主适配层」。
 
 ### 验证安装
 
@@ -249,7 +267,7 @@ Hook 只读取本地提示词，不联网、不授予工具权限；提示词缺
 
 | | pi（`adapters/pi`） | DSH（`adapters/dsh`） |
 |---|---|---|
-| 加载方式 | `pi install npm:search-boost-mcp`、`pi -e adapters/pi/index.js`，或 `search-boost install -t pi` 写入的 shim | `dsh plugin --profile web add search-boost-mcp`（自动应用 `adapters/dsh/cordis.patch.yml`，接管内置 `web_search` / `web_fetch`） |
+| 加载方式 | `pi install npm:search-boost`、`pi -e adapters/pi/index.js`，或 `search-boost install -t pi` 写入的 shim | `dsh plugin --profile web add search-boost`（自动应用 `adapters/dsh/cordis.patch.yml`，接管内置 `web_search` / `web_fetch`） |
 | 工具 | `fused_search`（含 `site`/`min_score`/`depth`，最多 20 条）、`fetch_page`（不裁剪）、`search-parallel-subagent`（searcher/summarizer 子进程；`/fast-parallel` `/complex-parallel`）、`x_search` | `fused_search`、`fetch_page`、`x_search`、`research_parallel`（DSH 原生 subagents）、`search_stats`；原生引用卡片 |
 | 命令 | `/web_change`、`/x-login`、`/x-logout`、`/search-cache`、`/search-audit` | `/web_change`、`/x-login`、`/x-logout` |
 | 提示词 | `before_agent_start` 追加 `<search_balance>` + 当日搜索预算 | `systemPrompt.section` `search:policy`（115）+ 动态 `search:status`（116） |

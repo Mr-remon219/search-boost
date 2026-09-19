@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, v0.2.0]
   pull_request:
 
 jobs:
@@ -34,4 +34,7 @@ jobs:
           fi
       - run: npm run test:fusion
       - run: npm run test:adapters
+      - run: npm run test:parallel
+      - run: npm run test:upgrade
+      - run: npm run test:mcp
       - run: npm run smoke

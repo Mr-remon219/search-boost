@@ -11,7 +11,7 @@ Install **search-boost MCP**, a lightweight **workflow router** and a capability
 **Recommended** — one command installs the plugin (when `grok` is on PATH) plus config, rule, and skill:
 
 ```bash
-npm install -g search-boost-mcp
+npm install -g search-boost
 search-boost install -t grok -y --auto-allow
 ```
 
@@ -23,14 +23,14 @@ If `grok` is not on PATH, the plugin step is skipped with a warning; config/rule
 # From a git clone:
 grok plugin install ./grok-plugin --trust
 # Or from the global npm package:
-#   grok plugin install "$(npm root -g)/search-boost-mcp/grok-plugin" --trust
-# Windows PowerShell: "$(npm root -g)\search-boost-mcp\grok-plugin"
+#   grok plugin install "$(npm root -g)/search-boost/grok-plugin" --trust
+# Windows PowerShell: "$(npm root -g)\search-boost\grok-plugin"
 
 # Then optional routing rules:
 search-boost install -t grok -y --auto-allow --skip-grok-plugin
 ```
 
-The bundled `.mcp.json` uses `npx -y search-boost-mcp serve` (portable). A separate `[mcp_servers.search-boost]` in `config.toml` from `search-boost install` may also exist — both work.
+The bundled `.mcp.json` uses `npx -y search-boost serve` (portable). A separate `[mcp_servers.search-boost]` in `config.toml` from `search-boost install` may also exist — both work.
 
 ---
 
@@ -66,7 +66,7 @@ To publish on the Grok plugin marketplace: open a PR to [xai-org/plugin-marketpl
 **推荐** — 一条命令（`grok` 在 PATH 时）自动装插件 + config、rule、skill：
 
 ```bash
-npm install -g search-boost-mcp
+npm install -g search-boost
 search-boost install -t grok -y --auto-allow
 ```
 
@@ -78,14 +78,14 @@ PATH 中没有 `grok` 时，插件步骤会跳过并警告，config/rule/skill �
 # 从仓库克隆：
 grok plugin install ./grok-plugin --trust
 # 或全局 npm 包：
-#   grok plugin install "$(npm root -g)/search-boost-mcp/grok-plugin" --trust
-# Windows PowerShell: "$(npm root -g)\search-boost-mcp\grok-plugin"
+#   grok plugin install "$(npm root -g)/search-boost/grok-plugin" --trust
+# Windows PowerShell: "$(npm root -g)\search-boost\grok-plugin"
 
 # 再可选写入路由规则：
 search-boost install -t grok -y --auto-allow --skip-grok-plugin
 ```
 
-包内 `.mcp.json` 使用 `npx -y search-boost-mcp serve`（可移植）。`search-boost install` 写入的 `config.toml` 里也可能有 `[mcp_servers.search-boost]` — 两者均可工作。
+包内 `.mcp.json` 使用 `npx -y search-boost serve`（可移植）。`search-boost install` 写入的 `config.toml` 里也可能有 `[mcp_servers.search-boost]` — 两者均可工作。
 
 ### 怎么确认装好了
 
