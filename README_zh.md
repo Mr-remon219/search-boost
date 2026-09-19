@@ -168,6 +168,15 @@ search-boost config x --set-xai-key KEY   # 保存 XAI API key
 search-boost config x --logout            # 删除本地副本
 ```
 
+**Jev 凭据（实验功能）：** TUI → **Jev credentials (experimental)**，或 `search-boost config jev`，保存 [TypeSafe Jev](https://console.typesafe.ai/settings/keys) System One 决策模型的 endpoint 与 API Key。`jev` 块与搜索引擎 Key 放在同一个 keys 文件里（便于统一处理），但 Jev **不是搜索引擎**：不会进入 `KEY_NAMES`、引擎路由或 api 层引擎池。目前仅记录凭据，尚无任何调用；配置后 `search-boost status` 与 TUI → Status 会显示该块。回退环境变量 `TYPESAFE_API_KEY`，默认 base URL `https://api.typesafe.ai/v1`。
+
+```bash
+search-boost config jev --show                                     # 查看 Jev 状态
+search-boost config jev --jev-base-url https://api.typesafe.ai/v1 \
+                        --jev-api-key KEY                          # 保存 endpoint + key
+search-boost config jev --clear                                    # 删除该块
+```
+
 **配置文件路径覆盖：** 环境变量 `SEARCH_BOOST_KEYS_FILE`、`SEARCH_BOOST_LAYER_FILE`、`SEARCH_BOOST_XAUTH_FILE`（可选，指向自定义路径）。
 
 ---
@@ -182,7 +191,7 @@ search-boost config x --logout            # 删除本地副本
 | `search-boost serve` | 启动 MCP 服务（Agent 调用的入口） |
 | `search-boost status` | 看密钥、搜索层、X 凭据、各 Agent 是否已配置 |
 | `search-boost doctor [--quick\|--probe] [--json] [--strict]` | 配置/Agent/引擎健康检查，含 pass/warn/fail 判定 |
-| `search-boost config keys\|layer\|x\|search` | 管密钥、默认层、X 凭据、是否替换内置搜索 |
+| `search-boost config keys\|layer\|x\|jev\|search` | 管密钥、默认层、X 凭据、Jev 凭据（实验）、是否替换内置搜索 |
 | `search-boost print <agent>` | 只打印 MCP 配置片段，不改文件 |
 | `search-boost agents` | 列出 Agent（适合脚本读） |
 

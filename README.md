@@ -164,6 +164,15 @@ search-boost config x --set-xai-key KEY   # store XAI API key
 search-boost config x --logout            # remove local copy
 ```
 
+**Jev credentials (experimental):** TUI → **Jev credentials (experimental)**, or `search-boost config jev`, stores the endpoint and API key for [TypeSafe's Jev](https://console.typesafe.ai/settings/keys) System One decision model. The `jev` block lives in the same keys file as the engine keys so every secret has one home, but Jev is **not a search engine**: it never joins `KEY_NAMES`, engine routing, or the api-layer pool. Nothing calls Jev yet — the option only records the credentials, and `search-boost status` / TUI → Status print the block once it is set. `TYPESAFE_API_KEY` is read as a fallback; default base URL `https://api.typesafe.ai/v1`.
+
+```bash
+search-boost config jev --show                                     # Jev status
+search-boost config jev --jev-base-url https://api.typesafe.ai/v1 \
+                        --jev-api-key KEY                          # store endpoint + key
+search-boost config jev --clear                                    # remove the block
+```
+
 **X filtering (with or without login):** all sources share one pipeline: retrieval/enrichment → normalization → merge/deduplication → filtering → result limit. Author handles come from X/Twitter URLs, and modern post IDs supply missing posting times. `from_date` / `to_date` include both UTC calendar dates; keyword `since:` is inclusive and `until:` exclusive. `username`, `allowed_x_handles`, and `excluded_x_handles` are case-insensitive author filters (`@` optional; allow/exclude lists are mutually exclusive, max 20). In user mode, dates filter `recent_posts`, not the account creation date.
 
 Local keyword metadata filters support `from:`, `-from:`, `since:`, `until:`, `min_faves:`, `min_retweets:`, `min_replies:`, and `lang:` with AND/OR groups. Quoted text is not parsed as filters. Text relevance and other operators remain provider-side (unsupported operators are noted). Candidates missing metadata needed to verify a filter are omitted with a note—not treated as matching. Thus keyless engagement/language filtering may return fewer or no posts; search-index coverage and oEmbed cannot reproduce the full authenticated X corpus. Date semantics follow the [xAI tool contract](https://docs.x.ai/developers/tools/x-search).
@@ -182,7 +191,7 @@ Local keyword metadata filters support `from:`, `-from:`, `since:`, `until:`, `m
 | `search-boost serve` | Run MCP stdio server (used by agents) |
 | `search-boost status` | Keys, layer, X credentials, per-agent configured state |
 | `search-boost doctor [--quick\|--probe] [--json] [--strict]` | Config/agents/engine health checks with pass/warn/fail |
-| `search-boost config keys\|layer\|x\|search` | Keys, default layer, X auth, native-search replace |
+| `search-boost config keys\|layer\|x\|jev\|search` | Keys, default layer, X auth, Jev credentials (experimental), native-search replace |
 | `search-boost print <agent>` | Print MCP snippet without writing |
 | `search-boost agents` | Machine-readable agent list |
 

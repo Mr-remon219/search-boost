@@ -27,7 +27,8 @@ async function scenario(result, actions) {
   assert.match(options.find((o) => o.value === 'upgrade').hint, /all installed agents/)
   assert.ok(!options.some((o) => o.value === 'migrate'), 'one-time npm rename is not a TUI update action')
   assert.ok(options.every((o) => !/[\u4e00-\u9fff]/.test(o.label)), 'keep the existing English Clack style')
-  for (const value of ['setup', 'install', 'uninstall', 'keys', 'layer', 'x', 'search', 'status', 'print', 'exit']) assert.ok(options.some((o) => o.value === value))
+  for (const value of ['setup', 'install', 'uninstall', 'keys', 'layer', 'x', 'jev', 'search', 'status', 'print', 'exit']) assert.ok(options.some((o) => o.value === value))
+  assert.match(options.find((o) => o.value === 'jev').label, /experimental/, 'the Jev option is marked experimental')
   return { menus, logs, exitCode: process.exitCode }
 }
 try {
