@@ -10,6 +10,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, exist
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { pathToFileURL } from 'node:url'
+import { spawnSync } from 'node:child_process'
 import { PKG_ROOT } from '../lib/pkg.mjs'
 import { runCommand } from '../lib/upgrade/process.mjs'
 
@@ -119,9 +120,23 @@ writeFileSync(file,JSON.stringify(pkg,null,2));`)
   // Precondition probe: the migration path resolves the global root/prefix through
   // npm itself and deliberately never echoes npm output (it may contain secrets),
   // so a broken child environment would only surface as a generic failure.
+  const npmResolution = () => {
+    const where = spawnSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', 'where npm'], { encoding: 'utf8', env, cwd })
+    const shims = [
+      join(cwd, 'npm.cmd'),
+      join(cwd, 'node_modules', '.bin', 'npm.cmd'),
+      join(prefix, 'npm.cmd'),
+      join(prefix, 'node_modules', '.bin', 'npm.cmd'),
+    ].filter((file) => existsSync(file))
+    return [
+      `where npm → ${(where.stdout ?? '').trim() || `(exit ${where.status}) ${(where.stderr ?? '').trim()}`}`,
+      `fixture shims → ${shims.join(' | ') || '(none)'}`,
+      ...shims.slice(0, 2).map((file) => `${file} → ${readFileSync(file, 'utf8').split('\n').slice(0, 4).join(' ⏎ ')}`),
+    ].join('\n')
+  }
   for (const args of [['--version'], ['root', '--global'], ['prefix', '--global']]) {
     const probe = await runCommand('npm', args, { env, cwd })
-    assert.equal(probe.code, 0, `npm ${args.join(' ')} failed (exit ${probe.code})\n${probe.stdout}\n${probe.stderr}\nPATH=${env[pathKey]}`)
+    assert.equal(probe.code, 0, `npm ${args.join(' ')} failed (exit ${probe.code})\n${probe.stdout}\n${probe.stderr}\nPATH=${env[pathKey]}\n${npmResolution()}`)
   }
 
   // Prewarm exactly as npx would, without requiring a transition version.
