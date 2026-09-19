@@ -1,3 +1,4 @@
+import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
 // pi host adapter — pi coding agent extension.
 //
 // Loaded by pi via package.json `pi.extensions` (pi install npm:search-boost),
@@ -25,6 +26,7 @@ import {
   clearAllCaches,
   countWords,
   describeLayer,
+  formatRuntimeCapabilities,
   excerptForTool,
   getLayer,
   hostOf,
@@ -63,9 +65,8 @@ export default function searchBoostExtension(pi) {
   /* -------------------- Proactive search rules (injected into system prompt) -------------------- */
 
   pi.on('before_agent_start', async (event) => {
-    if (!rules || event.systemPrompt.includes('<search_balance>')) {
-      return {} // already injected by an earlier handler
-    }
+    const base = event.systemPrompt.replace(/\n?<search_capabilities>[\s\S]*?<\/search_capabilities>/g, '')
+    const policy = rules && !base.includes('<search_balance>') ? `\n${rules}` : ''
     // budget state (not just a slogan): count today's searches so the model
     // can calibrate effort — research tasks may spend more, simple lookups
     // should not push the day's total into the hundreds
@@ -81,7 +82,7 @@ export default function searchBoostExtension(pi) {
     const budgetNote = todayCount > 0
       ? `\n[search budget] Searches used today: ${todayCount}. Research tasks may spend more; for simple lookups, prefer answering from what you already have when the day's total is high.`
       : ''
-    return { systemPrompt: `${event.systemPrompt}\n${rules}${budgetNote}` }
+    return { systemPrompt: `${base}${policy}${budgetNote}\n${formatRuntimeCapabilities()}` }
   })
 
   const onProgress = (onUpdate) => (msg) => {
@@ -93,24 +94,20 @@ export default function searchBoostExtension(pi) {
   pi.registerTool({
     name: 'fused_search',
     label: 'Fused Web Search',
-    description:
-      'Web search: runs keyword variants across the active layer\'s engines in parallel (layer = free: keyless bing/ddg/yahoo/exa-free, or api: the same plus keyed Tavily/Brave/Exa; switched with /web_change), deduplicates by URL, and cross-ranks results by engine agreement and domain quality. Returns up to max_results ranked hits with the engines that found each one. This is the only search tool — use it for everything from single quick lookups to multi-faceted research (pass complexity simple for the former).',
+    description: FUSED_DESCRIPTION,
     promptSnippet: 'Search the web across multiple engines in parallel with keyword variants',
     promptGuidelines: [
-      'fused_search: it is the single search entry point — for a quick lookup pass complexity=simple (1 variant, cheap); for multi-faceted or research-oriented questions let the tier default to medium/complex and give keyword variants.',
-      'fused_search query style: write queries like Grok Build does — stack 3-6 domain keywords plus a few specific terms (e.g. "OpenRLHF architecture training rollout infrastructure documentation"). You may use `site:example.com` (auto-translated to a client-side include filter) and `"phrase" OR "phrase2"` (auto-split into parallel query variants).',
-      'fused_search angles: when a topic needs depth, call it repeatedly with a different angle each time (component, use-case, comparison, official docs, community discussion) instead of one broad query.',
-      'fused_search: when a term is ambiguous, pass `exclude_domains` to drop known noise (e.g. exclude wikipedia.org / baike.baidu.com when the query has a generic acronym).',
-      'fused_search: for time-sensitive questions pass `recency` (day/week/month/year) — results with a publish date outside the window are demoted, and dated results are shown with their publish date.',
-      'fused_search: the active layer (free = keyless bing/ddg/yahoo/exa-free; api = plus keyed tavily/brave/exa) is selected with /web_change. In free layer expect occasional 429 on exa-free — prefer fewer variants and rely on cache; switch to api when stakes are high.',
-      'fused_search: to restrict to specific sites use `include_domains` (e.g. official docs domains); note engines ignore site: operators, so this is a strict client-side filter.',
+      'fused_search is the main Web Search entry point. Normally omit engines; use distinct queries for independent angles.',
+      'fused_search: engine_pool chooses sources, ranking changes final engine weights only, complexity controls budget/variants/depth. engine_weights never changes which engines run.',
+      'fused_search: community defaults to false. Enable only when recent developer/community voices are needed; use x_search for X-only accounts or threads.',
+      'fused_search: include_domains/exclude_domains are hard filters; recency favors recent evidence. Read warnings and runtime capabilities; availability is not a connectivity guarantee.',
     ],
     parameters: {
       type: 'object',
       properties: {
+        ...FUSED_ROUTING_PROPERTIES,
         query: { type: 'string', description: 'The question or topic to search for' },
-        queries: { type: 'array', items: { type: 'string' }, description: 'Optional keyword variants; if omitted, variants are derived automatically' },
-        engines: { type: 'array', items: { type: 'string', enum: ENGINE_ORDER }, description: 'Engine subset override (default: active layer\'s engines; run /web_change to switch layers)' },
+        queries: { type: 'array', items: { type: 'string' }, description: 'Optional distinct query angles; complexity caps total variants at 1/2/3, including query and OR alternatives' },
         max_results: { type: 'integer', minimum: 1, maximum: 20, default: 10, description: 'Max fused results' },
         site: { type: 'string', description: 'Deprecated: restrict to a domain (alias for include_domains)' },
         include_domains: { type: 'array', items: { type: 'string' }, description: 'Only keep results from these domains (client-side hard filter; engines ignore site: operators)' },
@@ -118,7 +115,6 @@ export default function searchBoostExtension(pi) {
         recency: { type: 'string', enum: RECENCY_ENUM, description: 'Recency window: results with a publish date outside the window decay exponentially (half-life scaled to window); undated results are mildly demoted (default any)' },
         min_score: { type: 'number', minimum: 0, maximum: 5, default: 0, description: 'Drop results below this fused score floor (Grok\'s min_score, default 0 = off)' },
         depth: { type: 'string', enum: ['basic', 'advanced'], description: 'Tavily search depth: basic = fast NLP summaries; advanced = query-aligned full extraction (results carry content you can use directly, skipping fetch_page)' },
-        complexity: { type: 'string', enum: ['auto', 'simple', 'medium', 'complex'], description: 'Search budget tier: auto = heuristic (default). simple = 1 variant, medium = 2 variants, complex = 3 variants + Tavily advanced. Explicit tier overrides the heuristic.' },
       },
       required: ['query'],
     },
@@ -138,7 +134,8 @@ export default function searchBoostExtension(pi) {
         recency: params.recency && params.recency !== 'any' ? params.recency : undefined,
         minScore: params.min_score ?? 0,
         depth: params.depth ?? null,
-        complexity: params.complexity ?? 'auto',
+        complexity: params.complexity ?? 'medium',
+        enginePool: params.engine_pool, ranking: params.ranking, engineWeights: params.engine_weights, community: params.community,
         signal,
       })
       audit.write({
@@ -166,6 +163,7 @@ export default function searchBoostExtension(pi) {
         `Fused search: "${res.query}"`,
         `Layer: ${res.layer} — ${LAYER_LABELS[res.layer]}`,
         `Tier: ${res.tier} — Queries used: ${(res.queriesUsed ?? []).join(' | ')}`,
+        `Pool: ${res.enginePool}; ranking: ${res.ranking}; enginesUsed: ${res.enginesUsed.join(', ')}; effectiveWeights: ${JSON.stringify(res.effectiveWeights)}; communityUsed: ${res.communityUsed}`,
         `Engines: ${stats}${res.cacheHit ? ' — cache hit' : ''} — ${res.tookMs}ms`,
         ...(res.warnings ?? []).map((w) => `WARNING: ${w}`),
         includeDomains.length > 0 ? `Include domains: ${includeDomains.join(', ')}` : '',
@@ -191,7 +189,7 @@ export default function searchBoostExtension(pi) {
       })
       return {
         content: [text(lines.join('\n').trim())],
-        details: { engineStats: res.engineStats, cacheHit: Boolean(res.cacheHit), tookMs: res.tookMs, layer: res.layer, tier: res.tier },
+        details: { enginesUsed: res.enginesUsed, effectiveWeights: res.effectiveWeights, communityUsed: res.communityUsed, warnings: res.warnings, enginePool: res.enginePool, ranking: res.ranking, engineStats: res.engineStats, cacheHit: Boolean(res.cacheHit), tookMs: res.tookMs, layer: res.layer, tier: res.tier },
       }
     },
   })

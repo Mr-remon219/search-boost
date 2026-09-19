@@ -24,16 +24,19 @@
 - 每轮回答前自检：① 本回答有外部事实断言吗？② 有疑问吗（哪怕一个小数字）？③ 附了来源 URL 吗？→ 任一为"是"而未搜索 = 不合格回答，先搜再发。
 - 回答中**区分有来源的事实与推断**：事实附来源 URL；推断明确标注"（推断）"。
 ## 工具路由
-- fused_search：任何超过一行查找的需求，第一选择（多引擎融合+去重+域名过滤+时效衰减+缓存）
+- fused_search：主 Web Search 入口，单点查询到多角度研究都默认使用；通常不手选 engines。engine_pool 选择搜索来源，ranking 只影响最终引擎权重，complexity 只控制预算、variants 和 depth。engine_weights 只覆盖评分，不改变调用集合。
+- community 默认 false；仅需要近期开发者/社区声音时开启。它复用 X Core，Web 按域名、X 按作者保持多样性，最终共同执行 max_results。独立 X 账号/线程任务继续用 x_search。
+- 当前实际可用引擎、兼容 layer 与 X official/fallback 以动态 search:status section 为准；检查结果中的 enginesUsed / effectiveWeights / communityUsed / warnings。
 - x_search：X/Twitter 数据（帖子/趋势/情绪/账号/线程）——keyword/semantic 双通道并行（托管 x_search ∥ 多引擎，限 x.com，去重合并）；无凭据也能用（多引擎 + oEmbed 全文；user 走 guest GraphQL 结构化）；/x-login 启用官方路径，/x-logout 关闭
 - fetch_page：单源正文、摘要不足时（Jina 正文 + focus 定向提取，省 ~90% token；优先抓一手源）
 - research_parallel：获授权的多角度研究；用 tasks 数组创建 searcher，再用 agent=summarizer 汇总；普通查询不需要子代理
 - 综述/对比：`fused_search` 换角度多查几次，或直接走 `research_parallel`
-- web_search：平凡单行查询
-## 搜索层（/web_change）
-- free 层：只用无 key 引擎（bing/ddg/yahoo/exa-free），不烧 API 额度
-- api 层（默认）：免费引擎 + keyed（tavily/brave/exa，若配了 key），融合最全
-- 免费层若反复 429/无结果，切 /web_change api 重试，不要硬闯
+- web_search：宿主内置兼容入口；主动检索优先使用 fused_search。
+## 搜索池与兼容 layer
+- engine_pool=free / api / hybrid 分别选择免费池、API-only 池或合并池；缺 key/被禁用的引擎会明确提示，不会偷偷补入其他池。
+- /web_change 保留原配置语义：旧 free → free，旧 api → hybrid。单次搜索优先传 engine_pool，不应擅自修改持久配置。
+- ranking=balanced / research / fresh 只改评分权重，不自动改变搜索引擎、深度或日期限制；时效需求仍传 recency。
+- 默认 complexity=medium；simple / medium / complex 至多使用 1 / 2 / 3 个 query variants，complex 默认 advanced depth。
 ## 深度与停止（有界浏览）
 - **一次聚焦搜索起步**；结果不足或对比确实需要多源时才跟进；同一查询第二次调用 = 循环（换措辞或停止）；最多 3 轮；不扩大 scope
 - 证据不足 → **换措辞重试或提高档位，不要停在半路**；证据足够即停，不无限搜索

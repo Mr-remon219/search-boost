@@ -9,13 +9,17 @@ const engineEnum = z.enum(ENGINE_ORDER)
 export const fusedSearchInput = {
   query: z.string().describe('Search query (site:, -site:, "phrase", A OR B)'),
   queries: z.array(z.string()).optional().describe('Distinct query angles, not paraphrases; use up to 3 variants'),
-  engines: z.array(engineEnum).optional().describe('Engine subset override'),
+  engines: z.array(engineEnum).min(1).optional().describe('Optional exact engine selection overriding engine_pool; unavailable or disabled engines are skipped with warnings'),
   max_results: z.number().int().min(1).max(10).optional().describe('Max results (default 6)'),
   include_domains: z.array(z.string()).optional().describe('Restrict results to these hostnames, e.g. nodejs.org; useful for official sources'),
   exclude_domains: z.array(z.string()).optional().describe('Exclude these hostnames from results'),
   recency: z.enum(['day', 'week', 'month', 'year']).optional().describe('Favor recent dated results; omit for historical or version-pinned documentation'),
-  complexity: z.enum(['auto', 'simple', 'medium', 'complex']).optional().describe('Search budget: simple for a focused lookup, complex for multi-angle research; default auto'),
-  layer: z.enum(['free', 'api']).optional().describe('Override the search layer for this request only; does not persist configuration'),
+  complexity: z.enum(['simple', 'medium', 'complex']).optional().describe('Budget, query variants and depth only; default medium'),
+  engine_pool: z.enum(['free', 'api', 'hybrid']).optional().describe('Which engines to search. Omitted: compatibility layer free→free, api→hybrid'),
+  ranking: z.enum(['balanced', 'research', 'fresh']).optional().describe('Final engine-weight preset only; default balanced'),
+  engine_weights: z.object(Object.fromEntries(ENGINE_ORDER.map((name) => [name, z.number().finite().min(0).optional()]))).strict().optional().describe('Override preset engine weights; never enables or selects engines'),
+  community: z.boolean().optional().describe('Add X developer/community voices when relevant; default false; shares final max_results'),
+  layer: z.enum(['free', 'api']).optional().describe('Deprecated compatibility alias: free→free pool, api→hybrid pool; engine_pool takes precedence; not persisted'),
 }
 
 export const fusedSearchOutput = {
@@ -27,9 +31,15 @@ export const fusedSearchOutput = {
   resultCount: z.number(),
   enginesRequested: z.array(z.string()).optional(),
   enginesUsed: z.array(z.string()).optional(),
+  enginePool: z.enum(['free', 'api', 'hybrid']),
+  ranking: z.enum(['balanced', 'research', 'fresh']),
+  effectiveWeights: z.record(z.number()),
+  communityUsed: z.boolean(),
   engineStats: z.record(z.object({
     used: z.boolean(),
     errors: z.number(),
+    attempts: z.number().optional(),
+    successes: z.number().optional(),
     note: z.string().optional(),
   })).optional(),
   warnings: z.array(z.string()).optional(),
@@ -41,6 +51,9 @@ export const fusedSearchOutput = {
     score: z.number(),
     engines: z.array(z.string()),
     published: z.string().nullable(),
+    kind: z.enum(['web', 'x']).optional(),
+    username: z.string().optional(),
+    id: z.string().optional(),
   })),
 }
 
@@ -64,12 +77,15 @@ export const xSearchInput = {
   username: z.string().optional().describe('X account handle for type=user'),
   post_id: z.string().optional().describe('Real X post ID or status URL for type=thread'),
   max_results: z.number().int().min(1).max(10).optional().describe('Requested result limit, 1–10'),
-  from_date: z.string().optional().describe('YYYY-MM-DD'),
-  to_date: z.string().optional().describe('YYYY-MM-DD'),
+  from_date: z.string().optional().describe('Inclusive start date, YYYY-MM-DD (UTC)'),
+  to_date: z.string().optional().describe('Inclusive end date, YYYY-MM-DD (UTC)'),
+  allowed_x_handles: z.array(z.string()).max(20).optional().describe('Only these authors; mutually exclusive with excluded_x_handles'),
+  excluded_x_handles: z.array(z.string()).max(20).optional().describe('Exclude these authors; mutually exclusive with allowed_x_handles'),
 }
 
 export const xSearchOutput = {
   via: z.string(),
+  note: z.string().optional(),
   results: z.number(),
   tookMs: z.number(),
   cacheHit: z.boolean().optional(),

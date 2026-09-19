@@ -1,3 +1,4 @@
+import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
 // DSH host adapter — DeepSeek Harness (Cordis) bundle plugin.
 //
 // Loaded via adapters/dsh/cordis.patch.yml (see package.json `dsh.bundle`):
@@ -23,6 +24,7 @@ import {
   cleanJsonValue,
   collectSearchStats,
   describeLayer,
+  formatRuntimeCapabilities,
   getLayer,
   hostOf,
   isSsrfError,
@@ -92,7 +94,7 @@ function registerSearchProvider(ctx) {
       // NOTE: do not add a deepseek-native engine here — ctx.web.search
       // resolves the configured seam (this provider after the patch) and
       // would recurse into itself.
-      const result = await runFused({ query: request.query, maxResults: count, complexity: 'auto', signal })
+      const result = await runFused({ query: request.query, maxResults: count, complexity: 'medium', signal })
       if (result.results.length === 0) {
         const errs = Object.entries(result.engineStats ?? {})
           .filter(([, v]) => v.errors > 0)
@@ -154,10 +156,7 @@ function registerStatusSection(ctx) {
   return ctx.systemPrompt?.section({
     name: 'search:status',
     order: 116, // right after the search policy section (115)
-    text: () => {
-      const info = describeLayer()
-      return `search status — layer: ${info.layer}; x_search: ${info.xOfficial ? 'official path' : 'fallback chain'} (${info.xSource}); /web_change switches the layer, /x-login|/x-logout switch the x_search path`
-    },
+    text: () => formatRuntimeCapabilities(),
   })
 }
 
@@ -166,27 +165,19 @@ function registerStatusSection(ctx) {
 function registerFusedSearchTool(ctx) {
   return ctx.tools.register({
     name: 'fused_search',
-    description:
-      'Multi-engine fused web search in parallel (free legs: Bing / DuckDuckGo / Yahoo / Exa MCP — all keyless; ' +
-      'keyed Tavily / Brave / Exa join in the api layer). The active layer (free = keyless only, api = full pool) is switched with /web_change. ' +
-      'CALL THIS BEFORE ANSWERING any fact that may be stale or external to the conversation: versions, release dates, ' +
-      'current status, prices, API changes, benchmarks, comparisons, or anything quoted from another source — do not answer from memory. ' +
-      'Beyond a trivial one-line lookup, prefer this over web_search: it runs query variants across engines, dedupes URLs, ' +
-      'cross-ranks with per-engine provenance, applies include/exclude domain filters, recency decay, and caches results (6h TTL). ' +
-      'Supports Grok-style queries: site:domain, -site:domain, "phrase", A OR B. For time-sensitive facts pass recency="day|week|month|year".',
+    description: FUSED_DESCRIPTION,
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
+        ...FUSED_ROUTING_PROPERTIES,
         query: { type: 'string', description: 'The search query (supports site:, -site:, "phrase", A OR B).' },
-        queries: { type: 'array', items: { type: 'string' }, description: 'Optional extra query variants (max 3 total).' },
-        engines: { type: 'array', items: { type: 'string', enum: ENGINE_ORDER }, description: 'Engines to use (default by complexity tier and active layer; see /web_change).' },
+        queries: { type: 'array', items: { type: 'string' }, description: 'Optional distinct query angles; complexity caps total variants at 1/2/3, including query and OR alternatives.' },
         max_results: { type: 'number', description: 'Max results to return (default 6, max 10).' },
         include_domains: { type: 'array', items: { type: 'string' }, description: 'Only keep results from these domains (subdomain match).' },
         exclude_domains: { type: 'array', items: { type: 'string' }, description: 'Drop results from these domains (subdomain match).' },
         recency: { type: 'string', enum: ['day', 'week', 'month', 'year'], description: 'Recency window; older results decay exponentially.' },
-        complexity: { type: 'string', enum: ['auto', 'simple', 'medium', 'complex'], description: 'Search budget (auto by default).' },
-        layer: { type: 'string', enum: ['free', 'api'], description: 'Override the active layer for this call only (default: current /web_change layer).' },
+        layer: { type: 'string', enum: ['free', 'api'], description: 'Deprecated compatibility alias: free→free, api→hybrid. engine_pool takes precedence.' },
       },
       required: ['query'],
     },
@@ -206,6 +197,7 @@ function registerFusedSearchTool(ctx) {
           tier: { type: 'string' },
           depth: { type: 'string' },
           layer: { type: 'string' },
+          enginePool: { type: 'string' }, ranking: { type: 'string' }, effectiveWeights: { type: 'object', additionalProperties: { type: 'number' } }, communityUsed: { type: 'boolean' },
           enginesRequested: { type: 'array', items: { type: 'string' } },
           enginesUsed: { type: 'array', items: { type: 'string' } },
           warnings: { type: 'array', items: { type: 'string' } },
@@ -218,7 +210,7 @@ function registerFusedSearchTool(ctx) {
               properties: {
                 title: { type: 'string' }, url: { type: 'string' }, domain: { type: 'string' },
                 snippet: { type: 'string' }, score: { type: 'number' }, engines: { type: 'array', items: { type: 'string' } },
-                published: { type: 'string' }, content: { type: 'string' },
+                published: { type: ['string', 'null'] }, content: { type: 'string' }, kind: { type: 'string' }, username: { type: 'string' }, id: { type: 'string' },
               },
               required: ['title', 'url', 'domain'],
             },
@@ -259,7 +251,8 @@ function registerFusedSearchTool(ctx) {
         includeDomains: args.include_domains,
         excludeDomains: args.exclude_domains,
         recency: args.recency,
-        complexity: args.complexity ?? 'auto',
+        complexity: args.complexity ?? 'medium',
+        enginePool: args.engine_pool, ranking: args.ranking, engineWeights: args.engine_weights, community: args.community,
         layer: args.layer ?? null,
         signal: exec?.signal,
       }))
@@ -270,6 +263,7 @@ function registerFusedSearchTool(ctx) {
 function renderFused(value) {
   const lines = []
   lines.push(`**fused_search: "${value.query}"** — layer ${value.layer ?? 'api'}, tier ${value.tier}, ${value.results.length} hits, ${value.tookMs}ms${value.cacheHit ? ' (cache hit)' : ''}`)
+  lines.push(`engine_pool: ${value.enginePool}; ranking: ${value.ranking}; enginesUsed: ${(value.enginesUsed ?? []).join(', ')}; effectiveWeights: ${JSON.stringify(value.effectiveWeights ?? {})}; communityUsed: ${!!value.communityUsed}`)
   for (const [i, r] of value.results.entries()) {
     const eng = (r.engines ?? []).join('+')
     lines.push(`${i + 1}. [${r.score}] ${r.title} — ${r.domain} (${eng})${r.published ? `, ${r.published}` : ''}`)
@@ -371,8 +365,8 @@ function registerXSearchTool(ctx) {
         max_results: { type: 'number', description: 'Max results (default 5, max 10).' },
         from_date: { type: 'string', description: 'YYYY-MM-DD lower bound (keyword/semantic).' },
         to_date: { type: 'string', description: 'YYYY-MM-DD upper bound (keyword/semantic).' },
-        allowed_x_handles: { type: 'array', items: { type: 'string' }, description: 'Hosted-tool handle filter (max 20).' },
-        excluded_x_handles: { type: 'array', items: { type: 'string' }, description: 'Hosted-tool handle exclusion (max 20, mutually exclusive with allowed).' },
+        allowed_x_handles: { type: 'array', items: { type: 'string' }, description: 'Author filter on all paths, including without login (max 20).' },
+        excluded_x_handles: { type: 'array', items: { type: 'string' }, description: 'Author exclusion on all paths (max 20, mutually exclusive with allowed).' },
       },
       required: [],
     },

@@ -15,7 +15,9 @@
 
 > 原 npm 名称为 **search-boost-mcp**；原独立仓库 **pi-search-boost** 与 **dsh-search-boost** 已并入本仓库，退化为两个宿主适配层。搜索引擎、融合排序、正文抓取与 X 搜索**只在本仓库的核心维护一份**。
 
-**核心**（[`lib/search/`](./lib/search/)）：**free** 层并行调用 Bing、DuckDuckGo、Yahoo 与 Exa-free；**api** 层在此基础上增加**你已配置**的 Tavily / Brave / Exa（配一个 Key 即可运行；建议配齐三个以获得最佳融合）。此外还提供 X 搜索（xAI 托管工具 ∥ 多引擎，无凭据也可降级使用），以及带 `focus` 的 Jina 正文抓取。
+**核心**（[`lib/search/`](./lib/search/)）：`fused_search` 是主 Web Search 入口。`engine_pool` 选择 **free**（Bing / DuckDuckGo / Yahoo / Exa-free）、**api**（仅 Tavily / Brave / Exa）或 **hybrid**；`ranking` 只影响最终引擎权重，`complexity` 只控制预算、variants 和 depth。需要开发者/社区声音时启用 `community=true`，复用 X Core；平时不必手选引擎。旧 layer 配置保持兼容：free → free、api → hybrid。带 `focus` 的 Jina 正文抓取和独立 X 账号/线程搜索继续可用。
+
+详见[路由、权重、动态能力与兼容说明](docs/search-routing.md)。MCP 通过 `search-boost://capabilities` 提供实时配置状态；Pi/DSH 动态注入同一 capability。执行结果包含 `enginesUsed`、`effectiveWeights`、`communityUsed` 和 `warnings`。
 
 English → [README.md](./README.md)
 
@@ -34,45 +36,34 @@ search-boost install -y     # 给所有能检测到的 Agent 装上
 
 装完后记得**重启**对应的 Agent，MCP 才会生效。
 
-### 升级与旧包过渡
+### 日常更新与一次性 npm 迁移
 
-新 npm 包是 **`search-boost`**，命令是 **`search-boost`**。旧包 **`search-boost-mcp`** 的过渡版本只保留 **`search-boost-mcp`** 命令，不再注册 `search-boost`，两个包可以并存。
-
-**旧包用户：过渡版本发布后，先更新旧包释放同名命令，再安装新包。** 不需要 `--force`，也不需要先卸载旧包。
+**已经使用 `search-boost`：** 打开 TUI，选择 **Update**。它检查 npm，需要新版本时从 npx 临时缓存运行更新器，更新 SearchBoost，再刷新**所有已接入的 agents**。Pi、DSH 包含在内：已有 `pi-search-boost` / `dsh-search-boost` 适配器会升级到统一的 `search-boost`。仅被检测到、但尚未接入的 agents 不会自动安装。
 
 ```bash
-npm install -g search-boost-mcp@latest  # 必须是已改命令名的过渡版本
-npm install -g search-boost@latest
-search-boost                         # TUI → One-click upgrade / 一键升级
-# 或直接执行：
+search-boost                         # TUI → Update
+# CLI 等价入口 / 预览 / 离线同步当前版本：
 search-boost upgrade -y
-```
-
-**过渡版也提供一键迁移脚本**，无需手工安装新包：
-
-```bash
-search-boost-mcp migrate -y
-# 先预览：search-boost-mcp migrate --dry-run
-# 不依赖 PATH：node /path/to/search-boost-mcp/migrate.mjs -y
-```
-
-它安装并验证 `search-boost@latest`，再由新包处理集成迁移；新包尚未发布时安全停止，部分失败明确报错，可修复后重试。`search-boost-mcp upgrade` 仍可用。不是转发插件，也没有 postinstall 自动迁移。
-
-已有新包用户直接在 TUI 选择一键升级：检查 `search-boost@latest`，需要时更新程序，再刷新**已经安装**的集成；不会因为检测到某个 Agent 就为它新增安装。
-
-```bash
-search-boost upgrade --dry-run        # 只预览，不改包、配置或凭据
-search-boost upgrade --sync-only -y   # npm 已更新后/离线时，只同步当前版本的集成
+search-boost upgrade --dry-run
+search-boost upgrade --sync-only -y
 search-boost upgrade --workspace /path/to/project -y
 ```
 
-迁移识别 `pi-search-boost`、`dsh-search-boost` 和 `search-boost-mcp`。先验证替代包，再移除对应宿主的旧注册；Pi 手动复制目录先归档，DSH 逐个已安装 profile 处理。**不会自动卸载旧全局 npm 包，不暂存接管或重建全局命令。** API keys、X token、认证文件、搜索层、既有权限和禁用状态保留；旧 Pi 的 `PI_SEARCH_*_KEY` 环境变量也继续兼容。
+**仍使用全局 npm 包 `search-boost-mcp`：** 直接通过 npx 加载新包的迁移代码，不需要过渡版本，也不需要手动卸载旧包。
 
-备份位于 `~/.search-boost/backups/`，执行记录位于 `~/.search-boost/state/last-upgrade.json`（支持 `SEARCH_BOOST_HOME`）。有冲突、权限不足或部分失败时明确报告，不能视为全部升级成功。完成后重启相关 Agent。
+```bash
+npx --yes --package=search-boost@latest -- search-boost migrate -y
+# 先预览：
+npx --yes --package=search-boost@latest -- search-boost migrate --dry-run
+# 完成后：
+search-boost                         # 以后更新都选 TUI → Update
+```
 
-扫描范围为已知用户级配置、DSH profiles、当前/已记录项目及指定 workspace；未记录的历史项目请在其目录执行或传入 `--workspace`。不会遍历整台机器，也不能代替宿主确认实际加载成功。
+`migrate` **仅负责这次全局 npm 包更名**，不代替日常更新。它自动安装并验证新包，然后卸载全局 `search-boost-mcp` 并核验新命令。**agent 配置保持原样；完成后在 TUI 选择 Update，才统一更新全部已有接入。** 删除旧包前会记录其准确目录/扩展入口，确保指向旧目录的本地注册仍能识别。同名命令只有确认属于旧包后才会暂存交接，不使用 `--force` 盲目覆盖；安装失败恢复暂存命令并保留旧包。API keys、认证、模型设置、权限和禁用状态保留；旧 Pi 的 Key 环境变量继续兼容。
 
-维护者：旧包过渡版的独立生成/发布步骤见 [发布说明](docs/legacy-release.md)。本仓库改动只有发布到 npm 后才会通过 `@latest` 分发。
+配置备份在 `~/.search-boost/backups/`，更新结果在 `state/last-upgrade.json`，跨版本的受管路径记录在 `state/package-sources.json`（均支持 `SEARCH_BOOST_HOME`）。Pi/DSH 在安装目录变化后仍可识别，但记录不会使已卸载的集成复活。扫描范围为已知用户配置、DSH profiles、当前/已记录项目及 `--workspace`，不会遍历整台机器。完成后重启/重新加载相关 agents。
+
+详见[迁移与发布说明](docs/migration.md)和 [Pi/DSH 连续升级设计](docs/host-upgrades.md)。这些代码必须随新的 `search-boost` 发布后才能通过 npm `@latest` 获取；不再发布旧包名过渡版。
 
 ### 按 Agent 单独安装
 
@@ -148,7 +139,7 @@ search-boost uninstall -t cursor,codex,claude -y
 | `fused_search` | 多引擎并行搜、去重、综合排序 |
 | `fetch_page` | 拉网页正文（Jina 优先，失败走 HTML；先去掉样式/广告，不裁剪；`focus` 可只留相关段落） |
 | `x_search` | 搜 X / Twitter：关键词、用户、帖子串 |
-| `search_layer` | 查看或切换搜索层：`free`（免 Key）/ `api`（带 Key 的引擎） |
+| `search_layer` | 查看/切换兼容默认值：`free → free`、`api → hybrid`；单次搜索用 `engine_pool` |
 | `search_stats` | 看缓存、各引擎是否可用等诊断信息 |
 
 另外还有资源 `search-boost://policy` 和提示词 `search_routing`。
@@ -165,6 +156,10 @@ search-boost uninstall -t cursor,codex,claude -y
 获取 Key：[Tavily](https://app.tavily.com/) · [Brave Search API](https://brave.com/search/api/) · [Exa](https://dashboard.exa.ai/)
 
 **X/Twitter 凭据（可选）：** 配置后可走官方 `x_search` 路径。存储于 `~/.search-boost/config/xauth.json`（仍会读取 flat/legacy 路径），或通过 `XAI_API_KEY`。使用 `search-boost config x` 配置（见下方命令表）。MCP `/x-login` 与 `search-boost config x` 写入同一本地副本。路径覆盖：`SEARCH_BOOST_XAUTH_FILE`。
+
+**X 筛选（登录与未登录共用）：** 所有来源统一经过「召回/补全 → 规范化 → 合并去重 → 筛选 → 截断」。从 X/Twitter URL 恢复作者 handle，从现代帖子 ID 恢复缺失的发帖时间。`from_date` / `to_date` 包含起止 UTC 日期整天；keyword 查询中的 `since:` 包含当天，`until:` 不包含当天。`username`、`allowed_x_handles`、`excluded_x_handles` 都按作者筛选，忽略大小写和前导 `@`；允许/排除列表互斥、最多 20 个。user 模式的日期条件只筛选 `recent_posts`，不筛账号注册时间。
+
+本地支持 `from:`、`-from:`、`since:`、`until:`、`min_faves:`、`min_retweets:`、`min_replies:`、`lang:` 及 AND/OR 分组；引号内文本不当作筛选条件。文本相关性及其他操作符仍由上游处理，不支持的操作符会说明。缺少筛选所需元数据的候选会被剔除并注明原因，不会假装匹配。因此未登录时点赞数、语言等筛选可能返回更少或零条结果；搜索引擎索引和 oEmbed 不能覆盖完整的登录后数据。日期边界依据 [xAI 工具文档](https://docs.x.ai/developers/tools/x-search)。
 
 ```bash
 search-boost config x --show              # 查看 xauth 状态

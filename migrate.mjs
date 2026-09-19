@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Standalone script shipped in the transition release; never runs at npm install time. */
+/** Explicit npm-name migration entry shipped in search-boost; never runs at install time. */
 import { runMigrationCli } from './lib/upgrade/migrate.mjs'
 
 runMigrationCli(process.argv.slice(2)).catch((err) => {

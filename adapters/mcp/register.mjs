@@ -1,3 +1,4 @@
+import { FUSED_DESCRIPTION } from '../../lib/search/routing.js'
 /**
  * MCP host adapter — tool / resource / prompt registration (protocol-native
  * registerTool API). All search logic comes from SearchBoost Core
@@ -10,6 +11,7 @@ import { MCP_POLICY_TEXT } from './policy.mjs'
 import {
   X_MODES,
   collectSearchStats,
+  collectRuntimeCapabilities,
   describeLayer,
   formatFusedSummary,
   formatAllEnginesFailedMessage,
@@ -39,11 +41,7 @@ import {
 export function registerAll(server) {
   server.registerTool('fused_search', {
     title: 'Fused Web Search',
-    description:
-      'Find public web evidence for facts, versions, APIs, or comparisons using multi-engine search with URL deduplication. ' +
-      'Start with complexity=simple for one fact; use distinct queries for multiple angles. ' +
-      'Returns ranked URLs, snippets, dates, and engine warnings. Use fetch_page when snippets do not establish the claim; ' +
-      'use x_search for X/Twitter. Free mode needs no keys.',
+    description: FUSED_DESCRIPTION + ' Optional live status: search-boost://capabilities Resource.',
     inputSchema: fusedSearchInput,
     outputSchema: fusedSearchOutput,
     annotations: { ...ANNOTATIONS.search, title: 'Search the web (multi-engine fusion)' },
@@ -59,7 +57,8 @@ export function registerAll(server) {
         includeDomains: args.include_domains,
         excludeDomains: args.exclude_domains,
         recency: args.recency,
-        complexity: args.complexity ?? 'auto',
+        complexity: args.complexity ?? 'medium',
+        enginePool: args.engine_pool, ranking: args.ranking, engineWeights: args.engine_weights, community: args.community,
         layer: args.layer ?? null,
         signal,
       })
@@ -73,6 +72,7 @@ export function registerAll(server) {
         resultCount: hits.length,
         enginesRequested: result.enginesRequested ?? [],
         enginesUsed: result.enginesUsed ?? [],
+        enginePool: result.enginePool, ranking: result.ranking, effectiveWeights: result.effectiveWeights, communityUsed: result.communityUsed,
         results: hits,
         engineStats: result.engineStats ?? {},
         warnings: result.warnings ?? [],
@@ -133,15 +133,13 @@ export function registerAll(server) {
         return toolErr(`x_search: no results (${out.error ?? 'primary and fallback failed'})`)
       }
       const items = out.items ?? []
-      if (items.length === 0) {
-        return toolErr(`x_search: no results (${out.via}${out.note ? `; ${out.note.slice(0, 120)}` : ''})`)
-      }
       const header = out.cacheHit
         ? `x_search (cache) — ${items.length} results`
         : `x_search via ${out.via === 'parallel' ? `parallel:${out.credential}` : out.via} — ${items.length} results`
       const text = [header, out.cacheHit ? '' : out.note ?? '', '', items.map(renderXItem).join('\n')].filter(Boolean).join('\n')
       return toolOk(text, {
         via: out.cacheHit ? (out.via ?? 'cache') : out.via,
+        ...(out.note ? { note: out.note } : {}),
         results: items.length,
         tookMs: out.tookMs,
         cacheHit: Boolean(out.cacheHit),
@@ -154,7 +152,7 @@ export function registerAll(server) {
 
   server.registerTool('search_layer', {
     title: 'Search Layer',
-    description: `Inspect the current search layer with layer=show (default, no change). layer=free or api persists a new default: only change it when authorized. free = ${LAYER_LABELS.free}. api = ${LAYER_LABELS.api}. For a single search, use fused_search.layer instead.`,
+    description: `Inspect the current search layer with layer=show (default, no change). layer=free or api persists a new default: only change it when authorized. free = ${LAYER_LABELS.free}. api = ${LAYER_LABELS.api}. For a single search, use fused_search.engine_pool instead; legacy api maps to hybrid, not the strict api pool.`,
     inputSchema: searchLayerInput,
     annotations: { ...ANNOTATIONS.config, title: 'Configure search layer' },
   }, async (args) => {
@@ -200,6 +198,12 @@ export function registerAll(server) {
       return toolErr(err instanceof Error ? err.message : String(err))
     }
   })
+
+  server.registerResource('search-capabilities', 'search-boost://capabilities', {
+    title: 'Live search capabilities',
+    description: 'Current available engines, pool defaults, compatibility layer and X official/fallback readiness. Recomputed on every read; no credentials or live connectivity guarantee.',
+    mimeType: 'application/json',
+  }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(collectRuntimeCapabilities(), null, 2) }] }))
 
   server.registerResource('search-policy', 'search-boost://policy', {
     title: 'Search usage reference',

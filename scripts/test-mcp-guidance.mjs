@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** Check the actual stdio contract without network calls, installed skills, or real HOME. */
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,12 +12,14 @@ import { fusedSearchInput, fetchPageInput, xSearchInput } from '../adapters/mcp/
 
 const home = mkdtempSync(join(tmpdir(), 'sb mcp guidance '))
 const client = new Client({ name: 'guidance-test', version: '1.0.0' })
+const env = { ...process.env, HOME: home, USERPROFILE: home, SEARCH_BOOST_HOME: home,
+  PI_CODING_AGENT_DIR: join(home, 'pi'), SEARCH_BOOST_LAYER: 'free', SEARCH_BOOST_KEYS_FILE: join(home, 'keys.json'),
+  SEARCH_BOOST_LAYER_FILE: join(home, 'layer.json'), SEARCH_BOOST_XAUTH_FILE: join(home, 'xauth.json') }
+for (const key of ['TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY', 'XAI_API_KEY']) delete env[key]
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [fileURLToPath(new URL('../cli.mjs', import.meta.url)), 'serve'],
-  env: { ...process.env, HOME: home, USERPROFILE: home, SEARCH_BOOST_HOME: home,
-    SEARCH_BOOST_LAYER: 'free', SEARCH_BOOST_KEYS_FILE: join(home, 'keys.json'),
-    SEARCH_BOOST_LAYER_FILE: join(home, 'layer.json'), SEARCH_BOOST_XAUTH_FILE: join(home, 'xauth.json') },
+  env,
   stderr: 'pipe',
 })
 try {
@@ -35,6 +37,8 @@ try {
   }
   assert.equal(byName.fused_search.inputSchema.properties.max_results.maximum, 10)
   assert.deepEqual(byName.fetch_page.inputSchema.required, ['url'])
+  assert.equal(byName.x_search.inputSchema.properties.allowed_x_handles.maxItems, 20)
+  assert.equal(byName.x_search.inputSchema.properties.excluded_x_handles.maxItems, 20)
   // These calls work without first reading a resource, invoking a prompt, or loading any skill.
   const layer = await client.callTool({ name: 'search_layer', arguments: { layer: 'show' } })
   assert(!layer.isError)
@@ -45,6 +49,21 @@ try {
 
   const { resources } = await client.listResources()
   assert(resources.some((r) => r.uri === 'search-boost://policy'))
+  assert(resources.some((r) => r.uri === 'search-boost://capabilities'))
+  const capability = async () => JSON.parse((await client.readResource({ uri: 'search-boost://capabilities' })).contents[0].text)
+  assert.equal((await capability()).defaultEnginePool, 'free')
+  const empty = await client.callTool({ name: 'fused_search', arguments: { query: 'fixture', engine_pool: 'api', ranking: 'research', engine_weights: { exa: 0 }, community: false } })
+  assert(!empty.isError)
+  assert.deepEqual(empty.structuredContent.enginesUsed, [])
+  assert.deepEqual(empty.structuredContent.effectiveWeights, {})
+  assert.equal(empty.structuredContent.communityUsed, false)
+  assert.ok(empty.structuredContent.warnings.length > 0)
+  writeFileSync(join(home, 'keys.json'), JSON.stringify({ tavily: 'fixture-secret-tavily' }))
+  assert.ok((await capability()).availableEngines.includes('tavily'))
+  assert.ok(!JSON.stringify(await capability()).includes('fixture-secret'))
+  writeFileSync(join(home, 'keys.json'), JSON.stringify({ tavily: 'fixture-secret-tavily', enabledEngines: [] }))
+  assert.ok(!(await capability()).availableEngines.includes('tavily'), 'Resource re-reads current routing each time')
+  console.log('ok: live MCP capability resource and actual fused output metadata, without live engine calls')
   const resource = await client.readResource({ uri: 'search-boost://policy' })
   const text = resource.contents[0].text
   const examples = [...text.matchAll(/```json\s*([\s\S]*?)```/g)]

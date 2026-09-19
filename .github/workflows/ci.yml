@@ -33,6 +33,8 @@ jobs:
             exit "$ec"
           fi
       - run: npm run test:fusion
+      - run: npm run test:x
+      - run: npm run test:search
       - run: npm run test:adapters
       - run: npm run test:parallel
       - run: npm run test:upgrade

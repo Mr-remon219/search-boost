@@ -48,16 +48,17 @@
     "test:skills": "node scripts/test-skill-bundles.mjs",
     "test:mcp": "node scripts/test-mcp-guidance.mjs",
     "test:parallel": "node scripts/test-parallel-research.mjs",
-    "test:upgrade": "node scripts/test-upgrade.mjs && node scripts/test-legacy-release.mjs",
+    "test:upgrade": "node scripts/test-upgrade.mjs && node scripts/test-host-upgrade.mjs && node scripts/test-migration.mjs && node scripts/test-update-tui.mjs",
     "test:hooks": "node scripts/test-startup-hooks.mjs",
     "test:doctor": "node scripts/test-doctor.mjs",
     "test:adapters": "node scripts/test-adapters.mjs",
     "plugin:sync-grok": "node scripts/sync-grok-plugin.mjs",
     "build:plugin": "node scripts/build-plugin.mjs",
-    "build:legacy": "node scripts/build-legacy-release.mjs",
     "check": "node scripts/check-syntax.mjs",
     "test:fusion": "node scripts/test-fusion-errors.mjs",
-    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:install && npm run test:doctor && npm run test:fusion && npm run test:adapters && npm run test:parallel && npm run test:upgrade && npm run test:mcp && npm run smoke"
+    "test:x": "node scripts/test-x-pipeline.mjs",
+    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:install && npm run test:doctor && npm run test:fusion && npm run test:x && npm run test:search && npm run test:adapters && npm run test:parallel && npm run test:upgrade && npm run test:mcp && npm run smoke",
+    "test:search": "node scripts/test-search-routing.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^0.10.1",

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** New TUI/CLI manages OLD Pi/DSH/MCP installations. No real package-manager/host mutations. */
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, statSync, symlinkSync, readlinkSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
@@ -23,7 +23,7 @@ const bytes = (path) => readFileSync(path, 'utf8')
 function snapshot(dir = home) {
   return Object.fromEntries(readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name)
-    return entry.isDirectory() ? Object.entries(snapshot(path)) : [[path, bytes(path)]]
+    return entry.isSymbolicLink() ? [[path, `symlink:${readlinkSync(path)}`]] : entry.isDirectory() ? Object.entries(snapshot(path)) : [[path, bytes(path)]]
   }))
 }
 const fixtureSecret = 'fixture-value-not-a-real-credential'
@@ -64,8 +64,10 @@ async function run(command, args) {
       pkg.dependencies['search-boost'] = `link:${PKG_ROOT}`
       pkg.dsh.profile.bundles = [...new Set([...pkg.dsh.profile.bundles, 'search-boost'])]
       write(file, pkg)
-      write(join(dirname(file), 'node_modules', 'search-boost', 'package.json'), { name: 'search-boost', version })
-      for (const path of ['cli.mjs', 'adapters/pi/index.js', 'adapters/dsh/index.js', 'adapters/dsh/cordis.patch.yml']) write(join(dirname(file), 'node_modules', 'search-boost', path), '// test adapter')
+      const installed = join(dirname(file), 'node_modules', 'search-boost')
+      mkdirSync(dirname(installed), { recursive: true })
+      rmSync(installed, { recursive: true, force: true })
+      symlinkSync(PKG_ROOT, installed, process.platform === 'win32' ? 'junction' : 'dir')
       return { code: 0, stdout: '' }
     }
     if (verb === 'remove') {
@@ -234,28 +236,36 @@ try {
   assert.deepEqual(snapshot(), beforeFailure)
   assert(!existsSync(join(process.env.SEARCH_BOOST_HOME, 'state', 'upgrade.lock')))
 
-  // Updating the program hands off to NEW package code, not stale loaded installer modules.
+  // A timeout must not release a lock while a handed-off worker is still alive.
+  const { acquireLock } = await import('../lib/upgrade/lock.mjs')
+  const lease = await acquireLock()
+  const lockFile = join(process.env.SEARCH_BOOST_HOME, 'state', 'upgrade.lock')
+  write(lockFile, { pid: process.ppid, token: lease.token })
+  await lease.release()
+  assert(existsSync(lockFile), 'a live handoff owner retains the lock')
+  write(lockFile, { pid: process.pid, token: lease.token })
+  await lease.release()
+  assert(!existsSync(lockFile))
+  console.log('ok: handed-off live workers retain the lock after parent timeout')
+
+  // A newer release runs from the npx cache, never overwritten imported files.
   const latest = '99.0.0'
   let handoff = false
   const update = await runUpgrade({ log, run: async (command, args, opts) => {
-    if (command === 'npm' && args[0] === 'view') return { code: 0, stdout: JSON.stringify(latest) }
-    if (command === 'npm' && args[0] === 'install') {
-      assert(args.includes('--global') && args.includes('--ignore-scripts') && args.includes(`search-boost@${latest}`))
-      write(join(globalRoot, 'search-boost', 'package.json'), { name: 'search-boost', version: latest })
-      for (const file of ['cli.mjs', 'adapters/pi/index.js', 'adapters/dsh/index.js', 'adapters/dsh/cordis.patch.yml']) write(join(globalRoot, 'search-boost', file), '// test payload')
-      return { code: 0, stdout: '' }
-    }
-    if (command === 'npm' && args[0] === 'root') return { code: 0, stdout: globalRoot }
-    assert.equal(command, process.execPath)
-    assert.equal(args[0], join(globalRoot, 'search-boost', 'cli.mjs'))
-    assert(args.includes('--sync-only') && args.includes('--yes'))
+    assert.equal(command, 'npm')
+    if (args[0] === 'view') return { code: 0, stdout: JSON.stringify(latest) }
+    assert.equal(args[0], 'exec')
+    assert(args.includes(`--package=search-boost@${latest}`))
+    assert.deepEqual(args.slice(args.indexOf('--') + 1), ['search-boost', 'upgrade', '--yes'])
     assert(opts.env.SEARCH_BOOST_UPGRADE_HANDOFF)
+    assert.equal(opts.env.SEARCH_BOOST_UPGRADE_CWD, project)
+    assert.notEqual(opts.cwd, project, 'project package must not shadow the cached updater')
     handoff = true
-    return { code: 0, stdout: 'new-version migration completed' }
+    return { code: 0, stdout: 'cached updater completed' }
   } })
   assert(update.ok && update.reloaded && handoff)
   for (const file of protectedFiles) assert.equal(bytes(file), credentialBytes[file])
-  console.log('ok: npm version failures stop cleanly; newer program installs exact version and hands off migration')
+  console.log('ok: npm check failures stop cleanly; newer releases hand off to an exact npx cache worker')
 
   const cliHelp = execFileSync(process.execPath, [join(PKG_ROOT, 'cli.mjs'), 'upgrade', '--help'], { encoding: 'utf8', env: process.env })
   assert(cliHelp.includes('--sync-only') && cliHelp.includes('--workspace'))

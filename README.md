@@ -15,7 +15,9 @@ Multi-engine web search for coding agents — **one SearchBoost core, three host
 
 > The former standalone repos **pi-search-boost** and **dsh-search-boost** are merged here as host adapters. Search engines, fusion, fetch, and X search are maintained **only** in this repo's core.
 
-**Core** ([`lib/search/`](./lib/search/)): on the **free** layer, Bing, DuckDuckGo, Yahoo, and Exa-free run in parallel; the **api** layer adds **whichever keyed Tavily / Brave / Exa engines you configure** (one key is enough; all three recommended for best fusion). Also included: X/Twitter (hosted xAI tool ∥ multi-engine, credential-free fallback) and Jina page fetch with `focus`.
+**Core** ([`lib/search/`](./lib/search/)): `fused_search` is the main Web Search entry point. `engine_pool` selects **free** (Bing / DuckDuckGo / Yahoo / Exa-free), **api** (Tavily / Brave / Exa only), or **hybrid**; `ranking` changes final engine weights, while `complexity` controls budget/variants/depth. Optional `community=true` reuses X Core for developer/community voices. Normal calls need no manual engine selection. Existing layer settings remain compatible: free → free, api → hybrid. Jina page fetch with `focus` and standalone X account/thread search remain available.
+
+See [search routing, weights, capability and compatibility](docs/search-routing.md). MCP exposes live status at `search-boost://capabilities`; Pi and DSH inject the same dynamically computed capability into their prompts. Results return `enginesUsed`, `effectiveWeights`, `communityUsed`, and `warnings`.
 
 中文文档 → [README_zh.md](./README_zh.md)
 
@@ -34,45 +36,34 @@ search-boost install -y     # all detected agents
 
 Restart each agent after install so MCP reloads.
 
-### Upgrade and legacy package transition
+### Updates and one-time npm migration
 
-The new npm package **`search-boost`** owns the **`search-boost`** command. The transition release of **`search-boost-mcp`** owns **only `search-boost-mcp`**. Both packages can coexist without a shared global executable.
-
-**After the transition release is published, update the old package first**, releasing its old `search-boost` alias, then install the new package. No `--force` or early uninstall is needed.
+**Already using `search-boost`:** open the TUI and choose **Update**. It checks npm, runs a newer updater from the npx cache when needed, updates SearchBoost, and refreshes **all installed agent integrations**. Pi and DSH are included: existing `pi-search-boost` / `dsh-search-boost` adapters are moved to the unified `search-boost` package. Detected but unconfigured agents are not installed.
 
 ```bash
-npm install -g search-boost-mcp@latest  # must be the command-renaming transition release
-npm install -g search-boost@latest
-search-boost                         # TUI → One-click upgrade
-# or:
+search-boost                         # TUI → Update
+# CLI equivalent / preview / offline asset refresh:
 search-boost upgrade -y
-```
-
-The transition release also ships a **one-command migration script**, without a separate manual installation step:
-
-```bash
-search-boost-mcp migrate -y
-# Preview: search-boost-mcp migrate --dry-run
-# Without PATH: node /path/to/search-boost-mcp/migrate.mjs -y
-```
-
-It installs and verifies `search-boost@latest`, then hands integration migration to the new package. If the future package is not published yet, it stops before installation/config changes. Partial failures return nonzero and can be retried after resolving blockers. `search-boost-mcp upgrade` remains available. There is no forwarding plugin or postinstall migration.
-
-The new TUI checks `search-boost@latest`, updates the program when necessary, then refreshes **existing** integrations rather than installing every detected host.
-
-```bash
 search-boost upgrade --dry-run
-search-boost upgrade --sync-only -y   # refresh this version's assets after npm update, or offline
+search-boost upgrade --sync-only -y
 search-boost upgrade --workspace /path/to/project -y
 ```
 
-Migration recognizes `pi-search-boost`, `dsh-search-boost`, and `search-boost-mcp`. Replacements are verified before retiring host registrations; manual Pi copies are archived and installed DSH profiles are handled individually. **Old global npm packages are not automatically uninstalled; there is no staged global takeover or bin rebuilding.** Credentials, auth files, search-layer preferences, existing permissions, and disabled settings are retained. Legacy `PI_SEARCH_*_KEY` environment variables remain supported.
+**Still using the global `search-boost-mcp` npm package:** run the new package's migration code directly through npx. No transition release or manual uninstall is required.
 
-Private backups live under `~/.search-boost/backups/`; the latest receipt is `~/.search-boost/state/last-upgrade.json` (honoring `SEARCH_BOOST_HOME`). Conflicts and partial failures are reported, not labeled successful. Restart affected hosts afterward.
+```bash
+npx --yes --package=search-boost@latest -- search-boost migrate -y
+# Preview:
+npx --yes --package=search-boost@latest -- search-boost migrate --dry-run
+# After migration:
+search-boost                         # future updates: TUI → Update
+```
 
-Discovery covers known user configs, DSH profiles, the current/recorded projects, and an explicit workspace—not an entire disk. Run from an unrecorded historical project or pass `--workspace`. Filesystem checks do not prove authenticated host execution.
+`migrate` is **only the one-time global npm rename**, not the normal update command. It installs/verifies the new global package, then uninstalls global `search-boost-mcp` and verifies the new command. **Agent configuration is left unchanged; choose TUI Update afterward to refresh all existing integrations.** The old package's exact root/extension entries are recorded before removal so local registrations remain recognizable. A conflicting old-owned bin is temporarily parked (never blindly forced); installation failure restores it and retains the old package. API keys, authentication, model settings, permissions and disabled state are retained. Old Pi key environment variables remain supported.
 
-Maintainers: see [transition release instructions](docs/legacy-release.md). Changes become available through npm `@latest` only after publishing.
+Private configuration backups are under `~/.search-boost/backups/`; upgrade results are in `state/last-upgrade.json` and version-independent local-source ownership in `state/package-sources.json` (all honor `SEARCH_BOOST_HOME`). Pi/DSH remain discoverable across release-directory changes; receipts alone never reinstall a removed integration. Discovery covers known user configs, DSH profiles, current/recorded projects and `--workspace`, not a full-disk scan. Restart/reload affected hosts after completion.
+
+See [migration and release notes](docs/migration.md) and [repeatable Pi/DSH upgrades](docs/host-upgrades.md). The new `search-boost` release must be published before npm `@latest` can deliver this code; there is no old-name transition package to publish.
 
 ### One-liners by agent
 
@@ -148,7 +139,7 @@ Uninstall removes only **search-boost-owned** blocks (marked MCP entries, skills
 | `fused_search` | Multi-engine parallel search, dedupe, cross-ranking |
 | `fetch_page` | Full page text (Jina + HTML fallback, chrome stripped, no clip; optional `focus`) |
 | `x_search` | X/Twitter keyword / user / thread |
-| `search_layer` | Show or set `free` (keyless) vs `api` (keyed engines) |
+| `search_layer` | Show/set the compatibility default: `free → free`, `api → hybrid`; use `engine_pool` per search |
 | `search_stats` | Cache hits, engine availability, diagnostics |
 
 Also: resource `search-boost://policy` · prompt `search_routing`
@@ -172,6 +163,10 @@ search-boost config x --import-grok       # import grok CLI login
 search-boost config x --set-xai-key KEY   # store XAI API key
 search-boost config x --logout            # remove local copy
 ```
+
+**X filtering (with or without login):** all sources share one pipeline: retrieval/enrichment → normalization → merge/deduplication → filtering → result limit. Author handles come from X/Twitter URLs, and modern post IDs supply missing posting times. `from_date` / `to_date` include both UTC calendar dates; keyword `since:` is inclusive and `until:` exclusive. `username`, `allowed_x_handles`, and `excluded_x_handles` are case-insensitive author filters (`@` optional; allow/exclude lists are mutually exclusive, max 20). In user mode, dates filter `recent_posts`, not the account creation date.
+
+Local keyword metadata filters support `from:`, `-from:`, `since:`, `until:`, `min_faves:`, `min_retweets:`, `min_replies:`, and `lang:` with AND/OR groups. Quoted text is not parsed as filters. Text relevance and other operators remain provider-side (unsupported operators are noted). Candidates missing metadata needed to verify a filter are omitted with a note—not treated as matching. Thus keyless engagement/language filtering may return fewer or no posts; search-index coverage and oEmbed cannot reproduce the full authenticated X corpus. Date semantics follow the [xAI tool contract](https://docs.x.ai/developers/tools/x-search).
 
 **Config file overrides:** `SEARCH_BOOST_KEYS_FILE`, `SEARCH_BOOST_LAYER_FILE`, `SEARCH_BOOST_XAUTH_FILE` (optional env vars pointing at custom paths).
 

@@ -3,6 +3,14 @@ export const MCP_POLICY_TEXT = `# search-boost usage reference
 
 Read only when examples or troubleshooting would help. Normal searches use MCP tools directly; this resource and the search-boost skill are not prerequisites. The host decides whether resource content is exposed to the model.
 
+## Search controls
+
+fused_search is the main Web Search entry point. Usually omit engines. engine_pool chooses free, api (keyed-only), or hybrid sources. ranking=balanced|research|fresh changes only final engine weights; engine_weights overrides individual weights without enabling/selecting engines. complexity=simple|medium|complex controls the budget, up to 1/2/3 query variants, and depth; default medium.
+
+community defaults to false. Enable it only when recent developer/community voices are relevant; it reuses X Core and shares the final max_results with Web evidence. Web diversity is by domain; X diversity is by author. Use x_search directly for X-only account/thread tasks. Domain restrictions still apply to both paths.
+
+Live configuration is available through the optional search-boost://capabilities Resource. It reports current available engines, compatibility layer and X official/fallback readiness, without claiming network reachability. Results report enginesUsed (attempted sources, including failures), effectiveWeights, communityUsed (whether the community channel was executed, not whether it found evidence), and warnings. Cached results retain their original provenance.
+
 ## Query examples
 
 A focused official-source lookup with fused_search:
@@ -15,6 +23,12 @@ For a comparison, use distinct angles rather than repeating the same query:
 
 \`\`\`json
 {"query":"PostgreSQL vs MySQL JSON indexing tradeoffs","queries":["PostgreSQL jsonb GIN index documentation","MySQL JSON generated column index documentation"],"complexity":"complex","max_results":8}
+\`\`\`
+
+When community voices are relevant in addition to Web evidence:
+
+\`\`\`json
+{"query":"Node.js migration developer experience","engine_pool":"hybrid","ranking":"fresh","community":true,"recency":"month","max_results":8}
 \`\`\`
 
 Read a known URL with fetch_page:
@@ -53,9 +67,9 @@ If tools are absent, inspect the host's MCP connection first. Resource access an
 
 For connected servers, use search_layer with layer=show and search_stats with no arguments to inspect the active layer, engine availability, and recent activity. Both are observational in these forms. Inspect errors and warnings; an empty result alone does not prove a configuration problem.
 
-Free mode needs no search-engine keys. API mode needs at least one of Tavily, Brave, or Exa. The user can configure keys with search-boost config keys and X authentication with search-boost config x. Never expose raw credentials in chat.
+The free pool needs no search-engine keys. The strict api pool uses configured/enabled API engines only and never silently switches to free sources. The user can configure keys with search-boost config keys and X authentication with search-boost config x. Never expose raw credentials in chat.
 
-Only change the persisted layer through search_layer when authorized. fused_search.layer is a request-local override. Do not reinstall, alter permissions, or change credentials simply because one query has no results.
+Only change the persisted compatibility layer through search_layer when authorized. Existing free maps to engine_pool=free; existing api maps to engine_pool=hybrid. Use engine_pool for a request-local selection. The deprecated layer alias remains accepted by MCP/DSH; engine_pool takes precedence. Do not reinstall, alter permissions, or change credentials simply because one query has no results.
 
 ## Workflow extensions
 
