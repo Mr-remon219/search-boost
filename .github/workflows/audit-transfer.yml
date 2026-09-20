@@ -1,0 +1,126 @@
+# One-shot transport for the maintainer-requested release audit.
+# It validates a pinned manifest and exact source/tree hashes, tests the result,
+# and stores Git objects only. It NEVER updates a branch or publishes a package.
+# This workflow and all transfer parts are absent from the resulting tree.
+name: Release audit transfer
+
+on:
+  push:
+    branches: [jev]
+    paths:
+      - '.github/audit-transfer/**'
+      - '.github/workflows/audit-transfer.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-audit-transfer
+  cancel-in-progress: false
+
+jobs:
+  verify-and-store:
+    if: github.repository == 'Mr-remon219/search-boost' && github.actor == 'Mr-remon219'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify pinned source, apply audited edits and check exact tree
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, json, lzma, os, subprocess
+          from pathlib import Path
+          BASE = '1bc46a3406d33a29f37c5164becabb5eac3112eb'
+          TREE = '7667897ef1cc61cdd2928d14d1bbaba8b18bf841'
+          DIGEST = 'eca6d361bbd031f7c82fec26fc34b04485921526f421a390895cba6cf420d96b'
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True).strip()
+          def blob(data):
+              return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+          assert os.environ['GITHUB_REF'] == 'refs/heads/jev'
+          assert git('rev-parse', 'HEAD') == os.environ['GITHUB_SHA']
+          assert git('rev-parse', 'HEAD^') == BASE, 'Source moved: refusing stale edits'
+          parts = sorted(Path('.github/audit-transfer').glob('part-*.txt'))
+          assert len(parts) == 6
+          raw = lzma.decompress(base64.b64decode(''.join(p.read_text().strip() for p in parts), validate=True))
+          assert hashlib.sha256(raw).hexdigest() == DIGEST, 'Transfer integrity mismatch'
+          manifest = json.loads(raw)
+          assert manifest['base'] == BASE and manifest['tree'] == TREE
+          assert len(manifest['files']) == 27
+          for item in manifest['files']:
+              path = Path(item['path'])
+              assert not path.is_absolute() and '..' not in path.parts and '.git' not in path.parts
+              assert not path.is_symlink()
+              previous = path.read_bytes() if path.exists() else b''
+              if item['before'] is None:
+                  assert not path.exists(), f'Unexpected existing file: {path}'
+              else:
+                  assert blob(previous) == item['before'], f'Stale file: {path}'
+              lines = previous.decode('utf-8').splitlines(keepends=True)
+              for start, end, replacement in reversed(item['edits']):
+                  assert 0 <= start <= end <= len(lines)
+                  lines[start:end] = [replacement]
+              content = ''.join(lines).encode('utf-8')
+              assert blob(content) == item['after'], f'Post-edit hash mismatch: {path}'
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_bytes(content)
+          removed = [str(p) for p in parts] + ['.github/workflows/audit-transfer.yml']
+          for name in removed:
+              Path(name).unlink()
+          manifest['removed'] = removed
+          manifest['parent'] = os.environ['GITHUB_SHA']
+          Path(os.environ['RUNNER_TEMP'], 'audit-manifest.json').write_text(json.dumps(manifest))
+          subprocess.run(['git', 'add', '-A'], check=True)
+          assert git('write-tree') == TREE, 'Final tree differs from locally tested code'
+          subprocess.run(['git', 'diff', '--cached', '--check'], check=True)
+          print('Verified exact audited tree:', TREE)
+          PY
+      - run: npm ci
+      - name: Complete release regression suite
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run prepublishOnly | tee "$RUNNER_TEMP/audit-tests.log"
+          npm pack --dry-run --json > "$RUNNER_TEMP/audit-pack.json"
+          git diff --check
+          git diff --exit-code
+      - name: Store tested tree without updating any branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess, urllib.request
+          from pathlib import Path
+          manifest = json.loads(Path(os.environ['RUNNER_TEMP'], 'audit-manifest.json').read_text())
+          assert subprocess.check_output(['git', 'write-tree'], text=True).strip() == manifest['tree']
+          entries = [{'path': f['path'], 'mode': '100644', 'type': 'blob', 'content': Path(f['path']).read_text()} for f in manifest['files']]
+          entries += [{'path': name, 'mode': '100644', 'type': 'blob', 'sha': None} for name in manifest['removed']]
+          payload = {'base_tree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(), 'tree': entries}
+          request = urllib.request.Request('https://api.github.com/repos/Mr-remon219/search-boost/git/trees', data=json.dumps(payload).encode(), method='POST', headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json', 'X-GitHub-Api-Version': '2022-11-28'})
+          with urllib.request.urlopen(request, timeout=60) as response:
+              result = json.load(response)
+          assert result['sha'] == manifest['tree'], 'Stored tree differs from tested tree'
+          receipt = {'tree': result['sha'], 'parent': manifest['parent'], 'base': manifest['base'], 'files': len(manifest['files']), 'tests': 'npm run prepublishOnly passed; npm pack --dry-run passed', 'branchUpdated': False}
+          Path(os.environ['RUNNER_TEMP'], 'audit-result.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps(receipt))
+          PY
+      - name: Upload verification receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-jev-audit-tree
+          path: |
+            ${{ runner.temp }}/audit-result.json
+            ${{ runner.temp }}/audit-tests.log
+            ${{ runner.temp }}/audit-pack.json
+          retention-days: 3
+          if-no-files-found: error
