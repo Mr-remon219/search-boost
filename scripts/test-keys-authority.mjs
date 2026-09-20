@@ -217,8 +217,23 @@ test('B2: an explicitly emptied store is not re-adopted from an older copy', () 
 
 const savedUmask = process.umask(0o022)
 const temps = (dir) => readdirSync(dir).filter((name) => name.includes('.tmp'))
+const isWindows = process.platform === 'win32'
+const skippedChecks = []
+/**
+ * POSIX mode bits have no Windows equivalent; ACL inheritance applies there.
+ * Claiming 0600 equals a private ACL would be wrong, so those assertions are
+ * reported as skipped on Windows instead of silently passing.
+ */
+const posixOnly = (name, fn) => {
+  if (isWindows) {
+    skippedChecks.push(name)
+    console.log(`skip: ${name} — POSIX file modes are not a Windows ACL claim`)
+    return
+  }
+  test(name, fn)
+}
 
-test('B4: new credential files are 0600 inside a 0700 directory under umask 022', () => {
+posixOnly('B4: new credential files are 0600 inside a 0700 directory under umask 022', () => {
   resetStore()
   keys.writeKeysFile({ tavily: 'tvly-fixture-123456' })
   const fileMode = statSync(canonical()).mode & 0o777
@@ -229,7 +244,7 @@ test('B4: new credential files are 0600 inside a 0700 directory under umask 022'
   assert.deepEqual(temps(dirname(canonical())), [], 'no temp file may be left behind')
 })
 
-test('B4: rewriting keeps the file private and tightens a wider existing file', () => {
+posixOnly('B4: rewriting keeps the file private and tightens a wider existing file', () => {
   resetStore()
   keys.writeKeysFile({ tavily: 'tvly-fixture-123456' })
   chmodSync(canonical(), 0o644)
@@ -268,7 +283,15 @@ test('B4: writing through a symlink is refused and the target is untouched', () 
   const target = join(home, 'attacker-target.json')
   writeRaw(target, JSON.stringify({ untouched: true }))
   mkdirSync(dirname(canonical()), { recursive: true })
-  symlinkSync(target, canonical())
+  try {
+    symlinkSync(target, canonical())
+  } catch {
+    // Symlink creation needs privileges on Windows; report it instead of
+    // pretending the check ran.
+    skippedChecks.push('symlink target refused')
+    console.log('skip: symlink target refused — symlinks unavailable on this platform')
+    return
+  }
   assert.throws(() => keys.writeKeysFile({ tavily: 'tvly-fixture-123456' }), (err) => err?.code === 'symlink_target')
   assert.deepEqual(JSON.parse(readFileSync(target, 'utf8')), { untouched: true })
   assert.ok(!existsSync(`${canonical()}.lock`), 'no lock may be left behind')
@@ -298,5 +321,5 @@ test('B4: error messages never contain credential material', () => {
 
 process.umask(savedUmask)
 
-console.log(`\n${count} config authority tests passed.`)
+console.log(`\n${count} config authority tests passed.${skippedChecks.length ? `\nskipped: ${skippedChecks.join('; ')}` : ''}`)
 if (process.exitCode) console.error('FAILURES PRESENT')

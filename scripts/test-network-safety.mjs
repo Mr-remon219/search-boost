@@ -48,7 +48,7 @@ const clearNetworkEnv = () => {
 clearNetworkEnv()
 
 const { NET_ERROR_KINDS, NetworkPolicyError, lookupBounded, pinnedLookup, proxyPolicy, autoSelectFamilyEnabled } = await import('../lib/search/net-policy.mjs')
-const { fetchPinned, ipv4Fetch, resetFetchDispatcher, __setUndiciLoaderForTests } = await import('../lib/search/ipv4-fetch.js')
+const { fetchPinned, ipv4Fetch, resetFetchDispatcher, closeFetchDispatchers, __setUndiciLoaderForTests } = await import('../lib/search/ipv4-fetch.js')
 const { assertStaticHttpUrl, isBlockedIp, isTunFakeIp, resolveValidatedAddresses, guardedFetch, trustedTunMode, __setFixtureAllowlistForTests } = await import('../lib/search/ssrf.js')
 const { fetchPage, makePageCache } = await import('../lib/search/fetch.js')
 
@@ -510,6 +510,9 @@ try {
     if (value === undefined) delete process.env[key]
     else process.env[key] = value
   }
+  // Keep-alive sockets from the proxy/agent dispatchers would otherwise hold the
+  // process open after the last assertion (and stall a CI step).
+  await closeFetchDispatchers()
   resetFetchDispatcher()
 }
 
@@ -522,3 +525,6 @@ function makeSelfSignedCert() {
 
 console.log(`\n${count} network policy tests passed.${skipped.length ? `\nskipped: ${skipped.join('; ')}` : ''}`)
 if (process.exitCode) console.error('FAILURES PRESENT')
+// Explicit exit: a stray keep-alive handle must not turn a green suite into a
+// stuck CI step.
+process.exit(process.exitCode ? 1 : 0)
