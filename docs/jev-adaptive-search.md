@@ -53,6 +53,10 @@ lib/search/adaptive/
 | 抓取前只检查预算 | 每次可能触网的读取都必须先成功预留（读额度 + 网络额度）；无额度则不调用（注入的 fetcher 不保证只读缓存）；缓存退款只退**当次**调用的网络额度，focus 重读独立计费 | 预算作为闭环安全边界必须真正阻断调用，两次读取不能混算 |
 | 任务异常向上传播 | 单题任务的异常就地收容并写入 `roundLog[].failures`；取消/超时后不再派发新任务，收尾仍组装部分结果 | 一题抛错不得丢失其他题结果或跳过程序化组装 |
 | CI 只覆盖 push 白名单分支 | push 白名单加入 `jev`；`test:jev` 纳入 CI 步骤（与 `prepublishOnly` 对齐） | 分支未跑 CI 时，`v0.2.0` 的历史成功不能证明含 Jev 代码的版本可发布 |
+| source 级共享 snippet / engineContent / fetch | 按 **question × source** 隔离：snippet 逐题保存；engineContent 作为共享原始正文、由每题各自抽取；fetch 状态与片段记在关联上 | 同页 q1 的长片段/focused 片段不能冒充 q2 的证据；“q1 已取证”不等于“q2 已取证” |
+| `ingestFetch` 先 `collapseSpace` 再取段 | 原始段落结构一直保留到 `pickParagraphs`；空白归一化只用于判空/计数 | 提前折叠会让长文只剩开头 600 字符，尾部答案丢失 |
+| token 预算只检查已用量 | 派发前按“已用估算 + 本次估算”原子预留；预算停止不报成 Jev 网络故障；服务端 usage 与估算分开记账，重试不旁路预算 | 估算上限必须在请求发出前生效 |
+| 预算上限（实验期） | 轮数 3→6、搜索 12→30、抓取网络 6→15 / 读取 12→30、证据条目 60→120、Jev 调用 12→36 / HTTP 20→80 / 输入估算 60k→240k、warning 20→40、软超时 90s→150s（mcp 75→120s，pi/dsh 120→150s）。**截断与扇出保持原值**（`maxExcerptChars`、`maxExcerptsPerEvidence`、`maxEvidenceTextChars`、`maxEnginesPerQuestionPerRound`、`maxResultsPerSearch`、批次与 state 大小上限） | 实验阶段放宽总量上限；不靠放大截断/扇出掩盖抽取问题，阈值与引擎集合不变 |
 | `limits.mjs` 阈值分散 | 阈值集中在 `limits.js` 的 `ADAPTIVE_THRESHOLDS`，并在输出 `limits.thresholds` 回显 | 便于审计与后续校准 |
 | 审计只写 `research` | 每次实际 `runFused` 写既有 `search` 事件（`cacheHits` 如实标注），整次调用写一条 `research` 事件 | 缓存命中不算新增付费请求 |
 
@@ -622,6 +626,9 @@ const fingerprint = createHash('sha256').update(JSON.stringify([routing.keys, { 
 10. **判断完整性**：来源侧 `injection`、覆盖侧 `source_conflict` / `snippet_self_sufficient` 被请求但未回答 → 不得 `covered`（`judgment_missing`，`assessed=false`），条目 `unassessed` 且不进入覆盖依据；未请求的检查不阻塞。
 11. **请求构造与引擎集合**：第二轮合并请求中引擎 noul 逐条解析 `state.engine_state.*` 索引并与子状态一致；`search_new_engines` 的候选/解析/默认回退/执行前校验都不含本题已用引擎（含“无有效回答”的兜底）。
 12. **预算与收尾**：网络抓取额度耗尽后第二次抓取不再调用（实际调用数与计数一致）；focus 重读无网络额度则跳过且不被前一次读取“退款”；单题抛错不影响其他题结果；取消/超时发生在飞行中时仍返回结构化部分结果。
+13. **逐题证据隔离**：同 URL 同全文按题抽取（两种 ingest 顺序都验）、不同 snippet 不串题、q1 已取证不阻塞 q2（且第二次读走缓存、不重复联网）、跨题改动不失效他题判断。
+14. **结构保留**：长无关导言 + 尾部答案经 `ingestFetch` 后仍保留答案与所抽段落（`excerptForContent` 独立抽取作对照）。
+15. **token 预留**：估算不足一次请求时不派发、不计数，停止原因是 `budget_tokens` 而非 Jev 故障，累计估算不超上限。
 
 ### 9.2 真实效果验证（Phase 4，`scripts/eval-adaptive-search.mjs`，显式 opt-in）
 

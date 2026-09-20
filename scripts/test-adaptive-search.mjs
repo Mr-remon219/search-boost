@@ -15,6 +15,7 @@ import { join } from 'node:path'
 
 const { runAdaptiveLoop, validateQuestions, canonicalizeQuestions, STOP_REASONS, REASONS } = await import('../lib/search/adaptive/loop.mjs')
 const { ADAPTIVE_LIMITS, ADAPTIVE_THRESHOLDS } = await import('../lib/search/adaptive/limits.js')
+const { createEvidencePool, excerptForContent } = await import('../lib/search/adaptive/evidence.js')
 const { JevError, JEV_ERROR_KINDS } = await import('../lib/jev/client.mjs')
 
 let tests = 0
@@ -1001,6 +1002,124 @@ await test('audit records one search event per real search and never counts a ca
   assert.equal(events[0].cacheHits, 1)
   assert.equal(events[0].tool, 'adaptive_search')
   assert.equal(events[0].engines.length, h.calls.fused[0].engineList.length)
+})
+
+// ---------------------------------------------------------------------------
+// 7. per-question material for a shared URL (evidence-pool isolation)
+// ---------------------------------------------------------------------------
+
+const SHARED_QUESTIONS = [
+  { id: 'q1', text: 'does the client cancellation abort an in-flight request' },
+  { id: 'q2', text: 'how many retries does the client attempt before giving up' },
+]
+const SHARED_URL = 'https://docs.example.com/client'
+const SHARED_CONTENT = [
+  'Overview of the client library and its configuration surface for every supported runtime.',
+  'The client performs cancellation cooperatively: calling cancel() aborts an in-flight request and rejects its promise with a CancelledError.',
+  'Retry behaviour is bounded: the client attempts at most three attempts before giving up and reporting the last error.',
+  'The retry policy can be overridden per request; see the retries configuration section for the supported retries options and their defaults.',
+  'Unrelated appendix listing the changelog, contributors and license terms for this documentation page.',
+].join('\n\n')
+
+await test('a shared URL gives each question its own excerpt, in both ingest orders', async () => {
+  for (const order of [['q1', 'q2'], ['q2', 'q1']]) {
+    const pool = createEvidencePool({ limits: ADAPTIVE_LIMITS, questions: SHARED_QUESTIONS })
+    for (const questionId of order) {
+      pool.ingestSearch({ questionId, round: 1, results: [{ url: SHARED_URL, title: 'Client', content: SHARED_CONTENT, snippet: 'client documentation', score: 1, engines: ['bing'] }] })
+    }
+    const textOf = (id) => pool.associationsFor(id)[0]?.text ?? ''
+    assert.match(textOf('q1'), /in-flight request/i, `q1 keeps its own answer (order ${order.join('→')})`)
+    assert.match(textOf('q2'), /three attempts/i, `q2 keeps its own answer (order ${order.join('→')})`)
+    assert.notEqual(textOf('q1'), textOf('q2'), 'one question never holds the other question\u2019s fragment')
+  }
+})
+
+await test('a snippet written for one question is not handed to another question', async () => {
+  const pool = createEvidencePool({ limits: ADAPTIVE_LIMITS, questions: SHARED_QUESTIONS })
+  pool.ingestSearch({ questionId: 'q2', round: 1, results: [{ url: SHARED_URL, title: 'Client', snippet: 'at most three attempts before giving up', score: 1, engines: ['bing'] }] })
+  pool.ingestSearch({ questionId: 'q1', round: 1, results: [{ url: SHARED_URL, title: 'Client', snippet: 'calling cancel() aborts an in-flight request and rejects it with a CancelledError immediately', score: 1, engines: ['bing'] }] })
+  const q2 = pool.associationsFor('q2')[0]?.text ?? ''
+  assert.match(q2, /three attempts/, 'the shorter correct snippet stays with its own question')
+  assert.doesNotMatch(q2, /CancelledError/, 'the longer snippet collected for q1 is not reused for q2')
+})
+
+await test('a long unrelated introduction does not bury a trailing answer', async () => {
+  const intro = Array.from({ length: 12 }, (_, i) => `Paragraph ${i + 1} of background material about the product, its history, its authors and the general documentation layout used across this site. It repeats filler text so the introduction is long enough to bury anything that follows.`).join('\n\n')
+  const body = `${intro}\n\n## Retry limits\n\nRetry behaviour is bounded: the client attempts at most three attempts before giving up and reporting the last error.\n\nThe retry policy can be overridden per request; see the retries configuration section for the supported retries options and their defaults.`
+  assert.ok(intro.length > 1_600, 'the fixture really buries the answer')
+  assert.match(excerptForContent(body, SHARED_QUESTIONS[1].text, ADAPTIVE_LIMITS).text, /three attempts/)
+  const pool = createEvidencePool({ limits: ADAPTIVE_LIMITS, questions: SHARED_QUESTIONS })
+  pool.ingestSearch({ questionId: 'q2', round: 1, results: [{ url: SHARED_URL, title: 'Client', snippet: '', score: 1, engines: ['bing'] }] })
+  const ingest = pool.ingestFetch({ questionId: 'q2', sourceKey: SHARED_URL, round: 2, page: { content: body, via: 'jina', word_count: 900, focusMiss: false, cacheHit: false } })
+  const text = pool.associationsFor('q2')[0]?.text ?? ''
+  assert.equal(ingest.changed, true)
+  assert.match(text, /three attempts/, 'the trailing answer survives ingestFetch')
+  assert.match(text, /\n\n/, 'the paragraphs the extractor picked stay separate')
+  assert.match(text, /retries configuration/, 'the second relevant paragraph survives too')
+})
+
+await test('a page read for one question does not count as page material for another', async () => {
+  const pool = createEvidencePool({ limits: ADAPTIVE_LIMITS, questions: SHARED_QUESTIONS })
+  for (const q of SHARED_QUESTIONS) pool.ingestSearch({ questionId: q.id, round: 1, results: [{ url: SHARED_URL, title: 'Client', snippet: 'client documentation', score: 1, engines: ['bing'] }] })
+  pool.ingestFetch({ questionId: 'q1', sourceKey: SHARED_URL, round: 2, page: { content: SHARED_CONTENT, via: 'jina', word_count: 300, focusMiss: false, cacheHit: false } })
+  assert.equal(pool.associationsFor('q1')[0].fetch?.state, 'ok')
+  assert.equal(pool.associationsFor('q2')[0].fetch, null, 'q2 has no page material yet')
+  assert.ok(pool.urlsFor('q2').some((item) => item.url === SHARED_URL), 'q2 may still fetch the URL')
+  assert.ok(!pool.urlsFor('q1').some((item) => item.url === SHARED_URL), 'q1 does not re-fetch what it already read')
+  pool.ingestFetch({ questionId: 'q2', sourceKey: SHARED_URL, round: 2, page: { content: SHARED_CONTENT, via: 'cache', word_count: 300, focusMiss: false, cacheHit: true } })
+  assert.match(pool.associationsFor('q2')[0].text, /three attempts/, 'q2 derives its own material from the same page')
+})
+
+await test('a material change for one question leaves the other question\u2019s judgement intact', async () => {
+  const pool = createEvidencePool({ limits: ADAPTIVE_LIMITS, questions: SHARED_QUESTIONS })
+  for (const q of SHARED_QUESTIONS) pool.ingestSearch({ questionId: q.id, round: 1, results: [{ url: SHARED_URL, title: 'Client', content: SHARED_CONTENT, snippet: 'client documentation', score: 1, engines: ['bing'] }] })
+  const judgments = pool.pendingSourceJudge().map((candidate) => ({
+    assocId: candidate.assocId,
+    textVersion: candidate.textVersion,
+    scores: { relevant: 0.9, states_evidence: 0.9, premise_conflict: 0.05, injection: 0.02 },
+    round: 1,
+  }))
+  assert.equal(judgments.length, 2, 'both questions have material to judge')
+  assert.equal(pool.applySourceJudgments(judgments).applied, 2)
+  const before = pool.associationsFor('q1')[0]
+  assert.ok(before.judgment, 'q1 really carries a judgement')
+  pool.ingestFetch({ questionId: 'q2', sourceKey: SHARED_URL, round: 2, page: { content: `${SHARED_CONTENT}\n\nRetry behaviour is bounded: the client attempts at most three attempts before giving up and reporting the last error after exponential backoff.`, via: 'jina', word_count: 400, focusMiss: false, cacheHit: false } })
+  const after = pool.associationsFor('q1')[0]
+  assert.equal(after.textVersion, before.textVersion, 'q1 keeps its text version')
+  assert.equal(after.judgment, before.judgment, 'q1 keeps its judgement')
+  assert.ok(!pool.pendingSourceJudge().some((candidate) => candidate.questionId === 'q1'), 'q1 is not re-judged')
+  assert.ok(pool.pendingSourceJudge().some((candidate) => candidate.questionId === 'q2'), 'q2 is re-judged for its new material')
+})
+
+await test('a page read for q1 still lets q2 obtain its own evidence without a second network fetch', async () => {
+  const page = 'Cancellation aborts an in-flight request: calling cancel() rejects the pending promise.\n\nRetries are bounded to at most three attempts before the client gives up.'
+  const h = harness({
+    search: ({ query }) => ({ results: [hit(`${query} is only mentioned here, not answered.`, 'https://docs.example.com/shared')] }),
+    // Both questions stay uncovered, so the round-2 fetch action runs for each of them.
+    coverageScore: ({ field }) => (field === 'coverage' ? 0.1 : 0.05),
+    fetchPage: (url, focus, index) => ({ url, via: index === 1 ? 'jina' : 'cache', content: page, word_count: 40, focusMiss: false, cacheHit: index > 1 }),
+  })
+  const res = await runAdaptiveLoop({ questions: ['does cancellation abort an in-flight request', 'how many retries before giving up'] }, h.deps)
+  const q2 = res.questions[1]
+  assert.ok(q2.evidence.some((item) => item.textBasis === 'fetched_page'), `q2 gets page material of its own: ${JSON.stringify(q2.evidence.map((item) => [item.textBasis, item.fetch?.state]))}`)
+  assert.ok(q2.evidence.some((item) => /three attempts/.test(item.reviewedText ?? '')), `q2 gets its own fragment, not q1\u2019s: ${JSON.stringify(q2.evidence.map((item) => (item.reviewedText ?? '').slice(0, 50)))}`)
+  assert.ok(res.usage.fetchCalls <= 1, `the shared page is not fetched over the network twice (fetchCalls=${res.usage.fetchCalls})`)
+  assert.equal(res.usage.fetchReads, 2, 'the second question reads the cached page instead')
+})
+
+await test('a Jev request that does not fit the remaining token estimate is never dispatched', async () => {
+  const cap = 2_600
+  const h = harness({
+    limits: { ...ADAPTIVE_LIMITS, maxJevInputTokens: cap },
+    search: ({ query }) => answerable(query),
+    fetchPage: (url) => ({ url, via: 'jina', content: '', word_count: 0, focusMiss: false, cacheHit: false }),
+  })
+  const res = await runAdaptiveLoop({ questions: ['alpha question'] }, h.deps)
+  assert.ok(h.calls.jev.length >= 1, 'at least one request fits inside the cap')
+  assert.ok(res.usage.jevInputTokensEstimated <= cap, `the cumulative estimate stays inside the cap (${res.usage.jevInputTokensEstimated} <= ${cap})`)
+  assert.equal(res.usage.jevCalls, h.calls.jev.length, 'every counted Jev call was really dispatched')
+  assert.equal(res.stopReason, STOP_REASONS.budgetTokens, 'the stop is our own budget stop')
+  assert.equal(res.jev.degraded, false, 'a budget stop is never reported as a Jev failure')
 })
 
 console.log(`\n${tests} adaptive_search loop tests passed.`)
