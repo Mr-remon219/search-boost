@@ -1,128 +1,235 @@
 # SearchBoost
 
-**Multi-engine web evidence for coding agents — one core, three adapters.**
+**Multi-engine web search & evidence synthesis for AI coding agents**  
+*One shared core runtime, deeply adapted for MCP, Pi, and DeepSeek Harness*
 
-SearchBoost gives an agent web search, page reading, X/Twitter retrieval and optional Jev-assisted evidence collection. It merges search results, removes duplicates and reports the engines, warnings and evidence actually used. The agent still decides what to investigate and writes the final answer.
+[![version](https://img.shields.io/badge/version-v0.2.0-orange?style=flat-square)](#)
+[![npm version](https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm)](https://www.npmjs.com/package/search-boost)
+[![Node version](https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
+[![Architecture](https://img.shields.io/badge/architecture-unified%20core-8a2be2?style=flat-square)](#)
+[![Free tier](https://img.shields.io/badge/free%20tier-zero%20key%20required-success?style=flat-square)](#)
 
-[中文说明](./README_zh.md) · [Search routing](./docs/search-routing.md) · [Migration](./docs/migration.md) · [Host upgrades](./docs/host-upgrades.md)
+[English](./README.md) · [中文文档](./README_zh.md)
+
+---
+
+> [!NOTE]
+> **Release & Branch Notice**: The `v0.2.0` branch unifies the formerly standalone `pi-search-boost` and `dsh-search-boost` projects into a single codebase under `lib/`. Documented commands specifying `@latest` retrieve the official published npm package. To explore or test the latest branch code, please follow [Installation from Source & Development](#installation-from-source--development).
+
+---
+
+## Table of Contents
+
+- [Key Features](#key-features)
+- [System Architecture](#system-architecture)
+- [Supported Hosts Matrix](#supported-hosts-matrix)
+- [Quick Start (30 Seconds)](#quick-start-30-seconds)
+- [Upgrade & Migration Guide](#upgrade--migration-guide)
+- [Interactive Console (TUI)](#interactive-console-tui)
+- [Tool Suite & Usage Guide](#tool-suite--usage-guide)
+  - [Tool Responsibilities & Boundaries](#tool-responsibilities--boundaries)
+  - [1. `fused_search` Multi-Engine Search](#1-fused_search-multi-engine-search)
+  - [2. `fetch_page` Smart Content Reader](#2-fetch_page-smart-content-reader)
+  - [3. `x_search` X (Twitter) Intelligence](#3-x_search-x-twitter-intelligence)
+  - [4. `adaptive_search` Jev Evidence Loop (Experimental)](#4-adaptive_search-jev-evidence-loop-experimental)
+  - [Engine Pools & Scoring Presets](#engine-pools--scoring-presets)
+- [Parallel Multi-Agent Research Workflows](#parallel-multi-agent-research-workflows)
+- [Configuration, Security & Privacy](#configuration-security--privacy)
+- [CLI Command Reference (Headless & CI)](#cli-command-reference-headless--ci)
+- [Installation from Source & Development](#installation-from-source--development)
+- [License](#license)
+
+---
+
+## Key Features
+
+- **Multi-Engine Parallel Fusion (`fused_search`)**  
+  Queries multiple search providers in parallel. Features an out-of-the-box **keyless free pool** (Bing, DuckDuckGo, Yahoo, Exa-free) and a high-tier **API pool** (Tavily, Brave, Exa). Automatically performs cross-engine URL deduplication, domain routing, and relevance re-ranking.
+- **Clean Webpage Content Extractor (`fetch_page`)**  
+  Uses Jina Reader by default for clean markdown extraction, backed by a guarded local HTML reader fallback. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
+- **X / Twitter Community Intelligence (`x_search`)**  
+  Retrieves public posts, user timelines, and discussion threads via official xAI API or an anonymous fallback channel. Recovers accurate UTC timestamps from Snowflake post IDs and enforces local author/date filtering without hallucination.
+- **Jev Adaptive Evidence Loop (`adaptive_search` · Experimental)**  
+  Connects with TypeSafe Jev to orchestrate multi-step search loops and evaluate evidence fragments across 1–6 targeted questions. Operates under strict token/step budgets and returns deterministic coverage states (`covered`, `insufficient`, `unassessed`, `not_searched`, `failed`).
+- **Native Multi-Agent Parallel Research**  
+  Bundles `search-boost` and `search-boost-parallel-research` skills. In hosts supporting subagents (Cursor, Claude Code, Pi, DSH), tasks can be dispatched to parallel Searchers (gathering evidence) and Summarizers (pure synthesis without tools), supporting both Fast and Complex waves.
+- **Unified Core Across All Host Ecosystems**  
+  A single, host-neutral core runtime powering standard Model Context Protocol (MCP) servers, alongside native extensions for Pi and Cordis plugin bundles for DeepSeek Harness (DSH).
+- **Zero-Config Onboarding & Strict Security**  
+  **Requires zero API keys to start** using the free engine pool. Sensitive credentials are encrypted in local private configs (POSIX `0600`). Enforces local SSRF protection, target IP address pinning, and proxy compliance, with zero credential leakage into model prompts.
+
+---
+
+## System Architecture
+
+SearchBoost follows a **"One Core, Three Adapters"** architecture. All search logic, content parsing, deduplication algorithms, and network safety mechanisms reside in the shared core:
 
 ```text
-                SearchBoost CLI / TUI
+                    SearchBoost TUI / CLI
              installation · configuration · updates
-                          │
-                 Shared SearchBoost Core
-             search · fetch · X · adaptive evidence
-                          │
-          ┌───────────────┼───────────────┐
-          MCP             Pi              DSH
-          stdio server    extension       native bundle
+                              │
+                    Shared SearchBoost Core
+                    lib/runtime.mjs facade
+              search · fetch · X · adaptive evidence
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+         MCP Adapter      Pi Adapter     DSH Adapter
+         stdio server     extension      Cordis bundle
+              │               │               │
+     ┌────────┴────────┐      ▼               ▼
+     │ Cursor / Claude │      Pi       DeepSeek Harness
+     │ Codex / Grok    │
+     │ Antigravity     │
+     └─────────────────┘
 ```
 
-The former `pi-search-boost` and `dsh-search-boost` projects are integrated here. Search algorithms live in `lib/`, not in three separate implementations. MCP integrations cover Cursor / Cursor CLI, Codex, Claude Code, Grok Build and Antigravity; Pi and DeepSeek Harness use their native adapters.
+- **Core (`lib/`)**: Host-neutral algorithms, engine orchestration, Jev client protocol, and network safety policies.
+- **Adapters (`adapters/`)**: Maps core operations into host-specific protocols (MCP JSON-RPC, Pi Extension API, DSH Cordis lifecycle).
+- **Agents (`agents/`)**: Host prompt contracts, workflow templates, and native skill definitions.
 
-> **Release preparation:** the `v0.2.0` branch is not an npm release. Commands containing `@latest` use the published package, not this Git branch. Before the unified release is published, use [installation from source](#installation-from-source) to try this branch. Merging a PR does not publish npm automatically.
+---
 
-## Quick start
+## Supported Hosts Matrix
 
-Requires **Node.js 22.13 or later** and npm. Install the package, then let the setup wizard configure the engines and the hosts you choose:
+| Host | Integration Type | Files / Mechanism | Capabilities & Notes |
+| :--- | :--- | :--- | :--- |
+| **Cursor / Cursor CLI** | MCP + Skills | `~/.cursor/mcp.json` / `skills/` | Supports CLI auto-approval (`cli-config.json`), session start injection, parallel research skill |
+| **Claude Code** | MCP + Prompts | Official `claude` MCP config | Full multi-engine search and page extraction tools with prompt boundaries |
+| **Codex** | MCP + Prompts | Host MCP configuration | Seamless access to fused search, X retrieval, and reader tools |
+| **Grok Build** | MCP + Plugin | MCP config + bundled plugin | Automatically syncs and installs companion plugin when `grok` CLI is available |
+| **Google Antigravity** | MCP + Workspace | Workspace MCP configuration | Per-project workspace guidance and full search tool suite |
+| **Pi** | Native Extension | `~/.pi/agent/extensions/` / `prompts/` | Registers native extension, `/fast-parallel`, `/complex-parallel`, searcher/summarizer roles |
+| **DeepSeek Harness** | Native Bundle | `cordis.patch.yml` / `dsh plugin` | Integrated with Cordis runtime; provides native `research_parallel` subagents and call cards |
+
+---
+
+## Quick Start (30 Seconds)
+
+### Prerequisites
+- **Node.js**: `>= 22.13.0`
+- **Package Manager**: `npm` (or `pnpm`)
+
+### 1. Install & Launch the Dashboard
 
 ```bash
+# Install globally
 npm install -g search-boost
-search-boost setup
-search-boost doctor
+
+# Launch the interactive terminal UI (TUI)
+search-boost
 ```
 
-No API key is required for the free engine pool. Restart or reload the affected agent after installation so its tools and prompt assets refresh.
+> [!TIP]
+> **Zero API Keys Required to Start**: SearchBoost includes a robust free engine pool (Bing, DuckDuckGo, Yahoo, Exa-free). You can begin searching immediately without signing up for any paid provider!
 
-Already configured your keys? Install specific integrations instead:
+### 2. 3-Step Setup Wizard
+1. Select **`Setup`** in the TUI menu. Configure engine keys (or skip to use free tier) and optional X credentials.
+2. Check the agents you want to integrate (Cursor, Claude Code, Pi, etc.), confirming auto-approval and native search replacement.
+3. Restart or reload your chosen agents, then ask them to research anything in conversation!
+
+---
+
+## Upgrade & Migration Guide
+
+### 1. Routine Updates: Upgrading via TUI
+
+Whether you run unified `search-boost` or have legacy `pi-search-boost` / `dsh-search-boost` installations, **select `Update` in the TUI to upgrade everything**:
 
 ```bash
-search-boost install -t cursor --keep-native
-search-boost install -t codex,claude --keep-native
-search-boost install -t pi -y
-search-boost install -t dsh -y --profile web
-search-boost install -t antigravity --workspace /path/to/project --keep-native
+# Option 1: Open the interactive menu
+search-boost
+# -> Select "Update"
+
+# Option 2: Run headless update
+search-boost upgrade -y
 ```
 
-**Read the install flags before automating:** `-y` skips the wizard and implies `--auto-allow` and `--replace-native`. Specifying `-t` without `-y` is also non-interactive and defaults to replacing native search, but does **not** imply auto-approval. `--keep-native` preserves native search; omit `--auto-allow` when you need host permission prompts. Changes depend on what each host supports.
+> **Update Behavior**: Fetches the latest published release, updates SearchBoost, and refreshes prompt assets across all configured agents while preserving existing keys, layer choices, and permission settings.
+
+---
+
+### 2. Migrating from Legacy `search-boost-mcp`
+
+> [!IMPORTANT]
+> If you have the old global package `search-boost-mcp` installed, npm cannot automatically replace the global binary across package renames. **Use the one-line npx migration command**:
 
 ```bash
-search-boost install -t cursor --dry-run --keep-native
-search-boost status
-search-boost print codex
+# Execute safe migration via npx
+npx --yes --package=search-boost@latest -- search-boost migrate -y
+
+# Once migrated, routine updates only require:
+search-boost
+# -> Select "Update" (or search-boost upgrade -y)
 ```
 
-`--dry-run` previews supported operations without writes. `print` prints an MCP configuration snippet without installing it. Run `search-boost --help` for the complete command reference.
+---
 
-### Host-specific notes
+## Interactive Console (TUI)
 
-| Host | Integration and verification |
-| --- | --- |
-| Cursor / Cursor CLI | MCP entry in `~/.cursor/mcp.json`; check that `search-boost` is connected. |
-| Codex / Claude Code | MCP tools plus host prompt/skill assets; confirm the tools are available after restart. |
-| Grok Build | MCP/config assets and the bundled plugin when the `grok` CLI is available; `--skip-grok-plugin` skips plugin installation. |
-| Antigravity | MCP plus workspace guidance; pass `--workspace` for a specific project. |
-| Pi | Native extension plus owned searcher/summarizer definitions and `/fast-parallel`, `/complex-parallel` templates. |
-| DeepSeek Harness | Native bundle; CLI installation needs `dsh` and `pnpm`. `--profile` selects the DSH profile, default `web`. |
+Launch `search-boost` without arguments to access the interactive dashboard built with Clack. Manage installation, updates, and credentials effortlessly:
 
-Native package managers are also supported:
+| Menu Option | Purpose |
+| :--- | :--- |
+| **Setup** | Complete initial walkthrough: configure engines, search layers, X credentials, and install agents. |
+| **Install / update agents** | Install or refresh selected host integrations, preserving existing credentials and layer settings. |
+| **Update** | **One-click upgrade**: checks npm for updates, upgrades SearchBoost, and refreshes all installed agents (including legacy Pi/DSH adapters). |
+| **API keys / Search layer** | Manage paid engine credentials (Tavily, Brave, Exa) and change the default search layer (`free` / `api`). |
+| **X credentials** | Manage X (Twitter) authentication; supports one-click import from local Grok login. |
+| **Jev credentials (experimental)** | Configure TypeSafe Jev cognitive engine endpoint and Bearer token. |
+| **Native web search** | Enable or disable host-native search for hosts supporting config switches. |
+| **Status** | Inspect current engine availability, configuration status, and active integrations. |
+| **Print MCP snippet** | Print MCP JSON configuration snippets to stdout for manual setups. |
+| **Uninstall** | Safely remove SearchBoost integrations from selected agents, keeping user configurations intact. |
 
-```bash
-pi install npm:search-boost
-dsh plugin --profile web add search-boost
-```
+---
 
-The Pi package manifest loads the extension; use `search-boost install -t pi -y` for the owned role definitions and prompt templates as well. Do not install the old standalone adapter beside the new one. The managed updater handles recognized legacy registrations.
+## Tool Suite & Usage Guide
 
-### Installation from source
+When integrated, agents automatically receive standard tool definitions and autonomously determine when to call them.
 
-Keep the checkout in a permanent directory while using a source-linked installation:
+### Tool Responsibilities & Boundaries
 
-```bash
-git clone https://github.com/Mr-remon219/search-boost.git
-cd search-boost
-git switch v0.2.0
-npm ci
-npm run plugin:sync-grok
-npm install -g .
-search-boost setup
-```
+| Tool | Best Used For | Boundary / Non-Goals |
+| :--- | :--- | :--- |
+| `fused_search` | Parallel multi-engine querying, deduplication, and diversity re-ranking | A single search step; follow-up decisions remain with the parent agent |
+| `fetch_page` | Reading clean content from public URLs with optional keyword focus | Not a browser with login state; cannot access internal/private networks |
+| `x_search` | Retrieving public X posts, author timelines, or discussion threads | Does not guarantee exhaustive comment threads or total sentiment sampling |
+| `adaptive_search` | **Experimental**: Jev-guided autonomous follow-up and evidence evaluation | Not a final-answer generator; `covered` is model evaluation, not verified truth |
+| `search_stats` | Reading engine status, memory cache hits, and recent diagnostic stats | Read-only; configuration readiness does not guarantee active external network reachability |
+| `search_layer` | Viewing or switching compatibility search layer in MCP | `show` is read-only; changing layers mutates persistent configuration on disk |
 
-To refresh that checkout, pull the intended branch, run `npm ci` and `npm run plugin:sync-grok` again, then `search-boost upgrade --sync-only -y`. Do not assume an npm update follows a development branch.
+---
 
-## How to use it
+### 1. `fused_search` Multi-Engine Search
 
-Use the tools in your agent conversation; the CLI installs/configures the integration and is not a separate `search <query>` command. For example:
+Dispatches queries across engines concurrently, normalizes URLs, strips redirects, and applies diversity filters.
 
-> Check the official documentation for this dependency's current API, read the relevant page, and explain whether our code needs a change. Do not change my search configuration.
-
-### Tool responsibilities
-
-| Tool | Use it for | Important boundary |
-| --- | --- | --- |
-| `fused_search` | A precise lookup or a few distinct web-search angles, with merged/ranked results. | One search operation; the parent decides any follow-up. |
-| `fetch_page` | Reading a known public URL, optionally keeping paragraphs matching `focus`. | Not a logged-in browser or a private-network fetcher. |
-| `x_search` | Available X posts, account material or thread material. | Coverage may be delayed, partial or empty; not a complete sentiment sample. |
-| `adaptive_search` | Optional automatic follow-up and per-question evidence assessment using Jev. | Not a subagent runner, a final-answer generator or an independent fact checker. |
-| `search_layer` | Inspecting/changing the compatibility default in MCP. | `show` reads; `free` / `api` persist a change and require authorization. |
-| `search_stats` | Read-only MCP/DSH diagnostics: engines, cache and recent activity. | Configuration readiness is not a successful network probe. |
-
-Pi exposes `/web_change` and `/search-audit` for its corresponding host controls. DSH exposes `/web_change` for the layer. Do not assume every host has identical command names.
-
-A tool call might look like this; these are **tool arguments**, not shell commands:
-
+**Tool Arguments Example (JSON)**:
 ```json
 {
-  "query": "AbortSignal.any Node.js documentation",
-  "include_domains": ["nodejs.org"],
+  "query": "Node.js 22 built-in WebSocket API guide",
+  "include_domains": ["nodejs.org", "developer.mozilla.org"],
   "engine_pool": "free",
+  "ranking": "balanced",
   "complexity": "simple",
   "max_results": 5
 }
 ```
 
-Then call `fetch_page` with a returned source URL:
+- **`engine_pool`**: `free` (keyless Bing, DuckDuckGo, Yahoo, Exa-free), `api` (configured paid engines only), or `hybrid` (all available engines).
+- **`ranking`**: Scoring presets: `balanced` (default), `research` (favors authoritative/documentation sources), or `fresh` (favors recent publications).
+- **`complexity`**: `simple` (1 query variant), `medium` (up to 2 variants), `complex` (up to 3 deep variants).
+- **`community`**: Boolean (`false` by default). Set to `true` to blend real-time X developer discussions into the final result quota.
 
+---
+
+### 2. `fetch_page` Smart Content Reader
+
+Reads webpage content from search URLs. Prioritizes Jina Reader for clean Markdown, with an internal guarded HTTP fetcher fallback.
+
+**Tool Arguments Example**:
 ```json
 {
   "url": "https://nodejs.org/api/globals.html",
@@ -130,151 +237,201 @@ Then call `fetch_page` with a returned source URL:
 }
 ```
 
-A `focus` miss does not establish absence: retry without focus when the full page is needed. The reader tries Jina first and a guarded local HTML fetch second. It removes CSS/JS/ad chrome, caches usable pages in memory, and enforces raw response-size limits rather than promising to retrieve arbitrary-sized pages.
+- **`focus` (Optional)**: Filters and retains paragraphs matching the target keywords.
+  > [!TIP]
+  > A `focus` miss does **not** prove the information is absent from the page. If in doubt, re-fetch without `focus` to inspect the full context.
 
-### Engine pools, ranking and budget
+---
 
-| Parameter | Meaning |
-| --- | --- |
-| `engine_pool: free` | Keyless Bing, DuckDuckGo, Yahoo and Exa-free. |
-| `engine_pool: api` | **Only** configured, enabled Tavily / Brave / Exa engines. |
-| `engine_pool: hybrid` | The free pool plus configured, enabled API engines. |
-| `engines` | Optional explicit engine selection; unavailable/disabled engines are reported, not enabled automatically. |
-| `ranking` | `balanced`, `research` or `fresh`: final engine-weight preset only. |
-| `complexity` | `simple`, `medium` or `complex`: search budget, variants and depth. |
-| `community` | Opt-in X/community material mixed into the final result limit; default `false`. |
+### 3. `x_search` X (Twitter) Intelligence
 
-Normally omit `engines`. `engine_weights` customizes scores, not engine selection. Domain filters restrict results; `recency` favors recent dated evidence, not a guarantee that every returned page is within a strict date interval. Read `enginesUsed`, `effectiveWeights`, `communityUsed` and `warnings`.
+Designed for real-time technical tracking and first-party developer updates. Supports keyword search, author timelines, and thread conversations.
 
-The older persistent **layer** is a compatibility setting: `free → free` pool, **`api → hybrid`** pool. It is not the same as the strict `engine_pool: api`. Prefer per-call parameters over changing a user's default.
-
-MCP exposes live configuration at `search-boost://capabilities`. Pi and DSH inject the same computed status into their host prompts. The optional MCP `search-boost://policy` resource supplies examples and limitations; neither that resource, the `search_routing` planning prompt nor a skill is required before calling a tool.
-
-### Jev-assisted collection
-
-```bash
-search-boost config jev
-search-boost config jev --show
+**Tool Arguments Example**:
+```json
+{
+  "query": "Claude 3.7 Sonnet hybrid reasoning from:AnthropicAI",
+  "mode": "keyword",
+  "max_results": 5
+}
 ```
 
-Then call `adaptive_search`:
+- **Precise Timestamps**: When platform timestamps are missing or inconsistent, recovers true UTC creation times from 64-bit Snowflake IDs.
+- **Native Operators**: Full support for `from:username`, `since:YYYY-MM-DD`, and `until:YYYY-MM-DD`.
 
+---
+
+### 4. `adaptive_search` Jev Evidence Loop (Experimental)
+
+When rigorous verification is required for complex technical claims, agents can call `adaptive_search`. The Jev cognitive loop formulates targeted queries, selects allowable engines, fetches relevant passages, and assesses coverage.
+
+**Tool Arguments Example**:
 ```json
 {
   "questions": [
-    "What cancellation behavior does the documented API guarantee?",
-    "Which version introduced the behavior our code relies on?"
+    "What cancellation guarantees does the official documentation provide for this API?",
+    "In which stable release was this behavior originally introduced?"
   ]
 }
 ```
 
-Accepts 1–6 nonblank questions, each at most 400 characters. Duplicate questions share execution but keep their output positions. Jev selects permitted searches and evaluates snippets, engine-returned material and fetched fragments; code enforces the budgets, engine restrictions and response validation.
+- Accepts 1–6 non-empty questions, each up to 400 characters.
+- **Returns per-question coverage status**:
+  - `covered`: Assessed fragments satisfy the question's criteria (model judgment).
+  - `insufficient`: Retrieved material does not fully answer the claim.
+  - `unassessed`: Intermediate state or evaluation not completed.
+  - `not_searched`: Query budget or deadline exhausted before execution.
+  - `failed`: An error occurred during retrieval or parsing.
 
-The result preserves every question with `covered`, `insufficient`, `unassessed`, `not_searched` or `failed`, reviewed evidence and explicit gaps. **`covered` is a model judgment about those fragments, not verified truth.** Inspect conflicts and missing requirements. Without configured Jev credentials, the tool returns `not_configured` without network requests. A Jev failure may permit a bounded plain-search fallback whose new findings remain unassessed. Direct search/read/X tools do not require Jev.
+---
 
-### Optional parallel research
+### Engine Pools & Scoring Presets
 
-Pi's `search-parallel-subagent` and DSH's `research_parallel` execute children; they do not replace the parent agent's judgment. Searchers collect evidence with search/read tools; summarizers receive reports and have no tools. Fast mode uses one wave and parent synthesis. Complex mode adds gap review and only material follow-up waves.
+In `fused_search`, base weights are governed by `engine_pool` and `ranking`:
 
-Delegation must be authorized. Pi's runner leaves wave size to the caller and has no concurrency cap: choose a sensible task budget. DSH uses its native provider and reports missing capabilities rather than launching Pi. Neither a skill nor a tool description grants permission to bypass a failed runtime, denied tool or cancellation.
+| Pool-Ranking Preset | Bing | DuckDuckGo | Yahoo | Exa-free | Tavily | Brave | Exa (API) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **free-balanced** | 1.00 | 1.05 | 1.00 | 1.10 | — | — | — |
+| **free-research** | 0.95 | 0.90 | 0.85 | 1.30 | — | — | — |
+| **free-fresh** | 1.15 | 0.95 | 0.90 | 1.00 | — | — | — |
+| **api-balanced** | — | — | — | — | 1.20 | 1.10 | 1.20 |
+| **api-research** | — | — | — | — | 1.35 | 1.00 | 1.45 |
+| **api-fresh** | — | — | — | — | 1.30 | 1.40 | 1.25 |
+| **hybrid-balanced** | 1.00 | 1.05 | 1.00 | 1.10 | 1.20 | 1.10 | 1.20 |
 
-## Configuration and privacy
+---
 
-```bash
-search-boost config keys           # search-engine credentials and routing
-search-boost config layer          # compatibility default
-search-boost config x              # optional X authentication
-search-boost config jev            # optional Jev endpoint and credential
+## Parallel Multi-Agent Research Workflows
+
+Installing SearchBoost into an MCP host automatically installs two bundled skills:
+
+1. **`search-boost`**: Research routing skill guiding the agent to select optimal tools for open-ended questions.
+2. **`search-boost-parallel-research`**: **Multi-agent parallel workflow** delegating independent research tracks to host subagents:
+
+```text
+                           [ Parent Agent ]
+                     Deconstructs Research Goals
+                                   │
+                 ┌─────────────────┴─────────────────┐
+                 ▼                                   ▼
+        [ Searcher Agent A ]               [ Searcher Agent B ]
+     Gathers Evidence via Tools         Gathers Evidence via Tools
+                 │                                   │
+                 └─────────────────┬─────────────────┘
+                                   ▼
+                         [ Summarizer Agent ]
+                      No Tools · Pure Synthesis
+                                   │
+                                   ▼
+                       [ Final Parent Report ]
 ```
 
-Prefer interactive entry over placing secrets in command arguments or chat history.
+- **Two Workflow Modes**:
+  - **Fast Mode**: Single concurrent wave (1 Wave) followed immediately by parent synthesis.
+  - **Complex Mode**: Adds a "Gap Review" step, launching a second wave only if critical information is missing.
+- **Graceful Degradation**: If the host lacks subagent capabilities, the workflow gracefully falls back to serial deep research without infinite loops.
 
-Runtime configuration lives in `~/.search-boost/config/`: `keys.json` (engines and Jev), `layer.json`, and `xauth.json`. `SEARCH_BOOST_HOME` relocates the SearchBoost directory. Legacy flat files can be adopted on first write; once a canonical store is initialized, clearing it does not revive an older backup. Corrupt authoritative stores are reported, not silently replaced. `enabledEngines: []` intentionally disables all keyed engines; omitting the field uses configured engines that are not individually disabled.
+---
 
-**Jev is config-only:** its endpoint/key pair comes from the canonical `config/keys.json`. `TYPESAFE_API_KEY`, project files, old adapter files and `SEARCH_BOOST_KEYS_FILE` cannot supply Jev credentials. Clearing Jev does not absorb or reactivate an environment key. Other providers keep their compatibility policy: Tavily / Brave / Exa can use their documented environment-key fallbacks, and X can use `XAI_API_KEY`. Jev is not a search engine or a substitute API-engine credential.
+## Configuration, Security & Privacy
 
-Private configuration writes are atomic with restrictive permissions on POSIX. Files are **not encrypted**; Windows protection also depends on account/file ACLs. Do not publish configuration files or paste raw keys into diagnostics.
+### Configuration Layout
 
-Search queries go to selected engines; Jina receives the requested page URL. Enabling Jev sends the questions and necessary evidence fragments to the configured endpoint, default `https://api.typesafe.ai/v1`. Engine keys/fingerprints are not included in the Jev body. The core evidence pool is in memory, but **the host can save conversation and audit history**. Pi maintains `search-boost-audit.jsonl` under its agent directory and logs search queries/URLs and activity; `/search-audit clear` clears that audit, not host conversation history.
+Local configuration is stored in `~/.search-boost/config/` (configurable via `SEARCH_BOOST_HOME`):
 
-X credentials are optional. `search-boost config x --import-grok` copies an existing Grok login; `--logout` removes SearchBoost's local copy without signing Grok itself out. Pi/DSH also provide `/x-login` and `/x-logout`; these are not MCP slash commands. X date bounds are inclusive UTC calendar dates; in user mode they filter recent posts. Unverifiable author/date/engagement metadata can cause candidates to be omitted.
-
-## Updating existing installations
-
-### Already using `search-boost`
-
-Open `search-boost` and choose **Update**, or use:
-
-```bash
-search-boost upgrade --dry-run
-search-boost upgrade -y
+```text
+~/.search-boost/
+├── config/
+│   ├── keys.json        # Search engine API keys & Jev credentials (mode 0600)
+│   ├── layer.json       # Search layer compatibility mode (free / api)
+│   └── xauth.json       # X (Twitter) authentication tokens
+├── backups/             # Automatic configuration backups
+└── state/               # Upgrade receipts and package tracking
 ```
 
-Update checks the published release, updates the package when necessary and refreshes **existing configured integrations**, including recognized old Pi/DSH registrations. It does not install every merely detected host. Keep host disabled state, model settings and permissions under user control; inspect reported failures instead of assuming every host updated.
+### Security & Privacy Guarantees
+
+- **Private File Permissions**: On POSIX systems, configuration files are written atomically with strict `0600` permissions (read/write by owner only).
+- **SSRF Protection & IP Pinning**: The direct HTML reader resolves and validates target IP addresses against private/loopback CIDRs, pinning the connection to prevent DNS rebinding attacks.
+- **Proxy Support**: Fully respects `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY`. **Explicitly rejects SOCKS proxies** with clear error messages to prevent accidental direct network leaks.
+- **TUN Fake-IP Compatibility**: When operating behind a TUN interface utilizing Fake-IP ranges, set `SEARCH_BOOST_TRUSTED_TUN=1` to allow trusted gateway routing.
+
+---
+
+## CLI Command Reference (Headless & CI)
+
+In addition to the interactive TUI, SearchBoost provides a comprehensive CLI for scripting and automation:
 
 ```bash
-search-boost upgrade --sync-only -y                    # refresh installed assets, no npm update
-search-boost upgrade --workspace /path/to/project -y   # include a particular project
+# ----------------- Core & Interactive -----------------
+search-boost                                # Launch interactive dashboard (TUI)
+search-boost status                         # Print active configuration and host summary
+search-boost --help                         # Display full CLI documentation
+
+# ----------------- Headless Installation -----------------
+search-boost install -t cursor -y           # Install for Cursor with auto-approval
+search-boost install -t claude,codex --keep-native  # Install while preserving host native search
+search-boost install -t antigravity --workspace /path/to/project # Target a specific workspace
+search-boost install -t pi -y               # Mount Pi extension and prompt templates
+search-boost install -t dsh --profile web   # Connect to DeepSeek Harness web profile
+search-boost install -t cursor --dry-run    # Preview installation without writing files
+
+# ----------------- Configuration Management -----------------
+search-boost config keys                    # Manage API keys from CLI
+search-boost config layer                   # Switch default layer (free / api)
+search-boost config x --import-grok         # Import X credentials from local Grok login
+search-boost config jev                     # Configure Jev endpoint and token
+
+# ----------------- Diagnostics & Health -----------------
+search-boost doctor                         # Run offline diagnostic checks
+search-boost doctor --strict                # Strict mode (exits non-zero on warnings)
+search-boost doctor --json                  # Output machine-readable JSON report
+
+# ----------------- Uninstall -----------------
+search-boost uninstall -t cursor,claude -y  # Remove integrations from selected hosts
 ```
 
-Discovery covers known user configs, DSH profiles and current/recorded/explicit workspaces, not an entire disk. Backups are under `~/.search-boost/backups/`; update results and source-ownership receipts are in `state/last-upgrade.json` and `state/package-sources.json`. A stale receipt alone must not reinstall an integration you removed. Reload affected hosts afterward.
+---
 
-### Still using `search-boost-mcp`
+## Installation from Source & Development
 
-After the unified package is published, run its migration code explicitly:
+To contribute to SearchBoost or test the latest unreleased changes on the `v0.2.0` branch:
 
-```bash
-npx --yes --package=search-boost@latest -- search-boost migrate --dry-run
-npx --yes --package=search-boost@latest -- search-boost migrate -y
-search-boost upgrade -y
-```
-
-`migrate` does **only the one-time global npm rename**. It installs/verifies the new package before removing the old one, handles the shared command safely, and leaves agent configuration unchanged. The following **Update / `upgrade` step** refreshes those integrations. No transition release of the old package, `postinstall` migration or blind manual uninstall is required. A failed handoff retains the old installation where rollback is possible and reports the failure.
-
-### Still using standalone Pi/DSH adapters
-
-Install the unified CLI, then use TUI **Update** or `search-boost upgrade -y`. The host-upgrade path recognizes supported legacy registrations and refreshes the native adapter/assets; `migrate` is not the Pi/DSH migration command. Review [host upgrade details](./docs/host-upgrades.md) for source types, project/profile discovery and retryable failures. Keep backups until the new tools work.
-
-## Diagnostics, network limits and uninstall
+### Source Setup
 
 ```bash
-search-boost doctor
-search-boost doctor --json
-search-boost doctor --strict
-search-boost status
-```
+# 1. Clone repository
+git clone https://github.com/Mr-remon219/search-boost.git
+cd search-boost
 
-`doctor` currently performs offline checks. **`--probe` is reserved and reports pending; it is not a live connectivity test.** Exit codes: `0` healthy, `1` failure (or warnings with `--strict`), `2` warnings only. Confirm an actual tool call in the host before concluding that a provider is reachable.
-
-Fixed-service transport honors `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and lowercase equivalents; nonempty lowercase values take precedence. `NO_PROXY` / `no_proxy` applies to these service requests. SOCKS URLs are rejected explicitly; use an HTTP/mixed proxy port supported by the transport rather than expecting silent direct access.
-
-For arbitrary pages, the direct fallback resolves and validates addresses once, pins the connection to them, and repeats validation at redirects. Cache hits and Jina do not require a local lookup of the target page. A configured HTTP proxy cannot currently provide equivalent target-address pinning with the locked transport, so that local fallback reports `proxy_unsupported` instead of bypassing the proxy. The Jina path may still work. TUN fake-IP compatibility requires explicit `SEARCH_BOOST_TRUSTED_TUN=1` and trust in the TUN's real routing; it is not enabled automatically.
-
-On failed/empty searches, inspect returned warnings and `search_stats` or the host audit. DNS failure, provider throttling, filters and missing credentials are different causes. Do not disable safety checks or change persistent layers merely because a request failed.
-
-```bash
-search-boost uninstall -t cursor,codex,claude --dry-run -y
-search-boost uninstall -t cursor,codex,claude -y
-```
-
-Uninstall targets SearchBoost-owned registrations, blocks and assets, retaining unrelated user content. Native search restoration depends on the owned settings and the host; Grok plugin removal is best-effort when its CLI is unavailable. Remove the npm package only after removing the integrations that depend on it.
-
-## Architecture and development
-
-`lib/runtime.mjs` is the host-neutral facade. `lib/search/` owns retrieval, ranking, network policy and adaptive evidence; `lib/jev/` owns the Jev protocol client. `adapters/` translates those results to each host. `agents/` contains the authored prompt/skill templates; generated host bundles should be refreshed rather than edited independently.
-
-**Prompt responsibilities:** tool descriptions explain when to call and what is returned; schemas explain parameters; injection explains verification policy and boundaries; live capabilities explain configuration; optional skills/templates explain workflows; child-role prompts explain the assigned subtask. See [the prompt contract](./docs/prompt-contract.md).
-
-```bash
+# 2. Switch to v0.2.0 branch and install dependencies
+git switch v0.2.0
 npm ci
-npm run prepublishOnly    # sync generated assets + all offline test gates; does not publish
-npm run test:network      # DNS/proxy/pinning plus release-audit regressions
-npm run test:adaptive
-npm run test:adapters
-npm run smoke            # MCP protocol smoke
-npm pack --dry-run
+
+# 3. Synchronize Grok plugin assets
+npm run plugin:sync-grok
+
+# 4. Link globally
+npm install -g .
+
+# 5. Launch and test
+search-boost
 ```
 
-CI runs the gates on Linux and Windows. Mocked provider responses and local network fixtures do not prove paid-service availability or every host version's live behavior; test those separately before publishing a release.
+### Development Test Gates
 
-[MIT License](./LICENSE)
+Before submitting a PR, verify your changes against the complete test suite:
+
+```bash
+npm run prepublishOnly    # Syntax check + asset sync + full offline test suite
+npm run test:network      # DNS, proxy, IP pinning, and security regressions
+npm run test:adaptive     # Jev adaptive search loop evaluation
+npm run test:adapters     # MCP, Pi, and DSH adapter protocol suites
+npm run smoke             # MCP JSON-RPC protocol smoke test
+```
+
+---
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
