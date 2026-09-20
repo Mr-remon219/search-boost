@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -126,7 +126,8 @@ test('B1: a fresh process reads the empty list instead of the default', () => {
   keys.writeKeysFile({ tavily: 'tvly-fixture-123456', exa: 'exa-fixture-123456' })
   keys.setEnabledEngines([])
   const reader = join(home, 'reader.mjs')
-  writeFileSync(reader, `const k = await import(${JSON.stringify(join(root, 'lib/keys.mjs'))})\nconsole.log(JSON.stringify(k.readKeysRouting().enabledNames))\n`)
+  // A file:// URL, not a raw path: Windows rejects absolute paths as ESM specifiers.
+  writeFileSync(reader, `const k = await import(${JSON.stringify(pathToFileURL(join(root, 'lib/keys.mjs')).href)})\nconsole.log(JSON.stringify(k.readKeysRouting().enabledNames))\n`)
   const out = execFileSync(process.execPath, [reader], {
     encoding: 'utf8',
     env: { ...process.env, HOME: home, USERPROFILE: home },

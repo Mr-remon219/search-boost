@@ -10,6 +10,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createServer as createHttpServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
+import { connect as netConnect } from 'node:net'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -55,6 +56,52 @@ const { fetchPage, makePageCache } = await import('../lib/search/fetch.js')
 // Fixture-only: the local servers below live on loopback, which production
 // validation blocks. This is a JS injection, never an environment switch.
 __setFixtureAllowlistForTests(['127.0.0.1', '::1'])
+
+/**
+ * A real tunneling HTTP proxy: CONNECT is forwarded to the actual target and
+ * bytes are piped both ways. A canned response would be timing-sensitive, and
+ * the point of the test is that our transport really routes through a proxy.
+ */
+function startTunnelProxy() {
+  return new Promise((resolve) => {
+    const connects = []
+    const sockets = new Set()
+    const server = createHttpServer((req, res) => {
+      res.writeHead(400)
+      res.end('this fixture is a CONNECT tunnel')
+    })
+    server.on('connection', (socket) => {
+      sockets.add(socket)
+      socket.on('close', () => sockets.delete(socket))
+    })
+    server.on('connect', (req, clientSocket, head) => {
+      sockets.add(clientSocket)
+      clientSocket.on('close', () => sockets.delete(clientSocket))
+      connects.push(req.url)
+      const [host, port] = String(req.url).split(':')
+      const upstream = netConnect(Number(port), host, () => {
+        clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
+        if (head?.length) upstream.write(head)
+        upstream.pipe(clientSocket)
+        clientSocket.pipe(upstream)
+      })
+      upstream.on('error', () => clientSocket.destroy())
+      clientSocket.on('error', () => upstream.destroy())
+    })
+    server.listen(0, '127.0.0.1', () => {
+      resolve({
+        port: server.address().port,
+        connects,
+        close: () => new Promise((r) => {
+          for (const socket of sockets) socket.destroy()
+          sockets.clear()
+          server.closeAllConnections?.()
+          server.close(r)
+        }),
+      })
+    })
+  })
+}
 
 /**
  * Start an HTTP server that records requests; returns { port, requests, close }.
@@ -354,30 +401,36 @@ try {
   })
 
   await test('a configured HTTP proxy is really used for fixed-service requests', async () => {
-    // The fixture answers CONNECT tunnels with a canned response, so a successful
-    // body proves the request was routed through the proxy.
-    const proxy = await startRecorder()
+    // A real origin behind a real CONNECT tunnel: the response body can only
+    // arrive if the request was routed through the proxy.
+    const origin = await startRecorder()
+    const proxy = await startTunnelProxy()
     const previous = { ...process.env }
     try {
       process.env.http_proxy = `http://127.0.0.1:${proxy.port}`
       process.env.https_proxy = `http://127.0.0.1:${proxy.port}`
+      // A CI runner may pre-set NO_PROXY for loopback; this fixture needs the
+      // proxy to be used for its own target.
+      delete process.env.no_proxy
+      delete process.env.NO_PROXY
       resetFetchDispatcher()
-      const res = await ipv4Fetch('http://proxied.example/fixed-service')
+      const res = await ipv4Fetch(`http://127.0.0.1:${origin.port}/fixed-service`)
       const body = await res.text()
       assert.equal(res.status, 200)
-      assert.ok(proxy.requests.length >= 1, 'the request must go through the proxy')
       assert.ok(
-        proxy.requests.some((entry) => String(entry.url).includes('proxied.example')),
-        `the proxy must see the target host: ${JSON.stringify(proxy.requests)}`,
+        proxy.connects.includes(`127.0.0.1:${origin.port}`),
+        `the proxy must see a CONNECT for the target: ${JSON.stringify(proxy.connects)}`,
       )
-      assert.match(body, /tunneled fixture body/)
+      assert.equal(origin.requests.length, 1, 'the origin must be reached through the tunnel')
+      assert.match(body, /fixture body/)
     } finally {
-      for (const key of ['http_proxy', 'https_proxy']) {
+      for (const key of ['http_proxy', 'https_proxy', 'no_proxy', 'NO_PROXY']) {
         if (previous[key] === undefined) delete process.env[key]
         else process.env[key] = previous[key]
       }
       resetFetchDispatcher()
       await proxy.close()
+      await origin.close()
     }
   })
 

@@ -763,7 +763,10 @@ await test('cancellation during an in-flight search still returns the partial re
 await test('a deadline reached during an in-flight search still returns the partial result', async () => {
   const h = harness({
     deadlineMs: 1_500,
-    limits: { ...ADAPTIVE_LIMITS, minBudgetMs: 1_500 },
+    // minBudgetMs stays far below the deadline: with both equal, any planning
+    // delay would make the task start "out of time" and stop as a budget stop
+    // instead of exercising the deadline path (flaky on slow runners).
+    limits: { ...ADAPTIVE_LIMITS, minBudgetMs: 50 },
     search: async () => {
       await new Promise((resolve) => setTimeout(resolve, 1_700))
       throw new Error('search finished after the deadline')
