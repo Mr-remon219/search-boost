@@ -74,6 +74,18 @@ jobs:
         if: always()
         run: npm run test:jev
 
+      - name: Config authority (engines, store, credentials)
+        if: always()
+        run: npm run test:keys-authority
+
+      - name: Dry-run contract
+        if: always()
+        run: npm run test:dry-run
+
+      - name: Network policy (DNS, pinning, proxy)
+        if: always()
+        run: npm run test:network
+
       - name: Jev client (System One transport)
         if: always()
         run: npm run test:jev-client

@@ -1,7 +1,7 @@
 {
   "name": "search-boost",
   "version": "0.1.7",
-  "description": "Multi-engine web search for coding agents — one SearchBoost core (fused search, fetch, X) with MCP (Cursor, Codex, Claude Code, Grok Build, Antigravity), pi extension, and DeepSeek Harness bundle adapters",
+  "description": "Multi-engine web search for coding agents \u2014 one SearchBoost core (fused search, fetch, X) with MCP (Cursor, Codex, Claude Code, Grok Build, Antigravity), pi extension, and DeepSeek Harness bundle adapters",
   "type": "module",
   "bin": {
     "search-boost": "./cli.mjs"
@@ -65,8 +65,11 @@
     "jev:probe": "node scripts/jev-probe.mjs",
     "eval:adaptive": "node scripts/eval-adaptive-search.mjs",
     "test:cli": "node scripts/test-cli-surface.mjs",
-    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:cli && npm run test:install && npm run test:doctor && npm run test:fusion && npm run test:x && npm run test:engines && npm run test:xauth && npm run test:jev && npm run test:jev-client && npm run test:adaptive && npm run test:search && npm run test:adapters && npm run test:parallel && npm run test:upgrade && npm run test:mcp && npm run smoke",
-    "test:search": "node scripts/test-search-routing.mjs"
+    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:cli && npm run test:install && npm run test:doctor && npm run test:fusion && npm run test:x && npm run test:engines && npm run test:xauth && npm run test:jev && npm run test:keys-authority && npm run test:dry-run && npm run test:network && npm run test:jev-client && npm run test:adaptive && npm run test:search && npm run test:adapters && npm run test:parallel && npm run test:upgrade && npm run test:mcp && npm run smoke",
+    "test:search": "node scripts/test-search-routing.mjs",
+    "test:keys-authority": "node scripts/test-keys-authority.mjs",
+    "test:dry-run": "node scripts/test-dry-run.mjs",
+    "test:network": "node scripts/test-network-safety.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^0.10.1",
