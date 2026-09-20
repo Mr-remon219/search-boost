@@ -943,13 +943,18 @@ await test('the deadline stops the loop and no request starts after it', async (
 await test('the capability block and the whole result never contain the configured key', async () => {
   const sentinel = 'SENTINEL-TYPESAFE-KEY-3b7c-never-log'
   const home = mkdtempSync(join(tmpdir(), 'sb-adaptive-keys-'))
-  const keysFile = join(home, 'keys.json')
+  // Jev credentials are read from the canonical user-level store only, so the
+  // fixture lives where that store resolves (SEARCH_BOOST_HOME), not in an
+  // env-relocated keys path.
+  const keysFile = join(home, 'config', 'keys.json')
+  const previousHome = process.env.SEARCH_BOOST_HOME
   const previousKeys = process.env.SEARCH_BOOST_KEYS_FILE
   const previousKey = process.env.TYPESAFE_API_KEY
   try {
-    mkdirSync(home, { recursive: true })
+    mkdirSync(join(home, 'config'), { recursive: true })
     writeFileSync(keysFile, JSON.stringify({ tavily: 'fixture-engine-key', jev: { apiKey: sentinel } }))
-    process.env.SEARCH_BOOST_KEYS_FILE = keysFile
+    process.env.SEARCH_BOOST_HOME = home
+    delete process.env.SEARCH_BOOST_KEYS_FILE
     delete process.env.TYPESAFE_API_KEY
     const config = await import('../lib/jev-config.mjs')
     const { formatJevStatusLines } = await import('../lib/installer/jev-wizard.mjs')
@@ -975,6 +980,8 @@ await test('the capability block and the whole result never contain the configur
     const withGateway = JSON.stringify({ ...described, gateway: 'custom', destination: 'the Jev service configured by the user (custom base URL)' })
     assert.equal(JSON.parse(withGateway).configured, true)
   } finally {
+    if (previousHome === undefined) delete process.env.SEARCH_BOOST_HOME
+    else process.env.SEARCH_BOOST_HOME = previousHome
     if (previousKeys === undefined) delete process.env.SEARCH_BOOST_KEYS_FILE
     else process.env.SEARCH_BOOST_KEYS_FILE = previousKeys
     if (previousKey !== undefined) process.env.TYPESAFE_API_KEY = previousKey

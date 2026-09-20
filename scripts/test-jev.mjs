@@ -1,9 +1,13 @@
-// Jev credentials (experimental) — storage round-trips and CLI surface.
+// Jev credentials (experimental) — storage round-trips, trust boundary and CLI surface.
 //
-// The `jev` block shares the keys file with the engine keys, so the regression
-// this suite guards is clobbering: a Jev write must keep engine keys + routing,
-// an engine-key write must keep the Jev block, and a Jev-only keys.json must not
-// look empty to the lazy flat/legacy migration in lib/config-paths.mjs.
+// Trust boundary under test (B3): the `jev` block is read from and written to the
+// canonical user-level store only. A project-local file, an env-relocated keys
+// path, a legacy DSH/Pi file or TYPESAFE_API_KEY can never supply the endpoint or
+// the key, so a low-trust file cannot redirect a global credential.
+//
+// The `jev` block shares the canonical keys file with engine keys and routing, so
+// the other regression this suite guards is clobbering: a Jev write must keep
+// engine keys + routing, and an engine-key/routing write must keep the Jev block.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -20,7 +24,7 @@ import {
 } from '../lib/jev-config.mjs'
 import { formatJevStatusLines } from '../lib/installer/jev-wizard.mjs'
 import { KEY_NAMES, readEngineRouting, readKeysFile, readKeysRouting, writeKeysFile } from '../lib/keys.mjs'
-import { prepareConfigWrite } from '../lib/config-paths.mjs'
+import { configNestedPath, prepareConfigWrite } from '../lib/config-paths.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const cli = join(root, 'cli.mjs')
@@ -28,14 +32,27 @@ const cli = join(root, 'cli.mjs')
 let count = 0
 const test = (name, fn) => { fn(); count++; console.log(`ok: ${name}`) }
 
+const savedEnv = {
+  HOME: process.env.HOME,
+  USERPROFILE: process.env.USERPROFILE,
+  SEARCH_BOOST_HOME: process.env.SEARCH_BOOST_HOME,
+  SEARCH_BOOST_KEYS_FILE: process.env.SEARCH_BOOST_KEYS_FILE,
+  TYPESAFE_API_KEY: process.env.TYPESAFE_API_KEY,
+}
 const home = mkdtempSync(join(tmpdir(), `search-boost-jev-${process.pid}-`))
-const keysFile = join(home, 'keys.json')
-const savedKeysFile = process.env.SEARCH_BOOST_KEYS_FILE
-const savedJevKey = process.env.TYPESAFE_API_KEY
-process.env.SEARCH_BOOST_KEYS_FILE = keysFile
+process.env.HOME = home
+process.env.USERPROFILE = home
+delete process.env.SEARCH_BOOST_HOME
+delete process.env.SEARCH_BOOST_KEYS_FILE
 delete process.env.TYPESAFE_API_KEY
 
-const readDoc = () => JSON.parse(readFileSync(keysFile, 'utf8'))
+/** The canonical user-level store: ~/.search-boost/config/keys.json */
+const canonicalFile = () => configNestedPath('keys')
+const readDoc = () => JSON.parse(readFileSync(canonicalFile(), 'utf8'))
+const writeDoc = (doc) => {
+  mkdirSync(dirname(canonicalFile()), { recursive: true })
+  writeFileSync(canonicalFile(), `${JSON.stringify(doc, null, 2)}\n`)
+}
 
 /** @param {string[]} args */
 function runCli(args) {
@@ -63,7 +80,52 @@ try {
     assert.deepEqual(formatJevStatusLines(), [])
   })
 
-  test('save writes base URL + key next to the engine keys', () => {
+  test('TYPESAFE_API_KEY alone never configures Jev', () => {
+    process.env.TYPESAFE_API_KEY = 'sk-env-1234567890'
+    try {
+      const cfg = readJevConfig()
+      assert.equal(cfg.apiKey, undefined, 'the env key must not be consumed')
+      assert.equal(cfg.source, 'missing')
+      assert.equal(jevStatus().configured, false)
+      assert.deepEqual(formatJevStatusLines(), [], 'status must not advertise an env fallback')
+      assert.ok(!formatJevStatusLines().join('\n').includes('TYPESAFE_API_KEY'))
+      // Only changing the URL must not absorb the env key into the file.
+      assert.throws(() => saveJevConfig({ baseUrl: 'https://api.typesafe.ai/v1' }), /Jev API key is required/)
+      const stored = (() => { try { return readFileSync(canonicalFile(), 'utf8') } catch { return '' } })()
+      assert.ok(!stored.includes('sk-env-1234567890'), 'env key must never be stored')
+    } finally {
+      delete process.env.TYPESAFE_API_KEY
+    }
+  })
+
+  test('an env-relocated keys file cannot supply Jev credentials', () => {
+    const elsewhere = join(home, 'relocated-keys.json')
+    writeFileSync(elsewhere, JSON.stringify({ jev: { baseUrl: 'https://evil.invalid/v1', apiKey: 'sk-evil-123456' } }))
+    process.env.SEARCH_BOOST_KEYS_FILE = elsewhere
+    try {
+      const cfg = readJevConfig()
+      assert.equal(cfg.source, 'missing', 'Jev must ignore an env-relocated store')
+      assert.equal(cfg.baseUrl, JEV_DEFAULT_BASE_URL)
+    } finally {
+      delete process.env.SEARCH_BOOST_KEYS_FILE
+    }
+  })
+
+  test('a project-local file cannot supply Jev credentials', () => {
+    const projectFile = join(process.cwd(), '.search-boost-keys.json')
+    const existed = (() => { try { readFileSync(projectFile, 'utf8'); return true } catch { return false } })()
+    if (existed) return
+    writeFileSync(projectFile, JSON.stringify({ jev: { baseUrl: 'https://project.invalid/v1', apiKey: 'sk-project-123456' } }))
+    try {
+      const cfg = readJevConfig()
+      assert.equal(cfg.source, 'missing', 'a project file must not configure Jev')
+      assert.equal(cfg.baseUrl, JEV_DEFAULT_BASE_URL)
+    } finally {
+      rmSync(projectFile, { force: true })
+    }
+  })
+
+  test('save writes base URL + key into the canonical store', () => {
     saveJevConfig({ baseUrl: 'https://api.typesafe.ai/v1/', apiKey: 'sk-test-1234567890' })
     assert.deepEqual(readDoc().jev, { baseUrl: 'https://api.typesafe.ai/v1', apiKey: 'sk-test-1234567890' })
     const cfg = readJevConfig()
@@ -98,26 +160,21 @@ try {
     assert.equal(readKeysFile().exa, 'exa-test-key-1234567890')
   })
 
-  test('key from TYPESAFE_API_KEY is reported as env, not stored', () => {
-    clearJevConfig()
-    process.env.TYPESAFE_API_KEY = 'sk-env-1234567890'
-    const status = jevStatus()
-    assert.equal(status.configured, true)
-    assert.equal(status.source, 'env')
-    assert.equal(readDoc().jev, undefined)
-    assert.ok(formatJevStatusLines().some((line) => line.includes('TYPESAFE_API_KEY')))
-    delete process.env.TYPESAFE_API_KEY
-  })
-
-  test('clear removes only the Jev block', () => {
+  test('clear removes only the Jev block and env cannot revive it', () => {
     saveJevConfig({ baseUrl: 'https://api.typesafe.ai/v1', apiKey: 'sk-test-1234567890' })
     clearJevConfig()
     assert.equal(readDoc().jev, undefined)
     assert.equal(readKeysFile().exa, 'exa-test-key-1234567890')
     assert.equal(jevStatus().configured, false)
+    process.env.TYPESAFE_API_KEY = 'sk-env-1234567890'
+    try {
+      assert.equal(jevStatus().configured, false, 'a cleared store stays cleared')
+    } finally {
+      delete process.env.TYPESAFE_API_KEY
+    }
   })
 
-  test('a Jev-only keys.json is not overwritten by a flat/legacy copy', () => {
+  test('a Jev-only canonical store is not overwritten by a flat/legacy copy', () => {
     const fakeHome = mkdtempSync(join(tmpdir(), 'search-boost-jev-migrate-'))
     try {
       const nestedDir = join(fakeHome, '.search-boost', 'config')
@@ -126,13 +183,29 @@ try {
       writeFileSync(join(fakeHome, '.search-boost-keys.json'), JSON.stringify({ tavily: 'tvly-flat-12345678' }))
       writeFileSync(nestedFile, JSON.stringify({ jev: { baseUrl: 'https://proxy.test/v1', apiKey: 'sk-nested-123456' } }))
       const opts = { homeDir: fakeHome }
-      delete process.env.SEARCH_BOOST_KEYS_FILE
       prepareConfigWrite('keys', opts)
       const nested = JSON.parse(readFileSync(nestedFile, 'utf8'))
       assert.deepEqual(nested.jev, { baseUrl: 'https://proxy.test/v1', apiKey: 'sk-nested-123456' })
       assert.equal(nested.tavily, undefined, 'the flat copy must not overwrite a Jev-only nested file')
     } finally {
-      process.env.SEARCH_BOOST_KEYS_FILE = keysFile
+      rmSync(fakeHome, { recursive: true, force: true })
+    }
+  })
+
+  test('a compat file\'s Jev block is never adopted by migration', () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), 'search-boost-jev-adopt-'))
+    try {
+      writeFileSync(join(fakeHome, '.search-boost-keys.json'), JSON.stringify({
+        tavily: 'tvly-flat-12345678',
+        jev: { baseUrl: 'https://legacy.invalid/v1', apiKey: 'sk-legacy-123456' },
+      }))
+      const nestedFile = join(fakeHome, '.search-boost', 'config', 'keys.json')
+      const written = prepareConfigWrite('keys', { homeDir: fakeHome })
+      assert.equal(written, nestedFile)
+      const nested = JSON.parse(readFileSync(nestedFile, 'utf8'))
+      assert.equal(nested.tavily, 'tvly-flat-12345678', 'engine keys still migrate')
+      assert.equal(nested.jev, undefined, 'a non-canonical Jev block must not be imported')
+    } finally {
       rmSync(fakeHome, { recursive: true, force: true })
     }
   })
@@ -141,6 +214,7 @@ try {
     const out = runCli(['config', 'jev', '--show'])
     assert.match(out, /Jev \(experimental\)/)
     assert.match(out, /not configured/)
+    assert.ok(!out.includes('TYPESAFE_API_KEY'), 'the CLI must not advertise an env fallback')
   })
 
   test('CLI: config jev saves, shows masked, and clears', () => {
@@ -166,10 +240,10 @@ try {
     assert.match(help, /config keys\|layer\|x\|jev\|search\|diag/)
   })
 } finally {
-  if (savedKeysFile === undefined) delete process.env.SEARCH_BOOST_KEYS_FILE
-  else process.env.SEARCH_BOOST_KEYS_FILE = savedKeysFile
-  if (savedJevKey === undefined) delete process.env.TYPESAFE_API_KEY
-  else process.env.TYPESAFE_API_KEY = savedJevKey
+  for (const [key, value] of Object.entries(savedEnv)) {
+    if (value === undefined) delete process.env[key]
+    else process.env[key] = value
+  }
   rmSync(home, { recursive: true, force: true })
 }
 
