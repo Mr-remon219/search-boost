@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, main, v0.2.0]
+    branches: [master, main, v0.2.0, jev]
   pull_request:
 
 concurrency:
@@ -69,6 +69,10 @@ jobs:
       - name: X auth
         if: always()
         run: npm run test:xauth
+
+      - name: Jev credentials (config round-trips)
+        if: always()
+        run: npm run test:jev
 
       - name: Jev client (System One transport)
         if: always()
