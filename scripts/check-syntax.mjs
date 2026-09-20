@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Syntax-check shipped source — .mjs tree-wide plus vendored lib/search/*.js.
+ * Syntax-check shipped source — .mjs tree-wide plus Core lib/search .js files
+ * (recursive, including lib/search/x/) and the host adapters' .js (adapters/pi, adapters/dsh).
  */
 import { execFileSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
@@ -8,7 +9,7 @@ import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const SKIP_DIRS = new Set(['node_modules', '.git', '.codegraph', '.agent-html'])
+const SKIP_DIRS = new Set(['node_modules', '.git', '.codegraph', '.agent-html', 'dist'])
 
 /** @param {string} dir @returns {string[]} */
 function collect(dir) {
@@ -19,8 +20,9 @@ function collect(dir) {
       out.push(...collect(join(dir, entry.name)))
     } else if (entry.name.endsWith('.mjs')) {
       out.push(join(dir, entry.name))
-    } else if (entry.name.endsWith('.js') && relative(ROOT, dir).replace(/\\/g, '/') === 'lib/search') {
-      out.push(join(dir, entry.name))
+    } else if (entry.name.endsWith('.js')) {
+      const rel = relative(ROOT, dir).replace(/\\/g, '/')
+      if (rel === 'lib/search' || rel.startsWith('lib/search/') || rel.startsWith('adapters/')) out.push(join(dir, entry.name))
     }
   }
   return out

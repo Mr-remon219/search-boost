@@ -2,12 +2,23 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, v0.2.0, jev]
   pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      # One platform failing must not hide the other platform's result.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -19,18 +30,110 @@ jobs:
       - run: npm ci
 
       - run: npm run plugin:sync-grok
-      - run: npm run check
-      - run: npm run test:install
-      - run: npm run test:doctor
+
+      # Every step below is `if: always()` on purpose: when a suite fails the
+      # remaining suites still run, so one CI run reports every failure on that
+      # platform instead of only the first. The job still fails if any step did.
+      - name: Syntax check
+        if: always()
+        run: npm run check
+
+      - name: CLI surface
+        if: always()
+        run: npm run test:cli
+
       - name: Doctor CLI smoke
+        if: always()
+        run: node scripts/ci-doctor-smoke.mjs
+
+      - name: Install, hooks and skill bundles
+        if: always()
+        run: npm run test:install
+
+      - name: Doctor
+        if: always()
+        run: npm run test:doctor
+
+      - name: Fusion errors
+        if: always()
+        run: npm run test:fusion
+
+      - name: X pipeline
+        if: always()
+        run: npm run test:x
+
+      - name: Engine requests
+        if: always()
+        run: npm run test:engines
+
+      - name: X auth
+        if: always()
+        run: npm run test:xauth
+
+      - name: Jev credentials (config round-trips)
+        if: always()
+        run: npm run test:jev
+
+      - name: Config authority (engines, store, credentials)
+        if: always()
+        run: npm run test:keys-authority
+
+      - name: Dry-run contract
+        if: always()
+        run: npm run test:dry-run
+
+      - name: Network policy (DNS, pinning, proxy)
+        if: always()
+        run: npm run test:network
+
+      - name: Jev client (System One transport)
+        if: always()
+        run: npm run test:jev-client
+
+      - name: Adaptive search (Jev loop)
+        if: always()
+        run: npm run test:adaptive
+
+      - name: Search routing
+        if: always()
+        run: npm run test:search
+
+      - name: Adapters
+        if: always()
+        run: npm run test:adapters
+
+      - name: Parallel research
+        if: always()
+        run: npm run test:parallel
+
+      - name: Upgrade and migration
+        if: always()
+        run: npm run test:upgrade
+
+      - name: MCP guidance
+        if: always()
+        run: npm run test:mcp
+
+      - name: MCP smoke
+        if: always()
+        run: npm run smoke
+
+      # Reproduce the tested Linux tree offline, without checkout credentials,
+      # HOME configuration, environment variables, or Git metadata.
+      - name: Prepare offline audit snapshot
+        if: always() && runner.os == 'Linux'
+        shell: bash
         run: |
-          if grep -q 'runDoctor' lib/cli/commands.mjs; then
-            set +e
-            node cli.mjs doctor --quick --json
-            ec=$?
-            set -e
-            if [ "$ec" -eq 2 ]; then exit 0; fi
-            exit "$ec"
-          fi
-      - run: npm run test:fusion
-      - run: npm run smoke
+          mkdir -p "$RUNNER_TEMP/search-boost-audit"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/search-boost-audit"
+          if [ -d node_modules ]; then cp -a node_modules "$RUNNER_TEMP/search-boost-audit/"; fi
+          tar -czf "$RUNNER_TEMP/search-boost-audit.tar.gz" -C "$RUNNER_TEMP/search-boost-audit" .
+
+      - name: Upload offline audit snapshot
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: search-boost-audit-${{ github.sha }}
+          path: ${{ runner.temp }}/search-boost-audit.tar.gz
+          retention-days: 3
+          if-no-files-found: error

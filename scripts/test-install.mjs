@@ -63,6 +63,8 @@ import {
   hooksConfigPath,
   hookScriptPath,
   mcpServerInstructionsPath,
+  piSubagentTemplatePaths,
+  piWorkflowPromptPaths,
   promptPath,
   ROUTE_IDS,
   rulePath,
@@ -88,6 +90,7 @@ import {
 import {
   GROK_PLUGIN_NAME,
   grokCliAvailable,
+  grokInstallFailureHint,
   grokPluginInstallCommandLine,
   grokPluginUninstallCommandLine,
   installGrokPlugin,
@@ -129,6 +132,9 @@ import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
+
+// Legacy Pi environment names are credential inputs too; never inherit real keys in tests.
+for (const key of ['PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY']) delete process.env[key]
 
 let failed = 0
 
@@ -198,7 +204,7 @@ assert('web_search marker removed', !toml.includes('SEARCH_BOOST_WEB_SEARCH_STAR
   assert('stripMarkedWebSearchFromMcpToml keeps bare MCP web_search', codexToml.includes('web_search = "live"'))
 }
 
-assert('isOwnedSearchBoostSkill detects ours', isOwnedSearchBoostSkill('mcp__search-boost__fused_search'))
+assert('isOwnedSearchBoostSkill detects ours', isOwnedSearchBoostSkill('<!-- search-boost: skill -->'))
 assert('isOwnedSearchBoostSkill rejects foreign', !isOwnedSearchBoostSkill('# my unrelated skill\n'))
 
 // MCP toml block: auto approval only when opted in
@@ -340,7 +346,7 @@ assert('mcp launch prefers bin or node cli over npx', launch.command !== 'npx' &
   launch.args.some((a) => a.endsWith('cli.mjs')) || launch.command.includes('search-boost')
 ))
 const plugin = pluginMcpEntry()
-assert('plugin mcp entry is npx', plugin.command === 'npx' && plugin.args?.includes('-y') && plugin.args?.includes('search-boost-mcp'))
+assert('plugin mcp entry is npx', plugin.command === 'npx' && plugin.args?.includes('-y') && plugin.args?.includes('search-boost'))
 assert('plugin mcp entry no abs paths', !/[A-Za-z]:[/\\]/.test(JSON.stringify(plugin)))
 const agy = antigravityMcpEntry()
 assert('antigravity omits type', !('type' in agy) && agy.command && agy.args?.length)
@@ -565,17 +571,23 @@ assert('parseFlags --enable', parseFlags(['--enable', 'brave']).enable[0] === 'b
 for (const id of ROUTE_IDS) {
   assert(`route ${id} prompt exists`, promptPath(id).includes(getRoute(id).dir))
 }
+assert(
+  'pi route lists subagent + workflow templates',
+  getRoute('pi').subagentTemplates?.length === 2 && getRoute('pi').workflowPrompts?.length === 2,
+)
+assert('pi subagent templates on disk', piSubagentTemplatePaths().every((p) => existsSync(p) && readFileSync(p, 'utf8').includes('search-boost: owned')))
+assert('pi workflow prompts on disk', piWorkflowPromptPaths().every((p) => existsSync(p) && readFileSync(p, 'utf8').includes('search-boost: owned')))
 const cursorPrompt = await loadAgentPrompt('cursor')
 assert(
   'load cursor inject',
-  cursorPrompt.includes('search-boost @ Cursor IDE') && cursorPrompt.includes('when you choose'),
+  cursorPrompt.includes('MCP server') && cursorPrompt.includes('workflow extensions'),
 )
 assert('codex route has skill', getRoute('codex').skill === 'skill.md')
 assert('codex route has openai yaml', getRoute('codex').openaiYaml === 'openai.yaml')
 const codexPrompt = await loadAgentPrompt('codex')
-assert('load codex inject', codexPrompt.includes('search-boost @ Codex CLI'))
+assert('load codex inject', codexPrompt.includes('native MCP channel'))
 const codexSkill = await loadAgentSkill('codex')
-assert('load codex skill', codexSkill?.includes('mcp__search-boost__fused_search'))
+assert('load codex skill', codexSkill?.includes('{{EXTENSION_ROUTES}}'))
 
 // claude permissions wildcard
 const perms = claudePermissions()
@@ -588,8 +600,8 @@ assert('mcp instructions path is shared', mcpServerInstructionsPath() === SHARED
 
 // claude skill frontmatter
 const claudeHeader = buildSkillHeader('claude')
-assert('claude skill has description', claudeHeader.includes('description: Multi-engine web search'))
-assert('claude skill has allowed-tools', claudeHeader.includes('allowed-tools: mcp__search-boost__fused_search'))
+assert('claude skill has description', claudeHeader.includes('description: Discover optional search-boost workflow extensions'))
+assert('claude router does not grant tool permissions', !claudeHeader.includes('allowed-tools:'))
 assert('claude skill no agent field', !claudeHeader.includes('agent: claude'))
 
 // other agents: name only, no agent field
@@ -598,7 +610,7 @@ assert('cursor skill name only', cursorHeader.includes('name: search-boost') && 
 
 // grok: prompt, permissions, project scope
 const grokPrompt = await loadAgentPrompt('grok')
-assert('load grok inject', grokPrompt.includes('search-boost @ Grok Build'))
+assert('load grok inject', grokPrompt.includes('MCP server') && grokPrompt.includes('workflow extensions'))
 assert('load grok inject native browse', /native (Grok|browsing)/i.test(grokPrompt))
 assert('grok permission allows count', grokPermissionAllows().length === 6)
 assert('grok permission toml block', grokPermissionTomlBlock().includes('[permission]'))
@@ -673,13 +685,42 @@ mkdirSync(join(grokDir, '.grok', 'rules'), { recursive: true })
 mkdirSync(join(grokDir, '.grok', 'skills', 'search-boost'), { recursive: true })
 writeFileSync(join(grokDir, '.grok', 'config.toml'), '[mcp_servers.search-boost]\ncommand = "npx"\n')
 writeFileSync(join(grokDir, '.grok', 'rules', 'search-boost.md'), '# rule\n')
-writeFileSync(join(grokDir, '.grok', 'skills', 'search-boost', 'SKILL.md'), '# skill\n')
+writeFileSync(join(grokDir, '.grok', 'skills', 'search-boost', 'SKILL.md'), '<!-- search-boost: skill -->\n# skill\n')
 process.chdir(grokDir)
 assert('grok configured project scope', agentConfigured('grok') === true)
 assert('grok scope has artifacts project', grokScopeHasArtifacts('project') === true)
 assert('grok uninstall scopes user only', grokUninstallScopes('user').join() === 'user')
 assert('grok uninstall scopes all', grokUninstallScopes('all').join() === 'user,project')
 await AGENTS.grok.uninstall({ scope: 'project', dryRun: false })
+assert('legacy pi package counts as configured and triggers the duplicate-tools warning', runInTempHome(`
+  import { mkdirSync, writeFileSync } from 'node:fs'
+  import { join } from 'node:path'
+  const home = process.env.HOME
+  mkdirSync(join(home, '.pi', 'agent'), { recursive: true })
+  writeFileSync(join(home, '.pi', 'agent', 'settings.json'), JSON.stringify({ packages: [{ source: 'npm:pi-search-boost@0.1.3' }] }), 'utf8')
+  const { agentConfigured, piRegistersLegacyPackage } = await import('./lib/paths.mjs')
+  const { piLegacyExtensionPresent } = await import('./lib/agents/host-runtime.mjs')
+  const state = { configured: agentConfigured('pi'), legacy: piRegistersLegacyPackage(), warns: piLegacyExtensionPresent() }
+  if (!state.configured || !state.legacy || !state.warns) throw new Error('legacy pi not recognized: ' + JSON.stringify(state))
+`))
+assert('dsh bundle install drives a real launcher from PATH (a .cmd shim on Windows)', runInTempHome(`
+  import { mkdirSync, writeFileSync, chmodSync } from 'node:fs'
+  import { join } from 'node:path'
+  const home = process.env.HOME
+  const tools = join(home, 'tools')
+  mkdirSync(tools, { recursive: true })
+  const shim = join(tools, 'dsh-shim.mjs')
+  writeFileSync(shim, 'process.exit(0)\\n', 'utf8')
+  if (process.platform === 'win32') {
+    writeFileSync(join(tools, 'dsh.cmd'), '@"' + process.execPath + '" "' + shim + '" %*\\r\\n', 'utf8')
+  } else {
+    writeFileSync(join(tools, 'dsh'), '#!/bin/sh\\nexec "' + process.execPath + '" "' + shim + '" "$@"\\n', 'utf8')
+    chmodSync(join(tools, 'dsh'), 0o755)
+  }
+  process.env.PATH = tools + (process.platform === 'win32' ? ';' : ':') + process.env.PATH
+  const { installDshBundle } = await import('./lib/agents/host-runtime.mjs')
+  await installDshBundle({ dryRun: false })
+`))
 assert('grok uninstall project config', !existsSync(join(grokDir, '.grok', 'config.toml')))
 assert('grok uninstall project rule', !existsSync(join(grokDir, '.grok', 'rules', 'search-boost.md')))
 assert('grok uninstall project skill', !existsSync(join(grokDir, '.grok', 'skills', 'search-boost', 'SKILL.md')))
@@ -786,6 +827,21 @@ assert('parseFlags --skip-grok-plugin', parseFlags(['--skip-grok-plugin']).skipG
 // grok-plugin: skip bypasses subprocess
 assert('installGrokPlugin skip', installGrokPlugin({ skip: true }).skipped === true)
 assert('uninstallGrokPlugin skip', uninstallGrokPlugin({ skip: true }).skipped === true)
+assert(
+  'grok install failure hint is Windows-only and names path length plus a short-path workaround',
+  (() => {
+    const dir = '/tmp/' + 'a'.repeat(60) + '/grok-plugin'
+    const win = grokInstallFailureHint(dir, 'win32')
+    const linux = grokInstallFailureHint(dir, 'linux')
+    return (
+      win.includes(`(${dir.length} characters)`) &&
+      win.includes('shorter path') &&
+      win.includes('~55') &&
+      win.includes('C:\\sb\\grok-plugin') &&
+      linux === ''
+    )
+  })(),
+)
 
 // grok-plugin: AGENTS.grok.install dry-run includes plugin step
 {
@@ -906,13 +962,29 @@ rmSync(cliDir, { recursive: true, force: true })
 }
 
 // antigravity workspace marker round-trip
-process.env.SEARCH_BOOST_WORKSPACES_FILE = join(tmpdir(), `search-boost-workspaces-${process.pid}.json`)
-await recordAntigravityWorkspace('/tmp/project-a', false)
-await recordAntigravityWorkspace('/tmp/project-b', false)
-assert('workspace marker records', (await listAntigravityWorkspaces()).length === 2)
-await forgetAntigravityWorkspace('/tmp/project-a', false)
-assert('workspace marker forgets', (await listAntigravityWorkspaces()).length === 1)
-delete process.env.SEARCH_BOOST_WORKSPACES_FILE
+// Isolated HOME: reads also fall back to the real ~/.search-boost state file, so a
+// developer machine with existing markers would otherwise fail the counts below.
+{
+  const markerHome = mkdtempSync(join(tmpdir(), `sb-workspaces-home-${process.pid}-`))
+  const savedMarkerHome = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE }
+  process.env.HOME = markerHome
+  process.env.USERPROFILE = markerHome
+  process.env.SEARCH_BOOST_WORKSPACES_FILE = join(markerHome, '.search-boost-antigravity-workspaces.json')
+  try {
+    await recordAntigravityWorkspace('/tmp/project-a', false)
+    await recordAntigravityWorkspace('/tmp/project-b', false)
+    assert('workspace marker records', (await listAntigravityWorkspaces()).length === 2)
+    await forgetAntigravityWorkspace('/tmp/project-a', false)
+    assert('workspace marker forgets', (await listAntigravityWorkspaces()).length === 1)
+  } finally {
+    delete process.env.SEARCH_BOOST_WORKSPACES_FILE
+    if (savedMarkerHome.HOME === undefined) delete process.env.HOME
+    else process.env.HOME = savedMarkerHome.HOME
+    if (savedMarkerHome.USERPROFILE === undefined) delete process.env.USERPROFILE
+    else process.env.USERPROFILE = savedMarkerHome.USERPROFILE
+    rmSync(markerHome, { recursive: true, force: true })
+  }
+}
 
 // antigravity workspace hook enables on install
 const agyHookDir = mkdtempSync(join(tmpdir(), 'sb-agy-hook-'))
@@ -1065,6 +1137,11 @@ assert('agy install+uninstall round-trip subprocess', runInTempHome(`
   checks.push(['keys preserved', readFileSync(keysPath, 'utf8').includes('tvly-bootstrap-key-12345678')])
   checks.push(['layer preserved', readFileSync(layerPath, 'utf8').includes('"api"')])
 
+  // A settings file holding only our entries must not survive uninstall as an empty object.
+  writeFileSync(PATHS.antigravity.settingsCli, JSON.stringify({ permissions: { allow: antigravityPermissions() } }) + '\\n', 'utf8')
+  await AGENTS.antigravity.uninstall({ dryRun: false, workspace: wsRoot })
+  checks.push(['remove our-only settings file', !existsSync(PATHS.antigravity.settingsCli)])
+
   const failed = checks.filter(([, ok]) => !ok).map(([name]) => name)
   if (failed.length) {
     console.error('FAIL subprocess checks:', failed.join(', '))
@@ -1144,9 +1221,12 @@ process.stdout.write('ok');
     )
     assert('claude roundtrip skill removed', !existsSync(join(claudeHome, '.claude', 'skills', 'search-boost', 'SKILL.md')))
     assert('claude roundtrip empty CLAUDE.md removed', !existsSync(join(claudeHome, '.claude', 'CLAUDE.md')))
-    const settingsAfterUninstall = JSON.parse(readFileSync(join(claudeHome, '.claude', 'settings.json'), 'utf8'))
-    assert('claude roundtrip allow stripped', !(settingsAfterUninstall.permissions?.allow ?? []).some((p) => p.startsWith('mcp__search-boost__')))
-    assert('claude roundtrip owned deny stripped', !claudeNativeReplaced(settingsAfterUninstall))
+    const claudeSettingsPath = join(claudeHome, '.claude', 'settings.json')
+    const settingsAfterUninstall = existsSync(claudeSettingsPath) ? JSON.parse(readFileSync(claudeSettingsPath, 'utf8')) : null
+    assert('claude roundtrip allow stripped', settingsAfterUninstall === null || !(settingsAfterUninstall.permissions?.allow ?? []).some((p) => p.startsWith('mcp__search-boost__')))
+    assert('claude roundtrip owned deny stripped', settingsAfterUninstall === null || !claudeNativeReplaced(settingsAfterUninstall))
+    // Uninstall must not leave behind a settings file that existed only for search-boost.
+    assert('claude roundtrip removes our-only settings file', !existsSync(claudeSettingsPath))
 
     writeFileSync(
       join(claudeHome, '.claude', 'settings.json'),

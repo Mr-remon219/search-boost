@@ -5,7 +5,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "search-boost-mcp",
+        "search-boost",
         "serve"
       ]
     }

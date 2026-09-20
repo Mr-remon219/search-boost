@@ -14,13 +14,15 @@ import {
   allAttemptedEnginesFailed,
   annotateFusedLayerEngines,
   apiLayerFreeOnlyWarning,
-  allocateResearchRound,
   availableEngines,
   formatAllEnginesFailedMessage,
   formatEngineStatsLine,
   formatFusedSummary,
   layerTierTable,
 } from '../lib/runtime.mjs'
+
+// Legacy Pi environment names are credential inputs too; never inherit real keys in tests.
+for (const key of ['PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY']) delete process.env[key]
 
 let failed = 0
 
@@ -55,7 +57,9 @@ assert('formatEngineStatsLine lists FAIL', engineLine.includes('bing: FAIL') && 
 
 const msg = formatAllEnginesFailedMessage({ query: 'test query', layer: 'free', engineStats: allFailStats })
 assert('failure message mentions search_layer', msg.includes('search_layer api'))
-assert('failure message mentions keys path', msg.includes('.search-boost-keys.json'))
+assert('failure message gives the supported key configuration command', msg.includes('search-boost config keys'))
+assert('API-layer failure gives read-only key diagnostics', formatAllEnginesFailedMessage({ query: 'test query', layer: 'api', engineStats: allFailStats }).includes('search-boost config keys --show'))
+assert('failure message requires authorization before changing layer', msg.includes('authorized'))
 
 const summary = formatFusedSummary({
   query: 'q',
@@ -144,11 +148,6 @@ const singleKeyedAnnotated = annotateFusedLayerEngines(
   ['bing', 'ddg', 'tavily'],
 )
 assert('single keyed engine no free-only warning', !singleKeyedAnnotated.warnings?.some((w) => w.includes('free engines only')))
-
-assert('allocateResearchRound explicit', allocateResearchRound(3) === 3)
-const autoA = allocateResearchRound()
-const autoB = allocateResearchRound()
-assert('allocateResearchRound auto-increment', autoA >= 1 && autoB === autoA + 1)
 
 const fused = await fusedSearch({
   query: 'node mcp test',

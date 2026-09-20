@@ -1,34 +1,12 @@
-# search-boost MCP @ Antigravity
+<!-- search-boost: skill -->
+# search-boost router
 
-Server id: `search-boost` in `~/.gemini/config/mcp_config.json` (or `.agents/mcp_config.json`).
+In Antigravity, use MCP server `search-boost` for web evidence rather than `search_web`; use authorized cloud tools for live account state.
 
-## Proactive default (bounded)
+For ordinary searches, page reads, X queries, and diagnostics, call MCP tools directly using their descriptions and input schemas. This router is not a prerequisite. The optional resource `search-boost://policy` covers detailed usage and troubleshooting.
 
-**Search before you edit** anything that touches external APIs or cloud products. Prefer MCP tools over built-in `search_web`.
+## Extension workflows
 
-**Doubt → one `fused_search`.** Max ~3 rounds per task.
+{{EXTENSION_ROUTES}}
 
-## Tools
-
-| Tool | Use |
-|------|-----|
-| `fused_search` | Version / API / support lookup (default) |
-| `fetch_page` | Official doc body (+ `focus`) |
-| `deep_research` | Library / service compare |
-| `x_search` | X/Twitter |
-| `search_layer` | free vs api |
-| `search_stats` | Diagnostics |
-
-## Flow
-
-1. External fact needed → `fused_search` before asserting
-2. Implementing integration → `fetch_page` on official URL before editing files
-3. Complex routing → prompt `search_routing` · resource `search-boost://policy`
-
-## Policy
-
-`~/.gemini/AGENTS.md` (SEARCH_BOOST block) · resource `search-boost://policy`.
-
-## Keys
-
-Optional — run `search-boost config keys`. Api: ≥1 keyed engine; all three recommended.
+Load a listed workflow only when it matches the task. Host permissions still apply; a skill cannot create subagent capabilities that the host does not expose.

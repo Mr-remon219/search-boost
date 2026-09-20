@@ -1,0 +1,16 @@
+# search-boost DSH bundle layer: mount the DSH host adapter and route the web
+# seam's search AND fetch capabilities to it. The base layer pins
+# `searchProvider: deepseek-official` (and possibly fetchProvider); a patch row
+# replaces the targeted row's whole config. A later profile patch can pin any
+# provider back (e.g. `deepseek-official`).
+#
+# `name` is the module specifier the Cordis loader imports — the package's
+# `./dsh` export (adapters/dsh/index.js), which runs on SearchBoost Core.
+- id: web
+  config:
+    searchProvider: search-boost
+    fetchProvider: search-boost
+
+- insert:
+    - id: search-boost
+      name: search-boost/dsh

@@ -4,8 +4,8 @@
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { isAuthEntryUsable } from '../lib/search/xauth.js'
-import { xAuthAvailableSync } from '../lib/search/xsearch.js'
+import { isAuthEntryUsable } from '../lib/search/x/xauth.js'
+import { xAuthAvailableSync } from '../lib/search/x/xsearch.js'
 
 let failed = 0
 
@@ -39,9 +39,11 @@ assert(
 
 const home = mkdtempSync(join(tmpdir(), `search-boost-xauth-test-${process.pid}-`))
 const savedHome = process.env.HOME
+const savedProfile = process.env.USERPROFILE
 const savedXauth = process.env.SEARCH_BOOST_XAUTH_FILE
 const savedXai = process.env.XAI_API_KEY
 process.env.HOME = home
+process.env.USERPROFILE = home
 delete process.env.XAI_API_KEY
 const xauthFile = join(home, '.search-boost', 'config', 'xauth.json')
 mkdirSync(join(home, '.search-boost', 'config'), { recursive: true })
@@ -70,6 +72,8 @@ try {
 } finally {
   if (savedHome === undefined) delete process.env.HOME
   else process.env.HOME = savedHome
+  if (savedProfile === undefined) delete process.env.USERPROFILE
+  else process.env.USERPROFILE = savedProfile
   if (savedXauth === undefined) delete process.env.SEARCH_BOOST_XAUTH_FILE
   else process.env.SEARCH_BOOST_XAUTH_FILE = savedXauth
   if (savedXai === undefined) delete process.env.XAI_API_KEY
