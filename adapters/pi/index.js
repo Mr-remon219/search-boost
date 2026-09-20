@@ -1,3 +1,4 @@
+import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
 // pi host adapter — pi coding agent extension.
 //
@@ -45,7 +46,7 @@ import {
   ADAPTIVE_PROMPT_GUIDELINES,
   ADAPTIVE_QUESTIONS_PARAM,
   ADAPTIVE_TOOL_NAME,
-  renderAdaptiveSummary,
+  adaptiveTextContent,
 } from '../../lib/search/adaptive/describe.js'
 
 const RECENCY_ENUM = ['day', 'week', 'month', 'year', 'any']
@@ -73,7 +74,9 @@ export default function searchBoostExtension(pi) {
   /* -------------------- Proactive search rules (injected into system prompt) -------------------- */
 
   pi.on('before_agent_start', async (event) => {
-    const base = event.systemPrompt.replace(/\n?<search_capabilities>[\s\S]*?<\/search_capabilities>/g, '')
+    const base = event.systemPrompt
+      .replace(/\n?<search_capabilities>[\s\S]*?<\/search_capabilities>/g, '')
+      .replace(/\n?\[search budget\][^\n]*/g, '')
     const policy = rules && !base.includes('<search_balance>') ? `\n${rules}` : ''
     // budget state (not just a slogan): count today's searches so the model
     // can calibrate effort — research tasks may spend more, simple lookups
@@ -88,7 +91,7 @@ export default function searchBoostExtension(pi) {
       /* audit must never break agent start */
     }
     const budgetNote = todayCount > 0
-      ? `\n[search budget] Searches used today: ${todayCount}. Research tasks may spend more; for simple lookups, prefer answering from what you already have when the day's total is high.`
+      ? `\n[search budget] Recent audit sample: ${todayCount} direct searches dated today (UTC), from at most 400 events; not an account quota or complete usage count. Reuse sufficient evidence and follow the task budget.`
       : ''
     return { systemPrompt: `${base}${policy}${budgetNote}\n${formatRuntimeCapabilities()}` }
   })
@@ -104,12 +107,7 @@ export default function searchBoostExtension(pi) {
     label: 'Fused Web Search',
     description: FUSED_DESCRIPTION,
     promptSnippet: 'Search the web across multiple engines in parallel with keyword variants',
-    promptGuidelines: [
-      'fused_search is the main Web Search entry point. Normally omit engines; use distinct queries for independent angles.',
-      'fused_search: engine_pool chooses sources, ranking changes final engine weights only, complexity controls budget/variants/depth. engine_weights never changes which engines run.',
-      'fused_search: community defaults to false. Enable only when recent developer/community voices are needed; use x_search for X-only accounts or threads.',
-      'fused_search: include_domains/exclude_domains are hard filters; recency favors recent evidence. Read warnings and runtime capabilities; availability is not a connectivity guarantee.',
-    ],
+    promptGuidelines: ['Use the evidence returned by this search before starting another round; inspect warnings rather than treating an empty result as proof of absence.'],
     parameters: {
       type: 'object',
       properties: {
@@ -118,11 +116,11 @@ export default function searchBoostExtension(pi) {
         queries: { type: 'array', items: { type: 'string' }, description: 'Optional distinct query angles; complexity caps total variants at 1/2/3, including query and OR alternatives' },
         max_results: { type: 'integer', minimum: 1, maximum: 20, default: 10, description: 'Max fused results' },
         site: { type: 'string', description: 'Deprecated: restrict to a domain (alias for include_domains)' },
-        include_domains: { type: 'array', items: { type: 'string' }, description: 'Only keep results from these domains (client-side hard filter; engines ignore site: operators)' },
+        include_domains: { type: 'array', items: { type: 'string' }, description: 'Only keep results from these domains, including subdomains; provider hints plus a client-side hard filter' },
         exclude_domains: { type: 'array', items: { type: 'string' }, description: 'Drop results from these domains, e.g. exclude wikipedia.org when a term is ambiguous' },
         recency: { type: 'string', enum: RECENCY_ENUM, description: 'Recency window: results with a publish date outside the window decay exponentially (half-life scaled to window); undated results are mildly demoted (default any)' },
         min_score: { type: 'number', minimum: 0, maximum: 5, default: 0, description: 'Drop results below this fused score floor (Grok\'s min_score, default 0 = off)' },
-        depth: { type: 'string', enum: ['basic', 'advanced'], description: 'Tavily search depth: basic = fast NLP summaries; advanced = query-aligned full extraction (results carry content you can use directly, skipping fetch_page)' },
+        depth: { type: 'string', enum: ['basic', 'advanced'], description: 'Tavily search depth: basic or advanced. Advanced may return extracted content; fetch the source only when the returned text is insufficient' },
       },
       required: ['query'],
     },
@@ -189,7 +187,7 @@ export default function searchBoostExtension(pi) {
           `   ${r.url}`,
           `   engines: ${r.engines.join(', ')}`,
           usable
-            ? `   [content: ${countWords(r.content)} words — usable directly, no fetch needed]\n${excerptForTool(r.content).split('\n').map((l) => `   ${l}`).join('\n')}`
+            ? `   [content: ${countWords(r.content)} words — engine-extracted material; check relevance and completeness]\n${excerptForTool(r.content).split('\n').map((l) => `   ${l}`).join('\n')}`
             : '',
           r.snippet ? `   ${r.snippet.slice(0, 240)}` : '',
           '',
@@ -207,13 +205,9 @@ export default function searchBoostExtension(pi) {
   pi.registerTool({
     name: 'fetch_page',
     label: 'Fetch Page (Reader Mode)',
-    description:
-      'Fetch a URL and extract its readable content as Markdown. Uses the Jina Reader service (keyless) with a local heuristic extractor as fallback. Drops CSS/JS/ad chrome up front; the body is not clipped. Returns content, word count, fetch method and timestamp. Results are cached for 24h.',
-    promptSnippet: 'Fetch a web page and extract readable content',
-    promptGuidelines: [
-      'fetch_page: use it to read full pages when search snippets are not enough — it returns clean article text.',
-      'fetch_page focus: pass the `focus` parameter (your question or the specific thing you need) to keep only relevant paragraphs — typically drops 80-95% of tokens. Always pass focus when you only need part of a page.',
-    ],
+    description: FETCH_DESCRIPTION,
+    promptSnippet: 'Read a known public URL, optionally focusing on matching paragraphs',
+    promptGuidelines: ['Respect fetch failures and policy limitations; do not work around them by using an unguarded network tool.'],
     parameters: {
       type: 'object',
       properties: {
@@ -262,10 +256,11 @@ export default function searchBoostExtension(pi) {
           params.focus ? (page.focusMiss
             ? '[dynamic filtering: focus matched nothing — retry without focus to read the whole page]'
             : `[dynamic filtering: kept ${page.word_count} words relevant to focus]`) : '',
+          page.limitation ? `WARNING: ${page.limitation.kind}: ${page.limitation.message}` : '',
           '',
           page.content,
         ].filter((l, i) => l !== '' || i === 3).join('\n'))],
-        details: { via: page.via, fetchedAt: page.fetched_at, wordCount: page.word_count, focusMiss: Boolean(page.focusMiss) },
+        details: { via: page.via, fetchedAt: page.fetched_at, wordCount: page.word_count, focusMiss: Boolean(page.focusMiss), ...(page.limitation ? { limitation: page.limitation } : {}) },
       }
     },
   })
@@ -285,7 +280,7 @@ export default function searchBoostExtension(pi) {
           type: 'array',
           minItems: 1,
           maxItems: 6,
-          items: { type: 'string', maxLength: 400 },
+          items: { type: 'string', minLength: 1, maxLength: 400 },
           description: ADAPTIVE_QUESTIONS_PARAM,
         },
       },
@@ -307,7 +302,7 @@ export default function searchBoostExtension(pi) {
       audit.write({
         type: 'research',
         ts: new Date().toISOString(),
-        query: questions.join(' | ').slice(0, 240),
+        query: `[${questions.length} adaptive question(s); text omitted]`,
         mode: ADAPTIVE_TOOL_NAME,
         rounds: res.rounds,
         stopReason: res.stopReason,
@@ -319,22 +314,8 @@ export default function searchBoostExtension(pi) {
         successfulSubtasks: res.questions.filter((q) => q.status === 'covered').length,
       })
       return {
-        content: [text(renderAdaptiveSummary(res))],
-        details: {
-          stopReason: res.stopReason,
-          questions: res.questions.map((q) => ({
-            id: q.id,
-            status: q.status,
-            assessed: q.assessed,
-            coverage: q.coverage?.probability ?? null,
-            basis: q.coverage?.textBasis ?? null,
-            evidenceCount: q.evidenceCount,
-            reasons: q.uncoveredReasons,
-          })),
-          jev: res.jev,
-          usage: res.usage,
-          warnings: res.warnings,
-        },
+        content: adaptiveTextContent(res),
+        details: res,
       }
     },
   })
@@ -344,14 +325,11 @@ export default function searchBoostExtension(pi) {
   pi.registerTool({
     name: 'search-parallel-subagent',
     label: 'Search Parallel Subagent',
-    description:
-      'Spawn isolated searcher or summarizer child agents. You choose how many and which role. Single mode: { agent, task }. Parallel mode: { tasks: [{ agent, task }, ...] } — every task starts at once, no concurrency cap. Prefer /fast-parallel (one searcher wave, then you continue) or /complex-parallel (searchers → summarizer → more searchers, few waves). For a single-angle lookup without subagents, use fused_search.',
-    promptSnippet: 'Spawn searcher/summarizer subagents (parallelism is your choice)',
+    description: 'Run authorized isolated Pi searcher or summarizer children. Use {agent, task} for one child or {tasks:[{agent,task},...]} for a concurrent wave. Searchers have fused_search/fetch_page; summarizers have no tools. Returns each child report with completion/failure status. The caller chooses the wave size; this runner has no concurrency cap. Use direct search for ordinary lookups.',
+    promptSnippet: 'Run a bounded research task or a wave of authorized searcher/summarizer children',
     promptGuidelines: [
-      'search-parallel-subagent: you decide the task list and size — the tool does not cap concurrency. Pass { agent, task } for one child or tasks[] for a parallel wave.',
-      'search-parallel-subagent agents: searcher (fused_search + fetch_page) or summarizer (--no-tools; gap check for the next wave).',
-      'Workflows: /fast-parallel = one searcher wave then you synthesize. /complex-parallel = searchers → summarizer → more searchers; default 1–2 waves, hard cap 3; stop when the summarizer says no or gaps are marginal.',
-      'search-parallel-subagent citations: require >=2 independent domains for key claims; mark single-source claims as unverified.',
+      'The /fast-parallel and /complex-parallel templates own the multi-wave workflow; do not infer permission to delegate from tool availability.',
+      'Assess source independence and quality, not just domain counts. Identify single-source claims without automatically rejecting an authoritative primary source.',
     ],
     parameters: {
       type: 'object',
@@ -565,15 +543,9 @@ export default function searchBoostExtension(pi) {
   pi.registerTool({
     name: 'x_search',
     label: 'X (Twitter) Search',
-    description:
-      'Search X/Twitter in real time (posts, users, threads). Keyword/semantic run as PARALLEL instant search: the xAI x_search hosted tool (grok login / XAI_API_KEY, results merged, deduped) alongside the fused multi-engine route (site-restricted to x.com). Works even with NO credentials — routes straight to multi-engine + oEmbed full-text enhancement. Four modes: keyword (X advanced syntax: from:user, since:YYYY-MM-DD, min_faves:N), semantic (natural language), user (structured profile + timeline via guest GraphQL), thread (full conversation by post id). Configure credentials with /x-login.',
-    promptSnippet: 'Search X/Twitter posts, users, and threads via the xAI x_search API (direct, no subprocess)',
-    promptGuidelines: [
-      'x_search: type=keyword for real-time post search with X advanced syntax (from:user, since:/until:date, min_faves:N, lang:xx); type=semantic for natural-language relevance; type=user to get a structured account profile + recent timeline (followers, bio, posts with engagement); type=thread with a post id (or x.com/.../status/<id> URL) for the full conversation.',
-      'x_search: keyword/semantic run x_search ∥ multi-engine in parallel and merge results (real-time posts + engine-indexed posts, deduped). user prefers guest GraphQL (structured); thread uses oEmbed.',
-      'x_search works without any X credentials (multi-engine + oEmbed fallback); with grok login (/x-login) or XAI_API_KEY the hosted x_search tool runs in parallel for live in-app search results.',
-      'Route X-specific questions (trends, sentiment, what people say on X, account info, thread reconstruction) to x_search; general web questions to fused_search.',
-    ],
+    description: X_DESCRIPTION,
+    promptSnippet: 'Retrieve available X posts, account material or thread material',
+    promptGuidelines: ['A retrieved sample or incomplete thread does not establish overall sentiment, completeness or real-time availability.'],
     parameters: {
       type: 'object',
       properties: {
@@ -582,12 +554,12 @@ export default function searchBoostExtension(pi) {
         username: { type: 'string', description: 'Username/handle to search (type=user), or from: target for keyword' },
         post_id: { type: 'string', description: 'X post/status id or x.com/.../status/<id> URL (type=thread)' },
         max_results: { type: 'integer', minimum: 1, maximum: 10, default: 5, description: 'Max results' },
-        from_date: { type: 'string', description: 'Date range start (ISO8601 YYYY-MM-DD), keyword/semantic' },
-        to_date: { type: 'string', description: 'Date range end (ISO8601 YYYY-MM-DD), keyword/semantic' },
+        from_date: { type: 'string', description: 'Inclusive start date, YYYY-MM-DD (UTC); in user mode filters recent posts' },
+        to_date: { type: 'string', description: 'Inclusive end date, YYYY-MM-DD (UTC); in user mode filters recent posts' },
         allowed_x_handles: { type: 'array', items: { type: 'string' }, description: 'Only consider posts from these handles (max 20)' },
         excluded_x_handles: { type: 'array', items: { type: 'string' }, description: 'Exclude posts from these handles (max 20; not with allowed_x_handles)' },
         model: { type: 'string', description: 'Driving model (default grok-4.6)' },
-        reasoning_effort: { type: 'string', enum: ['minimal', 'low', 'medium', 'high', 'xhigh'], description: 'Reasoning effort (default low = fast; results identical, latency much lower)' },
+        reasoning_effort: { type: 'string', enum: ['minimal', 'low', 'medium', 'high', 'xhigh'], description: 'Reasoning effort for the hosted X model (default low); results and latency can differ' },
       },
       required: ['type'],
     },

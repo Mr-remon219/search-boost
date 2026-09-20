@@ -1,3 +1,4 @@
+import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION } from '../../lib/search/routing.js'
 /**
  * MCP host adapter — tool / resource / prompt registration (protocol-native
@@ -102,7 +103,7 @@ function summarizeAdaptive(result) {
 
   server.registerTool('fetch_page', {
     title: 'Fetch Page',
-    description: 'Read a known public webpage or official documentation URL directly, without searching again. Returns readable text via Jina Reader with HTML fallback; removes page chrome without clipping the body. Use focus for relevant paragraphs, or omit it for the full readable page. If focus matches nothing, retry without it. Not an authenticated browser or live account-state tool.',
+    description: FETCH_DESCRIPTION,
     inputSchema: fetchPageInput,
     outputSchema: fetchPageOutput,
     annotations: { ...ANNOTATIONS.search, title: 'Fetch URL content' },
@@ -113,7 +114,7 @@ function summarizeAdaptive(result) {
       const signal = abortSignal(extra, 60_000)
       const page = await runFetchPage(url, args.focus, signal)
       const focusNote = page.focusMiss ? ' (focus matched nothing — content omitted; retry without focus)' : ''
-      const summary = `fetch_page: ${page.url} — via ${page.via}, ${page.word_count} words, ${page.tookMs}ms${focusNote}`
+      const summary = `fetch_page: ${page.url} — via ${page.via}, ${page.word_count} words, ${page.tookMs}ms${focusNote}${page.limitation ? `; WARNING ${page.limitation.kind}: ${page.limitation.message}` : ''}`
       return toolOk(`${summary}\n\n${page.content}`, {
         url: page.url,
         via: page.via,
@@ -121,6 +122,8 @@ function summarizeAdaptive(result) {
         tookMs: page.tookMs,
         truncated: Boolean(page.truncated),
         content: page.content,
+        focusMiss: Boolean(page.focusMiss),
+        ...(page.limitation ? { limitation: page.limitation } : {}),
       })
     } catch (err) {
       return toolErr(err instanceof Error ? err.message : String(err))
@@ -129,11 +132,7 @@ function summarizeAdaptive(result) {
 
   server.registerTool('x_search', {
     title: 'X (Twitter) Search',
-    description:
-      'Search X/Twitter posts, inspect an account, or retrieve a thread. ' +
-      'Choose keyword/semantic with query, user with username, or thread with post_id. ' +
-      'Credential-free web/oEmbed fallbacks are available; configured X authentication can improve coverage. ' +
-      'Results are not guaranteed to cover all posts or a complete thread; a sample does not establish platform-wide sentiment.',
+    description: X_DESCRIPTION,
     inputSchema: xSearchInput,
     outputSchema: xSearchOutput,
     annotations: { ...ANNOTATIONS.search, title: 'Search X/Twitter' },

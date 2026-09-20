@@ -63,6 +63,8 @@ export const fetchPageInput = {
 }
 
 export const fetchPageOutput = {
+  focusMiss: z.boolean().optional(),
+  limitation: z.object({ kind: z.string(), message: z.string() }).optional(),
   url: z.string(),
   via: z.string(),
   word_count: z.number(),
@@ -116,7 +118,7 @@ export const searchStatsOutput = {
 
 export const adaptiveSearchInput = {
   questions: z.array(z.string().min(1).max(400)).min(1).max(6)
-    .describe('1–6 independent questions (blank answers and over-long items are rejected, never truncated). Each question is searched and judged on its own and keeps its output position; identical questions reuse one execution.'),
+    .describe('1–6 independent questions (blank questions and over-long items are rejected, never truncated). Each question is searched and judged on its own and keeps its output position; identical questions reuse one execution.'),
 }
 
 const adaptiveJudgment = z.object({

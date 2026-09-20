@@ -1,3 +1,4 @@
+import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
 // DSH host adapter — DeepSeek Harness (Cordis) bundle plugin.
 //
@@ -20,7 +21,7 @@ import {
   ADAPTIVE_DESCRIPTION,
   ADAPTIVE_QUESTIONS_PARAM,
   ADAPTIVE_TOOL_NAME,
-  renderAdaptiveSummary,
+  adaptiveTextContent,
 } from '../../lib/search/adaptive/describe.js'
 import {
   ENGINE_ORDER,
@@ -291,9 +292,7 @@ function renderFused(value) {
 function registerFetchPageTool(ctx) {
   return ctx.tools.register({
     name: 'fetch_page',
-    description:
-      'Fetch and extract the full text content of one URL (Jina Reader markdown first, local HTML extraction fallback for blocked sites like github.com). ' +
-      'Drops CSS/JS/ad chrome up front and does not clip the body. Pass focus="<topic>" to keep only the paragraphs around that topic. Results are cached 24h.',
+    description: FETCH_DESCRIPTION,
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -316,13 +315,14 @@ function registerFetchPageTool(ctx) {
         properties: {
           url: { type: 'string' }, via: { type: 'string' }, fetched_at: { type: 'string' },
           word_count: { type: 'number' }, content: { type: 'string' }, truncated: { type: 'boolean' },
+          limitation: { type: 'object', properties: { kind: { type: 'string' }, message: { type: 'string' } }, required: ['kind', 'message'] },
           focusMiss: { type: 'boolean' }, cacheHit: { type: 'boolean' }, tookMs: { type: 'number' },
         },
         required: ['url', 'via', 'content'],
       },
       render: (_args, value) => [{
         type: 'text',
-        text: `**fetch_page: ${value.url}** — via ${value.via}, ${value.word_count} words, ${value.tookMs}ms${value.cacheHit ? ' (cache)' : ''}${value.truncated ? ' (truncated)' : ''}${value.focusMiss ? ' (focus matched nothing — retry without focus)' : ''}\n\n${value.content}`,
+        text: `**fetch_page: ${value.url}** — via ${value.via}, ${value.word_count} words, ${value.tookMs}ms${value.cacheHit ? ' (cache)' : ''}${value.truncated ? ' (truncated)' : ''}${value.focusMiss ? ' (focus matched nothing — retry without focus)' : ''}\n\n${value.content}${value.limitation ? `\nWARNING: ${value.limitation.kind}: ${value.limitation.message}` : ''}`,
       }],
       presentationMeta: (_args, value) => ({
         url: value.url,
@@ -400,8 +400,9 @@ function registerAdaptiveSearchTool(ctx) {
         },
         required: ['schemaVersion', 'tool', 'questions', 'rounds', 'stopReason'],
       },
-      render: (_args, value) => [{ type: 'text', text: renderAdaptiveSummary(value) }],
+      render: (_args, value) => adaptiveTextContent(value),
       presentationMeta: (_args, value) => ({
+        truncated: Boolean(value.outputTruncated),
         covered: (value.questions ?? []).filter((q) => q.status === 'covered').length,
         total: (value.questions ?? []).length,
         sources: (value.questions ?? [])
@@ -421,7 +422,7 @@ function registerAdaptiveSearchTool(ctx) {
         kind: 'search',
         title: `adaptive_search: ${meta.covered}/${meta.total} questions covered`,
         sources: meta.sources ?? [],
-        truncated: false,
+        truncated: Boolean(meta.truncated),
       }
     },
     timeoutMs: 180000,
@@ -437,12 +438,7 @@ function registerAdaptiveSearchTool(ctx) {
 function registerXSearchTool(ctx) {
   return ctx.tools.register({
     name: 'x_search',
-    description:
-      'Search X (Twitter) in real time: posts, users, threads. keyword/semantic run as PARALLEL instant search — the hosted xAI x_search tool ' +
-      '(grok login enabled via /x-login, or XAI_API_KEY) runs alongside the fused multi-engine route (site-restricted to x.com) and the results are merged, deduped by status id/url. ' +
-      'Works even with NO credentials (routes straight to the multi-engine route + oEmbed full-text enhancement, ~2s); user mode gets a structured profile + recent timeline ' +
-      'via X\'s anonymous guest GraphQL; thread mode via oEmbed. Four modes: keyword (X advanced syntax), semantic (natural language), user (accounts), thread (conversation by post id). ' +
-      'Enable the official path with /x-login, disable it with /x-logout.',
+    description: X_DESCRIPTION,
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -452,8 +448,8 @@ function registerXSearchTool(ctx) {
         username: { type: 'string', description: 'Target account for type=user.' },
         post_id: { type: 'string', description: 'Post id or x.com/.../status/<id> URL for type=thread.' },
         max_results: { type: 'number', description: 'Max results (default 5, max 10).' },
-        from_date: { type: 'string', description: 'YYYY-MM-DD lower bound (keyword/semantic).' },
-        to_date: { type: 'string', description: 'YYYY-MM-DD upper bound (keyword/semantic).' },
+        from_date: { type: 'string', description: 'Inclusive start date, YYYY-MM-DD (UTC); user mode filters recent posts.' },
+        to_date: { type: 'string', description: 'Inclusive end date, YYYY-MM-DD (UTC); user mode filters recent posts.' },
         allowed_x_handles: { type: 'array', items: { type: 'string' }, description: 'Author filter on all paths, including without login (max 20).' },
         excluded_x_handles: { type: 'array', items: { type: 'string' }, description: 'Author exclusion on all paths (max 20, mutually exclusive with allowed).' },
       },
@@ -613,13 +609,7 @@ function registerXLogoutCommand(ctx) {
 function registerParallelTool(ctx, provider = 'spawn') {
   return ctx.tools.register({
     name: 'research_parallel',
-    description:
-      'Native DSH research children using the same searcher/summarizer roles as Pi. ' +
-      'Use {agent, task} for one child or {tasks:[{agent,task},...]} for a concurrent wave. ' +
-      'Searchers get fused_search/fetch_page only; summarizers get no tools. Delegation must be authorized. ' +
-      'The parent owns synthesis: fast mode = one wave; complex mode = searchers then a summarizer, ' +
-      'follow only material gaps, at most 3 waves. Missing capabilities fail explicitly; no Pi CLI fallback. ' +
-      'Legacy {query, sub_queries} remains supported. Prefer explicit independent tasks; ordinary lookups use fused_search.',
+    description: 'Run authorized DSH-native research children: searchers receive fused_search/fetch_page, summarizers receive no tools. Use {agent, task} for one child or {tasks:[{agent,task},...]} for a concurrent wave. Returns reports with execution status; missing capabilities fail explicitly, without a Pi CLI fallback. Legacy {query, sub_queries} remains supported. Ordinary lookups use direct search; the shared workflow governs follow-up waves.',
     parameters: {
       type: 'object',
       additionalProperties: false,

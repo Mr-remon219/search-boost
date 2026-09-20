@@ -13,7 +13,7 @@ Live configuration is available through the optional search-boost://capabilities
 
 ## Adaptive search (optional, Jev)
 
-adaptive_search is a separate high-level tool for 1–6 independent questions at once. It requires Jev credentials (TypeSafe's System One decision model, or a custom gateway) and is registered even when unconfigured: without credentials it returns not_configured and makes no network request. It sends the question text and the evidence fragments needed for each judgement to the Jev service you configured (default TypeSafe); no engine credentials or fingerprints are sent, and nothing is written to disk.
+adaptive_search is a separate high-level tool for 1–6 independent questions at once. It requires Jev credentials (TypeSafe's System One decision model, or a custom gateway) and is registered even when unconfigured: without credentials it returns not_configured and makes no network request. It sends the question text and the evidence fragments needed for each judgement to the Jev service you configured (default TypeSafe); no engine credentials or fingerprints are sent. Core evidence is held in memory, but hosts can retain session/audit history; do not assume the host is log-free.
 
 The tool chooses the search engines, judges each collected fragment against the question it belongs to, and reports per question whether the qualified evidence supports an answer. Status values are covered, insufficient, unassessed, not_searched and failed; 'covered' means the model judged the cited fragments sufficient, not that a fact was independently verified. Snippets, engine-returned text and fetched page text are distinguished in each evidence item, and questions whose evidence was never judged stay unassessed.
 
