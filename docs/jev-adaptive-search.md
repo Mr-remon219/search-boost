@@ -47,6 +47,12 @@ lib/search/adaptive/
 | 一轮 `usefulDelta===0` 立即整轮停止 | 零增量只说明这批动作无进展：仍有未尝试引擎、可抓页面或其他问题的动作时继续下一轮；`finish_partial` 只结束对应问题 | 防止一个问题拖停全部问题 |
 | 缓存命中 = 无新证据 | 以**本次证据池**为准：首次从缓存取得有效材料算新证据，相同文本再次出现不算，同 URL 更优片段/抓取升级/新逐题关联算进展；仅换 `text_basis` 标签不算 | 缓存与“无新证据”不是同一件事 |
 | 引擎/动作选择只看 Jev | 合法低分与缺失/非法回答分开：全低分 → 取最高分 1 个（分档 `jev_low_scores`）；完全无有效回答 → 代码稳定兜底（`plan_fallback_default`） | 坏响应不能被伪装成有效判断 |
+| 必要判断缺失时按“否”处理 | 请求过的必要判断（来源侧的 `relevant`/`states_evidence`/`injection`、覆盖侧的 `cov.*.source_conflict`、`cov.*.snippet_self_sufficient`）缺失或非法一律算**未知**：不进入成功分支（`answerCapable=false`；不得 `covered`），也不伪造成“无冲突/自足”；未请求的可选检查不阻塞 | 未知 ≠ 否，也 ≠ 通过 |
+| 第二轮引擎 noul 沿用根层 `state.questions[i]` / `state.already_ran[i]` | 引擎子请求合并进动作请求时固定挂在 `state.engine_state`，其 `state_path`、instructions、criteria 全部指向该子状态；同一请求内问题索引与历史引用一致 | 子集索引 + 根层路径会读错问题（Q2 的答案实际读 Q1） |
+| “新引擎”只按候选集合过滤 | 由代码定义 `当前允许集合 − 本题已用集合`，并在构造候选、解析回答、默认回退、执行前校验四处一致；`deepen` 仍可重用已用引擎 | 模型回答不能放回已用引擎，避免重复请求与空耗轮数 |
+| 抓取前只检查预算 | 每次可能触网的读取都必须先成功预留（读额度 + 网络额度）；无额度则不调用（注入的 fetcher 不保证只读缓存）；缓存退款只退**当次**调用的网络额度，focus 重读独立计费 | 预算作为闭环安全边界必须真正阻断调用，两次读取不能混算 |
+| 任务异常向上传播 | 单题任务的异常就地收容并写入 `roundLog[].failures`；取消/超时后不再派发新任务，收尾仍组装部分结果 | 一题抛错不得丢失其他题结果或跳过程序化组装 |
+| CI 只覆盖 push 白名单分支 | push 白名单加入 `jev`；`test:jev` 纳入 CI 步骤（与 `prepublishOnly` 对齐） | 分支未跑 CI 时，`v0.2.0` 的历史成功不能证明含 Jev 代码的版本可发布 |
 | `limits.mjs` 阈值分散 | 阈值集中在 `limits.js` 的 `ADAPTIVE_THRESHOLDS`，并在输出 `limits.thresholds` 回显 | 便于审计与后续校准 |
 | 审计只写 `research` | 每次实际 `runFused` 写既有 `search` 事件（`cacheHits` 如实标注），整次调用写一条 `research` 事件 | 缓存命中不算新增付费请求 |
 
@@ -613,6 +619,9 @@ const fingerprint = createHash('sha256').update(JSON.stringify([routing.keys, { 
 7. **密钥卫生**：哨兵 key 不出现在 capability 文本、Jev 请求体、工具结果 JSON、审计事件里。
 8. **原工具不受影响**：现有全部套件通过；额外断言 `fused_search`/`fetch_page`/`x_search` 的 MCP/Pi/DSH 注册项与参数 schema 与改动前一致（可快照 description+schema 对比）。
 9. **三端**：`createMcpServer()` 工具列表含 `adaptive_search`；Pi mock ExtensionAPI 与 DSH mock ctx 注册成功且带 `output.schema`/`presentCall`；**未配置 Jev 时能力段落不出现 Jev 引导**（证明没有探测、没有虚假宣传）。
+10. **判断完整性**：来源侧 `injection`、覆盖侧 `source_conflict` / `snippet_self_sufficient` 被请求但未回答 → 不得 `covered`（`judgment_missing`，`assessed=false`），条目 `unassessed` 且不进入覆盖依据；未请求的检查不阻塞。
+11. **请求构造与引擎集合**：第二轮合并请求中引擎 noul 逐条解析 `state.engine_state.*` 索引并与子状态一致；`search_new_engines` 的候选/解析/默认回退/执行前校验都不含本题已用引擎（含“无有效回答”的兜底）。
+12. **预算与收尾**：网络抓取额度耗尽后第二次抓取不再调用（实际调用数与计数一致）；focus 重读无网络额度则跳过且不被前一次读取“退款”；单题抛错不影响其他题结果；取消/超时发生在飞行中时仍返回结构化部分结果。
 
 ### 9.2 真实效果验证（Phase 4，`scripts/eval-adaptive-search.mjs`，显式 opt-in）
 

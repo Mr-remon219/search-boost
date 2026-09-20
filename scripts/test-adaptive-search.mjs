@@ -322,6 +322,101 @@ await test('an engine that becomes unavailable between plan and execution is dro
   for (const call of h.calls.fused) assert.ok(call.engineList.every((name) => name === 'exa-free'), 'dropped engines are not silently replaced')
 })
 
+await test('round-2 engine questions name the question list they are merged into', async () => {
+  const h = harness({
+    search: ({ query }) => (query === 'q1 text'
+      ? { results: [hit('q1 text is answered here: the documented value is 42 in full detail.', 'https://docs.example.com/q1')] }
+      : { results: [hit('q2 text is mentioned but not answered.', 'https://docs.example.com/q2')] }),
+    coverageScore: ({ field, questionId }) => (questionId === 'q1' ? (field === 'coverage' ? 0.95 : 0.9) : (field === 'coverage' ? 0.1 : 0.05)),
+    fetchPage: (url) => ({ url, via: 'jina', content: '', word_count: 0, focusMiss: false, cacheHit: false }),
+  })
+  const res = await runAdaptiveLoop({ questions: ['q1 text', 'q2 text'] }, h.deps)
+  const merged = h.calls.jev
+    .filter((call) => call.phase === 'plan' && call.state.engine_state)
+    .find((call) => Object.keys(call.questions).some((id) => id.startsWith('plan.q2.')))
+  assert.ok(merged, 'round 2 asks engine questions for the still-unfinished question')
+  const engineIds = Object.keys(merged.questions).filter((id) => id.startsWith('plan.'))
+  assert.ok(engineIds.length > 0)
+  for (const id of engineIds) {
+    const instruction = merged.questions[id].instructions
+    const questionPaths = [...instruction.matchAll(/state\.engine_state\.questions\[(\d+)\]/g)]
+    const alreadyPaths = [...instruction.matchAll(/state\.engine_state\.already_ran\[(\d+)\]/g)]
+    assert.ok(questionPaths.length > 0, `${id} must name its question path`)
+    assert.ok(alreadyPaths.length > 0, `${id} must name its already_ran path`)
+    for (const match of questionPaths) {
+      assert.equal(merged.state.engine_state.questions[Number(match[1])].id, 'q2', `${id} must point at q2, not at the action list's first question`)
+    }
+    for (const match of alreadyPaths) {
+      assert.equal(merged.state.engine_state.already_ran[Number(match[1])].question_id, 'q2')
+    }
+    const withoutNested = instruction.replace(/state\.engine_state\.questions\[\d+\]/g, '')
+    assert.ok(!/state\.questions\[\d+\]/.test(withoutNested), `${id} must not fall back to a bare state.questions path`)
+  }
+  // The action questions keep resolving against the action state they belong to.
+  const actionId = Object.keys(merged.questions).find((id) => id.startsWith('action.q2'))
+  assert.ok(actionId, 'the action question for q2 is asked in the same request')
+  const actionIndex = Number(/state\.questions\[(\d+)\]/.exec(merged.questions[actionId].instructions)[1])
+  assert.equal(merged.state.questions[actionIndex].id, 'q2')
+  assert.equal(res.questions[0].status, 'covered')
+})
+
+await test('search_new_engines can only return engines the question has not used yet', async () => {
+  const h = harness({
+    // Round 1 selects bing only. Round 2 asks for new engines and the model's
+    // highest scores are bing (already used) plus ddg.
+    engineScore: (id, ctx) => {
+      if (ctx.state.round === 1) return id.includes('.bing') ? 0.9 : 0.3
+      return id.includes('.bing') ? 0.99 : id.includes('.ddg') ? 0.8 : 0.3
+    },
+    actionChoice: (id, ctx) => {
+      const options = Object.keys(ctx.questions[id].criteria ?? {})
+      return options.includes('search_new_engines') ? { choice: 'search_new_engines', confidence: 0.95 } : { choice: options[0], confidence: 0.95 }
+    },
+    search: ({ query, engineList }) => ({ results: [hit(`${query} is only mentioned in this fragment from ${engineList.join('+')}.`, `https://docs.example.com/${engineList.join('-')}`)] }),
+    coverageScore: ({ field }) => (field === 'coverage' ? 0.1 : 0.05),
+    fetchPage: (url) => ({ url, via: 'jina', content: '', word_count: 0, focusMiss: false, cacheHit: false }),
+  })
+  const res = await runAdaptiveLoop({ questions: ['alpha question'] }, h.deps)
+  assert.deepEqual(h.calls.fused[0].engineList, ['bing'], 'round 1 uses only the engine above the threshold')
+  assert.ok(h.calls.fused[1], 'round 2 searched with a new engine')
+  assert.ok(!h.calls.fused[1].engineList.includes('bing'), `bing already ran for this question: ${h.calls.fused[1].engineList}`)
+  assert.deepEqual(h.calls.fused[1].engineList, ['ddg'])
+  const action = res.roundLog[1].plan.actions.find((entry) => entry.action === 'search_new_engines')
+  assert.ok(action, 'the round-2 action was search_new_engines')
+  assert.ok(!action.params.engines.includes('bing'), 'the plan parameters never carry an already-used engine')
+})
+
+await test('a missing engine answer falls back to engines the question has not used yet', async () => {
+  const h = harness({
+    engineScore: (id, ctx) => (ctx.state.round === 1 ? (id.includes('.bing') ? 0.9 : 0.3) : 0.99),
+    actionChoice: (id, ctx) => {
+      const options = Object.keys(ctx.questions[id].criteria ?? {})
+      return options.includes('search_new_engines') ? { choice: 'search_new_engines', confidence: 0.95 } : { choice: options[0], confidence: 0.95 }
+    },
+    // Round 2's engine answers are missing entirely: the code default must stay
+    // inside the allowed set too. The action choice itself is still answered.
+    raw: (ctx) => {
+      if (ctx.phase !== 'plan' || ctx.state.round !== 2) return null
+      const answers = {}
+      for (const [id, spec] of Object.entries(ctx.questions)) {
+        if (spec.type === 'choice' && Object.keys(spec.criteria ?? {}).includes('search_new_engines')) {
+          answers[id] = { choice: 'search_new_engines', confidence: 0.95 }
+        }
+      }
+      return { answers }
+    },
+    search: ({ query, engineList }) => ({ results: [hit(`${query} is only mentioned in this fragment from ${engineList.join('+')}.`, `https://docs.example.com/${engineList.join('-')}`)] }),
+    coverageScore: ({ field }) => (field === 'coverage' ? 0.1 : 0.05),
+    fetchPage: (url) => ({ url, via: 'jina', content: '', word_count: 0, focusMiss: false, cacheHit: false }),
+  })
+  const res = await runAdaptiveLoop({ questions: ['alpha question'] }, h.deps)
+  assert.deepEqual(h.calls.fused[0].engineList, ['bing'])
+  assert.ok(h.calls.fused[1], 'the fallback still searched something')
+  assert.ok(!h.calls.fused[1].engineList.includes('bing'), `the default subset never reuses bing: ${h.calls.fused[1].engineList}`)
+  assert.deepEqual(h.calls.fused[1].engineList, ['ddg', 'yahoo'])
+  assert.ok(res.warnings.some((warning) => /no usable engine answer/.test(warning)))
+})
+
 // ---------------------------------------------------------------------------
 // 3. coverage semantics
 // ---------------------------------------------------------------------------
@@ -382,6 +477,82 @@ await test('an unresolved conflict between sources blocks a covered verdict and 
   assert.ok(res.questions[0].uncoveredReasons.includes(REASONS.sourceConflictUnresolved))
   assert.equal(res.questions[0].conflictCount, 1)
   assert.equal(res.questions[0].conflicts[0].kind, 'source_conflict_unresolved')
+})
+
+await test('a requested conflict judgement that never arrives is not a "no conflict"', async () => {
+  const h = harness({
+    search: () => ({
+      results: [
+        hit('Version 22 supports the flag.', 'https://a.example.com/yes'),
+        hit('Version 22 removed the flag entirely.', 'https://b.example.com/no'),
+      ],
+    }),
+    // The conflict question is asked (two qualified fragments) and never answered.
+    raw: (ctx) => {
+      if (ctx.phase !== 'coverage_judge') return null
+      const answers = {}
+      for (const id of Object.keys(ctx.questions)) {
+        if (id.endsWith('.source_conflict')) continue
+        answers[id] = id.endsWith('.coverage') ? 0.97 : 0.9
+      }
+      return { answers }
+    },
+    fetchPage: (url) => ({ url, via: 'jina', content: '', word_count: 0, focusMiss: false, cacheHit: false }),
+  })
+  const res = await runAdaptiveLoop({ questions: ['does v22 support the flag'] }, h.deps)
+  assert.notEqual(res.questions[0].status, 'covered')
+  assert.equal(res.questions[0].conflictCount, 0, 'a missing answer never becomes an invented conflict')
+  assert.ok(res.questions[0].uncoveredReasons.includes(REASONS.judgmentMissing))
+  assert.equal(res.questions[0].assessed, false, 'an unanswered necessary judgement leaves the verdict incomplete')
+  const asked = h.calls.jev.filter((call) => call.phase === 'coverage_judge')
+  assert.ok(asked.some((call) => call.questions['cov.q1.source_conflict']), 'the conflict question really was asked')
+})
+
+await test('a source judgement that never answers injection cannot be coverage evidence', async () => {
+  const h = harness({
+    search: () => ({ results: [hit('Alpha question is answered here: the documented value is 42.', 'https://docs.example.com/alpha')] }),
+    raw: (ctx) => {
+      if (ctx.phase !== 'source_judge') return null
+      const answers = {}
+      for (const id of Object.keys(ctx.questions)) {
+        if (id.endsWith('.injection')) continue // the model never answers injection
+        answers[id] = id.endsWith('.relevant') || id.endsWith('.states_evidence') ? 0.95 : 0.05
+      }
+      return { answers }
+    },
+    coverageScore: () => 0.95,
+    fetchPage: (url) => ({ url, via: 'jina', content: '', word_count: 0, focusMiss: false, cacheHit: false }),
+  })
+  const res = await runAdaptiveLoop({ questions: ['alpha question'] }, h.deps)
+  const item = res.questions[0].evidence[0]
+  assert.notEqual(res.questions[0].status, 'covered')
+  assert.equal(item.status, 'unassessed', 'injection-unknown material is not answer-capable')
+  assert.equal(item.judgmentIncomplete, true)
+  assert.equal(item.usedForCoverage, false)
+  assert.ok(res.questions[0].uncoveredReasons.includes(REASONS.judgmentMissing))
+  for (const call of h.calls.jev.filter((entry) => entry.phase === 'coverage_judge')) {
+    assert.ok(!call.state.evidence.some((entry) => entry.id === item.evidenceId), 'unjudged material never reaches the coverage judgement')
+  }
+})
+
+await test('a requested snippet self-sufficiency answer that never arrives is not a "yes"', async () => {
+  const h = harness({
+    search: () => ({ results: [hit('AbortSignal.timeout(delay) aborts after delay milliseconds; available in Node.js 22.', 'https://docs.example.com/abort')] }),
+    raw: (ctx) => {
+      if (ctx.phase !== 'coverage_judge') return null
+      const answers = {}
+      for (const id of Object.keys(ctx.questions)) {
+        if (id.endsWith('.snippet_self_sufficient')) continue
+        answers[id] = id.endsWith('.coverage') ? 0.9 : 0.05
+      }
+      return { answers }
+    },
+    fetchPage: (url) => ({ url, via: 'jina', content: '', word_count: 0, focusMiss: false, cacheHit: false }),
+  })
+  const res = await runAdaptiveLoop({ questions: ['Node.js 22 AbortSignal.timeout behavior'] }, h.deps)
+  assert.notEqual(res.questions[0].status, 'covered')
+  assert.ok(res.questions[0].uncoveredReasons.includes(REASONS.judgmentMissing))
+  assert.equal(res.questions[0].coverage?.snippetSelfSufficient ?? null, null)
 })
 
 await test('a title that matches but whose text answers nothing is not coverage', async () => {
@@ -516,10 +687,92 @@ await test('a focus miss re-reads the cached page without a second network fetch
   assert.equal(h.calls.fetch.length, 2)
   assert.equal(h.calls.fetch[0].focus, 'alpha question 22')
   assert.equal(h.calls.fetch[1].focus, undefined, 'the retry re-reads without a focus filter')
-  assert.equal(res.usage.fetchCalls, 0, 'a cached re-read is not a new network fetch')
+  assert.equal(res.usage.fetchCalls, 1, 'the first read really went to the network; only the cached re-read refunds its own reservation')
   assert.equal(res.usage.fetchReads, 2)
   assert.equal(res.questions[0].status, 'covered')
   assert.equal(res.questions[0].evidence[0].textBasis, 'fetched_page')
+})
+
+await test('a fetch is never dispatched once the network budget is spent', async () => {
+  // Both questions get a fetch option in round 2; only the one that reserved a
+  // network slot may actually call the fetcher.
+  const h = harness({
+    limits: { ...ADAPTIVE_LIMITS, maxFetchCalls: 1 },
+    search: ({ query }) => ({ results: [hit(`${query} is only mentioned here, not answered.`, `https://docs.example.com/${slug(query)}`)] }),
+    fetchPage: (url) => ({ url, via: 'jina', content: '', word_count: 0, focusMiss: false, cacheHit: false }),
+    coverageScore: ({ field }) => (field === 'coverage' ? 0.1 : 0.05),
+  })
+  const res = await runAdaptiveLoop({ questions: ['alpha one', 'beta two'] }, h.deps)
+  assert.equal(h.calls.fetch.length, 1, 'only the fetch that reserved a network slot was dispatched')
+  assert.equal(res.usage.fetchCalls, 1)
+  assert.ok(res.warnings.some((warning) => /no budget left for a page read/.test(warning)))
+})
+
+await test('a focus-miss re-read is skipped when no network reservation is left', async () => {
+  const h = harness({
+    limits: { ...ADAPTIVE_LIMITS, maxFetchCalls: 1 },
+    search: () => ({ results: [{ title: 'Alpha', url: 'https://docs.example.com/alpha', snippet: '', score: 1, engines: ['bing'] }] }),
+    fetchPage: (url) => ({ url, via: 'jina', content: '', word_count: 0, focusMiss: true, cacheHit: false }),
+    coverageScore: ({ field }) => (field === 'coverage' ? 0.1 : 0.05),
+  })
+  const res = await runAdaptiveLoop({ questions: ['alpha question 22'] }, h.deps)
+  assert.equal(h.calls.fetch.length, 1, 'the second read is not attempted without a reservation')
+  assert.equal(res.usage.fetchCalls, 1)
+  assert.equal(res.usage.fetchReads, 1)
+  assert.ok(res.warnings.some((warning) => /focus-miss re-read skipped/.test(warning)))
+})
+
+await test('one question failing does not lose another question\u2019s result', async () => {
+  const h = harness({
+    search: ({ query }) => {
+      if (query === 'beta two') throw new Error('engine transport exploded')
+      return answerable(query)
+    },
+  })
+  const res = await runAdaptiveLoop({ questions: ['alpha one', 'beta two'] }, h.deps)
+  assert.equal(res.questions.length, 2, 'every question keeps its output slot')
+  assert.equal(res.questions[0].status, 'covered', 'the healthy question still completes')
+  assert.ok(res.questions[0].evidence.length > 0, 'its evidence survives the other question\u2019s failure')
+  assert.equal(res.questions[1].status, 'failed')
+  assert.ok(res.questions[1].uncoveredReasons.includes(REASONS.enginesFailed))
+  assert.equal(res.questions[1].assessed, false)
+  assert.ok(res.warnings.some((warning) => /search q2 failed/.test(warning)))
+  assert.equal(res.roundLog[0].search.length, 2, 'the failed outcome is recorded next to the successful one')
+})
+
+await test('cancellation during an in-flight search still returns the partial result', async () => {
+  const controller = new AbortController()
+  const h = harness({
+    signal: controller.signal,
+    search: async ({ query }) => {
+      if (query !== 'alpha one') return answerable(query)
+      controller.abort(new Error('user cancelled'))
+      throw new Error('search aborted by the host')
+    },
+  })
+  const res = await runAdaptiveLoop({ questions: ['alpha one', 'beta two'] }, h.deps)
+  assert.equal(res.stopReason, STOP_REASONS.cancelled)
+  assert.equal(res.questions.length, 2, 'the structured result is still assembled')
+  assert.ok(res.questions.every((q) => q.status !== 'covered'))
+  assert.equal(h.calls.fused.length, 1, 'no further search is dispatched after the cancel')
+  assert.equal(h.calls.fetch.length, 0)
+  assert.equal(res.roundLog.length, 1)
+})
+
+await test('a deadline reached during an in-flight search still returns the partial result', async () => {
+  const h = harness({
+    deadlineMs: 1_500,
+    limits: { ...ADAPTIVE_LIMITS, minBudgetMs: 1_500 },
+    search: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1_700))
+      throw new Error('search finished after the deadline')
+    },
+  })
+  const res = await runAdaptiveLoop({ questions: ['alpha one'] }, h.deps)
+  assert.equal(res.stopReason, STOP_REASONS.deadline)
+  assert.equal(res.questions.length, 1)
+  assert.notEqual(res.questions[0].status, 'covered')
+  assert.equal(h.calls.fetch.length, 0)
 })
 
 await test('collected core result objects are never mutated (frozen inputs survive)', async () => {
