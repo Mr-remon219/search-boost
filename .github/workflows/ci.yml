@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, main, v0.2.0]
+    branches: [master, main, v0.2.0, jev]
   pull_request:
 
 concurrency:
@@ -70,6 +70,30 @@ jobs:
         if: always()
         run: npm run test:xauth
 
+      - name: Jev credentials (config round-trips)
+        if: always()
+        run: npm run test:jev
+
+      - name: Config authority (engines, store, credentials)
+        if: always()
+        run: npm run test:keys-authority
+
+      - name: Dry-run contract
+        if: always()
+        run: npm run test:dry-run
+
+      - name: Network policy (DNS, pinning, proxy)
+        if: always()
+        run: npm run test:network
+
+      - name: Jev client (System One transport)
+        if: always()
+        run: npm run test:jev-client
+
+      - name: Adaptive search (Jev loop)
+        if: always()
+        run: npm run test:adaptive
+
       - name: Search routing
         if: always()
         run: npm run test:search
@@ -93,3 +117,23 @@ jobs:
       - name: MCP smoke
         if: always()
         run: npm run smoke
+
+      # Reproduce the tested Linux tree offline, without checkout credentials,
+      # HOME configuration, environment variables, or Git metadata.
+      - name: Prepare offline audit snapshot
+        if: always() && runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/search-boost-audit"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/search-boost-audit"
+          if [ -d node_modules ]; then cp -a node_modules "$RUNNER_TEMP/search-boost-audit/"; fi
+          tar -czf "$RUNNER_TEMP/search-boost-audit.tar.gz" -C "$RUNNER_TEMP/search-boost-audit" .
+
+      - name: Upload offline audit snapshot
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: search-boost-audit-${{ github.sha }}
+          path: ${{ runner.temp }}/search-boost-audit.tar.gz
+          retention-days: 3
+          if-no-files-found: error

@@ -1,18 +1,13 @@
 ---
-description: Gap-driven parallel search — searchers, then summarizer, then more searchers if needed
+description: Gap-driven parallel search — authorized searchers, a summarizer, and material follow-up
 argument-hint: "<question>"
 search-boost: owned
 ---
-Use search-parallel-subagent to research this question. You choose parallelism and the max number of waves. Finish in as few waves as you can — do not make the user wait for completeness theater.
+Apply the shared workflow below in **complex mode**: default 1–2 searcher waves, at most 3. Stop earlier when evidence is sufficient, the summarizer reports `need_another_round: no`, or the remaining gaps are marginal. The parent owns the final decision and answer.
 
-Default to 1–2 waves. Hard cap 3. Stop earlier if the summarizer says `need_another_round: no`, if leftover gaps are edge-cases, or if another wave would repeat the same angles.
-
-Each wave:
-1. You pick N independent searcher tasks (no tool-side cap). Call once:
-   `{ "tasks": [{ "agent": "searcher", "task": "..." }, ...] }`
-2. Hand every report to one summarizer:
-   `{ "agent": "summarizer", "task": "Research question: ...\n\nReports:\n..." }`
-3. If `need_another_round` is yes and you are under the cap, launch only the summarizer's next tasks. Otherwise synthesize the final answer with citations and stop.
+Pi bindings through `search-parallel-subagent`:
+- Searcher wave: `{"tasks":[{"agent":"searcher","task":"..."},...]}`. Choose the wave size within the task budget; this runner has no concurrency cap.
+- Gap review: `{"agent":"summarizer","task":"Question, all reports, execution statuses, and prior synthesis"}`. This child has no tools. A proposed next wave is not permission to spawn it.
 
 {{RESEARCH_WORKFLOW}}
 

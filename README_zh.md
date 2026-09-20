@@ -1,328 +1,280 @@
-# search-boost
+# SearchBoost
 
-面向编程 Agent 的**多引擎联网搜索** —— **一份 SearchBoost 核心，三种宿主适配**。MCP 服务接入 **Cursor**、**Cursor CLI**、**Codex**、**Claude Code**、**Grok Build** 和 **Antigravity**；同一个包同时也是 **[pi](https://github.com/earendil-works/pi-coding-agent) 扩展**和 **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle 插件**。
+**面向 Coding Agent 的多引擎网络证据工具：一个核心，三种适配。**
+
+SearchBoost 提供网页搜索、页面读取、X/Twitter 检索，以及可选的 Jev 辅助证据收集。它负责合并搜索结果、去重，并报告实际使用的引擎、证据和警告；Agent 仍然决定调查什么、是否继续，以及如何形成最终答案。
+
+[English](./README.md) · [搜索路由](./docs/search-routing.md) · [迁移说明](./docs/migration.md) · [宿主升级](./docs/host-upgrades.md)
 
 ```text
-                SearchBoost Core  (lib/runtime.mjs + lib/search/)
-                        │
-          ┌─────────────┼─────────────┐
-          │             │             │
-     adapters/mcp   adapters/pi   adapters/dsh
-     (stdio MCP)     (pi 扩展)    (Cordis bundle)
-          │             │             │
-          └── agents/<host> 宿主级提示词策略 ──┘
+                   SearchBoost CLI / TUI
+                     安装 · 配置 · 更新
+                              │
+                     共用 SearchBoost Core
+                   搜索 · 抓取 · X · 自适应证据
+                              │
+              ┌───────────────┼───────────────┐
+              MCP             Pi              DSH
+              stdio 服务      原生扩展        原生插件包
 ```
 
-> 原 npm 名称为 **search-boost-mcp**；原独立仓库 **pi-search-boost** 与 **dsh-search-boost** 已并入本仓库，退化为两个宿主适配层。搜索引擎、融合排序、正文抓取与 X 搜索**只在本仓库的核心维护一份**。
+原来的 `pi-search-boost`、`dsh-search-boost` 已整合到本仓库。搜索算法统一维护在 `lib/`，而不是维护三份实现。MCP 接入 Cursor / Cursor CLI、Codex、Claude Code、Grok Build 和 Antigravity；Pi、DeepSeek Harness 使用各自的原生适配层。
 
-**核心**（[`lib/search/`](./lib/search/)）：`fused_search` 是主 Web Search 入口。`engine_pool` 选择 **free**（Bing / DuckDuckGo / Yahoo / Exa-free）、**api**（仅 Tavily / Brave / Exa）或 **hybrid**；`ranking` 只影响最终引擎权重，`complexity` 只控制预算、variants 和 depth。需要开发者/社区声音时启用 `community=true`，复用 X Core；平时不必手选引擎。旧 layer 配置保持兼容：free → free、api → hybrid。带 `focus` 的 Jina 正文抓取和独立 X 账号/线程搜索继续可用。
+> **发布准备说明：** `v0.2.0` 分支不等于 npm 已发布版本。下面包含 `@latest` 的命令获取的是已发布包，不会自动跟随 Git 分支。统一版本尚未发布时，请按[源码安装](#源码安装)体验本分支；合并 PR 不会自动发布 npm。
 
-详见[路由、权重、动态能力与兼容说明](docs/search-routing.md)。MCP 通过 `search-boost://capabilities` 提供实时配置状态；Pi/DSH 动态注入同一 capability。执行结果包含 `enginesUsed`、`effectiveWeights`、`communityUsed` 和 `warnings`。
+## 快速开始
 
-English → [README.md](./README.md)
-
----
-
-## 快速安装
-
-环境要求：**Node ≥ 22.13**。
+需要 **Node.js 22.13 或以上版本**以及 npm。先安装，再由向导配置引擎和你选择的宿主：
 
 ```bash
 npm install -g search-boost
-search-boost setup          # 交互式：配密钥 → 选搜索层 → 选 Agent
-# 想省事、全自动：
-search-boost install -y     # 给所有能检测到的 Agent 装上
+search-boost setup
+search-boost doctor
 ```
 
-装完后记得**重启**对应的 Agent，MCP 才会生效。
+免费引擎池不需要 API Key。安装后重启或重新加载相关 Agent，使工具和提示词资产生效。
 
-### 日常更新与一次性 npm 迁移
-
-**已经使用 `search-boost`：** 打开 TUI，选择 **Update**。它检查 npm，需要新版本时从 npx 临时缓存运行更新器，更新 SearchBoost，再刷新**所有已接入的 agents**。Pi、DSH 包含在内：已有 `pi-search-boost` / `dsh-search-boost` 适配器会升级到统一的 `search-boost`。仅被检测到、但尚未接入的 agents 不会自动安装。
+已经配置好密钥时，也可以直接安装指定宿主：
 
 ```bash
-search-boost                         # TUI → Update
-# CLI 等价入口 / 预览 / 离线同步当前版本：
-search-boost upgrade -y
-search-boost upgrade --dry-run
-search-boost upgrade --sync-only -y
-search-boost upgrade --workspace /path/to/project -y
+search-boost install -t cursor --keep-native
+search-boost install -t codex,claude --keep-native
+search-boost install -t pi -y
+search-boost install -t dsh -y --profile web
+search-boost install -t antigravity --workspace /path/to/project --keep-native
 ```
 
-**仍使用全局 npm 包 `search-boost-mcp`：** 直接通过 npx 加载新包的迁移代码，不需要过渡版本，也不需要手动卸载旧包。
+**自动化前注意安装参数：** `-y` 会跳过向导，并隐含 `--auto-allow` 和 `--replace-native`。只指定 `-t`、不加 `-y`，同样属于非交互安装且默认替换原生搜索，但**不会**隐含自动批准。`--keep-native` 保留原生搜索；需要宿主继续弹出权限确认时，不要加 `--auto-allow`。实际修改取决于宿主支持的配置能力。
 
 ```bash
-npx --yes --package=search-boost@latest -- search-boost migrate -y
-# 先预览：
-npx --yes --package=search-boost@latest -- search-boost migrate --dry-run
-# 完成后：
-search-boost                         # 以后更新都选 TUI → Update
+search-boost install -t cursor --dry-run --keep-native
+search-boost status
+search-boost print codex
 ```
 
-`migrate` **仅负责这次全局 npm 包更名**，不代替日常更新。它自动安装并验证新包，然后卸载全局 `search-boost-mcp` 并核验新命令。**agent 配置保持原样；完成后在 TUI 选择 Update，才统一更新全部已有接入。** 删除旧包前会记录其准确目录/扩展入口，确保指向旧目录的本地注册仍能识别。同名命令只有确认属于旧包后才会暂存交接，不使用 `--force` 盲目覆盖；安装失败恢复暂存命令并保留旧包。API keys、认证、模型设置、权限和禁用状态保留；旧 Pi 的 Key 环境变量继续兼容。
+支持的操作使用 `--dry-run` 可以只预览、不写入；`print` 只打印 MCP 配置片段，不执行安装。完整命令参考见 `search-boost --help`。
 
-配置备份在 `~/.search-boost/backups/`，更新结果在 `state/last-upgrade.json`，跨版本的受管路径记录在 `state/package-sources.json`（均支持 `SEARCH_BOOST_HOME`）。Pi/DSH 在安装目录变化后仍可识别，但记录不会使已卸载的集成复活。扫描范围为已知用户配置、DSH profiles、当前/已记录项目及 `--workspace`，不会遍历整台机器。完成后重启/重新加载相关 agents。
+### 各宿主的接入方式
 
-详见[迁移与发布说明](docs/migration.md)和 [Pi/DSH 连续升级设计](docs/host-upgrades.md)。这些代码必须随新的 `search-boost` 发布后才能通过 npm `@latest` 获取；不再发布旧包名过渡版。
+| 宿主 | 安装内容与检查方法 |
+| --- | --- |
+| Cursor / Cursor CLI | MCP 条目位于 `~/.cursor/mcp.json`；检查 `search-boost` 是否连接成功。 |
+| Codex / Claude Code | MCP 工具以及对应提示词/skill；重启后确认工具可见。 |
+| Grok Build | MCP、配置资产，以及存在 `grok` CLI 时安装的插件；`--skip-grok-plugin` 可跳过插件安装。 |
+| Antigravity | MCP 和工作区指引；使用 `--workspace` 指定项目。 |
+| Pi | 原生扩展、受管理的 searcher/summarizer 定义，以及 `/fast-parallel`、`/complex-parallel` 模板。 |
+| DeepSeek Harness | 原生插件包；CLI 安装需要 `dsh` 和 `pnpm`。`--profile` 选择 DSH 配置档，默认 `web`。 |
 
-### 按 Agent 单独安装
+也支持宿主原生包管理器：
 
 ```bash
-search-boost install -t cursor -y
-search-boost install -t codex,claude -y --auto-allow
-search-boost install -t grok -y --auto-allow   # grok CLI 在 PATH 时自动装插件 + 配置
-search-boost install -t antigravity --workspace --auto-allow -y
-search-boost install -t pi -y                  # pi shim + searcher/summarizer + /fast-parallel /complex-parallel
-search-boost install -t dsh -y --profile web   # 执行 dsh plugin --profile web add …（需要 dsh + pnpm）
+pi install npm:search-boost
+dsh plugin --profile web add search-boost
 ```
 
-只想看看会改哪些文件、不真正写入：加 `--dry-run`。
+Pi 包清单负责加载扩展；需要完整的角色定义与提示词模板时，使用 `search-boost install -t pi -y`。不要把旧独立适配器与新包重复安装；受管理的更新流程会处理可识别的旧注册。
 
-**不经 CLI 直接装 pi / DSH：** `pi install npm:search-boost`（包清单 `pi.extensions`）或 `dsh plugin --profile web add search-boost`（包清单 `dsh.bundle`）。详见下文「宿主适配层」。
+### 源码安装
 
-### 验证安装
-
-```bash
-search-boost doctor          # 健康检查（离线，pass/warn/fail）
-search-boost doctor --json   # 机器可读报告，便于 CI/脚本
-search-boost status          # 安装态仪表盘（密钥、搜索层、各 Agent）
-```
-
-退出码：**0** 正常 · **1** 失败（或 `--strict` 下警告也算失败）· **2** 仅警告。
-
-可选：`search-boost doctor --probe` 增加联网冒烟（需网络；Phase 2）。
-
-然后在对应 Agent 里确认：
-
-| Agent | 快速检查 |
-|-------|----------|
-| **Cursor** | 设置 → MCP → `search-boost` 已连接且列出工具 |
-| **Cursor CLI** | 同上，配置在 `~/.cursor/mcp.json` |
-| **Codex** | 会话中能看到 `mcp__search-boost__*` 工具 |
-| **Claude Code** | MCP 面板有 `search-boost`；若用了 `--auto-allow` 则无需每次审批 |
-| **Grok Build** | `grok mcp doctor search-boost` · `grok inspect` |
-| **Antigravity** | MCP 配置含 `search-boost`；安装后需重启 IDE |
-
-工具能列出但调用失败时，可在终端跑 `search-boost serve` 看启动报错。
-
-### 安装参数说明
-
-| 参数 | 作用 |
-|------|------|
-| `-t`, `--target` | 指定 Agent（`cursor`、`codex`、`claude`、`grok`、`antigravity`、`cursor-cli`、`pi`、`dsh`、`auto`、`all`） |
-| `--profile <name>` | 仅 DSH：`$DSH_HOME/profiles` 下的 profile（默认 `web`） |
-| `-y`, `--yes` | 非交互：跳过密钥/搜索层向导、默认 `--target=auto`，**同时隐含** `--auto-allow` 与 `--replace-native` |
-| 仅 `-t`、不加 `-y` | 对该目标非交互安装，**默认仍会替换内置搜索**，但**不会**自动加 `--auto-allow`；需要免审批请显式加上 |
-| `--auto-allow` | 在 Agent 配置里预批准 search-boost 的 MCP 工具（Cursor CLI 白名单、Codex 自动审批、Claude/Grok/Antigravity 权限规则），避免每轮都弹审批 |
-| `--replace-native` / `--keep-native` | 关闭或保留内置联网（Codex `web_search`、Claude `WebSearch`）。非交互安装时默认替换 |
-| `--scope user\|project\|all` | 仅 Grok：user（`~/.grok`）、project（cwd 下 `.grok/`），卸载时可选 both |
-| `--skip-grok-plugin` | 仅 Grok：跳过 bundled `grok plugin install`；仍会写入 config.toml、rule、skill |
-| `--dry-run` | 只打印将要修改的内容，不写文件 |
-
-若要完整走密钥 + 搜索层选择，请用 `search-boost setup`，或不加 `-y` 的 `search-boost install`。
-
-### 卸载
-
-```bash
-search-boost uninstall -t codex -y
-search-boost uninstall -t cursor,codex,claude -y
-```
-
-卸载只移除 **search-boost 拥有** 的配置块（带标记的 MCP、skill、hook、权限规则）。在 Agent 支持的情况下会恢复内置联网（Codex 顶层 `web_search`、Claude `WebSearch` deny），除非你安装时用了 `--keep-native`，或原本就有未标记的用户设置。若文件仅因 search-boost 而存在且清理后为空，会被删除；安装时新建的空目录不回收（无法判断该目录是我们创建的，还是用户或其他工具本来就有的，因此不做删除）。Grok 的 `grok plugin uninstall` 为**尽力而为**（CLI 缺失或失败时会警告并继续）。预览：加 `--dry-run`。
-
----
-
-## MCP 工具
-
-| MCP 工具 | 干什么用 |
-|----------|----------|
-| `fused_search` | 多引擎并行搜、去重、综合排序 |
-| `fetch_page` | 拉网页正文（Jina 优先，失败走 HTML；先去掉样式/广告，不裁剪；`focus` 可只留相关段落） |
-| `x_search` | 搜 X / Twitter：关键词、用户、帖子串 |
-| `search_layer` | 查看/切换兼容默认值：`free → free`、`api → hybrid`；单次搜索用 `engine_pool` |
-| `search_stats` | 看缓存、各引擎是否可用等诊断信息 |
-
-另外还有资源 `search-boost://policy` 和提示词 `search_routing`。
-
-**两种搜索层**
-
-- **free**：Bing + DuckDuckGo + Yahoo + Exa-free，**无需 API Key**。
-- **api**：在 free 层基础上增加**任意已配置**的 Tavily / Brave / Exa（一个 Key 即可；建议配齐三个以获得最佳多引擎融合）
-
-配 Key：`search-boost config keys`，写到 `~/.search-boost/config/keys.json`（仍会读取 flat `~/.search-boost-keys.json` 与 legacy `~/.dsh-search-boost-keys.json`）；也可以设环境变量 `TAVILY_API_KEY`、`BRAVE_API_KEY`、`EXA_API_KEY`。可选路由：`enabledEngines: ["exa"]` 或 `"engines": { "brave": { "enabled": false } }`。
-
-**配置目录：** 运行时数据位于 `~/.search-boost/` — `config/`（keys、layer、xauth）、`cache/`（xguest token）、`state/`（Antigravity 工作区注册表）。首次写入时从 flat `~/.search-boost-*.json` 与 legacy `~/.dsh-*` 懒迁移（旧文件保留）。覆盖根目录：`SEARCH_BOOST_HOME`；单文件：`SEARCH_BOOST_*_FILE`。
-
-获取 Key：[Tavily](https://app.tavily.com/) · [Brave Search API](https://brave.com/search/api/) · [Exa](https://dashboard.exa.ai/)
-
-**X/Twitter 凭据（可选）：** 配置后可走官方 `x_search` 路径。存储于 `~/.search-boost/config/xauth.json`（仍会读取 flat/legacy 路径），或通过 `XAI_API_KEY`。使用 `search-boost config x` 配置（见下方命令表）。MCP `/x-login` 与 `search-boost config x` 写入同一本地副本。路径覆盖：`SEARCH_BOOST_XAUTH_FILE`。
-
-**X 筛选（登录与未登录共用）：** 所有来源统一经过「召回/补全 → 规范化 → 合并去重 → 筛选 → 截断」。从 X/Twitter URL 恢复作者 handle，从现代帖子 ID 恢复缺失的发帖时间。`from_date` / `to_date` 包含起止 UTC 日期整天；keyword 查询中的 `since:` 包含当天，`until:` 不包含当天。`username`、`allowed_x_handles`、`excluded_x_handles` 都按作者筛选，忽略大小写和前导 `@`；允许/排除列表互斥、最多 20 个。user 模式的日期条件只筛选 `recent_posts`，不筛账号注册时间。
-
-本地支持 `from:`、`-from:`、`since:`、`until:`、`min_faves:`、`min_retweets:`、`min_replies:`、`lang:` 及 AND/OR 分组；引号内文本不当作筛选条件。文本相关性及其他操作符仍由上游处理，不支持的操作符会说明。缺少筛选所需元数据的候选会被剔除并注明原因，不会假装匹配。因此未登录时点赞数、语言等筛选可能返回更少或零条结果；搜索引擎索引和 oEmbed 不能覆盖完整的登录后数据。日期边界依据 [xAI 工具文档](https://docs.x.ai/developers/tools/x-search)。
-
-```bash
-search-boost config x --show              # 查看 xauth 状态
-search-boost config x --import-grok       # 从 grok CLI 导入登录
-search-boost config x --set-xai-key KEY   # 保存 XAI API key
-search-boost config x --logout            # 删除本地副本
-```
-
-**配置文件路径覆盖：** 环境变量 `SEARCH_BOOST_KEYS_FILE`、`SEARCH_BOOST_LAYER_FILE`、`SEARCH_BOOST_XAUTH_FILE`（可选，指向自定义路径）。
-
----
-
-## 常用命令
-
-| 命令 | 说明 |
-|------|------|
-| `search-boost` | 打开交互式菜单 |
-| `search-boost setup` | 一条龙：密钥 + 搜索层 + 安装 |
-| `search-boost install` / `uninstall` | 安装或卸载到各 Agent |
-| `search-boost serve` | 启动 MCP 服务（Agent 调用的入口） |
-| `search-boost status` | 看密钥、搜索层、X 凭据、各 Agent 是否已配置 |
-| `search-boost doctor [--quick\|--probe] [--json] [--strict]` | 配置/Agent/引擎健康检查，含 pass/warn/fail 判定 |
-| `search-boost config keys\|layer\|x\|search` | 管密钥、默认层、X 凭据、是否替换内置搜索 |
-| `search-boost print <agent>` | 只打印 MCP 配置片段，不改文件 |
-| `search-boost agents` | 列出 Agent（适合脚本读） |
-
-**安装时常用参数：** `-t` 指定 Agent · `-y` 非交互（隐含 `--auto-allow` 与 `--replace-native`）· `--dry-run` 预览 · `--auto-allow` 预批准 MCP 工具（见上表）· `--replace-native` / `--keep-native` · `--scope user|project|all`（Grok）· `--skip-grok-plugin`（Grok）· `--workspace`（Antigravity `.agents/`）
-
----
-
-## 支持哪些 Agent
-
-| Agent | MCP 写在哪 | 还会注入什么 |
-|-------|------------|--------------|
-| Cursor IDE | `~/.cursor/mcp.json` | hook、skill |
-| Cursor CLI | `~/.cursor/mcp.json`（与 IDE 共用 surface） | hook、skill（CLI 版）、可选 CLI 免审批 |
-| Codex CLI | `~/.codex/config.toml` | SessionStart hook、AGENTS.md、skill |
-| Claude Code | `~/.claude.json` | SessionStart hook、CLAUDE.md、skill、权限规则 |
-| Grok Build | `~/.grok/config.toml` | rule、skill、随包 [grok-plugin](./grok-plugin/)（`grok` 在 PATH 时自动安装） |
-| Antigravity | `~/.gemini/config/mcp_config.json` | 首次调用 hook、AGENTS.md、GEMINI.md、skill，可选工作区配置 |
-| pi | —（进程内扩展，[`adapters/pi`](./adapters/pi/)） | `~/.pi/agent/extensions/search-boost.js` shim；`agents/` + `prompts/`（searcher、summarizer、`/fast-parallel`、`/complex-parallel`） |
-| DeepSeek Harness | —（进程内 bundle，[`adapters/dsh`](./adapters/dsh/)） | `dsh plugin --profile <p> add` → profile 的 `package.json` |
-
-MCP 接入现在会在启动时提醒模型**主动核实外部事实**：版本、API、不确定的技术行为、比较与选型，不必等用户要求搜索。纯本地代码、稳定概念、写作及用户禁止联网时跳过，不要求每轮搜索。共享策略在 [`agents/shared/startup-search.md`](./agents/shared/startup-search.md)；pi / DSH 的原有策略不变。
-
-### 提示词职责与扩展入口
-
-```text
-hook：主动核实提醒       inject.md：简短的能力与宿主说明
-                ↓
-普通任务 → MCP description + schema → 直接调用
-需要详细参考 → 可选 resource：search-boost://policy
-复杂扩展流程 → search-boost skill router → 已注册的专项 skill
-```
-
-**MCP 宿主安装 `search-boost` router 和 `search-boost-parallel-research` 工作流 skill，两者都不是普通搜索的前置步骤。** 原来的 search/fetch/x/diagnostics 四个工具说明型 skill 已撤下：工具选择与参数说明归 MCP description/schema，示例、证据注意事项和排障归可选 resource。`search_routing` MCP prompt 保留为显式请求的规划助手，不在每次调用前自动运行。Resource 是否被读取、注入上下文由宿主决定。
-
-Router 模板位于 `agents/<agent>/skill.md`；六份 `inject.md` 只提供基本认知。扩展注册表是 [`agents/router.mjs`](./agents/router.mjs) 的 `SKILL_EXTENSIONS`，目前登记了并行研究工作流。安装器和插件据此安装 skill 并生成 router 链接，支持宿主限制；具体宿主的委派说明渲染进 skill。支持 skill 不等于具备 subagent 能力。开发说明见 [`agents/shared/skills/README.md`](./agents/shared/skills/README.md)。Skill 只能编排宿主已有且获授权的能力，不能凭提示词创建 subagent 工具。
-
-重新安装会保留 router、清理属于 search-boost 的旧工具说明型技能及其 Codex 元数据，保留用户文件；卸载也处理旧技能残留。插件同步：`npm run plugin:sync-grok` / `npm run build:plugin`。模板变更需重新安装目标。pi / DSH 保留原生集成；Grok 仍通过启动 rule 承载主动提醒。
-
-### 共享并行研究
-
-Pi、DSH 和 MCP 宿主的 skill 共用 [`agents/shared/research/`](./agents/shared/research/) 中的角色与流程规范，普通单点查询仍直接调用工具。
-
-| 宿主 | 入口 | 执行方式 |
-|------|------|----------|
-| Pi | `search-parallel-subagent`；`/fast-parallel`、`/complex-parallel` | Pi 子进程；searcher 仅有 `fused_search` / `fetch_page`，summarizer 无工具 |
-| DSH | 已有原生 `research_parallel` | DSH `spawn` provider；角色提示、工具白名单、深度限制、整波取消和资源释放；**不依赖 Pi** |
-| Claude / Codex / Cursor IDE 与 CLI | `search-boost-parallel-research` skill | 使用当前会话真实且获授权的原生委派工具，先确认子代理 MCP 可用 |
-| Grok / Antigravity | 同一 skill，按能力检查 | 不预设子代理 API；有可调用的原生能力才并行，否则明确说明串行研究 |
-
-Pi 与 DSH 支持相同的角色/任务调用形状；DSH 也兼容旧的 `query` / `sub_queries`：
-
-```json
-{"tasks":[{"agent":"searcher","task":"目标版本的官方 API 行为"},{"agent":"searcher","task":"已知限制和冲突证据"}]}
-```
-
-```json
-{"agent":"summarizer","task":"主问题、所有报告与执行状态、已有结论、剩余预算"}
-```
-
-快速模式只做一波，由主代理综合；复杂模式由 summarizer 判断重要缺口，默认 1–2 波，流程要求最多 3 波。原生工具一次只执行**一波**，不是自动循环研究。主代理负责最终验收，不能隐藏超时、拒绝、截断报告或单源证据。
-
-DSH provider 必须声明独立上下文和 `toolFilter` / `depthLimit` / `persona` 能力，默认 `spawn`，可通过插件配置 `researchProvider` 显式指定其他兼容 provider。旧版或能力缺失时明确报错，不降为无限制子代理。`max_seconds`（1–300，默认 120）覆盖整波启动和执行；取消会请求宿主清理，不把未响应的 provider 宣称为已成功停止。`max_sources` 是提示词预算，不是强制工具调用配额。
-
-Skill 不安装自定义宿主 agent，不开启被禁用的委派功能，也不能单靠文字强制隔离或取消。缺少委派或子代理 MCP 时，仅在仍符合用户要求的情况下明确转为串行；权限拒绝、运行故障和取消应报告为阻塞，不能启动另一个 CLI 绕过。详见[实现契约、宿主资料与验证边界](./agents/shared/research/README.md)。
-
-### MCP 启动注入
-
-| Agent | 注入机制与配置位置 |
-|-------|--------------------|
-| Claude Code | `~/.claude/settings.json` → `SessionStart` → `hookSpecificOutput.additionalContext` |
-| Codex CLI | `~/.codex/hooks.json` → `SessionStart` → `hookSpecificOutput.additionalContext` |
-| Cursor IDE / CLI | 复用 `~/.cursor/hooks.json` 的 `sessionStart`，合并提示词时只加入一份主动搜索策略 |
-| Antigravity | `~/.gemini/config/hooks.json` 的 `PreInvocation`，仅 `invocationNum = 0` 时注入；`--workspace` 同步安装工作区副本，启用全局 hook 时副本不重复提醒 |
-| Grok Build | 启动读取的 `search-boost.md` rule；官方规定被动 hook 的 stdout 被忽略，因此不安装无效的 SessionStart 注入 |
-
-Hook 只读取本地提示词，不联网、不授予工具权限；提示词缺失或运行输入异常时放行。重复安装不会叠加 hook，卸载保留其他用户 hook。安装不会覆盖宿主禁用 hook 的设置，也不会绕过信任确认。**Codex 新版需要在 `/hooks` 中审阅并信任 hook；旧版可能需要升级或手动启用其实验 hooks 功能。** Cursor cloud agent 不支持这里的 `sessionStart`。
-
-更新源码或提示词后，重新安装目标并重启对应 Agent（例如 `node cli.mjs install -t claude -y --keep-native`）。仅手工添加 MCP 配置或使用 `search-boost print` 不会安装 hook。
-
-协议依据：[Claude](https://code.claude.com/docs/en/hooks)、[Codex](https://developers.openai.com/codex/hooks)、[Cursor](https://cursor.com/docs/agent/hooks)、[Antigravity](https://antigravity.google/docs/hooks)、[Grok](https://docs.x.ai/build/features/hooks)。
-
-## 宿主适配层（pi / DeepSeek Harness）
-
-两个宿主都在**进程内**直接调用与 MCP 服务相同的核心 —— 没有第二套引擎实现，也不经过 MCP。
-
-| | pi（`adapters/pi`） | DSH（`adapters/dsh`） |
-|---|---|---|
-| 加载方式 | `pi install npm:search-boost`、`pi -e adapters/pi/index.js`，或 `search-boost install -t pi` 写入的 shim | `dsh plugin --profile web add search-boost`（自动应用 `adapters/dsh/cordis.patch.yml`，接管内置 `web_search` / `web_fetch`） |
-| 工具 | `fused_search`（含 `site`/`min_score`/`depth`，最多 20 条）、`fetch_page`（不裁剪）、`search-parallel-subagent`（searcher/summarizer 子进程；`/fast-parallel` `/complex-parallel`）、`x_search` | `fused_search`、`fetch_page`、`x_search`、`research_parallel`（DSH 原生 subagents）、`search_stats`；原生引用卡片 |
-| 命令 | `/web_change`、`/x-login`、`/x-logout`、`/search-cache`、`/search-audit` | `/web_change`、`/x-login`、`/x-logout` |
-| 提示词 | `before_agent_start` 追加 `<search_balance>` + 当日搜索预算 | `systemPrompt.section` `search:policy`（115）+ 动态 `search:status`（116） |
-| 状态 | 审计日志 `~/.pi/agent/search-boost-audit.jsonl`；旧的 `~/.pi/agent/search-boost-layer.json` / `xsearch-auth.json` 仍可读 | — |
-
-Key、搜索层与 X 凭据与 MCP 服务共用：`search-boost config keys|layer|x`（或 TUI）—— 不再写 `PI_SEARCH_*` 环境变量与 `~/.dsh-search-boost-*.json`（旧文件仍会读取）。
-
-**和内置搜索的关系：** 非交互安装且使用 `--replace-native`（默认）时，Codex 会在 `config.toml` **顶层**写入带标记的 `web_search = "disabled"`（不会写进 `[mcp_servers.*]`）；Claude 会在 `settings.json` 写入带 ownership 标记的 `WebSearch` deny。卸载时只移除 search-boost 拥有的项，并在安全时恢复内置搜索。想保留内置搜索就加 `--keep-native`。Cursor、Antigravity 没有硬开关，靠 skill 和 hook 引导优先用 search-boost。Grok 自带的 browse **不会动**。
-
-**Cursor + Cursor CLI：** 两个 target 共用一套 `~/.cursor/` 配置。`-t cursor,cursor-cli` 会把 IDE 与 CLI 提示词合并写入一次；卸载会清理整份共用 surface。
-
-**Grok Build：** `search-boost install -t grok -y --auto-allow` 在 Grok CLI 位于 PATH 时会执行 `grok plugin install <bundled grok-plugin> --trust`，随后写入 `config.toml`、rule 与 skill。若 PATH 中没有 `grok`，插件步骤会跳过并给出警告，配置安装仍会继续。仅需 config/rule/skill 时加 `--skip-grok-plugin`。重复安装对 `[permission]` 块（带标记或 legacy）是幂等的；卸载只剥离 search-boost 拥有的 permission 行。若已设 `[ui] permission_mode = "always-approve"`，`--auto-allow` 会跳过注入 `[permission]`。插件 `.mcp.json` 使用可移植的 `npx`；`config.toml` 使用 `resolveMcpLaunch()`（源码开发时为本地 `node`）——两者可并存。手动装插件（进阶）：`grok plugin install ./grok-plugin --trust` → [grok-plugin/README.md](./grok-plugin/README.md)。在 Windows 上，grok CLI 对**过长的插件源路径（超过约 55 字符）**会报 `no plugins found in the source`；把 `grok-plugin` 复制到更短的路径（如 `C:\sb\grok-plugin`）再从那里安装即可。无论哪种情况 search-boost 都只警告，`config.toml`、rule 与 skill 仍会写入。
-
----
-
-## 故障排查
-
-| 现象 | 建议 |
-|------|------|
-| search-boost 是否健康？ | `search-boost doctor` — pass/warn/fail 判定；脚本用 `--json` |
-| 安装直接失败 | 确认 Node **≥ 22.13**（`node -v`） |
-| Agent 里看不到 MCP | 重新安装并**重启 Agent**，执行 `search-boost status` |
-| 每次调用都要审批 | 重装时加 `--auto-allow`，或在 Agent 里一次性批准 |
-| 搜不到结果 / 引擎为空 | `search-boost doctor` — 看 layer/密钥/引擎检查；**free** 无需 Key；**api** 需**至少一个** keyed 引擎（`search-boost config keys` 或环境变量；建议配齐三个） |
-| 网络/代理问题 | Phase 2：`search-boost doctor --probe`（尚未实现） |
-| MCP 起不来 | `search-boost doctor` → `mcp_launch_command`、`node_version`；再跑 `search-boost serve` |
-| Grok 插件 MCP 起不来 | `grok mcp doctor search-boost`；确认 `npx` 与网络可用 |
-| 超时 / 抓取失败 | 公司代理或防火墙可能拦截 Bing/DDG/Jina；本地跑 `search-boost serve` 看 stderr |
-
----
-
-## 本地开发
+使用源码关联安装期间，请保留这个仓库目录，不要将其放在随时清理的临时目录中：
 
 ```bash
 git clone https://github.com/Mr-remon219/search-boost.git
-cd search-boost && npm install
-npm run check && npm run test:install && npm run test:adapters && npm run smoke
-node cli.mjs install --dry-run -y
+cd search-boost
+git switch v0.2.0
+npm ci
+npm run plugin:sync-grok
+npm install -g .
+search-boost setup
 ```
 
-从源码安装时，MCP 启动命令会写成 `node /你的路径/cli.mjs serve`。无需 sibling checkout 或 `SEARCH_BOOST_DSH_ROOT`。
+更新这个工作副本时，拉取目标分支，重新运行 `npm ci` 和 `npm run plugin:sync-grok`，再运行 `search-boost upgrade --sync-only -y` 刷新已安装资产。npm 更新不会自动跟随开发分支。
 
-目录边界：`lib/runtime.mjs` + `lib/search/` 是核心（与宿主无关）；`adapters/{mcp,pi,dsh}` 是宿主适配层（只做注册、渲染、生命周期）；`agents/<host>/` 放宿主级提示词策略；`lib/agents/` 是安装器。搜索逻辑只允许出现在核心里，适配层不得重新实现。
+## 如何使用
 
----
+在 Agent 对话中使用这些工具。CLI 用于安装、配置和更新，并不提供独立的 `search <query>` 搜索命令。例如：
 
-## 许可证
+> 核对这个依赖当前的官方 API 文档，读取相关页面，判断我们的代码是否需要修改。不要改变我的搜索配置。
 
-MIT
+### 工具之间如何分工
 
----
+| 工具 | 负责什么 | 不负责什么 / 使用边界 |
+| --- | --- | --- |
+| `fused_search` | 单点查询或少量不同角度的网络搜索，合并、去重和排序。 | 一次搜索操作；后续是否继续由主 Agent 决定。 |
+| `fetch_page` | 读取已知公开 URL，可用 `focus` 保留匹配段落。 | 不是登录浏览器，也不是内网访问工具。 |
+| `x_search` | 获取可用的 X 帖子、账号资料或线程材料。 | 不保证实时、完整；样本不代表平台总体情绪。 |
+| `adaptive_search` | 可选的自动补充检索与逐题证据判断，使用 Jev。 | 不是子代理调度器、最终答案生成器或独立事实核验器。 |
+| `search_layer` | MCP 中查看或修改兼容默认层。 | `show` 只读；`free` / `api` 会持久化修改，需要授权。 |
+| `search_stats` | MCP/DSH 中只读查看引擎、缓存和近期活动。 | 配置就绪不等于网络已经连通。 |
 
-**相关链接：** [Issues](https://github.com/Mr-remon219/search-boost/issues) · 已并入本仓库的旧仓库：[dsh-search-boost](https://github.com/Mr-remon219/dsh-search-boost) · [pi-search-boost](https://github.com/Mr-remon219/pi-search-boost)
+Pi 的相应宿主控制命令是 `/web_change`、`/search-audit`；DSH 使用 `/web_change` 修改层。不要假定所有宿主都具有相同的命令名。
 
-**友情链接：** [LINUX DO 社区](https://linux.do/)
+下面是 `fused_search` 的**工具参数**示例，不是终端命令：
+
+```json
+{
+  "query": "AbortSignal.any Node.js documentation",
+  "include_domains": ["nodejs.org"],
+  "engine_pool": "free",
+  "complexity": "simple",
+  "max_results": 5
+}
+```
+
+找到来源后，直接调用 `fetch_page`：
+
+```json
+{
+  "url": "https://nodejs.org/api/globals.html",
+  "focus": "AbortSignal.any"
+}
+```
+
+`focus` 没有命中不代表页面不存在答案；需要完整上下文时去掉它重读。读取器先使用 Jina，再尝试受保护的本地 HTML 抓取，去除 CSS/JS/广告杂项，并在内存中缓存可用正文。原始响应有大小上限，不承诺抓取任意大小的页面。
+
+### 引擎池、排序与预算
+
+| 参数 | 含义 |
+| --- | --- |
+| `engine_pool: free` | 无需 Key 的 Bing、DuckDuckGo、Yahoo、Exa-free。 |
+| `engine_pool: api` | **仅**使用已配置且启用的 Tavily / Brave / Exa。 |
+| `engine_pool: hybrid` | 免费池加上已配置且启用的 API 引擎。 |
+| `engines` | 可选的明确引擎选择；缺失或禁用的引擎会被报告，不会自动启用。 |
+| `ranking` | `balanced`、`research`、`fresh`，只改变最终引擎权重。 |
+| `complexity` | `simple`、`medium`、`complex`，控制搜索预算、变体和深度。 |
+| `community` | 将 X/社区材料混入最终结果限额，默认 `false`，按需开启。 |
+
+通常不必手选 `engines`。`engine_weights` 只调整评分，不决定调用哪些引擎。域名参数限制结果；`recency` 偏向较新的已标日期材料，不是对所有结果执行严格日期截断。检查返回的 `enginesUsed`、`effectiveWeights`、`communityUsed` 和 `warnings`。
+
+旧的持久化 **layer** 只保留兼容语义：`free → free` 池，**`api → hybrid`** 池。它与严格的 `engine_pool: api` 不同。一次搜索优先用参数控制，不要随意改变用户的默认配置。
+
+MCP 在 `search-boost://capabilities` 提供动态配置状态；Pi、DSH 将同一份计算结果注入宿主提示词。可选的 `search-boost://policy` resource 提供示例和限制；调用工具前不必先读取它、调用 `search_routing` 规划 prompt 或加载 skill。
+
+### Jev 辅助证据收集
+
+```bash
+search-boost config jev
+search-boost config jev --show
+```
+
+然后调用 `adaptive_search`：
+
+```json
+{
+  "questions": [
+    "官方文档对这个 API 的取消行为作出了什么保证？",
+    "我们依赖的这个行为是从哪个版本开始提供的？"
+  ]
+}
+```
+
+输入为 1–6 个非空问题，每题最多 400 字符。重复问题复用执行，但保留各自输出位置。Jev 选择允许的搜索动作，评估搜索摘要、引擎返回正文和抓取片段；代码负责预算、引擎限制和返回值校验。
+
+每个问题都有独立状态：`covered`、`insufficient`、`unassessed`、`not_searched` 或 `failed`，并附上送审证据与明确缺口。**`covered` 只表示模型认为这些片段足够，不表示事实已经被独立核验。**仍需检查冲突和未满足条件。未配置 Jev 时返回 `not_configured`，不发网络请求；Jev 故障时可能执行一次受限的普通搜索回退，新结果保持未评估。普通搜索、读页和 X 工具不依赖 Jev。
+
+### 可选的并行研究
+
+Pi 的 `search-parallel-subagent`、DSH 的 `research_parallel` 负责运行子代理，不替代主 Agent 的判断。searcher 只使用搜索/读页工具收集材料，summarizer 只看报告、没有工具。fast 模式只运行一波，再由主代理综合；complex 模式增加缺口检查，仅在有实质缺口时继续。
+
+委派必须获授权。Pi 运行器不限制并发数量，由调用方结合任务预算选择合理的任务数。DSH 使用原生 provider，能力缺失会明确失败，而不是偷偷启动 Pi。skill 或工具描述都不能授权绕过运行时故障、权限拒绝或用户取消。
+
+## 配置与隐私
+
+```bash
+search-boost config keys           # 搜索引擎密钥及路由
+search-boost config layer          # 兼容默认层
+search-boost config x              # 可选 X 认证
+search-boost config jev            # 可选 Jev 地址与密钥
+```
+
+优先通过交互界面输入密钥，避免把真实值放入命令行参数或聊天记录。
+
+运行配置位于 `~/.search-boost/config/`：`keys.json` 保存引擎和 Jev 配置，另有 `layer.json`、`xauth.json`。`SEARCH_BOOST_HOME` 可迁移整个 SearchBoost 目录。旧平铺文件可在首次写入时被接纳；canonical 存储一旦初始化，清空它不会让旧副本重新生效。权威配置损坏会明确报错，不会悄悄用旧文件替代。`enabledEngines: []` 表示有意禁用全部带 Key 引擎；不写该字段则使用已配置且没有单独禁用的引擎。
+
+**Jev 只认配置：** endpoint/key 组合来自 canonical `config/keys.json`。`TYPESAFE_API_KEY`、项目文件、旧适配器文件，以及 `SEARCH_BOOST_KEYS_FILE` 都不能为 Jev 提供凭据。清除 Jev 不会吸收或重新启用环境变量中的 Key。其他 provider 保留其兼容规则：Tavily / Brave / Exa 支持既有的环境变量 Key 回退，X 可使用 `XAI_API_KEY`。Jev 不是搜索引擎，也不能代替搜索引擎的 Key。
+
+私有配置使用原子写入，并在 POSIX 上限制文件权限。文件**不是加密存储**；Windows 上的保护还取决于账户和文件 ACL。不要发布配置文件，也不要在诊断信息中粘贴原始密钥。
+
+搜索问题会发往选定引擎；Jina 会收到待抓取的页面 URL。启用 Jev 后，问题和必要的证据片段会发往配置的 endpoint，默认 `https://api.typesafe.ai/v1`；请求正文不包含引擎 Key 或 fingerprint。核心证据池在内存中，但**宿主可以保存会话和审计历史**。Pi 在其 agent 目录维护 `search-boost-audit.jsonl`，其中包含搜索问题、URL 和活动记录；`/search-audit clear` 只清除该审计，不清除宿主对话历史。
+
+X 认证是可选的。`search-boost config x --import-grok` 复制已有 Grok 登录，`--logout` 删除 SearchBoost 本地副本，不会让 Grok 本身退出。Pi/DSH 另有 `/x-login`、`/x-logout`，它们不是 MCP 的斜杠命令。X 日期上下界按 UTC 自然日包含两端；user 模式筛选近期帖子。无法验证作者、日期或互动量元数据的候选可能被排除。
+
+## 老用户如何更新
+
+### 已经使用 `search-boost`
+
+运行 `search-boost`，进入 TUI 的 **Update**；或执行：
+
+```bash
+search-boost upgrade --dry-run
+search-boost upgrade -y
+```
+
+更新流程检查已发布版本，必要时更新包，并刷新**已经配置的集成**，包括可识别的旧 Pi/DSH 注册。不会给所有“检测到但未配置”的宿主自动安装。宿主禁用状态、模型和权限配置仍由用户控制；出现失败时检查报告，不要默认每个宿主都已完成更新。
+
+```bash
+search-boost upgrade --sync-only -y                    # 只刷新已安装资产，不更新 npm 包
+search-boost upgrade --workspace /path/to/project -y   # 纳入指定项目
+```
+
+发现范围包括已知用户配置、DSH profiles，以及当前、已记录和明确指定的工作区，不是全盘扫描。备份位于 `~/.search-boost/backups/`，更新报告与源码所有权收据位于 `state/last-upgrade.json`、`state/package-sources.json`。仅有过期收据不会重新安装你已移除的集成。完成后重新加载相关宿主。
+
+### 仍在使用 `search-boost-mcp`
+
+统一包发布后，通过新包显式运行迁移代码：
+
+```bash
+npx --yes --package=search-boost@latest -- search-boost migrate --dry-run
+npx --yes --package=search-boost@latest -- search-boost migrate -y
+search-boost upgrade -y
+```
+
+`migrate` **只做一次性的全局 npm 包改名迁移**：先安装并验证新包，再卸载旧包，安全处理共用命令名，保持 Agent 配置不变。后续的 **Update / `upgrade`** 才刷新这些集成。不需要发布旧包过渡版本、依靠 `postinstall` 自动迁移，或先盲目卸载旧包。交接失败时，在可回滚的范围内保留旧安装并明确报告。
+
+### 仍在使用独立 Pi/DSH 适配器
+
+安装统一 CLI，再通过 TUI **Update** 或 `search-boost upgrade -y` 更新。宿主升级流程识别受支持的旧注册，刷新原生适配器与资产；`migrate` 不是 Pi/DSH 的迁移命令。源码类型、项目/profile 发现范围、失败重试见[宿主升级说明](./docs/host-upgrades.md)。新工具确认正常后再清理备份。
+
+## 诊断、网络限制与卸载
+
+```bash
+search-boost doctor
+search-boost doctor --json
+search-boost doctor --strict
+search-boost status
+```
+
+`doctor` 当前执行离线检查。**`--probe` 是预留功能，会报告 pending，不是实时连通性测试。**退出码为：`0` 正常，`1` 失败或 `--strict` 下出现警告，`2` 仅警告。判断 provider 真正可达，需要在宿主中完成一次实际工具调用。
+
+固定服务的传输支持 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY` 及小写形式，非空小写值优先；`NO_PROXY` / `no_proxy` 适用于这些服务请求。SOCKS URL 会明确报错，请使用传输层支持的 HTTP/混合代理端口，而不是期待它静默直连。
+
+任意页面的直接回退抓取会解析、校验地址，并将连接固定到校验过的地址；重定向逐跳重新检查。缓存命中和 Jina 路径不要求本机先解析目标页面域名。当前锁定的传输依赖无法在 HTTP 代理后提供等价的目标地址固定，所以设置代理时，本地回退会报告 `proxy_unsupported`，而不是绕过代理；Jina 路径仍可能可用。TUN fake-IP 兼容需要显式设置 `SEARCH_BOOST_TRUSTED_TUN=1`，并信任 TUN 的实际路由，不会默认开启。
+
+搜索失败或为空时，检查返回警告以及 `search_stats` 或宿主审计。DNS、provider 限流、过滤条件和缺 Key 是不同原因；不要因为一次失败就关闭安全检查或修改持久化层。
+
+```bash
+search-boost uninstall -t cursor,codex,claude --dry-run -y
+search-boost uninstall -t cursor,codex,claude -y
+```
+
+卸载针对 SearchBoost 所属的注册、区块和资产，保留无关用户内容。原生搜索恢复取决于受管理设置及宿主能力；Grok CLI 不可用时，插件移除是尽力执行。先移除依赖这个包的宿主集成，再卸载 npm 包。
+
+## 架构与开发
+
+`lib/runtime.mjs` 是宿主无关入口。`lib/search/` 负责检索、排序、网络政策和自适应证据流程，`lib/jev/` 负责 Jev 协议客户端；`adapters/` 将结果转换为各宿主的接口。`agents/` 是提示词与 skill 的源模板，生成资产应由同步流程刷新，不要单独修改后让各份内容失配。
+
+**提示词分工：**工具描述说明用途和结果，schema 说明参数，inject 说明验证原则与边界，动态 capability 说明配置，按需 skill/template 说明工作流，角色提示词只说明该子任务。详细约定见[提示词契约](./docs/prompt-contract.md)。
+
+```bash
+npm ci
+npm run prepublishOnly    # 同步生成资产并执行全部离线测试，不会发布
+npm run test:network      # DNS/代理/地址固定，以及发布审计回归
+npm run test:adaptive
+npm run test:adapters
+npm run smoke            # MCP 协议冒烟测试
+npm pack --dry-run
+```
+
+CI 在 Linux 和 Windows 上运行测试。模拟 provider 响应和本地网络夹具不能证明付费服务当前可用，也不能覆盖所有宿主版本的真实行为；正式发布前仍需单独验证这些环境。
+
+[MIT License](./LICENSE)

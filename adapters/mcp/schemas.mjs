@@ -63,6 +63,8 @@ export const fetchPageInput = {
 }
 
 export const fetchPageOutput = {
+  focusMiss: z.boolean().optional(),
+  limitation: z.object({ kind: z.string(), message: z.string() }).optional(),
   url: z.string(),
   via: z.string(),
   word_count: z.number(),
@@ -114,8 +116,106 @@ export const searchStatsOutput = {
   recent: z.array(z.record(z.unknown())),
 }
 
-/** MCP tool annotations (hints for clients) */
-export const ANNOTATIONS = {
+export const adaptiveSearchInput = {
+  questions: z.array(z.string().min(1).max(400)).min(1).max(6)
+    .describe('1–6 independent questions (blank questions and over-long items are rejected, never truncated). Each question is searched and judged on its own and keeps its output position; identical questions reuse one execution.'),
+}
+
+const adaptiveJudgment = z.object({
+  relevance: z.number().nullable(),
+  states_evidence: z.number().nullable(),
+  premise_conflict: z.number().nullable(),
+  injection: z.number().nullable(),
+})
+
+const adaptiveEvidence = z.object({
+  evidenceId: z.string(),
+  url: z.string(),
+  title: z.string(),
+  domain: z.string(),
+  published: z.string().nullable(),
+  textBasis: z.enum(['snippet', 'engine_content', 'fetched_page']).nullable(),
+  reviewedText: z.string(),
+  textVersion: z.string().nullable(),
+  engines: z.array(z.string()),
+  fusionScore: z.number(),
+  status: z.enum(['answer_capable', 'mention_only', 'off_topic', 'unassessed', 'excluded_injection', 'no_text']),
+  assessed: z.boolean(),
+  judgment: adaptiveJudgment.nullable(),
+  premiseConflict: z.boolean(),
+  injectionSuspected: z.boolean(),
+  usedForCoverage: z.boolean(),
+  firstRound: z.number().optional(),
+  changeCount: z.number().optional(),
+  textTruncated: z.boolean().optional(),
+  fetch: z.object({ state: z.string(), via: z.string().nullable(), words: z.number() }).nullable().optional(),
+})
+
+const adaptiveCoverage = z.object({
+  probability: z.number().nullable(),
+  threshold: z.number(),
+  basis: z.string().nullable(),
+  textBasis: z.string().nullable(),
+  snippetOnly: z.boolean(),
+  snippetSelfSufficient: z.number().nullable(),
+  judgedAtRound: z.number().nullable(),
+  evidenceVersionSignature: z.string(),
+  missingExplicitRequirements: z.array(z.string()),
+  evidenceIds: z.array(z.string()),
+})
+
+const adaptiveQuestion = z.object({
+  id: z.string(),
+  canonicalId: z.string().nullable(),
+  question: z.string(),
+  status: z.enum(['covered', 'insufficient', 'unassessed', 'not_searched', 'failed']),
+  assessed: z.boolean(),
+  coverage: adaptiveCoverage.nullable(),
+  evidence: z.array(adaptiveEvidence),
+  evidenceCount: z.number(),
+  evidenceTruncated: z.boolean(),
+  conflictCount: z.number(),
+  uncoveredReason: z.string().nullable(),
+  uncoveredReasons: z.array(z.string()),
+  conflicts: z.array(z.record(z.unknown())),
+  searchedEngines: z.array(z.string()),
+})
+
+export const adaptiveSearchOutput = {
+  schemaVersion: z.number(),
+  tool: z.string(),
+  questions: z.array(adaptiveQuestion),
+  uncovered: z.array(z.object({
+    id: z.string(),
+    canonicalId: z.string().nullable(),
+    question: z.string(),
+    status: z.string(),
+    reasons: z.array(z.string()),
+    qualifiedEvidence: z.number(),
+    conflicts: z.number(),
+  })),
+  rounds: z.number(),
+  stopReason: z.string(),
+  stopDetail: z.string().nullable(),
+  evidence: z.object({
+    total: z.number(),
+    sources: z.number(),
+    withText: z.number(),
+    answerCapable: z.number(),
+    dropped: z.number(),
+    byBasis: z.record(z.number()),
+  }),
+  usage: z.record(z.unknown()),
+  roundLog: z.array(z.record(z.unknown())),
+  jev: z.record(z.unknown()),
+  limits: z.record(z.unknown()),
+  warnings: z.array(z.string()),
+  outputTruncated: z.boolean().optional(),
+  fallback: z.record(z.unknown()).optional(),
+  configurationHint: z.string().optional(),
+}
+
+/** MCP tool annotations (hints for clients) */export const ANNOTATIONS = {
   search: { readOnlyHint: true, openWorldHint: true, destructiveHint: false },
   config: { readOnlyHint: false, openWorldHint: false, destructiveHint: false },
   stats: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },

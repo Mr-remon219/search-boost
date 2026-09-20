@@ -612,7 +612,7 @@ assert('cursor skill name only', cursorHeader.includes('name: search-boost') && 
 const grokPrompt = await loadAgentPrompt('grok')
 assert('load grok inject', grokPrompt.includes('MCP server') && grokPrompt.includes('workflow extensions'))
 assert('load grok inject native browse', /native (Grok|browsing)/i.test(grokPrompt))
-assert('grok permission allows count', grokPermissionAllows().length === 5)
+assert('grok permission allows count', grokPermissionAllows().length === 6)
 assert('grok permission toml block', grokPermissionTomlBlock().includes('[permission]'))
 
 let grokToml = ''

@@ -140,6 +140,11 @@ function childEnvironment() {
   delete env.PI_SESSION_ID
   delete env.PI_SESSION_FILE
   delete env.PI_SUBAGENT_PARENT_SESSION
+  // SearchBoost-created children must not inherit the Jev credential. The host's
+  // own process.env is left untouched (proxy variables, PATH, host model
+  // credentials and everything else keep working). This is not OS-level secret
+  // isolation: a same-user process can still read the variable itself.
+  delete env.TYPESAFE_API_KEY
   return env
 }
 

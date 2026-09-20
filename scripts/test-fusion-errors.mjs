@@ -57,7 +57,9 @@ assert('formatEngineStatsLine lists FAIL', engineLine.includes('bing: FAIL') && 
 
 const msg = formatAllEnginesFailedMessage({ query: 'test query', layer: 'free', engineStats: allFailStats })
 assert('failure message mentions search_layer', msg.includes('search_layer api'))
-assert('failure message mentions keys path', msg.includes('.search-boost-keys.json'))
+assert('failure message gives the supported key configuration command', msg.includes('search-boost config keys'))
+assert('API-layer failure gives read-only key diagnostics', formatAllEnginesFailedMessage({ query: 'test query', layer: 'api', engineStats: allFailStats }).includes('search-boost config keys --show'))
+assert('failure message requires authorization before changing layer', msg.includes('authorized'))
 
 const summary = formatFusedSummary({
   query: 'q',

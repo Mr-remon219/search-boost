@@ -11,6 +11,14 @@ community defaults to false. Enable it only when recent developer/community voic
 
 Live configuration is available through the optional search-boost://capabilities Resource. It reports current available engines, compatibility layer and X official/fallback readiness, without claiming network reachability. Results report enginesUsed (attempted sources, including failures), effectiveWeights, communityUsed (whether the community channel was executed, not whether it found evidence), and warnings. Cached results retain their original provenance.
 
+## Adaptive search (optional, Jev)
+
+adaptive_search is a separate high-level tool for 1–6 independent questions at once. It requires Jev credentials (TypeSafe's System One decision model, or a custom gateway) and is registered even when unconfigured: without credentials it returns not_configured and makes no network request. It sends the question text and the evidence fragments needed for each judgement to the Jev service you configured (default TypeSafe); no engine credentials or fingerprints are sent. Core evidence is held in memory, but hosts can retain session/audit history; do not assume the host is log-free.
+
+The tool chooses the search engines, judges each collected fragment against the question it belongs to, and reports per question whether the qualified evidence supports an answer. Status values are covered, insufficient, unassessed, not_searched and failed; 'covered' means the model judged the cited fragments sufficient, not that a fact was independently verified. Snippets, engine-returned text and fetched page text are distinguished in each evidence item, and questions whose evidence was never judged stay unassessed.
+
+Use adaptive_search when several questions share one evidence-gathering task and you want per-question coverage reporting. Use fused_search / fetch_page / x_search when you want to control the query, engines, or parameters yourself — those tools are unchanged and always available. The budgets (rounds, search/fetch calls, deadline, thresholds) are code constants and are not accepted as parameters.
+
 ## Query examples
 
 A focused official-source lookup with fused_search:
