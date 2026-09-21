@@ -1,13 +1,9 @@
 #!/usr/bin/env node
-// Network policy regressions (B5): validated-address pinning, bounded DNS,
-// per-hop redirect checks, dual-stack fallback, proxy selection and the
-// explicit limitations where the locked Undici release cannot satisfy a policy.
-//
-// Local servers and injected resolvers are fixtures only: loopback is reachable
-// here because the test injects the address snapshot directly. Production
-// validation still blocks loopback/private/metadata targets.
+// Network policy: proxy retries/fallback, HTTP/TLS/size/cancellation bounds,
+// ordinary local networking, plus retained legacy DNS/pinning helper contracts.
+// All live requests use loopback fixtures; no external network or credentials.
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { createServer as createHttpServer } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { connect as netConnect } from 'node:net'
@@ -48,7 +44,7 @@ const clearNetworkEnv = () => {
 }
 clearNetworkEnv()
 
-const { NET_ERROR_KINDS, NetworkPolicyError, lookupBounded, pinnedLookup, proxyPolicy, autoSelectFamilyEnabled } = await import('../lib/search/net-policy.mjs')
+const { NET_ERROR_KINDS, NetworkPolicyError, lookupBounded, pinnedLookup, proxyPolicy, proxyRouteFor, noProxyMatches, autoSelectFamilyEnabled } = await import('../lib/search/net-policy.mjs')
 const { fetchPinned, ipv4Fetch, resetFetchDispatcher, closeFetchDispatchers, __setUndiciLoaderForTests } = await import('../lib/search/ipv4-fetch.js')
 const { assertStaticHttpUrl, isBlockedIp, isTunFakeIp, resolveValidatedAddresses, guardedFetch, trustedTunMode, __setFixtureAllowlistForTests } = await import('../lib/search/ssrf.js')
 const { fetchPage, makePageCache } = await import('../lib/search/fetch.js')
@@ -62,7 +58,7 @@ __setFixtureAllowlistForTests(['127.0.0.1', '::1'])
  * bytes are piped both ways. A canned response would be timing-sensitive, and
  * the point of the test is that our transport really routes through a proxy.
  */
-function startTunnelProxy() {
+function startTunnelProxy(resolveHost = (host) => host, failures = 0, failureStatus = 502) {
   return new Promise((resolve) => {
     const connects = []
     const sockets = new Set()
@@ -78,8 +74,13 @@ function startTunnelProxy() {
       sockets.add(clientSocket)
       clientSocket.on('close', () => sockets.delete(clientSocket))
       connects.push(req.url)
+      if (connects.length <= failures) {
+        if (failureStatus === 'reset') { clientSocket.destroy(); return }
+        clientSocket.end(`HTTP/1.1 ${failureStatus} Proxy failure\r\nContent-Length: 0\r\n\r\n`)
+        return
+      }
       const [host, port] = String(req.url).split(':')
-      const upstream = netConnect(Number(port), host, () => {
+      const upstream = netConnect(Number(port), resolveHost(host), () => {
         clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
         if (head?.length) upstream.write(head)
         upstream.pipe(clientSocket)
@@ -241,27 +242,27 @@ try {
   // -------------------------------------------------------------------------
 
   await test('IPv4-mapped IPv6 literals are judged by their IPv4 value', () => {
-    // Literal blocking is production behaviour: run it without the fixture allowlist.
+    // Legacy classification remains available, but normal page URL checks no longer block IPs.
     __setFixtureAllowlistForTests(null)
     try {
       assert.equal(isBlockedIp('::ffff:127.0.0.1'), true)
       assert.equal(isBlockedIp('::ffff:10.0.0.1'), true)
       assert.equal(isBlockedIp('::ffff:169.254.169.254'), true)
       assert.equal(isBlockedIp('::ffff:93.184.216.34'), false)
-      assert.throws(() => assertStaticHttpUrl('http://[::ffff:127.0.0.1]/'), /blocked address/)
-      assert.throws(() => assertStaticHttpUrl('http://127.0.0.1/'), /blocked address/)
-      assert.throws(() => assertStaticHttpUrl('http://[::1]/'), /blocked address/)
+      assert.ok(assertStaticHttpUrl('http://[::ffff:127.0.0.1]/'))
+      assert.ok(assertStaticHttpUrl('http://127.0.0.1/'))
+      assert.ok(assertStaticHttpUrl('http://[::1]/'))
     } finally {
       __setFixtureAllowlistForTests(['127.0.0.1', '::1'])
     }
   })
 
-  await test('static checks reject credentials, non-http schemes and internal names without DNS', () => {
+  await test('URL checks reject credentials and non-HTTP schemes, not internal destinations', () => {
     assert.throws(() => assertStaticHttpUrl('http://user:pass@example.com/'), /credentials/)
     assert.throws(() => assertStaticHttpUrl('file:///etc/passwd'), /http\(s\)/)
-    assert.throws(() => assertStaticHttpUrl('http://localhost/'), /blocked host/)
-    assert.throws(() => assertStaticHttpUrl('http://metadata.google.internal/'), /blocked host/)
-    assert.throws(() => assertStaticHttpUrl('http://svc.internal/'), /blocked host/)
+    assert.ok(assertStaticHttpUrl('http://localhost/'))
+    assert.ok(assertStaticHttpUrl('http://metadata.google.internal/'))
+    assert.ok(assertStaticHttpUrl('http://svc.internal/'))
     // A normal public name passes the static check with no DNS involved: a lookup
     // for `.invalid` could never succeed, so passing proves none was attempted.
     assert.ok(assertStaticHttpUrl('http://this-name-cannot-resolve.invalid/'), 'static checks must not need DNS')
@@ -279,8 +280,8 @@ try {
     assert.deepEqual(allowed, [{ address: '198.18.0.5', family: 4 }])
     assert.equal(trustedTunMode({ SEARCH_BOOST_TRUSTED_TUN: '1' }), true)
     assert.equal(trustedTunMode({}), false)
-    // A literal fake-IP in the URL is blocked even in trusted-TUN mode.
-    assert.throws(() => assertStaticHttpUrl('http://198.18.0.5/'), /blocked address/)
+    // The page URL policy delegates fake-IP routing to the local network as well.
+    assert.ok(assertStaticHttpUrl('http://198.18.0.5/'))
   })
 
   // -------------------------------------------------------------------------
@@ -328,13 +329,24 @@ try {
     const server = createHttpsServer({ key: pem.key, cert: pem.cert }, (req, res) => { res.writeHead(200); res.end('tls fixture') })
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
     const port = server.address().port
+    const proxy = await startTunnelProxy(() => '127.0.0.1')
     try {
       await assert.rejects(
+        guardedFetch(`https://tls.example:${port}/`, {
+          env: { https_proxy: `http://127.0.0.1:${proxy.port}` },
+          lookupImpl: () => { throw new Error('unexpected local lookup') },
+        }),
+        (err) => err.kind === NET_ERROR_KINDS.tls,
+        'proxy DNS trust must not disable target TLS verification',
+      )
+      assert.ok(proxy.connects.every((host) => host === `tls.example:${port}`))
+      await assert.rejects(
         fetchPinned(`https://tls.example:${port}/`, { addresses: [{ address: '127.0.0.1', family: 4 }] }),
-        (err) => /certificate|self.signed|unable to verify|CERT|TLS/i.test(String(err?.message ?? err)) || /CERT|TLS/i.test(String(err?.cause?.code ?? '')),
+        (err) => err.kind === NET_ERROR_KINDS.tls || /certificate|self.signed|unable to verify|CERT|TLS/i.test(String(err?.message ?? err)) || /CERT|TLS/i.test(String(err?.cause?.code ?? '')),
         'a self-signed certificate must fail: verification is not disabled',
       )
     } finally {
+      await proxy.close()
       await new Promise((resolve) => server.close(resolve))
       rmSync(pem.dir, { recursive: true, force: true })
     }
@@ -344,18 +356,18 @@ try {
   // Redirects are re-validated per hop
   // -------------------------------------------------------------------------
 
-  await test('a redirect into a blocked address is rejected before connecting', async () => {
+  await test('a redirect to a disallowed protocol is rejected before connecting', async () => {
     const server = await startRecorder((req, res) => {
-      res.writeHead(302, { location: 'http://169.254.169.254/latest/meta-data/' })
+      res.writeHead(302, { location: 'file:///etc/passwd' })
       res.end()
     })
     try {
       await assert.rejects(
-        guardedFetch(`http://redirect.example:${server.port}/`, {
+        guardedFetch(`http://127.0.0.1:${server.port}/`, {
           lookupImpl: (host, opts, cb) => cb(null, [{ address: '127.0.0.1', family: 4 }]),
           timeoutMs: 3_000,
         }),
-        (err) => err.kind === NET_ERROR_KINDS.blockedAddress,
+        (err) => err.kind === NET_ERROR_KINDS.blockedHost,
       )
     } finally {
       await server.close()
@@ -369,7 +381,7 @@ try {
     })
     try {
       await assert.rejects(
-        guardedFetch(`http://loop.example:${server.port}/`, {
+        guardedFetch(`http://127.0.0.1:${server.port}/`, {
           lookupImpl: (host, opts, cb) => cb(null, [{ address: '127.0.0.1', family: 4 }]),
           maxHops: 3,
           timeoutMs: 3_000,
@@ -491,20 +503,218 @@ try {
     }
   })
 
-  await test('an arbitrary page fetch through a proxy reports a limitation instead of bypassing it', async () => {
-    const previous = { ...process.env }
+  await test('NO_PROXY matching and protocol-specific routes match service policy', async () => {
+    for (const [host, port, rule, expected] of [
+      ['example.com', 443, 'EXAMPLE.COM', true],
+      ['sub.example.com', 443, 'example.com', false],
+      ['sub.example.com', 443, '.example.com', true],
+      ['example.com', 443, '*.example.com', false],
+      ['example.com', 443, '*example.com', true],
+      ['example.com', 443, 'example.com:80', false],
+      ['example.com', 443, 'other.test, example.com:443', true],
+      ['example.com', 443, '*', true],
+      ['example.com', 443, '', false],
+      ['[::1]', 80, '[::1]:80', true],
+    ]) assert.equal(noProxyMatches(host, port, rule), expected, `${host}:${port} / ${rule}`)
+    const env = { https_proxy: 'http://127.0.0.1:9' }
+    assert.equal(proxyRouteFor('http://example.com', env).route, 'direct', 'HTTPS-only proxy must not unpin HTTP')
+    assert.equal(proxyRouteFor('https://example.com', env).route, 'proxy')
+    assert.equal(proxyRouteFor('https://example.com', { ...env, NO_PROXY: 'example.com' }).route, 'direct')
+    assert.equal(proxyRouteFor('https://example.com', { ...env, no_proxy: '', NO_PROXY: '*' }).route, 'proxy')
+  })
+
+  await test('pages delegate DNS to the real proxy without a local target lookup', async () => {
+    const origin = await startRecorder()
+    const proxy = await startTunnelProxy(() => '127.0.0.1')
     try {
-      process.env.https_proxy = 'http://127.0.0.1:9'
-      resetFetchDispatcher()
-      await assert.rejects(
-        fetchPinned('http://page.example/', { addresses: [{ address: '93.184.216.34', family: 4 }] }),
-        (err) => err.kind === NET_ERROR_KINDS.proxyUnsupported,
-      )
-    } finally {
-      if (previous.https_proxy === undefined) delete process.env.https_proxy
-      else process.env.https_proxy = previous.https_proxy
-      resetFetchDispatcher()
+      const res = await guardedFetch(`http://proxy-only.invalid:${origin.port}/page`, {
+        env: { http_proxy: `http://127.0.0.1:${proxy.port}` },
+        lookupImpl: () => { throw new Error('must not resolve the target locally') },
+      })
+      assert.match(await res.text(), /fixture body/)
+      assert.deepEqual(proxy.connects, [`proxy-only.invalid:${origin.port}`])
+      assert.equal(origin.requests[0].host, `proxy-only.invalid:${origin.port}`)
+    } finally { await proxy.close(); await origin.close() }
+  })
+
+  await test('page NO_PROXY uses normal direct networking, including local destinations', async () => {
+    const origin = await startRecorder()
+    const proxy = await startTunnelProxy(() => '127.0.0.1')
+    try {
+      const res = await guardedFetch(`http://127.0.0.1:${origin.port}/page`, {
+        env: { http_proxy: `http://127.0.0.1:${proxy.port}`, no_proxy: '127.0.0.1' },
+        lookupImpl: () => { throw new Error('obsolete DNS pre-check must not run') },
+      })
+      assert.match(await res.text(), /fixture body/)
+      assert.equal(proxy.connects.length, 0)
+      assert.equal(origin.requests.length, 1)
+    } finally { await proxy.close(); await origin.close() }
+  })
+
+  await test('redirects re-select proxy/direct routes and retain static blocks', async () => {
+    const origin = await startRecorder((req, res) => {
+      if (req.url === '/start') res.writeHead(302, { location: `http://127.0.0.1:${origin.port}/next` })
+      else if (req.url === '/blocked') res.writeHead(302, { location: 'file:///etc/passwd' })
+      else if (req.url === '/next') res.writeHead(302, { location: `http://proxy-only.invalid:${origin.port}/end` })
+      res.end('fixture body '.repeat(20))
+    })
+    const proxy = await startTunnelProxy(() => '127.0.0.1')
+    const seen = []
+    const options = {
+      env: { http_proxy: `http://127.0.0.1:${proxy.port}`, no_proxy: '127.0.0.1' },
+      lookupImpl: (host, _opts, cb) => { seen.push(host); cb(null, [{ address: '127.0.0.1', family: 4 }]) },
     }
+    try {
+      const res = await guardedFetch(`http://proxy-only.invalid:${origin.port}/start`, options)
+      assert.match(await res.text(), /fixture body/)
+      assert.deepEqual(seen, [], 'no local destination pre-check')
+      assert.deepEqual(origin.requests.map((r) => r.host), [
+        `proxy-only.invalid:${origin.port}`, `127.0.0.1:${origin.port}`, `proxy-only.invalid:${origin.port}`,
+      ])
+      assert.ok(proxy.connects.length >= 1)
+      await assert.rejects(guardedFetch(`http://proxy-only.invalid:${origin.port}/blocked`, options),
+        (err) => err.kind === NET_ERROR_KINDS.blockedHost)
+      assert.equal(origin.requests.length, 4, 'blocked redirect was not fetched')
+    } finally { await proxy.close(); await origin.close() }
+  })
+
+  await test('the fifth proxy attempt can succeed without any direct DNS', async () => {
+    const origin = await startRecorder()
+    const proxy = await startTunnelProxy(() => '127.0.0.1', 4)
+    try {
+      const res = await guardedFetch(`http://fifth.invalid:${origin.port}/`, {
+        env: { http_proxy: `http://127.0.0.1:${proxy.port}` },
+        lookupImpl: () => { throw new Error('must stay proxied') },
+      })
+      assert.match(await res.text(), /fixture body/)
+      assert.equal(proxy.connects.length, 5, '5 attempts total, not 1 + 5 retries')
+      assert.equal(origin.requests.length, 1)
+    } finally { await proxy.close(); await origin.close() }
+  })
+
+  await test('five failed proxy attempts then one direct page chain', async () => {
+    const proxy = await startTunnelProxy(() => '127.0.0.1', Infinity)
+    const origin = await startRecorder((req, res) => {
+      assert.equal(proxy.connects.length, 5, 'origin reached only after five proxy failures')
+      if (req.url === '/start') res.writeHead(302, { location: '/end' })
+      res.end('fixture body '.repeat(20))
+    })
+    try {
+      const res = await guardedFetch(`http://127.0.0.1:${origin.port}/start`, {
+        env: { http_proxy: `http://127.0.0.1:${proxy.port}` },
+      })
+      assert.match(await res.text(), /fixture body/)
+      assert.equal(proxy.connects.length, 5, 'redirects stay on the direct fallback lane')
+      assert.equal(origin.requests.length, 2)
+    } finally { await proxy.close(); await origin.close() }
+  })
+
+  await test('proxy socket resets still get five attempts then direct, for Undici and curl', async () => {
+    for (const transport of [undefined, 'curl']) {
+      if (transport === 'curl' && spawnSync('curl', ['-q', '--version'], { stdio: 'ignore' }).status !== 0) continue
+      const proxy = await startTunnelProxy(() => '127.0.0.1', Infinity, 'reset')
+      const origin = await startRecorder()
+      try {
+        const res = await guardedFetch(`http://127.0.0.1:${origin.port}/`, {
+          env: { http_proxy: `http://127.0.0.1:${proxy.port}` }, transport,
+        })
+        assert.match(await res.text(), /fixture body/)
+        assert.equal(proxy.connects.length, 5, `reset attempts via ${transport ?? 'undici'}`)
+        assert.equal(origin.requests.length, 1)
+      } finally { await proxy.close(); await origin.close() }
+    }
+  })
+
+  await test('service cancellation during retry backoff is classified and never goes direct', async () => {
+    let calls = 0
+    process.env.http_proxy = 'http://127.0.0.1:9'
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 40)
+    try {
+      __setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: async () => {
+        calls++
+        throw Object.assign(new Error('refused'), { code: 'ECONNREFUSED' })
+      } }))
+      await assert.rejects(ipv4Fetch('http://fixture.invalid/', { signal: controller.signal }),
+        (err) => err.kind === NET_ERROR_KINDS.cancelled)
+      assert.equal(calls, 1)
+    } finally { clearTimeout(timer); delete process.env.http_proxy; __setUndiciLoaderForTests(null) }
+  })
+
+  await test('the engine/service transport also falls back after exactly five failures', async () => {
+    const origin = await startRecorder()
+    const proxy = await startTunnelProxy((host) => host, Infinity)
+    try {
+      process.env.http_proxy = `http://127.0.0.1:${proxy.port}`
+      resetFetchDispatcher()
+      const res = await ipv4Fetch(`http://127.0.0.1:${origin.port}/search`, {
+        method: 'POST', body: JSON.stringify({ query: 'fixture query' }),
+        headers: { 'content-type': 'application/json', 'x-api-key': 'fixture-key' },
+        signal: AbortSignal.timeout(8000),
+      })
+      assert.match(await res.text(), /fixture body/)
+      assert.equal(proxy.connects.length, 5)
+      assert.equal(origin.requests.length, 1)
+      assert.equal(origin.requests[0].method, 'POST')
+    } finally {
+      delete process.env.http_proxy
+      resetFetchDispatcher()
+      await proxy.close(); await origin.close()
+    }
+  })
+
+  await test('page fetching permits loopback without a fixture allowlist or DNS pre-check', async () => {
+    const origin = await startRecorder()
+    __setFixtureAllowlistForTests(null)
+    try {
+      const res = await guardedFetch(`http://127.0.0.1:${origin.port}/`, {
+        env: {}, lookupImpl: () => { throw new Error('no target pre-check') },
+      })
+      assert.match(await res.text(), /fixture body/)
+    } finally { __setFixtureAllowlistForTests(['127.0.0.1', '::1']); await origin.close() }
+  })
+
+  await test('HTTP responses and proxy authentication/policy denial do not trigger fallback', async () => {
+    const origin = await startRecorder((_req, res) => { res.writeHead(503); res.end('site unavailable') })
+    const proxy = await startTunnelProxy(() => '127.0.0.1')
+    try {
+      const res = await guardedFetch(`http://http-error.invalid:${origin.port}/`, {
+        env: { http_proxy: `http://127.0.0.1:${proxy.port}` },
+        lookupImpl: () => { throw new Error('unexpected direct fallback') },
+      })
+      assert.equal(res.status, 503)
+      await res.text()
+      assert.equal(proxy.connects.length, 1)
+    } finally { await proxy.close(); await origin.close() }
+    for (const status of [403, 407]) {
+      const denied = await startTunnelProxy(() => '127.0.0.1', Infinity, status)
+      try {
+        await assert.rejects(guardedFetch('http://denied.invalid/', {
+          env: { http_proxy: `http://127.0.0.1:${denied.port}` },
+          lookupImpl: () => { throw new Error('unexpected direct fallback') },
+        }))
+        assert.equal(denied.connects.length, 1)
+      } finally { await denied.close() }
+    }
+  })
+
+  await test('deadline expiry and unsupported proxy protocols never switch routes', async () => {
+    const origin = await startRecorder()
+    // Bind and close a listener to obtain a currently unused port.
+    const dead = await startRecorder()
+    await dead.close()
+    let lookups = 0
+    try {
+      const lookupImpl = () => { lookups++; throw new Error('unexpected DNS') }
+      await assert.rejects(guardedFetch(`http://127.0.0.1:${origin.port}/`, {
+        env: { http_proxy: `http://127.0.0.1:${dead.port}` }, lookupImpl, timeoutMs: 1000,
+      }))
+      await assert.rejects(guardedFetch('http://page.invalid/', {
+        env: { http_proxy: 'socks5://127.0.0.1:9' }, lookupImpl,
+      }), (err) => err.kind === NET_ERROR_KINDS.proxyUnsupported)
+      assert.equal(lookups, 0)
+      assert.equal(origin.requests.length, 0)
+    } finally { await origin.close() }
   })
 
   // -------------------------------------------------------------------------
@@ -521,22 +731,24 @@ try {
     assert.match(res.content, /cached fixture body/)
   })
 
-  await test('the reader path does not resolve the target name locally', async () => {
+  await test('the reader is a backup after an origin HTTP failure', async () => {
     const originalFetch = globalThis.fetch
     __setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...args) => globalThis.fetch(...args) }))
     const seen = []
     globalThis.fetch = async (url) => {
       seen.push(String(url))
+      if (!String(url).startsWith('https://r.jina.ai/')) return new Response('unavailable', { status: 503 })
       return new Response('reader body '.repeat(20), { status: 200, headers: { 'content-type': 'text/markdown' } })
     }
     try {
       const cache = makePageCache()
       // `.invalid` can never resolve: succeeding proves no local lookup happened.
       const res = await fetchPage('http://reader-only.invalid/page', undefined, cache)
-      assert.equal(seen.length, 1)
-      assert.match(seen[0], /^https:\/\/r\.jina\.ai\//, 'the request goes to the reader service')
+      assert.equal(seen.length, 2)
+      assert.equal(seen[0], 'http://reader-only.invalid/page')
+      assert.match(seen[1], /^https:\/\/r\.jina\.ai\//, 'the request goes to the reader service')
       assert.ok(
-        seen[0].includes(encodeURIComponent('http://reader-only.invalid/page')),
+        seen[1].includes(encodeURIComponent('http://reader-only.invalid/page')),
         `the reader must receive the target URL: ${seen[0]}`,
       )
       assert.equal(res.via, 'jina')

@@ -71,7 +71,7 @@
     "test:search": "node scripts/test-search-routing.mjs",
     "test:keys-authority": "node scripts/test-keys-authority.mjs",
     "test:dry-run": "node scripts/test-dry-run.mjs",
-    "test:network": "node scripts/test-network-safety.mjs && node scripts/test-audit-regressions.mjs",
+    "test:network": "node scripts/test-network-safety.mjs && node scripts/test-audit-regressions.mjs && node scripts/test-fetch-fallback.mjs",
     "test:v021": "node scripts/test-v021.mjs && node scripts/test-review-regressions.mjs"
   },
   "dependencies": {

@@ -19,7 +19,7 @@
 
 ---
 
-> **v0.2.1 repair branch**: fixes Pi transport isolation, configuration preservation, updater process cleanup, page-version identity and Jev accounting/retries; adds Vercel Jev support. This branch is not an npm release: `@latest` does not guarantee these repairs. See the [repair and verification record](./docs/v0.2.1-repair-audit.md).
+> **v0.2.1 repair branch**: fixes Pi transport isolation, configuration preservation, updater process cleanup, page-version identity and Jev accounting/retries; adds Vercel Jev support. This branch is not an npm release: `@latest` does not guarantee these repairs. See the [delivery freeze notes](./docs/v0.2.1-delivery.md) for the current scope and the [earlier repair record](./docs/v0.2.1-repair-audit.md).
 
 ## Table of Contents
 
@@ -49,7 +49,7 @@
 - **Multi-Engine Parallel Fusion (`fused_search`)**  
   Queries multiple search providers in parallel. Features an out-of-the-box **keyless free pool** (Bing, DuckDuckGo, Yahoo, Exa-free) and a high-tier **API pool** (Tavily, Brave, Exa). Automatically performs cross-engine URL deduplication, domain routing, and relevance re-ranking.
 - **Clean Webpage Content Extractor (`fetch_page`)**  
-  Uses Jina Reader by default for clean markdown extraction, backed by a guarded local HTML reader fallback. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
+  Fetches the origin first for low latency, with optional same-route curl compatibility fallback and Jina Reader backup. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
 - **X / Twitter Community Intelligence (`x_search`)**  
   Retrieves public posts, user timelines, and discussion threads via official xAI API or an anonymous fallback channel. Recovers accurate UTC timestamps from Snowflake post IDs and enforces local author/date filtering without hallucination.
 - **Jev Adaptive Evidence Loop (`adaptive_search` · Experimental)**  
@@ -59,7 +59,7 @@
 - **Unified Core Across All Host Ecosystems**  
   A single, host-neutral core runtime powering standard Model Context Protocol (MCP) servers, alongside native extensions for Pi and Cordis plugin bundles for DeepSeek Harness (DSH).
 - **Zero-Config Onboarding & Strict Security**  
-  **Requires zero API keys to start** using the free engine pool. Sensitive credentials are encrypted in local private configs (POSIX `0600`). Enforces local SSRF protection, target IP address pinning, and proxy compliance, with zero credential leakage into model prompts.
+  **Requires zero API keys to start** using the free engine pool. Sensitive credentials are encrypted in local private configs (POSIX `0600`). Uses local networking and proxy DNS, with bounded requests and explicit fallback, with zero credential leakage into model prompts.
 
 ---
 
@@ -229,7 +229,7 @@ Dispatches queries across engines concurrently, normalizes URLs, strips redirect
 
 ### 2. `fetch_page` Smart Content Reader
 
-Reads webpage content from search URLs. Prioritizes Jina Reader for clean Markdown, with an internal guarded HTTP fetcher fallback.
+Reads webpage content from search URLs. Reads and cleans the origin first; curl handles transport compatibility when installed, and Jina Reader is the backup.
 
 **Tool Arguments Example**:
 ```json
@@ -358,9 +358,10 @@ Local configuration is stored in `~/.search-boost/config/` (configurable via `SE
 ### Security & Privacy Guarantees
 
 - **Private File Permissions**: On POSIX systems, configuration files are written atomically with strict `0600` permissions (read/write by owner only).
-- **SSRF Protection & IP Pinning**: The direct HTML reader resolves and validates target IP addresses against private/loopback CIDRs, pinning the connection to prevent DNS rebinding attacks.
-- **Proxy Support**: Fully respects `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY`. **Explicitly rejects SOCKS proxies** with clear error messages to prevent accidental direct network leaks.
-- **TUN Fake-IP Compatibility**: When operating behind a TUN interface utilizing Fake-IP ranges, set `SEARCH_BOOST_TRUSTED_TUN=1` to allow trusted gateway routing.
+- **Network Trust Boundary**: Destination access belongs to the local network/firewall and configured proxy. `fetch_page` does not block internal/private destinations, pre-resolve DNS or pin normal direct connections. Keep secrets/private services behind appropriate network access controls.
+- **Proxy Retry & Direct Fallback**: Honors HTTP(S)/ALL/NO_PROXY and lowercase forms. Five proxy connection failures permit direct fallback (including fused-search engine requests); cancellation/deadlines stop early. A switch emits a warning and may expose the local egress IP. HTTP errors, proxy authentication/policy denial, unsupported configuration and TLS failures do not trigger a route switch.
+- **Bounded Fetching**: HTTP(S) only, no credentials embedded in page URLs, normal TLS verification, bounded redirects/downloads/deadlines. Optional curl fallback retains these checks, disables curlrc, and uses the selected route. Same-route curl can use its own CA store; certificate verification is never disabled. See [network policy](docs/network-policy.md).
+
 
 ---
 
@@ -430,7 +431,7 @@ Before submitting a PR, verify your changes against the complete test suite:
 
 ```bash
 npm run prepublishOnly    # Syntax check + asset sync + full offline test suite
-npm run test:network      # DNS, proxy, IP pinning, and security regressions
+npm run test:network      # Proxy retries, curl fallback, request bounds, compatibility regressions
 npm run test:adaptive     # Jev adaptive search loop evaluation
 npm run test:adapters     # MCP, Pi, and DSH adapter protocol suites
 npm run smoke             # MCP JSON-RPC protocol smoke test

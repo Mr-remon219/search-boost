@@ -8,6 +8,7 @@ import { getEventListeners } from 'node:events'
 import { proxyPolicy, NET_ERROR_KINDS } from '../lib/search/net-policy.mjs'
 import { ipv4Fetch, fetchPinned, closeFetchDispatchers, resetFetchDispatcher, __setUndiciLoaderForTests } from '../lib/search/ipv4-fetch.js'
 import { isBlockedIp, resolveValidatedAddresses, guardedFetch } from '../lib/search/ssrf.js'
+import { __setCurlSpawnForTests } from '../lib/search/curl-fetch.mjs'
 import { fetchPage, makePageCache, toFetchPageResult } from '../lib/search/fetch.js'
 import { runAdaptiveLoop } from '../lib/search/adaptive/loop.mjs'
 import { renderAdaptiveSummary } from '../lib/search/adaptive/describe.js'
@@ -22,6 +23,7 @@ const cleanProxy = () => { for (const key of proxyNames) delete process.env[key]
 async function test(name, fn) {
   cleanProxy()
   resetFetchDispatcher()
+  __setCurlSpawnForTests(() => { throw new Error('curl disabled in hermetic unit fixtures') })
   try {
     await fn()
     passed++
@@ -33,6 +35,7 @@ async function test(name, fn) {
     globalThis.fetch = originalFetch
     await closeFetchDispatchers()
     __setUndiciLoaderForTests(null)
+    __setCurlSpawnForTests(null)
   }
 }
 async function listen(server) {
@@ -129,18 +132,34 @@ try {
     const res = await guardedFetch('https://redirect.example/', { lookupImpl: (_h, _o, cb) => cb(null, [{ address: '93.184.216.34', family: 4 }]) })
     assert.equal(await res.text(), 'done')
   })
-  await test('Jina failure followed by local HTML uses the local provenance and HTML cleaner', async () => {
+  await test('origin HTML returns immediately with local provenance and cleanup, without Jina', async () => {
     __setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...args) => globalThis.fetch(...args) }))
-    globalThis.fetch = async (url) => String(url).startsWith('https://r.jina.ai/')
-      ? new Response('unavailable', { status: 503 })
-      : new Response(`<html><style>SECRET_STYLE</style><script>SECRET_SCRIPT</script><body><h1>Reference</h1><p>${'Useful reference material. '.repeat(10)}</p></body></html>`)
+    globalThis.fetch = async (url) => {
+      assert.ok(!String(url).startsWith('https://r.jina.ai/'), 'fast path must skip Jina')
+      return new Response(`<html><style>SECRET_STYLE</style><script>SECRET_SCRIPT</script><body><h1>Reference</h1><p>${'Useful reference material. '.repeat(10)}</p></body></html>`)
+    }
     const page = await fetchPage('https://93.184.216.34/reference', undefined, makePageCache())
     assert.equal(page.via, 'local')
     assert.match(page.content, /Useful reference/)
     assert.doesNotMatch(page.content, /SECRET_SCRIPT|SECRET_STYLE|<html>/)
   })
+  await test('reader and local failures both remain diagnosable without losing the local kind', async () => {
+    __setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...args) => globalThis.fetch(...args) }))
+    __setCurlSpawnForTests(() => { throw new Error('curl unavailable in fixture') })
+    globalThis.fetch = async (url) => {
+      if (String(url).startsWith('https://r.jina.ai/')) return new Response('unavailable', { status: 503 })
+      throw Object.assign(new Error('fixture connect failure'), { code: 'ECONNREFUSED' })
+    }
+    await assert.rejects(fetchPage('https://93.184.216.34/reference', undefined, makePageCache()), (err) => {
+      assert.equal(err.kind, NET_ERROR_KINDS.connectRefused)
+      assert.match(err.message, /reader failed: jina http 503/)
+      assert.match(err.readerCause.message, /jina http 503/)
+      return true
+    })
+  })
   await test('an unavailable transport is a tool failure, never an empty successful page', async () => {
     __setUndiciLoaderForTests(async () => { throw new Error('missing dependency') })
+    __setCurlSpawnForTests(() => { throw new Error('curl also unavailable in fixture') })
     await assert.rejects(fetchPage('https://reader-only.invalid/', undefined, makePageCache()), (err) => err.kind === NET_ERROR_KINDS.transportUnavailable)
   })
   await test('no-engine adaptive calls release the host abort listener on every early return', async () => {
