@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, main, v0.2.0, jev]
+    branches: [master, main, v0.2.0, v0.2.1, jev]
   pull_request:
 
 concurrency:
@@ -117,6 +117,10 @@ jobs:
       - name: MCP smoke
         if: always()
         run: npm run smoke
+
+      - name: v0.2.1 release repairs
+        if: always()
+        run: npm run test:v021
 
       # Reproduce the tested Linux tree offline, without checkout credentials,
       # HOME configuration, environment variables, or Git metadata.
