@@ -2,9 +2,9 @@
 /** v0.2.1 repairs: real CLI/config/process/loopback HTTP boundaries, plus typed
  * provider response fixtures. Never consumes a real credential or the host HOME. */
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, resolve, delimiter } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { createServer } from 'node:http'
 import { connect } from 'node:net'
@@ -84,6 +84,30 @@ try {
     const path = join(temp, '.grok', 'config.toml'); assert(existsSync(path)); assert.match(readFileSync(path, 'utf8'), /search-boost/)
     assert.equal(cli(['uninstall', '-t', 'grok', '--scope', 'project', '--skip-grok-plugin', '-y']).code, 0)
     assert(!existsSync(path) || !readFileSync(path, 'utf8').includes('mcp_servers.search-boost'))
+  })
+  await test('Grok plugin failures preserve MCP setup; confirmed absence makes uninstall idempotent', () => {
+    const bin = join(temp, 'grok-bin'), script = join(bin, 'fake.cjs'), log = join(temp, 'grok-calls')
+    save(script, `const fs = require('node:fs'); const args = process.argv.slice(2); fs.appendFileSync(process.env.GROK_TEST_LOG, args.join(' ') + '\\n');
+if (args[1] === 'list') { console.log(process.env.GROK_TEST_LIST || '[]'); process.exit(0); }
+process.exit(1);`)
+    // Use the actual platform host launcher, not a mocked installer result.
+    const launcher = join(bin, process.platform === 'win32' ? 'grok.cmd' : 'grok')
+    save(launcher, process.platform === 'win32' ? `@"${process.execPath}" "${script}" %*\r\n` : `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`)
+    if (process.platform !== 'win32') chmodSync(launcher, 0o755)
+    const env = { ...process.env, PATH: bin + delimiter + process.env.PATH, GROK_TEST_LOG: log }
+    const config = join(temp, '.grok', 'config.toml')
+    const install = cli(['install', '-t', 'grok', '--scope', 'project', '-y'], env)
+    assert.notEqual(install.code, 0); assert.match(install.text, /MCP\/config\/rule\/skill installed/)
+    assert.match(install.text, /--skip-grok-plugin/); assert.match(readFileSync(config, 'utf8'), /mcp_servers.search-boost/)
+    save(log, '')
+    const absent = cli(['uninstall', '-t', 'grok', '--scope', 'project', '-y'], env)
+    assert.equal(absent.code, 0, absent.text); assert(!existsSync(config))
+    assert.doesNotMatch(readFileSync(log, 'utf8'), /plugin uninstall/)
+    for (const listing of ['[{"name":"search-boost","repo_key":"fixture-id"}]', 'invalid-json', '{}', '[null]']) {
+      save(log, '')
+      const failed = cli(['uninstall', '-t', 'grok', '--scope', 'project', '-y'], { ...env, GROK_TEST_LIST: listing })
+      assert.notEqual(failed.code, 0); assert.match(readFileSync(log, 'utf8'), /plugin uninstall/)
+    }
   })
   await test('U07 missing DSH returns failure rather than fictitious successful installation', () => {
     const out = cli(['install', '-t', 'dsh', '-y'], { ...process.env, PATH: join(temp, 'empty-bin') }); assert.notEqual(out.code, 0); assert.doesNotMatch(out.text, /\[ok\] dsh/)

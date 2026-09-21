@@ -15,7 +15,7 @@ npm install -g search-boost
 search-boost install -t grok -y --auto-allow
 ```
 
-If `grok` is not on PATH, the plugin step is skipped with a warning; config/rule/skill still install. Use `--skip-grok-plugin` to skip the plugin step explicitly.
+If `grok` is not on PATH, the plugin step is skipped with a warning; config/rule/skill still install. Use `--skip-grok-plugin` to skip the plugin step explicitly. If the plugin command fails (including Windows source-path limitations), config/rule/skill still install, but the command exits non-zero and reports the partial failure. Retry the plugin command manually with a shorter path when needed.
 
 **Manual plugin only** (advanced — e.g. marketplace path install without `search-boost` CLI):
 
@@ -70,7 +70,7 @@ npm install -g search-boost
 search-boost install -t grok -y --auto-allow
 ```
 
-PATH 中没有 `grok` 时，插件步骤会跳过并警告，config/rule/skill 仍会安装。显式跳过插件：加 `--skip-grok-plugin`。
+PATH 中没有 `grok` 时，插件步骤会跳过并警告，config/rule/skill 仍会安装。显式跳过插件：加 `--skip-grok-plugin`。插件命令失败时（包括 Windows 源路径长度限制），config/rule/skill 仍会安装，但命令以非零状态退出并报告部分失败；必要时将插件复制到更短路径后手动重试。
 
 **仅手动装插件**（进阶 — 例如不走 search-boost CLI 的市场路径）：
 
