@@ -1,3 +1,4 @@
+import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
 // Hermetic X contract + runtime regression tests: no credentials or live HTTP.
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
@@ -28,6 +29,7 @@ const last = post('Alice', '2025-01-31T23:59:59.999Z')
 const after = post('Alice', '2025-02-01T00:00:00.000Z')
 const bob = post('Bob', '2025-01-15T12:00:00.000Z')
 const originalFetch = globalThis.fetch
+__setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...args) => globalThis.fetch(...args) }))
 
 try {
   await test('canonical identity: aliases, mobile, query strings, i/web; no spoof hosts', () => {
@@ -308,5 +310,6 @@ try {
   console.log(`\n${count} X pipeline tests passed.`)
 } finally {
   globalThis.fetch = originalFetch
+  await closeFetchDispatchers(); __setUndiciLoaderForTests(null)
   rmSync(temp, { recursive: true, force: true })
 }

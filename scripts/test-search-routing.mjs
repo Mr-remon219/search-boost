@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
 /** Hermetic Core tests: real fusion/X orchestration, fake engine and hosted transports. */
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -49,6 +50,7 @@ const reset = () => { runtime.invalidateSearchCaches(); calls = []; officialCall
 let tests = 0
 async function test(name, fn) { reset(); await fn(); tests++; console.log(`ok: ${name}`) }
 const originalFetch = globalThis.fetch
+__setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...args) => globalThis.fetch(...args) }))
 globalThis.fetch = async (raw) => {
   const url = new URL(String(raw))
   assert.equal(url.hostname, 'publish.x.com', 'tests must never access live services')
@@ -273,4 +275,4 @@ try {
     assert.equal(calls.length, 0)
   })
   console.log(`\n${tests} routing/community/capability groups passed.`)
-} finally { globalThis.fetch = originalFetch; rmSync(temp, { recursive: true, force: true }) }
+} finally { globalThis.fetch = originalFetch; await closeFetchDispatchers(); __setUndiciLoaderForTests(null); rmSync(temp, { recursive: true, force: true }) }

@@ -206,7 +206,7 @@ export default function searchBoostExtension(pi) {
     name: 'fetch_page',
     label: 'Fetch Page (Reader Mode)',
     description: FETCH_DESCRIPTION,
-    promptSnippet: 'Read a known public URL, optionally focusing on matching paragraphs',
+    promptSnippet: 'Read a known HTTP(S) URL, optionally focusing on matching paragraphs',
     promptGuidelines: ['Respect fetch failures and policy limitations; do not work around them by using an unguarded network tool.'],
     parameters: {
       type: 'object',

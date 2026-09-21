@@ -274,8 +274,9 @@ await withIsolatedHome(async (home) => {
   }
 }
 
-// registry drift: quick checks (design spec lists 15 ids)
-assert('registry quick check count', CHECK_IDS.length === 18)
+// Registry drift includes the static Pi child-tool wiring check.
+assert('registry quick check count', CHECK_IDS.length === 19)
+assert('registry includes Pi child-tool check', CHECK_IDS.includes('pi_subagent_tools'))
 
 // --category probe with no registered checks → exit 2
 {

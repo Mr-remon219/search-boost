@@ -686,6 +686,7 @@ function registerParallelTool(ctx, provider = 'spawn') {
         maxSeconds: args.max_seconds,
         maxSources: args.max_sources,
         subagents,
+        tools: ctx.tools,
         agent: exec?.agent,
         signal: exec?.signal,
       }))
