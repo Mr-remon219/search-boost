@@ -3,7 +3,7 @@
 **面向 AI Coding Agent 的多引擎网络搜索与证据聚合工具箱**  
 *一个核心代码库，深度适配 MCP、Pi 与 DeepSeek Harness 三大生态*
 
-[![version](https://img.shields.io/badge/version-v0.2.0-orange?style=flat-square)](#)
+[![version](https://img.shields.io/badge/version-v0.2.1-orange?style=flat-square)](#)
 [![npm version](https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm)](https://www.npmjs.com/package/search-boost)
 [![Node version](https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
@@ -18,6 +18,8 @@
 > **版本与发布说明**：当前的 `v0.2.0` 分支已整合以往独立的 `pi-search-boost` 与 `dsh-search-boost` 代码，统一维护在 `lib/` 核心层中。文档中包含 `@latest` 的命令指向 npm 正式发布的版本；体验本分支最新代码请参考[源码安装与本地开发](#源码安装与本地开发)。
 
 ---
+
+> **v0.2.1 修复分支**：修复 Pi 网络适配、配置保护、更新进程清理、网页版本缓存和 Jev 统计/限流，并新增 Vercel Jev 适配。分支尚未发布到 npm；`@latest` 不保证包含这些修复。详见 [修复与验收记录](./docs/v0.2.1-repair-audit.md)。
 
 ## 目录
 
@@ -262,6 +264,8 @@ search-boost
 ---
 
 ### 4. `adaptive_search` Jev 自适应证据链（实验功能）
+
+**Vercel 接入**：在 TUI → Jev credentials 填写 `https://ai-gateway.vercel.sh/v1` 和 Vercel AI Gateway Key。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级配置中的 Jev Key，不读取环境变量；服务端限流等待不会被缩短。
 
 当需要对高度专业的断言进行严格考证时，Agent 可调用 `adaptive_search`。Jev 认知内核会自动拆解问题、选择允许的引擎、抓取关键网页片段并评估证据充分性。
 

@@ -1,3 +1,4 @@
+import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
 // Engine request bodies — assert what actually goes on the wire.
 //
 // A parameter an adapter drops, renames or misspells is invisible to a test that
@@ -8,6 +9,7 @@ import assert from 'node:assert/strict'
 const { engineRegistry } = await import('../lib/search/engines.js')
 
 const originalFetch = globalThis.fetch
+__setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...args) => globalThis.fetch(...args) }))
 const calls = []
 globalThis.fetch = async (input, init = {}) => {
   calls.push({ url: new URL(String(input)), body: init.body ? JSON.parse(init.body) : null })
@@ -49,4 +51,5 @@ try {
   console.log(`\n${count} engine request tests passed.`)
 } finally {
   globalThis.fetch = originalFetch
+  await closeFetchDispatchers(); __setUndiciLoaderForTests(null)
 }

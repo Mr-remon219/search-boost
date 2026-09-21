@@ -6,6 +6,7 @@
 // extension; summarizer children get --no-tools.
 
 import { spawn } from 'node:child_process'
+import { terminateProcessTree } from '../../lib/process-tree.mjs'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
@@ -191,34 +192,37 @@ async function runAgentAttempt(item, timeoutMs, signal, dispatch) {
     const exitCode = await new Promise((resolve) => {
       let settled = false
       let closed = false
-      let forceTimer
+      let forceTimer, finalTimer, exitTimer
       const finish = (code) => {
         if (settled) return
         settled = true
+        clearTimeout(timer); clearTimeout(forceTimer); clearTimeout(finalTimer); clearTimeout(exitTimer)
+        signal?.removeEventListener('abort', onAbort)
+        proc.stdout?.destroy(); proc.stderr?.destroy(); proc.unref()
         resolve(code)
       }
       const proc = spawn(invocation.command, invocation.args, {
         shell: false,
+        detached: process.platform !== 'win32',
         stdio: ['ignore', 'pipe', 'pipe'],
         env: childEnvironment(),
       })
       let buffer = ''
 
       const forceStop = (reason) => {
-        if (closed) return
+        if (closed || terminationRequested) return
         terminationRequested = true
         errorMessage ||= reason
-        try { proc.kill('SIGTERM') } catch { /* already gone */ }
+        terminateProcessTree(proc, 'SIGTERM')
         forceTimer = setTimeout(() => {
           if (!closed) {
-            try { proc.kill('SIGKILL') } catch { /* already gone */ }
+            terminateProcessTree(proc, 'SIGKILL')
           }
         }, 3000)
-        forceTimer.unref?.()
+        finalTimer = setTimeout(() => finish(1), 3500)
       }
 
       const timer = setTimeout(() => forceStop(`timeout after ${Math.round(timeoutMs / 1000)}s`), timeoutMs)
-      timer.unref?.()
 
       const processLine = (line) => {
         if (!line.trim()) return
@@ -227,7 +231,7 @@ async function runAgentAttempt(item, timeoutMs, signal, dispatch) {
         if (event.type !== 'message_end' || !event.message) return
         const msg = event.message
         if (msg.role !== 'assistant') return
-        messages.push(msg)
+        if (Array.isArray(msg.content) && msg.content.some((part) => part.type === 'text' && part.text)) messages.splice(0, messages.length, msg) // only the last assistant response is returned
         turns++
         if (msg.stopReason) stopReason = msg.stopReason
         if (msg.errorMessage) errorMessage = msg.errorMessage
@@ -235,6 +239,7 @@ async function runAgentAttempt(item, timeoutMs, signal, dispatch) {
 
       proc.stdout?.on('data', (data) => {
         buffer += data.toString()
+        if (buffer.length > 4_000_000) { forceStop('child JSONL output exceeded the 4 MB frame limit'); buffer = ''; return }
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
         for (const line of lines) processLine(line)
@@ -247,7 +252,11 @@ async function runAgentAttempt(item, timeoutMs, signal, dispatch) {
       if (signal?.aborted) onAbort()
       else signal?.addEventListener('abort', onAbort, { once: true })
 
+      proc.once('exit', () => {
+        if (!settled && !terminationRequested) exitTimer = setTimeout(() => forceStop('child exited without closing its output pipes'), 500)
+      })
       proc.on('close', (code) => {
+        if (terminationRequested) terminateProcessTree(proc, 'SIGKILL')
         closed = true
         clearTimeout(timer)
         if (forceTimer) clearTimeout(forceTimer)

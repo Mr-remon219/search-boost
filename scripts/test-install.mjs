@@ -1,4 +1,5 @@
-﻿/**
+import './isolate-install-tests.mjs'
+/**
  * Unit-style checks for install helpers (no writes to real home dir).
  */
 import { upsertTomlSection, removeTomlSection, hasTomlSection } from '../lib/toml.mjs'
@@ -691,7 +692,7 @@ assert('grok configured project scope', agentConfigured('grok') === true)
 assert('grok scope has artifacts project', grokScopeHasArtifacts('project') === true)
 assert('grok uninstall scopes user only', grokUninstallScopes('user').join() === 'user')
 assert('grok uninstall scopes all', grokUninstallScopes('all').join() === 'user,project')
-await AGENTS.grok.uninstall({ scope: 'project', dryRun: false })
+await AGENTS.grok.uninstall({ skipGrokPlugin: true, scope: 'project', dryRun: false })
 assert('legacy pi package counts as configured and triggers the duplicate-tools warning', runInTempHome(`
   import { mkdirSync, writeFileSync } from 'node:fs'
   import { join } from 'node:path'
@@ -746,7 +747,7 @@ rmSync(grokDir, { recursive: true, force: true })
     [
       '--input-type=module',
       '-e',
-      `import { AGENTS } from '${pathToFileURL(join(repoRoot, 'lib/agents/index.mjs')).href}'; await AGENTS.grok.uninstall({ scope: "user", dryRun: false });`,
+      `import { AGENTS } from '${pathToFileURL(join(repoRoot, 'lib/agents/index.mjs')).href}'; await AGENTS.grok.uninstall({ skipGrokPlugin: true, scope: "user", dryRun: false });`,
     ],
     { cwd: grokUserDir, env: { ...process.env, HOME: grokUserHome, USERPROFILE: grokUserHome }, stdio: 'pipe' },
   )
@@ -761,7 +762,7 @@ rmSync(grokDir, { recursive: true, force: true })
 // grok: all scope no-op does not create files
 const grokNoopDir = mkdtempSync(join(tmpdir(), 'sb-grok-noop-'))
 process.chdir(grokNoopDir)
-await AGENTS.grok.uninstall({ scope: 'all', dryRun: false })
+await AGENTS.grok.uninstall({ skipGrokPlugin: true, scope: 'all', dryRun: false })
 assert('grok all uninstall no-op no config', !existsSync(join(grokNoopDir, '.grok', 'config.toml')))
 assert('grok all uninstall no-op no rule', !existsSync(join(grokNoopDir, '.grok', 'rules', 'search-boost.md')))
 assert('grok all uninstall no-op no skill', !existsSync(join(grokNoopDir, '.grok', 'skills', 'search-boost', 'SKILL.md')))
@@ -772,9 +773,9 @@ rmSync(grokNoopDir, { recursive: true, force: true })
 {
   const grokFreshDir = mkdtempSync(join(tmpdir(), 'sb-grok-fresh-'))
   process.chdir(grokFreshDir)
-  await AGENTS.grok.install({ scope: 'project', dryRun: false, autoAllow: true })
+  await AGENTS.grok.install({ skipGrokPlugin: true, scope: 'project', dryRun: false, autoAllow: true })
   assert('grok fresh install creates project config', existsSync(join(grokFreshDir, '.grok', 'config.toml')))
-  await AGENTS.grok.uninstall({ scope: 'project', dryRun: false })
+  await AGENTS.grok.uninstall({ skipGrokPlugin: true, scope: 'project', dryRun: false })
   assert('grok fresh uninstall deletes project config', !existsSync(join(grokFreshDir, '.grok', 'config.toml')))
   assert('grok fresh uninstall deletes project rule', !existsSync(join(grokFreshDir, '.grok', 'rules', 'search-boost.md')))
   assert('grok fresh uninstall deletes project skill', !existsSync(join(grokFreshDir, '.grok', 'skills', 'search-boost', 'SKILL.md')))
@@ -799,7 +800,7 @@ assert('parseFlags --skip-grok-plugin', parseFlags(['--skip-grok-plugin']).skipG
   const origLog = console.log
   console.log = (...args) => { logs.push(args.join(' ')) }
   try {
-    const r = installGrokPlugin({ dryRun: true })
+    const r = await installGrokPlugin({ dryRun: true })
     assert('installGrokPlugin dry-run ok', r.ok === true && r.dryRun === true)
     assert('installGrokPlugin dry-run logs command', logs.some((l) => l.includes('Would run:') && l.includes('grok plugin install') && l.includes('--trust')))
   } finally {
@@ -813,7 +814,7 @@ assert('parseFlags --skip-grok-plugin', parseFlags(['--skip-grok-plugin']).skipG
   const origLog = console.log
   console.log = (...args) => { logs.push(args.join(' ')) }
   try {
-    const r = uninstallGrokPlugin({ dryRun: true })
+    const r = await uninstallGrokPlugin({ dryRun: true })
     assert('uninstallGrokPlugin dry-run ok', r.ok === true && r.dryRun === true)
     assert(
       'uninstallGrokPlugin dry-run logs command',
@@ -825,8 +826,8 @@ assert('parseFlags --skip-grok-plugin', parseFlags(['--skip-grok-plugin']).skipG
 }
 
 // grok-plugin: skip bypasses subprocess
-assert('installGrokPlugin skip', installGrokPlugin({ skip: true }).skipped === true)
-assert('uninstallGrokPlugin skip', uninstallGrokPlugin({ skip: true }).skipped === true)
+assert('installGrokPlugin skip', (await installGrokPlugin({ skip: true })).skipped === true)
+assert('uninstallGrokPlugin skip', (await uninstallGrokPlugin({ skip: true })).skipped === true)
 assert(
   'grok install failure hint is Windows-only and names path length plus a short-path workaround',
   (() => {
@@ -861,15 +862,8 @@ assert(
   }
 }
 
-// grok-plugin: optional integration when grok CLI on PATH
-if (grokCliAvailable()) {
-  console.log('ok: grok CLI detected on PATH (integration checks)')
-  const installedId = resolveInstalledGrokPluginId()
-  assert('resolveInstalledGrokPluginId returns string', typeof installedId === 'string' && installedId.length > 0)
-  assert('grok plugin install command includes grok-plugin dir', grokPluginInstallCommandLine().includes('grok-plugin'))
-} else {
-  console.log('skip: grok CLI not on PATH (integration)')
-}
+// Live Grok sessions are explicit user journeys, never an implicit unit-test branch.
+assert('plugin command helpers are side-effect free', grokPluginUninstallCommandLine().includes(GROK_PLUGIN_NAME))
 
 // shared instructions cover per-agent routing notes
 assert('mcp instructions mention grok', readFileSync(mcpServerInstructionsPath(), 'utf8').includes('Grok Build'))

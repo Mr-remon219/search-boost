@@ -459,6 +459,7 @@ await test('material that denies the question premise is still an answer, not de
   const item = res.questions[0].evidence[0]
   assert.equal(item.premiseConflict, true)
   assert.equal(item.status, 'answer_capable')
+  assert.equal(res.evidence.answerCapable, 1, 'global total must use the same classification as the per-question evidence')
   assert.equal(item.usedForCoverage, true)
   assert.ok(h.calls.jev.some((call) => call.phase === 'source_judge' && call.questions['src.e1.premise_conflict']))
 })

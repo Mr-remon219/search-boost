@@ -102,8 +102,9 @@ try {
   await test('a missing proxy-agent implementation cannot silently create a direct Agent', async () => {
     process.env.ALL_PROXY = 'http://localhost:9'
     let fetched = false
+    __setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...args) => globalThis.fetch(...args) }))
     globalThis.fetch = async () => { fetched = true; return new Response('must not be reached') }
-    __setUndiciLoaderForTests(async () => ({ Agent: class {} }))
+    __setUndiciLoaderForTests(async () => ({ fetch: (...args) => globalThis.fetch(...args), Agent: class {} }))
     await assert.rejects(ipv4Fetch('https://service.example/'), (err) => err.kind === NET_ERROR_KINDS.transportUnavailable)
     assert.equal(fetched, false)
   })
@@ -119,6 +120,7 @@ try {
   await test('each redirect body is released before the next pinned hop', async () => {
     let cancelled = false
     let calls = 0
+    __setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...args) => globalThis.fetch(...args) }))
     globalThis.fetch = async () => {
       if (++calls === 1) return new Response(new ReadableStream({ cancel() { cancelled = true } }), { status: 302, headers: { location: '/next' } })
       assert.equal(cancelled, true)
@@ -128,6 +130,7 @@ try {
     assert.equal(await res.text(), 'done')
   })
   await test('Jina failure followed by local HTML uses the local provenance and HTML cleaner', async () => {
+    __setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...args) => globalThis.fetch(...args) }))
     globalThis.fetch = async (url) => String(url).startsWith('https://r.jina.ai/')
       ? new Response('unavailable', { status: 503 })
       : new Response(`<html><style>SECRET_STYLE</style><script>SECRET_SCRIPT</script><body><h1>Reference</h1><p>${'Useful reference material. '.repeat(10)}</p></body></html>`)
@@ -160,13 +163,14 @@ try {
   })
   await test('pinned page failures preserve DNS, TLS and connection-timeout diagnostics', async () => {
     for (const [code, kind] of [['EAI_AGAIN', 'dns_temporary'], ['ENOTFOUND', 'dns_not_found'], ['CERT_HAS_EXPIRED', 'tls'], ['UND_ERR_CONNECT_TIMEOUT', 'connect_timeout']]) {
-      globalThis.fetch = async () => { throw new TypeError('fetch failed', { cause: Object.assign(new Error('fixture'), { code }) }) }
+      __setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...args) => globalThis.fetch(...args) }))
+    globalThis.fetch = async () => { throw new TypeError('fetch failed', { cause: Object.assign(new Error('fixture'), { code }) }) }
       await assert.rejects(guardedFetch('https://93.184.216.34/'), (err) => err.kind === kind)
     }
   })
   await test('pinned dispatcher cache retires old connections and shutdown closes the rest', async () => {
     let live = 0
-    __setUndiciLoaderForTests(async () => ({ Agent: class {
+    __setUndiciLoaderForTests(async () => ({ fetch: (...args) => globalThis.fetch(...args), Agent: class {
       constructor() { live++; this.closed = false }
       async close() { if (!this.closed) { this.closed = true; live-- } }
       async destroy() { await this.close() }

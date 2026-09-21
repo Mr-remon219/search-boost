@@ -3,7 +3,7 @@
 **Multi-engine web search & evidence synthesis for AI coding agents**  
 *One shared core runtime, deeply adapted for MCP, Pi, and DeepSeek Harness*
 
-[![version](https://img.shields.io/badge/version-v0.2.0-orange?style=flat-square)](#)
+[![version](https://img.shields.io/badge/version-v0.2.1-orange?style=flat-square)](#)
 [![npm version](https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm)](https://www.npmjs.com/package/search-boost)
 [![Node version](https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
@@ -18,6 +18,8 @@
 > **Release & Branch Notice**: The `v0.2.0` branch unifies the formerly standalone `pi-search-boost` and `dsh-search-boost` projects into a single codebase under `lib/`. Documented commands specifying `@latest` retrieve the official published npm package. To explore or test the latest branch code, please follow [Installation from Source & Development](#installation-from-source--development).
 
 ---
+
+> **v0.2.1 repair branch**: fixes Pi transport isolation, configuration preservation, updater process cleanup, page-version identity and Jev accounting/retries; adds Vercel Jev support. This branch is not an npm release: `@latest` does not guarantee these repairs. See the [repair and verification record](./docs/v0.2.1-repair-audit.md).
 
 ## Table of Contents
 
@@ -262,6 +264,8 @@ Designed for real-time technical tracking and first-party developer updates. Sup
 ---
 
 ### 4. `adaptive_search` Jev Evidence Loop (Experimental)
+
+**Vercel support**: in TUI → Jev credentials, enter `https://ai-gateway.vercel.sh/v1` and a Vercel AI Gateway key. SearchBoost selects the official SDK evaluation model `typesafe-ai/jev`, not chat completions. The default TypeSafe `/systemone` path remains supported. Both paths use only the canonical user Jev credential, not environment keys, and respect server rate-limit delays.
 
 When rigorous verification is required for complex technical claims, agents can call `adaptive_search`. The Jev cognitive loop formulates targeted queries, selects allowable engines, fetches relevant passages, and assesses coverage.
 

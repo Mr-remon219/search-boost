@@ -161,6 +161,8 @@ try {
     const child = new EventEmitter()
     child.stdout = new EventEmitter()
     child.stderr = new EventEmitter()
+    child.stdout.destroy = child.stderr.destroy = () => {}
+    child.unref = () => {}
     child.kill = () => { queueMicrotask(() => child.emit('close', null)); return true }
     const promptPath = args[args.indexOf('--append-system-prompt') + 1]
     spawned.push({ args, promptPath, prompt: readFileSync(promptPath, 'utf8') })

@@ -523,6 +523,7 @@ try {
 
   await test('the reader path does not resolve the target name locally', async () => {
     const originalFetch = globalThis.fetch
+    __setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...args) => globalThis.fetch(...args) }))
     const seen = []
     globalThis.fetch = async (url) => {
       seen.push(String(url))
@@ -542,11 +543,13 @@ try {
       assert.match(res.content, /reader body/)
     } finally {
       globalThis.fetch = originalFetch
+      __setUndiciLoaderForTests(null)
     }
   })
 
   await test('a cancelled page fetch starts no request at all', async () => {
     const originalFetch = globalThis.fetch
+    __setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...args) => globalThis.fetch(...args) }))
     let calls = 0
     globalThis.fetch = async () => { calls++; return new Response('x') }
     try {
@@ -556,6 +559,7 @@ try {
       assert.equal(calls, 0, 'no request may start after a cancel')
     } finally {
       globalThis.fetch = originalFetch
+      __setUndiciLoaderForTests(null)
     }
   })
 } finally {
