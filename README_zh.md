@@ -15,11 +15,11 @@
 ---
 
 > [!NOTE]
-> **版本与发布说明**：当前的 `v0.2.0` 分支已整合以往独立的 `pi-search-boost` 与 `dsh-search-boost` 代码，统一维护在 `lib/` 核心层中。文档中包含 `@latest` 的命令指向 npm 正式发布的版本；体验本分支最新代码请参考[源码安装与本地开发](#源码安装与本地开发)。
+> **版本与发布说明**：以往的 `pi-search-boost` 与 `dsh-search-boost` 已合并为单一代码库，统一维护在 `lib/` 核心层中。文档中包含 `@latest` 的命令指向 npm 正式发布的版本；如需验证尚未进入正式发布的代码，请检出你所需的分支或标签，并参考[源码安装与本地开发](#源码安装与本地开发)。
 
 ---
 
-> **v0.2.1 修复分支**：修复 Pi 网络适配、配置保护、更新进程清理、网页版本缓存和 Jev 统计/限流，并新增 Vercel Jev 适配。分支尚未发布到 npm；`@latest` 不保证包含这些修复。当前交付范围见 [v0.2.1 交付冻结说明](./docs/v0.2.1-delivery.md)，此前修复见 [修复与验收记录](./docs/v0.2.1-repair-audit.md)。
+> **v0.2.1 修复内容**：修复 Pi 网络适配、配置保护、更新进程清理、网页版本缓存和 Jev 统计/限流，并新增 Vercel Jev 适配。该版本尚未发布到 npm；`@latest` 不保证包含这些修复。当前交付范围见 [v0.2.1 交付冻结说明](./docs/v0.2.1-delivery.md)，此前修复见 [修复与验收记录](./docs/v0.2.1-repair-audit.md)。
 
 ## 目录
 
@@ -37,7 +37,7 @@
   - [4. `adaptive_search` Jev 自适应证据链（实验功能）](#4-adaptive_search-jev-自适应证据链实验功能)
   - [引擎池与评分预设](#引擎池与评分预设)
 - [多智能体并行研究工作流](#多智能体并行研究工作流)
-- [配置、安全与隐私保障](#配置安全与隐私保障)
+- [安全](#安全)
 - [CLI 命令参考（自动化与进阶）](#cli-命令参考自动化与进阶)
 - [源码安装与本地开发](#源码安装与本地开发)
 - [开源协议](#开源协议)
@@ -307,60 +307,51 @@ search-boost
 
 ## 多智能体并行研究工作流
 
-Pi/DSH 子代理工具加载、旧 `pi-search-boost` 路径与已移除的 `deep_research` 排查，见[子代理工具配置与诊断](docs/subagent-tools.md)。
-
-在安装 MCP 宿主（如 Cursor、Claude Code、Codex、Grok、Antigravity）时，TUI 会同步安装两套官方 Skill：
-
-1. **`search-boost`**：研究路由引导 Skill，帮助模型在面对复杂探索任务时选择最合适的工具策略。
-2. **`search-boost-parallel-research`**：**多智能体并行研究工作流**，通过宿主子代理机制实现“分头调研、统一综合”：
+同一套工作流，三种宿主接入方式。主 Agent 先把问题拆成互不依赖的调研线；每条线由一名 Searcher 子代理用 `fused_search` 与 `fetch_page` 收集证据，再由无工具的 Summarizer（或主 Agent 自己）收敛成一份答案。
 
 ```text
-                           [ 主 Agent (Parent) ]
-                         拆分研究目标 / 规划波次
-                                     │
-                 ┌───────────────────┴───────────────────┐
-                 ▼                                       ▼
-       [ Searcher 子代理 A ]                   [ Searcher 子代理 B ]
-     专职使用搜索与读页工具                  专职使用搜索与读页工具
-                 │                                       │
-                 └───────────────────┬───────────────────┘
-                                     ▼
-                           [ Summarizer 子代理 ]
-                         不授予工具 · 纯文本交叉比对
-                                     │
-                                     ▼
-                           [ 主 Agent 输出最终报告 ]
+                        [ 主 Agent (Parent) ]
+                    拆分调研线 · 持有最终结论
+                                │
+                ┌───────────────┴───────────────┐
+                ▼                               ▼
+         [ Searcher A ]                  [ Searcher B ]
+     fused_search · fetch_page       fused_search · fetch_page
+                │                               │
+                └───────────────┬───────────────┘
+                                ▼
+                        [ Summarizer ]
+                      无工具 · 只做证据综合
+                                ▼
+                       [ 主 Agent 报告 ]
 ```
 
-- **两种工作流模式**：
-  - **Fast 模式**：单波次并发搜集（1 Wave），搜集完毕后立即由主代理完成收敛报告。
-  - **Complex 模式**：增加“证据缺口复核”环节，仅在发现实质性论据缺失时才发起第二波补充搜集。
-- **降级保护**：当宿主不支持派生子代理时，Skill 会自动降级为单代理串行深度研究，绝不产生死循环。
+| 宿主 | 入口 | 子代理如何运行 |
+| :--- | :--- | :--- |
+| **Pi** | `/fast-parallel`、`/complex-parallel` 提示词；`search-parallel-subagent` 工具；`searcher` / `summarizer` 角色 | 每个 Searcher 是独立子进程，显式加载 SearchBoost Pi 扩展（`adapters/pi/index.js`），工具白名单只有 `fused_search` 与 `fetch_page`；Summarizer 以 `--no-tools` 启动。波次规模由调用方决定，该 runner 不设并发上限。 |
+| **DeepSeek Harness** | 原生 `research_parallel` 工具 | 子代理经宿主 subagent 服务在同一 Cordis 上下文中创建。Searcher 获得 `toolFilter.allow = ['fused_search','fetch_page']`，Summarizer 为空白名单。发起波次前 `research_parallel` 会确认两个工具已注册，否则拒绝派发；句柄在成功或失败后都会释放，`maxDepth` 为 1，子代理不能再次嵌套调研。 |
+| **MCP 宿主**（Cursor、Claude Code、Codex、Grok、Antigravity） | 随包安装的 `search-boost-parallel-research` Skill | Skill 内嵌同一套角色与流程，用宿主自身的子代理机制执行；宿主无法派生子代理时，退回主 Agent 串行调研。 |
+
+安装到 MCP 宿主时还会同时安装配套的 **`search-boost`** 路由 Skill，为开放式问题选择合适工具。
+
+- **Fast 模式**：只跑一波 Searcher，随后由主 Agent 收敛，不启动 Summarizer，也不补第二波。
+- **Complex 模式**：1~3 波，波次之间做证据缺口复核；只有存在实质性缺口时才追加下一波，证据足够就提前停止。需注意：波次上限是提示词层面的工作流约束，不是跨独立工具调用的全局配额。
+- **降级保护**：宿主无法派生子代理时，由主 Agent 串行调研并如实说明，不会假装并行波次已经执行。
+
+> [!IMPORTANT]
+> 子代理返回 `ok` 只代表执行完成且文本非空，**不代表结论已被证实**。失败或部分完成的报告仍会保留可见，但其 URL 不计入成功聚合；最终判断始终由主 Agent 负责。
+
+Pi/DSH 子代理工具加载、旧 `pi-search-boost` 路径与已移除的 `deep_research` 排查，见[子代理工具配置与诊断](docs/subagent-tools.md)。
 
 ---
 
-## 配置、安全与隐私保障
+## 安全
 
-### 配置文件结构
+API Key 存放在由 SearchBoost 自己管理的凭据文件中，不写入提示词、工具结果或 shell 配置：
 
-所有本地持久化数据统一存放在 `~/.search-boost/config/`（可通过环境变量 `SEARCH_BOOST_HOME` 整体重定向）：
-
-```text
-~/.search-boost/
-├── config/
-│   ├── keys.json        # 搜索引擎 API Keys 及 Jev 凭据 (权限 0600)
-│   ├── layer.json       # 兼容搜索层设置 (free / api)
-│   └── xauth.json       # X (Twitter) 认证凭据
-├── backups/             # 自动配置备份目录
-└── state/               # 来源登记与升级状态快照
-```
-
-### 安全规范与网络限制
-
-- **文件权限**：在 POSIX 系统上，凭据文件均采用原子写入且权限严格限制为 `0600`（仅当前用户可读写）。
-- **网络信任边界**：目标访问权限交给本机网络、防火墙及配置的代理。`fetch_page` 不再拦截内网/私网目标，也不再本地 DNS 预检或固定普通直连 IP。私有服务应由网络侧做好访问控制。
-- **代理重试与直连兜底**：支持 HTTP(S)/ALL/NO_PROXY 及小写形式。代理连续 5 次连接失败后尝试直连，融合搜索也适用；取消或总超时会提前停止。切换时发出警告，直连可能暴露本机出口 IP。网站 HTTP 错误、代理认证/策略拒绝、无效配置及证书错误不触发换线。
-- **请求基本边界**：仅 HTTP(S)，页面 URL 不可嵌入凭据；保留正常证书验证、跳转/下载大小/超时限制。同线路 curl 兜底禁用 curlrc、遵循已经选定的线路；可用 curl 自己的 CA 信任库验证证书，但不会关闭验证。详见[网络策略](docs/network-policy.md)。
+- **文件权限**：密钥存放在 `~/.search-boost/config/keys.json`（可用 `SEARCH_BOOST_HOME` 重定向根目录）。在 POSIX 系统上目录为 `0700`、文件为 `0600`；覆盖写入时先生成全新的 `0600` 临时文件再改名替换，已存在的文件不会被放宽权限。同一根目录下的备份与升级状态同样为 `0600`。环境变量指定的自定义目录会保留其原有权限，但凭据文件仍以 `0600` 创建。Windows 没有 POSIX 权限位，由 ACL 继承决定。
+- **原子写入与加锁**：写入使用 `O_EXCL` 临时文件加改名替换，读取方只会看到旧文件或新文件，不会读到写了一半的内容；写入失败会自行清理临时文件并保留原文件。读改写流程持有独占锁，两个写入者不会静默互相覆盖，被拒绝的修改也不会触碰原文件。
+- **不回显**：API Key 只在调用所属引擎时随请求发送（Tavily、Brave、Exa 的请求参数或请求头）。状态输出、`search-boost config keys --show` 与 doctor 报告只显示掩码（`abcd****wxyz`）；错误信息经过测试不会包含凭据内容，Jev 评测请求中也不含 Key、掩码 Key 或指纹。
 
 
 ---
@@ -402,40 +393,61 @@ search-boost uninstall -t cursor,claude -y  # 移除指定宿主的集成与注�
 
 ## 源码安装与本地开发
 
-如果你希望对 SearchBoost 进行二次开发，或体验 `v0.2.0` 未发布的最新分支代码：
+适用于参与开发，或提前验证尚未进入 npm 正式发布的代码；文档其他位置的 `@latest` 命令指向 npm 已发布版本。
 
-### 源码安装步骤
+### 环境准备
+
+- **Node.js** `>= 22.13.0`（与 `package.json` 声明一致）
+- **git** 与 **npm**
+- 可选：**`curl`**，用于 `fetch_page` 的同线路传输兼容兜底
+
+### 检出并初始化
 
 ```bash
-# 1. 克隆代码仓库
+# 1. 克隆仓库
 git clone https://github.com/Mr-remon219/search-boost.git
 cd search-boost
 
-# 2. 切换至目标分支并安装依赖
-git switch v0.2.0
+# 2. 按 CI 的方式安装依赖
 npm ci
 
-# 3. 同步生成 Grok 插件资产
+# 3. 重新生成随包 Grok 插件资产
 npm run plugin:sync-grok
+```
 
-# 4. 全局软链安装至系统
-npm install -g .
+克隆后位于仓库的默认分支。若要验证其他分支或标签，请在安装依赖前先检出（`git checkout BRANCH_OR_TAG`）。
 
-# 5. 启动控制台体验
+### 不装全局包直接运行
+
+```bash
+node cli.mjs                  # 直接从检出目录启动交互式控制台 (TUI)
+node cli.mjs status           # 查看当前状态摘要
+node cli.mjs install -t pi -y # 从当前检出目录挂载 Pi 扩展
+node cli.mjs install -t dsh --profile web
+```
+
+`node cli.mjs` 接受与全局安装后的 `search-boost` 完全相同的命令。若希望终端里直接使用 `search-boost`，用软链代替全局安装：
+
+```bash
+npm link        # 或：npm install -g .
 search-boost
 ```
 
-### 开发验证门禁
+修改适配器或 Agent 资产后，重新执行该宿主对应的安装命令（`node cli.mjs install -t HOST`）让宿主加载新文件，然后重启或重载该宿主。
 
-在提交 PR 或发布前，建议在本地运行完整的测试套件：
+### 提交 PR 前的验证门禁
 
-```bash
-npm run prepublishOnly    # 语法检查 + 同步资产 + 全套离线单元测试
-npm run test:network      # DNS、代理、IP 固定与网络安全回归测试
-npm run test:adaptive     # Jev 自适应证据收集循环评测
-npm run test:adapters     # MCP / Pi / DSH 三大适配器协议测试
-npm run smoke             # MCP JSON-RPC 协议冒烟测试
-```
+| 命令 | 覆盖范围 |
+| :--- | :--- |
+| `npm run check` | CLI、核心层、适配器与脚本的语法检查 |
+| `npm run prepublishOnly` | 完整离线套件：插件同步、语法、CLI、安装、doctor、融合搜索、X、引擎、X 认证、Jev、密钥权限、dry-run、网络、搜索路由、适配器、并行研究、升级、MCP 与冒烟测试 |
+| `npm run test:network` | 代理重试、curl 兜底、请求边界与兼容性回归 |
+| `npm run test:adapters` | MCP / Pi / DSH 适配器协议测试，以及 Pi 子代理配置迁移诊断 |
+| `npm run test:parallel` | Searcher/Summarizer 契约、DSH 派发预检、取消与工具隔离 |
+| `npm run test:adaptive` | Jev 自适应证据收集循环 |
+| `npm run smoke` | MCP JSON-RPC 协议冒烟测试 |
+
+这些套件使用本地回环夹具与进程替身运行，不需要真实引擎 Key；`npm run prepublishOnly` 全绿即可提交 PR。
 
 ---
 
