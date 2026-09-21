@@ -99,6 +99,11 @@ try {
       write(join(manual, 'index.js'), 'export default () => "1.0.0"')
       write(join(manual, 'user-notes.txt'), 'keep this when archiving')
     } else settings.extensions = [piEntry(v1)]
+    settings.subagents = {
+      defaultExtensions: [name === 'global-extension' ? join(agentDir, 'npm', 'node_modules', 'pi-search-boost', 'index.ts') : piEntry(v1)],
+      agentOverrides: { reviewer: { tools: ['read', 'fused_search', 'fetch_page', 'deep_research'] }, isolated: { extensions: [], tools: [] } },
+      defaultModel: 'unchanged',
+    }
     write(join(agentDir, 'settings.json'), settings)
     scopes.push({ name, agentDir })
   }
@@ -120,6 +125,10 @@ try {
       const settings = json(join(agentDir, 'settings.json'))
       assert.deepEqual(settings.userSetting, { unchanged: true })
       assert.equal(settings.packages[0], 'npm:unrelated-tools')
+      assert.deepEqual(settings.subagents.defaultExtensions, [piEntry(root)])
+      assert.deepEqual(settings.subagents.agentOverrides.reviewer.tools, ['read', 'fused_search', 'fetch_page'])
+      assert.deepEqual(settings.subagents.agentOverrides.isolated, { extensions: [], tools: [] })
+      assert.equal(settings.subagents.defaultModel, 'unchanged')
       if (name === 'package') assert.deepEqual(settings.packages[1], { source: root, extensions: [], skills: [], autoload: false })
       else if (settings.extensions) assert.deepEqual(settings.extensions, [(name === 'disabled' ? '-' : '') + piEntry(root)])
       else assert.equal(loadedVersion(join(agentDir, 'extensions', 'search-boost.js')), version)

@@ -307,6 +307,8 @@ In `fused_search`, base weights are governed by `engine_pool` and `ranking`:
 
 ## Parallel Multi-Agent Research Workflows
 
+For Pi/DSH child-tool loading, stale `pi-search-boost` references, and the retired `deep_research` tool, see [Subagent tool setup and diagnosis](docs/subagent-tools.md).
+
 Installing SearchBoost into an MCP host automatically installs two bundled skills:
 
 1. **`search-boost`**: Research routing skill guiding the agent to select optimal tools for open-ended questions.

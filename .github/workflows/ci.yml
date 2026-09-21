@@ -27,6 +27,11 @@ jobs:
           node-version: '22'
           cache: npm
 
+      # Independent TOML parsing for Codex config/print regression assertions.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - run: npm ci
 
       - run: npm run plugin:sync-grok

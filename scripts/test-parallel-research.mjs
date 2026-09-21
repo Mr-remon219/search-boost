@@ -18,6 +18,7 @@ process.env.PI_CODING_AGENT_DIR = join(home, 'pi')
 process.env.SEARCH_BOOST_HOME = join(home, 'search-boost')
 mkdirSync(process.env.PI_CODING_AGENT_DIR)
 const parent = { session: { id: 'test-parent' } }
+const registry = { get: (name) => ['fused_search', 'fetch_page'].includes(name) ? { name } : undefined }
 const item = (task, agent = 'searcher') => ({ agent, task })
 const terminal = (text, stopReason = 'completed') => ({ stopReason, output: [{ type: 'text', text }] })
 function deferred() {
@@ -32,7 +33,7 @@ function nativeService(start) {
   }
 }
 function run(subagents, opts = {}) {
-  return parallelResearch({ subagents, agent: parent, tasks: [item('one'), item('two')], maxSeconds: 2, ...opts })
+  return parallelResearch({ subagents, tools: registry, agent: parent, tasks: [item('one'), item('two')], maxSeconds: 2, ...opts })
 }
 const originalSpawn = childProcess.spawn
 try {
@@ -66,6 +67,26 @@ try {
   }
   assert.equal(starts, 0)
   console.log('ok: missing provider/capabilities fail closed without starting a child or runtime fallback')
+
+  for (const missing of ['fused_search', 'fetch_page']) {
+    const tools = { get: (name, scope) => { assert.equal(scope, parent); return name !== missing && registry.get(name) } }
+    await assert.rejects(run(nativeService(() => { starts++ }), { tools }), new RegExp(missing))
+  }
+  await assert.rejects(run(nativeService(() => { starts++ }), { tools: {} }), /registry unavailable/)
+  await assert.rejects(run(nativeService(() => { starts++ }), { agent: undefined }), /parent agent/)
+  assert.equal(starts, 0)
+  console.log('ok: missing/denied scoped tools, unknown registry and absent parent fail before child startup')
+
+  let childDisposed = 0
+  const child = { session: { id: 'child-with-extra-restriction' } }
+  const hidden = await run(nativeService(async () => ({
+    localAgent: child, result: Promise.resolve(terminal('must not count as success')),
+    dispose: async () => { childDisposed++ },
+  })), { tasks: [item('child scope')], tools: { get: (name, scope) => scope === parent ? registry.get(name) : undefined } })
+  assert.equal(hidden.okCount, 0)
+  assert.match(hidden.results[0].error, /fused_search, fetch_page/)
+  assert.equal(childDisposed, 1)
+  console.log('ok: published child scope is checked; missing tools cannot count as successful research')
 
   const requests = [], disposed = [], gate = deferred()
   const service = nativeService(async (provider, request) => {
@@ -193,7 +214,7 @@ try {
   const commands = { register() {} }
   dsh.apply({
     get: (name) => name === 'subagents' ? nativeService(async () => ({ result: Promise.resolve(terminal('https://example.com/tool')), dispose: async () => {} })) : name === 'commands' ? commands : undefined,
-    tools: { register: (tool) => tools.set(tool.name, tool) },
+    tools: { register: (tool) => tools.set(tool.name, tool), get: (name) => tools.get(name) },
     web: { registerSearchProvider() {}, registerFetchProvider() {} },
     systemPrompt: { section() {} },
   })
@@ -203,6 +224,29 @@ try {
   assert.equal(actual.results[0].agent, 'summarizer')
   assert(tool.output.render({}, actual)[0].text.includes('https://example.com/tool'))
   console.log('ok: DSH tool adapter forwards role dispatch and describes the full output contract')
+
+  // Real adapter registration flags, not a permissive start() double: a disabled
+  // search tool must stop a wave before the native provider is invoked.
+  for (const flag of ['fusedSearch', 'fetchPage']) {
+    const registered = new Map()
+    let launched = 0
+    const ctx = {
+      get: (name) => name === 'subagents' ? nativeService(async () => {
+        launched++
+        return { result: Promise.resolve(terminal('summary')), dispose: async () => {} }
+      }) : name === 'commands' ? commands : undefined,
+      tools: { register: (tool) => registered.set(tool.name, tool), get: (name, scope) => { assert.equal(scope, parent); return registered.get(name) } },
+      web: { registerSearchProvider() {}, registerFetchProvider() {} }, systemPrompt: { section() {} },
+    }
+    dsh.apply(ctx, { [flag]: false })
+    const parallel = registered.get('research_parallel')
+    await assert.rejects(parallel.execute({ tasks: [item('facts'), item('reports', 'summarizer')] }, { agent: parent }), /required searcher tools unavailable/)
+    assert.equal(launched, 0)
+    const summaryOnly = await parallel.execute({ agent: 'summarizer', task: 'reports' }, { agent: parent })
+    assert.equal(summaryOnly.okCount, 1)
+    assert.equal(launched, 1)
+  }
+  console.log('ok: disabled DSH search tools block mixed/searcher waves but not tool-free summarizers')
 } finally {
   childProcess.spawn = originalSpawn
   syncBuiltinESMExports()

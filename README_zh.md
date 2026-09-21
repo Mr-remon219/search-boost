@@ -307,6 +307,8 @@ search-boost
 
 ## 多智能体并行研究工作流
 
+Pi/DSH 子代理工具加载、旧 `pi-search-boost` 路径与已移除的 `deep_research` 排查，见[子代理工具配置与诊断](docs/subagent-tools.md)。
+
 在安装 MCP 宿主（如 Cursor、Claude Code、Codex、Grok、Antigravity）时，TUI 会同步安装两套官方 Skill：
 
 1. **`search-boost`**：研究路由引导 Skill，帮助模型在面对复杂探索任务时选择最合适的工具策略。
