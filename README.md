@@ -40,6 +40,7 @@
 - [Security](#security)
 - [CLI Command Reference (Headless & CI)](#cli-command-reference-headless--ci)
 - [Installation from Source & Development](#installation-from-source--development)
+- [Friendly Links](#friendly-links)
 - [License](#license)
 
 ---
@@ -448,6 +449,12 @@ After changing adapter or agent assets, re-run the same install command for that
 | `npm run smoke` | MCP JSON-RPC protocol smoke test |
 
 These suites run against loopback fixtures and process doubles, so no engine keys are needed; a green `npm run prepublishOnly` is the bar for a PR.
+
+---
+
+## Friendly Links
+
+- [LINUX DO](https://linux.do/)
 
 ---
 
