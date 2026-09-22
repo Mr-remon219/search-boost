@@ -80,6 +80,9 @@ assert('apiLayerFreeOnlyWarning null on free layer', apiLayerFreeOnlyWarning('fr
 assert('apiLayerFreeOnlyWarning null when keyed used', apiLayerFreeOnlyWarning('api', ['bing', 'tavily']) === null)
 assert('apiLayerFreeOnlyWarning null with single keyed engine', apiLayerFreeOnlyWarning('api', ['bing', 'ddg', 'tavily']) === null)
 
+assert('anonymous AnySearch does not suppress free-only warning', !!apiLayerFreeOnlyWarning('api', ['anysearch']))
+assert('keyed AnySearch suppresses free-only warning with snapshot evidence', apiLayerFreeOnlyWarning('api', ['anysearch'], { anysearchKeyed: true }) === null)
+
 const tavilyOnlyKeys = { tavily: 'tvly-test-key-12345678', brave: undefined, exa: undefined }
 const emptyRouting = readEngineRoutingFromDoc({})
 assert('resolveKeyedEngines single configured key', resolveKeyedEngines(tavilyOnlyKeys, emptyRouting).join() === 'tavily')

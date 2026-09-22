@@ -48,6 +48,17 @@ try {
     assert.equal(lastCall().url.searchParams.get('freshness'), 'pm')
   })
 
+  await test('Yahoo preserves primary and supplemental positions through malformed/duplicate cards', async () => {
+    const saved = globalThis.fetch
+    const card = (url, title, primary = true) => `${primary ? '<div class="dd fst algo result">' : ''}<div class="compTitle"><a href="${url}"><h3 class="title">${title}</h3></a></div><div class="compText"><p>snippet</p></div>`
+    try {
+      globalThis.fetch = async () => new Response(card('javascript:bad', 'invalid') + card('https://one.example', 'one') + card('https://one.example', 'duplicate') + card('https://two.example', 'two'))
+      const rows = await engines.yahoo.search('query', 10, {})
+      assert.deepEqual(rows.map((r) => r.providerRank), [2, 4])
+      globalThis.fetch = async () => new Response(card('javascript:bad', 'invalid', false) + card('https://one.example', 'one', false) + card('https://one.example', 'duplicate', false) + card('https://two.example', 'two', false))
+      assert.deepEqual((await engines.yahoo.search('query', 10, {})).map((r) => r.providerRank), [2, 4])
+    } finally { globalThis.fetch = saved }
+  })
   await test('AnySearch pool readiness, optional auth and bounded documented envelope', async () => {
     const anonymous = engineRegistry({}).anysearch
     assert.equal(anonymous.available(), true)
@@ -68,15 +79,16 @@ try {
     const { runFused, invalidateSearchCaches } = await import('../lib/runtime.mjs')
     invalidateSearchCaches()
     const engines = engineRegistry({ anysearch: 'fixture-key' })
-    const snapshot = () => ({ engines, fingerprint: 'anysearch-fixture', capability: { x: { official: { available: false } } } })
+    const snapshot = () => ({ engines, routing: { keys: { anysearch: 'fixture-key' } }, fingerprint: 'anysearch-fixture', capability: { x: { official: { available: false } } } })
     for (const pool of ['free', 'api', 'hybrid']) {
       const before = calls.length
-      const out = await runFused({ query: 'fixture', enginePool: pool, engineList: ['anysearch'], complexity: 'simple' }, { snapshot })
+      const out = await runFused({ query: 'fixture', layer: 'api', enginePool: pool, engineList: ['anysearch'], complexity: 'simple' }, { snapshot })
       assert.equal(calls.length, before + 1)
       assert.equal(lastCall().headers.authorization, pool === 'free' ? undefined : 'Bearer fixture-key')
       assert.equal(out.results[0].engineRanks.anysearch, 1)
       assert.equal(out.results[0].scoreVersion, 'consensus-v2.1')
-      assert.equal((await runFused({ query: 'fixture', enginePool: pool, engineList: ['anysearch'], complexity: 'simple' }, { snapshot })).cacheHit, true)
+      assert.equal(out.warnings.some((w) => w.includes('using free engines only')), pool === 'free')
+      assert.equal((await runFused({ query: 'fixture', layer: 'api', enginePool: pool, engineList: ['anysearch'], complexity: 'simple' }, { snapshot })).cacheHit, true)
     }
     invalidateSearchCaches()
   })

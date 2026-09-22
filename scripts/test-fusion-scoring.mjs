@@ -137,6 +137,10 @@ near(community.evidenceScore, score([{ engine: 'bing', rank: 8 }, { engine: 'tav
 assert.ok(!community.engines.includes('fake'))
 const zeroCommunity = mergeCommunityResults([webPost], [fallbackPost], { query: 'alpha', effectiveWeights: { bing: 0, tavily: 0 }, xArgs: { type: 'keyword', query: 'alpha' } })
 assert.equal(zeroCommunity.results.length, 0)
+const aliasedPost = { url: postUrl, text: 'alpha', engines: ['anysearch-anonymous', 'anysearch-keyed'], engineRanks: { 'anysearch-anonymous': 4, 'anysearch-keyed': 2 } }
+const aliased = mergeCommunityResults([], [aliasedPost], { query: 'alpha', effectiveWeights: { anysearch: 1 }, xArgs: { type: 'keyword', query: 'alpha' } }).results[0]
+assert.deepEqual(aliased.engineRanks, { anysearch: 2 })
+near(aliased.evidenceScore, 10 / 11)
 console.log('ok: Web/X share original ranks and one vote/provider; hosted provenance cannot invent votes')
 
 for (const pool of ['free', 'api', 'hybrid']) {
