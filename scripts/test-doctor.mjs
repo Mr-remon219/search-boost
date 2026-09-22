@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url'
 import { CHECK_IDS } from '../lib/doctor/registry.mjs'
 import { runDoctor } from '../lib/doctor/run.mjs'
 import { renderHuman } from '../lib/doctor/render.mjs'
+import { findMisplacedCodexWebSearch } from '../lib/codex-toml.mjs'
+import { countSearchBoostPermissions, permissionsRedundant } from '../lib/antigravity-settings.mjs'
 import { markClaudeOwnedWebSearchDeny } from '../lib/native-search.mjs'
 
 // Legacy Pi environment names are credential inputs too; never inherit real keys in tests.
@@ -284,8 +286,56 @@ await withIsolatedHome(async (home) => {
 }
 
 // Registry drift includes the static Pi child-tool wiring check.
-assert('registry quick check count', CHECK_IDS.length === 19)
+assert('registry quick check count', CHECK_IDS.length === 24)
 assert('registry includes Pi child-tool check', CHECK_IDS.includes('pi_subagent_tools'))
+for (const id of [
+  'config_layout',
+  'codex_web_search_config',
+  'cursor_hook_config',
+  'antigravity_mcp_duplication',
+  'antigravity_permission_config',
+]) {
+  assert(`registry includes recovered check: ${id}`, CHECK_IDS.includes(id))
+}
+
+// helper unit tests: Codex misplaced web_search placement
+{
+  const marked = '[mcp_servers.search-boost]\ncommand = "node"\n# SEARCH_BOOST_WEB_SEARCH_START\nweb_search = "disabled"\n# SEARCH_BOOST_WEB_SEARCH_END\n'
+  const bare = '[mcp_servers.search-boost]\ncommand = "node"\nweb_search = "live"\n'
+  const root = 'web_search = "disabled"\n[mcp_servers.search-boost]\ncommand = "node"\n'
+  const standalone = 'web_search = "disabled"\n'
+  assert('misplaced marked block detected', findMisplacedCodexWebSearch(marked)?.marker === true)
+  assert('misplaced bare web_search detected', findMisplacedCodexWebSearch(bare)?.bare === true)
+  assert('root web_search not misplaced', findMisplacedCodexWebSearch(root) === null)
+  assert('no MCP section not misplaced', findMisplacedCodexWebSearch(standalone) === null)
+}
+
+// helper unit tests: Antigravity permission counting
+{
+  const counts = countSearchBoostPermissions(['mcp(search-boost/*)', 'mcp(search-boost/search)', 'Shell(git)'])
+  assert('antigravity permission counts', counts.wildcard === 1 && counts.granular === 1 && counts.total === 2)
+  assert('antigravity wildcard+granular redundant', permissionsRedundant(['mcp(search-boost/*)', 'mcp(search-boost/search)']) === true)
+  assert('antigravity wildcard only not redundant', permissionsRedundant(['mcp(search-boost/*)']) === false)
+  assert('antigravity non-array input tolerated', countSearchBoostPermissions(null).total === 0)
+}
+
+// layer_config_valid warns when a present file has no usable layer value
+await withIsolatedHome(async (home) => {
+  writeFileSync(join(home, '.search-boost-layer.json'), `${JSON.stringify({ layer: 'turbo' })}\n`, 'utf8')
+  const { report } = await runDoctor({
+    homeDir: home,
+    silent: true,
+    category: 'config',
+    env: {
+      TAVILY_API_KEY: undefined,
+      BRAVE_API_KEY: undefined,
+      EXA_API_KEY: undefined,
+      ANYSEARCH_API_KEY: undefined,
+    },
+  })
+  const check = findCheck(report, 'layer_config_valid')
+  assert('layer_config_valid warns on unusable layer file', check?.status === 'warn')
+})
 
 // --category probe with no registered checks → exit 2
 {
@@ -306,6 +356,32 @@ await withIsolatedHome(async (home) => {
   })
   const check = findCheck(report, 'config_paths_writable')
   assert('config_paths_writable pass with env override', check?.status === 'pass')
+})
+
+// config_paths_writable allows missing parent dirs (created on first write)
+await withIsolatedHome(async (home) => {
+  const { report } = await runDoctor({
+    homeDir: home,
+    silent: true,
+    category: 'config',
+    env: { SEARCH_BOOST_KEYS_FILE: join(home, 'newdir', 'sub', 'keys.json') },
+  })
+  const check = findCheck(report, 'config_paths_writable')
+  assert('config_paths_writable pass with missing override parents', check?.status === 'pass')
+})
+
+// config_paths_writable fails when a path component exists as a file
+await withIsolatedHome(async (home) => {
+  const blocker = join(home, 'blocker')
+  writeFileSync(blocker, 'not a directory\n', 'utf8')
+  const { report } = await runDoctor({
+    homeDir: home,
+    silent: true,
+    category: 'config',
+    env: { SEARCH_BOOST_KEYS_FILE: join(blocker, 'keys.json') },
+  })
+  const check = findCheck(report, 'config_paths_writable')
+  assert('config_paths_writable fails on file-in-path', check?.status === 'fail')
 })
 
 // render exit footnote distinguishes fail vs strict-warn
@@ -421,6 +497,85 @@ await withIsolatedHome(async (home) => {
     const { report } = runDoctorInSubprocess(home, 'agents')
     const claudePerm = findCheck(report, 'claude_permission_config')
     assert('claude malformed allow does not crash', claudePerm?.status === 'pass')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// agents: codex misplaced web_search block (legacy MCP placement) must fail
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-codex-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.codex'), { recursive: true })
+    writeFileSync(
+      join(home, '.codex', 'config.toml'),
+      [
+        '[mcp_servers.search-boost]',
+        'command = "node"',
+        '# SEARCH_BOOST_WEB_SEARCH_START',
+        'web_search = "disabled"',
+        '# SEARCH_BOOST_WEB_SEARCH_END',
+        '',
+      ].join('\n'),
+      'utf8',
+    )
+    const { report } = runDoctorInSubprocess(home, 'agents')
+    const misplaced = findCheck(report, 'codex_web_search_config')
+    assert('codex misplaced marker fail', misplaced?.status === 'fail')
+    assert('codex misplaced fix_hint install', misplaced?.fix_hint?.includes('install -t codex'))
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// agents: codex root web_search placement passes
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-codex-ok-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.codex'), { recursive: true })
+    writeFileSync(
+      join(home, '.codex', 'config.toml'),
+      ['web_search = "disabled"', '', '[mcp_servers.search-boost]', 'command = "node"', ''].join('\n'),
+      'utf8',
+    )
+    const { report } = runDoctorInSubprocess(home, 'agents')
+    const ok = findCheck(report, 'codex_web_search_config')
+    assert('codex root web_search placement pass', ok?.status === 'pass')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// agents: cursor MCP configured without sessionStart hook warns
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-cursor-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.cursor'), { recursive: true })
+    writeFileSync(
+      join(home, '.cursor', 'mcp.json'),
+      `${JSON.stringify({ mcpServers: { 'search-boost': { command: 'node' } } })}\n`,
+      'utf8',
+    )
+    const { report } = runDoctorInSubprocess(home, 'agents')
+    const cursor = findCheck(report, 'cursor_hook_config')
+    assert('cursor missing sessionStart hook warn', cursor?.status === 'warn')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// agents: antigravity search-boost in both unified and legacy MCP configs fails
+{
+  const home = mkdtempSync(join(tmpdir(), `search-boost-doctor-antigravity-${process.pid}-`))
+  try {
+    mkdirSync(join(home, '.gemini', 'config'), { recursive: true })
+    mkdirSync(join(home, '.gemini', 'antigravity'), { recursive: true })
+    const cfg = `${JSON.stringify({ mcpServers: { 'search-boost': { command: 'node' } } })}\n`
+    writeFileSync(join(home, '.gemini', 'config', 'mcp_config.json'), cfg, 'utf8')
+    writeFileSync(join(home, '.gemini', 'antigravity', 'mcp_config.json'), cfg, 'utf8')
+    const { report } = runDoctorInSubprocess(home, 'agents')
+    const dup = findCheck(report, 'antigravity_mcp_duplication')
+    assert('antigravity MCP duplication fail', dup?.status === 'fail')
   } finally {
     rmSync(home, { recursive: true, force: true })
   }
