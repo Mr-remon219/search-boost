@@ -25,7 +25,7 @@ MCP / Pi / DSH x_search
 主要模块：
 
 - `lib/search/results.js`：Web URL/日期规范化、X URL 身份、域名过滤、通用去重、三态过滤、domain/author 多样性选择。
-- `lib/search/routing.js`：引擎池、9 组权重、路由校验、共用 description / 原生参数定义。
+- `lib/search/routing.js`：引擎池、跨池共享策略权重、路由校验、共用 description / 原生参数定义。
 - `lib/search/x/x-pipeline.js`：X 特有的数据结构、作者/日期/metadata operators；复用公共函数。
 - `lib/search/x/community.js`：只做 Web/X 最终聚合，不负责检索。
 - `lib/search/capability.js`：所有宿主与运行时共用的动态能力快照。
@@ -46,7 +46,7 @@ MCP / Pi / DSH x_search
 
 `queries` 是调用方提供的独立角度；query 中的 OR alternatives 也占 variant 预算。没有额外的 LLM 自动改写器。`ranking=fresh` 不隐式修改日期范围、搜索深度或请求参数；时效需求仍用 `recency`。
 
-权重必须是有限非负数。权重为 0 仍调用该引擎；它只消除该引擎的加权贡献，相关性等其他评分项仍存在。未选择引擎的 override 不生效，也不会使其被调用。显式 `engines` 选到池外引擎时，采用该引擎所属 free/api 池的同名 ranking 权重，再应用 override。空 engines、未知引擎和无效权重直接报错。
+权重必须是有限非负数。权重为 0 仍调用该引擎；它不能贡献共识分，全零证据不会被元数据恢复。未选择引擎的 override 不生效，也不会使其被调用。显式 `engines` 选到池外引擎时，采用该引擎所属 free/api 池的同名 ranking 权重，再应用 override。空 engines、未知引擎和无效权重直接报错。
 
 ### 引擎池与权重
 
@@ -81,9 +81,9 @@ MCP / Pi / DSH x_search
 2. `allowed_x_handles` / `excluded_x_handles` / username 与字段日期做交集；字段 `to_date` 包含整天，query `until:` 仍为排他上界。可验证的 query metadata operators 统一在本地执行；无法验证的约束会提示或排除缺元数据项。
 3. X 用 post ID 去重，所以 x.com、twitter.com、mobile、`i/web/status` 与带作者路径不会重复。Web 使用去 tracking/fragment 的 URL key，保留路径大小写、有意义的 query 和端口。
 4. community 候选模式不提前执行最终过滤/限量；先与普通 Web leg 中的 X 帖子合并元数据，再统一执行 X 约束，防止普通 Web 结果绕过作者/日期过滤。候选模式有独立缓存键，不会污染公开 x_search。
-5. 相同来源不重复计分：同引擎多个 variant 命中的 URL 只保留最佳 rank 贡献；Web/X 两条路都找到同一帖子时，每个引擎只贡献一次。official 或无 Web provenance 的 fallback 使用中性权重 1，不属于可自定义的七个 Web engine weights。
-6. 最终 Web 按 domain、X 按 author 分桶；重复桶采用 0.7 衰减并最多保留两条，再统一截取 max_results。未知 X 作者使用同一保守桶，不允许靠缺元数据绕过作者多样性。
-7. include/exclude domains（含 query 中的 site 规则）作用于全部结果。X/Twitter 域名 aliases 视为同一来源；排除 X 时跳过 community。显式 recency 在社区通道转为 UTC 日期下界，最终也检查普通 Web leg 的 X 帖子。Web recency 仍为原有时效评分/引擎提示。
+5. 相同来源不重复计分：同引擎多个 variant 命中的 URL 只保留最佳 rank 贡献；Web/X 两条路都找到同一帖子时，每个引擎只贡献一次。official 或无 Web provenance 的 fallback 使用中性权重 1，不属于可自定义的八个 Web engine weights。
+6. 最终使用已入选结果的标题/摘要 shingle 相似度选择，质量分不变；短摘要 Web 回退为每域最多两条，单站点限制豁免；X 按作者最多两条。未知 X 作者使用同一保守桶，不允许靠缺元数据绕过作者多样性。
+7. include/exclude domains（含 query 中的 site 规则）作用于全部结果。X/Twitter 域名 aliases 视为同一来源；排除 X 时跳过 community。显式 recency 在社区通道转为 UTC 日期下界，最终也检查普通 Web leg 的 X 帖子。Web recency 仍为软时效偏好/引擎提示，未知日期中立。
 
 这些约束不能使提供方返回未检索到的帖子。GraphQL、oEmbed 和匿名索引均是 best-effort；不会保证完整线程或全平台情绪代表性。
 
@@ -97,7 +97,11 @@ MCP / Pi / DSH x_search
 
 工具静态 description 不写当前可用引擎，避免改 key/layer 后描述失真。
 
+新评分公式、分值迁移、元数据和校准边界见 [fusion-scoring.md](fusion-scoring.md)。
+
 每次 fused 结果包含：
+
+- `scoreVersion`：当前为 consensus-v2.1；min_score 用新质量分尺度，旧阈值需重新校准。
 
 - `enginesUsed`：实际尝试的 Web 引擎（含 X fallback 直接调用的引擎）；失败不从列表隐藏。
 - `effectiveWeights`：本次可用且已选择的引擎实际采用的权重。
@@ -105,7 +109,7 @@ MCP / Pi / DSH x_search
 - `warnings`：缺 key/禁用、调用失败、community 降级、约束信息等。
 - `engineStats`：attempts、successes、errors；部分 variant 失败不被误报为全部引擎失败。
 
-缓存命中保留原始 provenance，不代表本次重新联网。缓存包含池、ranking、权重、community、参数与私有能力/凭据 fingerprint；credential 内容或 fingerprint 不会出现在 capability Resource/prompt 中。Web 缓存最长 6 小时，community 聚合缓存 5 分钟；保留原 X 各模式 TTL。取消不缓存为成功；失败的聚合不会作为完整成功长期缓存。
+缓存命中保留原始 provenance，不代表本次重新联网。缓存包含评分版本/完整配置、池、ranking、权重、community、参数与私有能力/凭据 fingerprint；credential 内容或 fingerprint 不会出现在 capability Resource/prompt 中。Web 缓存最长 6 小时，community 聚合缓存 5 分钟；保留原 X 各模式 TTL。取消不缓存为成功；失败的聚合不会作为完整成功长期缓存。
 
 ## 示例与验证
 

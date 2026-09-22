@@ -297,17 +297,20 @@ search-boost
 
 ### 引擎池与评分预设
 
-在 `fused_search` 中，各引擎的基础权重受 `engine_pool` 与 `ranking` 共同约束：
+`engine_pool` 选择调用集合，`ranking` 选择跨池共享权重；`complexity` 只控制预算。AnySearch 是单一逻辑引擎：free 匿名、api 要求 key、hybrid 优先用已配置 key。使用 `ANYSEARCH_API_KEY` 或 `config keys --set anysearch=KEY` 配置。
 
-| 引擎组合 (Pool-Ranking) | Bing | DuckDuckGo | Yahoo | Exa-free | Tavily | Brave | Exa (API) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **free-balanced** | 1.00 | 1.05 | 1.00 | 1.10 | — | — | — |
-| **free-research** | 0.95 | 0.90 | 0.85 | 1.30 | — | — | — |
-| **free-fresh** | 1.15 | 0.95 | 0.90 | 1.00 | — | — | — |
-| **api-balanced** | — | — | — | — | 1.20 | 1.10 | 1.20 |
-| **api-research** | — | — | — | — | 1.35 | 1.00 | 1.45 |
-| **api-fresh** | — | — | — | — | 1.30 | 1.40 | 1.25 |
-| **hybrid-balanced** | 1.00 | 1.05 | 1.00 | 1.10 | 1.20 | 1.10 | 1.20 |
+| 引擎 | balanced | research | fresh |
+| --- | ---: | ---: | ---: |
+| bing | 0.957 | 0.927 | 1.020 |
+| ddg | 0.981 | 0.903 | 0.927 |
+| yahoo | 0.957 | 0.877 | 0.902 |
+| exa-free | 1.004 | 1.085 | 0.951 |
+| tavily | 1.049 | 1.105 | 1.084 |
+| brave | 1.004 | 0.951 | 1.125 |
+| exa | 1.049 | 1.146 | 1.063 |
+| anysearch | 1.004 | 1.042 | 0.951 |
+
+权重是未经实测标注校准的冷启动先验。`consensus-v2.1` 使用原始排名、相关来源组折扣和 max+log 共识，元数据修正最多 20%；质量分与列表选择分分离。零权重不投票，旧 `min_score` 阈值需重新校准。详见 [评分设计与迁移](docs/fusion-scoring.md) 和 [引擎池](docs/search-routing.md)。
 
 ---
 

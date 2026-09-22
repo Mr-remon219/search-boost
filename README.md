@@ -178,7 +178,7 @@ Launch `search-boost` without arguments to access the interactive dashboard buil
 | **Setup** | Complete initial walkthrough: configure engines, search layers, X credentials, and install agents. |
 | **Install / update agents** | Install or refresh selected host integrations, preserving existing credentials and layer settings. |
 | **Update** | **One-click upgrade**: checks npm for updates, upgrades SearchBoost, and refreshes all installed agents (including legacy Pi/DSH adapters). |
-| **API keys / Search layer** | Manage paid engine credentials (Tavily, Brave, Exa) plus the AnySearch key slot — stored and masked now, kept out of the api pool until its adapter ships — and change the default search layer (`free` / `api`). |
+| **API keys / Search layer** | Manage Tavily, Brave, Exa and optional AnySearch credentials, and change the default search layer (`free` / `api`). |
 | **X credentials** | Manage X (Twitter) authentication; supports one-click import from local Grok login. |
 | **Jev credentials (experimental)** | Configure TypeSafe Jev cognitive engine endpoint and Bearer token. |
 | **Native web search** | Enable or disable host-native search for hosts supporting config switches. |
@@ -297,17 +297,20 @@ See the [adaptive-search contract and limitations](./docs/jev-adaptive-search.md
 
 ### Engine Pools & Scoring Presets
 
-In `fused_search`, base weights are governed by `engine_pool` and `ranking`:
+`engine_pool` selects engines, `ranking` selects shared cross-pool weights, and `complexity` controls only budget. AnySearch is one logical engine: anonymous in free, key-required in api, and key-preferred in hybrid. Configure `ANYSEARCH_API_KEY` or `config keys --set anysearch=KEY`.
 
-| Pool-Ranking Preset | Bing | DuckDuckGo | Yahoo | Exa-free | Tavily | Brave | Exa (API) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **free-balanced** | 1.00 | 1.05 | 1.00 | 1.10 | — | — | — |
-| **free-research** | 0.95 | 0.90 | 0.85 | 1.30 | — | — | — |
-| **free-fresh** | 1.15 | 0.95 | 0.90 | 1.00 | — | — | — |
-| **api-balanced** | — | — | — | — | 1.20 | 1.10 | 1.20 |
-| **api-research** | — | — | — | — | 1.35 | 1.00 | 1.45 |
-| **api-fresh** | — | — | — | — | 1.30 | 1.40 | 1.25 |
-| **hybrid-balanced** | 1.00 | 1.05 | 1.00 | 1.10 | 1.20 | 1.10 | 1.20 |
+| Engine | balanced | research | fresh |
+| --- | ---: | ---: | ---: |
+| bing | 0.957 | 0.927 | 1.020 |
+| ddg | 0.981 | 0.903 | 0.927 |
+| yahoo | 0.957 | 0.877 | 0.902 |
+| exa-free | 1.004 | 1.085 | 0.951 |
+| tavily | 1.049 | 1.105 | 1.084 |
+| brave | 1.004 | 0.951 | 1.125 |
+| exa | 1.049 | 1.146 | 1.063 |
+| anysearch | 1.004 | 1.042 | 0.951 |
+
+These are uncalibrated cold-start priors, not measured quality rankings. `consensus-v2.1` combines original ranks, related-provider discounts and max+log consensus, with metadata adjustments capped at 20%. Quality and list-selection scores stay separate; zero-weight sources cannot vote. Recalibrate old `min_score` thresholds. See [scoring and migration](docs/fusion-scoring.md) and [pool routing](docs/search-routing.md).
 
 ---
 
@@ -357,7 +360,7 @@ API keys use a credential store this tool owns. They are not written into prompt
 
 - **Private file permissions**: keys live in `~/.search-boost/config/keys.json` (redirect the root with `SEARCH_BOOST_HOME`). On POSIX the store directory is `0700` and the file is `0600`; a rewrite is built from a fresh `0600` temporary file rather than written in place, so an existing file is never widened. Backups and upgrade receipts under the same root are `0600` as well. An env-overridden directory keeps its own mode, while the credential file is still created `0600`. Windows has no POSIX mode bits — ACL inheritance applies there.
 - **Atomic, locked writes**: replacement uses an `O_EXCL` temporary file plus rename, so a reader sees either the old or the new file and never a partial one; a failed write cleans up after itself and leaves the previous file untouched. Read-modify-write cycles take an exclusive lock, so two writers cannot silently lose each other's update, and a rejected change does not touch the file at all.
-- **Never echoed back**: a key is only sent to the engine it belongs to (Tavily, Brave and Exa request parameters/headers). Status output, `search-boost config keys --show` and the doctor report print masked values (`abcd****wxyz`); error messages are tested not to contain credential material, and Jev evaluation payloads deliberately carry no key, masked key or fingerprint. A stored AnySearch key is a stored-only slot: no request carries it until its engine adapter lands, and it never enters engine routing, the api pool or the layer decision.
+- **Never echoed back**: a key is only sent to the engine it belongs to (Tavily, Brave, Exa and AnySearch request parameters/headers). Status output, `search-boost config keys --show` and the doctor report print masked values (`abcd****wxyz`); error messages are tested not to contain credential material, and Jev evaluation payloads deliberately carry no key, masked key or fingerprint. AnySearch uses anonymous quota in free, requires a key in api, and prefers a configured key in hybrid. Its potentially credential-bearing error envelopes are never echoed or persisted.
 
 
 ---
