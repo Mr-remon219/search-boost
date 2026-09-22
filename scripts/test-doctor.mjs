@@ -75,6 +75,7 @@ const { report, exitCode } = await runDoctor({
     TAVILY_API_KEY: undefined,
     BRAVE_API_KEY: undefined,
     EXA_API_KEY: undefined,
+      ANYSEARCH_API_KEY: undefined,
   },
 });
 process.stdout.write(JSON.stringify({ report, exitCode }));
@@ -98,6 +99,7 @@ await withIsolatedHome(async (home) => {
     TAVILY_API_KEY: undefined,
     BRAVE_API_KEY: undefined,
     EXA_API_KEY: undefined,
+      ANYSEARCH_API_KEY: undefined,
   }
   const { report, exitCode } = await runDoctor({
     homeDir: home,
@@ -126,14 +128,15 @@ await withIsolatedHome(async (home) => {
       TAVILY_API_KEY: undefined,
       BRAVE_API_KEY: undefined,
       EXA_API_KEY: undefined,
+      ANYSEARCH_API_KEY: undefined,
     },
   })
   const check = findCheck(report, 'layer_keys_coherence')
   assert('layer_keys_coherence warn on api with single key', check?.status === 'warn')
-  assert('layer_keys_coherence single key mentions 1/3', check?.message?.includes('1/3'))
+  assert('layer_keys_coherence single key mentions 1/4', check?.message?.includes('1/4'))
 })
 
-// layer_keys_coherence pass (api with three keys)
+// layer_keys_coherence pass (api with four keys)
 await withIsolatedHome(async (home) => {
   writeFileSync(join(home, '.search-boost-layer.json'), `${JSON.stringify({ layer: 'api' })}\n`, 'utf8')
   writeFileSync(
@@ -142,6 +145,7 @@ await withIsolatedHome(async (home) => {
       tavily: 'tvly-test-key-12345678',
       brave: 'brave-test-key-12345678',
       exa: 'exa-test-key-1234567890',
+      anysearch: 'as-test-key-1234567890',
     })}\n`,
     'utf8',
   )
@@ -153,10 +157,11 @@ await withIsolatedHome(async (home) => {
       TAVILY_API_KEY: undefined,
       BRAVE_API_KEY: undefined,
       EXA_API_KEY: undefined,
+      ANYSEARCH_API_KEY: undefined,
     },
   })
   const check = findCheck(report, 'layer_keys_coherence')
-  assert('layer_keys_coherence pass with api + three keys', check?.status === 'pass')
+  assert('layer_keys_coherence pass with api + four keys', check?.status === 'pass')
 })
 
 // api_keyed_pool warn on partial keyed engines
@@ -175,6 +180,7 @@ await withIsolatedHome(async (home) => {
       TAVILY_API_KEY: undefined,
       BRAVE_API_KEY: undefined,
       EXA_API_KEY: undefined,
+      ANYSEARCH_API_KEY: undefined,
     },
   })
   const check = findCheck(report, 'api_keyed_pool')
@@ -182,7 +188,7 @@ await withIsolatedHome(async (home) => {
   assert('api_keyed_pool single engine OK message', check?.message?.includes('single engine OK'))
 })
 
-// api_keyed_pool pass with all three keys
+// api_keyed_pool pass with all four keys
 await withIsolatedHome(async (home) => {
   writeFileSync(join(home, '.search-boost-layer.json'), `${JSON.stringify({ layer: 'api' })}\n`, 'utf8')
   writeFileSync(
@@ -191,6 +197,7 @@ await withIsolatedHome(async (home) => {
       tavily: 'tvly-test-key-12345678',
       brave: 'brave-test-key-12345678',
       exa: 'exa-test-key-1234567890',
+      anysearch: 'as-test-key-1234567890',
     })}\n`,
     'utf8',
   )
@@ -202,10 +209,11 @@ await withIsolatedHome(async (home) => {
       TAVILY_API_KEY: undefined,
       BRAVE_API_KEY: undefined,
       EXA_API_KEY: undefined,
+      ANYSEARCH_API_KEY: undefined,
     },
   })
   const check = findCheck(report, 'api_keyed_pool')
-  assert('api_keyed_pool pass with three keys', check?.status === 'pass')
+  assert('api_keyed_pool pass with four keys', check?.status === 'pass')
 })
 
 // keys_file_integrity fail (corrupt JSON) → exit 1
@@ -234,6 +242,7 @@ await withIsolatedHome(async (home) => {
       TAVILY_API_KEY: undefined,
       BRAVE_API_KEY: undefined,
       EXA_API_KEY: undefined,
+      ANYSEARCH_API_KEY: undefined,
     },
   })
   assert('exit strict turns warn into 1', exitCode === 1)

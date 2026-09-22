@@ -103,7 +103,7 @@ const report = {
 async function runAdaptiveArm() {
   for (const [index, group] of groups.entries()) {
     const started = Date.now()
-    const result = await runAdaptiveSearch({ questions: group }, { host: 'mcp' })
+    const result = await runAdaptiveSearch({ questions: group }, { host: 'mcp', diagnostics: true })
     report.adaptive.push({
       group: index + 1,
       size: group.length,

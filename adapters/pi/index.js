@@ -1,3 +1,4 @@
+import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/adaptive/input.js'
 import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
 // pi host adapter — pi coding agent extension.
@@ -44,7 +45,6 @@ import { normalizeTasks, runSearchParallel } from './search-parallel-subagent.js
 import {
   ADAPTIVE_DESCRIPTION,
   ADAPTIVE_PROMPT_GUIDELINES,
-  ADAPTIVE_QUESTIONS_PARAM,
   ADAPTIVE_TOOL_NAME,
   adaptiveTextContent,
 } from '../../lib/search/adaptive/describe.js'
@@ -118,8 +118,8 @@ export default function searchBoostExtension(pi) {
         site: { type: 'string', description: 'Deprecated: restrict to a domain (alias for include_domains)' },
         include_domains: { type: 'array', items: { type: 'string' }, description: 'Only keep results from these domains, including subdomains; provider hints plus a client-side hard filter' },
         exclude_domains: { type: 'array', items: { type: 'string' }, description: 'Drop results from these domains, e.g. exclude wikipedia.org when a term is ambiguous' },
-        recency: { type: 'string', enum: RECENCY_ENUM, description: 'Recency window: results with a publish date outside the window decay exponentially (half-life scaled to window); undated results are mildly demoted (default any)' },
-        min_score: { type: 'number', minimum: 0, maximum: 5, default: 0, description: 'Drop results below this fused score floor (Grok\'s min_score, default 0 = off)' },
+        recency: { type: 'string', enum: RECENCY_ENUM, description: 'Soft freshness preference for dated results; unknown dates are neutral (default any)' },
+        min_score: { type: 'number', minimum: 0, default: 0, description: 'Minimum consensus-v2 quality score; old thresholds need recalibration (default 0)'  },
         depth: { type: 'string', enum: ['basic', 'advanced'], description: 'Tavily search depth: basic or advanced. Advanced may return extracted content; fetch the source only when the returned text is insufficient' },
       },
       required: ['query'],
@@ -169,7 +169,7 @@ export default function searchBoostExtension(pi) {
         `Fused search: "${res.query}"`,
         `Layer: ${res.layer} — ${LAYER_LABELS[res.layer]}`,
         `Tier: ${res.tier} — Queries used: ${(res.queriesUsed ?? []).join(' | ')}`,
-        `Pool: ${res.enginePool}; ranking: ${res.ranking}; enginesUsed: ${res.enginesUsed.join(', ')}; effectiveWeights: ${JSON.stringify(res.effectiveWeights)}; communityUsed: ${res.communityUsed}`,
+        `Score: ${res.scoreVersion}; Pool: ${res.enginePool}; ranking: ${res.ranking}; enginesUsed: ${res.enginesUsed.join(', ')}; effectiveWeights: ${JSON.stringify(res.effectiveWeights)}; communityUsed: ${res.communityUsed}`,
         `Engines: ${stats}${res.cacheHit ? ' — cache hit' : ''} — ${res.tookMs}ms`,
         ...(res.warnings ?? []).map((w) => `WARNING: ${w}`),
         includeDomains.length > 0 ? `Include domains: ${includeDomains.join(', ')}` : '',
@@ -195,7 +195,7 @@ export default function searchBoostExtension(pi) {
       })
       return {
         content: [text(lines.join('\n').trim())],
-        details: { enginesUsed: res.enginesUsed, effectiveWeights: res.effectiveWeights, communityUsed: res.communityUsed, warnings: res.warnings, enginePool: res.enginePool, ranking: res.ranking, engineStats: res.engineStats, cacheHit: Boolean(res.cacheHit), tookMs: res.tookMs, layer: res.layer, tier: res.tier },
+        details: { scoreVersion: res.scoreVersion, results: res.results, enginesUsed: res.enginesUsed, effectiveWeights: res.effectiveWeights, communityUsed: res.communityUsed, warnings: res.warnings, enginePool: res.enginePool, ranking: res.ranking, engineStats: res.engineStats, cacheHit: Boolean(res.cacheHit), tookMs: res.tookMs, layer: res.layer, tier: res.tier },
       }
     },
   })
@@ -271,34 +271,22 @@ export default function searchBoostExtension(pi) {
     name: ADAPTIVE_TOOL_NAME,
     label: 'Adaptive Search (Jev)',
     description: ADAPTIVE_DESCRIPTION,
-    promptSnippet: 'Gather per-question coverage evidence for 1–6 independent questions (Jev-driven)',
+    promptSnippet: 'Search keyword-guided targets with Jev; page through approved URLs and descriptions',
     promptGuidelines: ADAPTIVE_PROMPT_GUIDELINES,
-    parameters: {
-      type: 'object',
-      properties: {
-        questions: {
-          type: 'array',
-          minItems: 1,
-          maxItems: 6,
-          items: { type: 'string', minLength: 1, maxLength: 400 },
-          description: ADAPTIVE_QUESTIONS_PARAM,
-        },
-      },
-      required: ['questions'],
-    },
+    parameters: ADAPTIVE_INPUT_SCHEMA,
     async execute(_toolCallId, params, signal, onUpdate) {
       const progress = onProgress(onUpdate)
       const started = Date.now()
       const questions = Array.isArray(params?.questions) ? params.questions : []
-      progress(`adaptive_search: ${questions.length} question(s) — planning engines, judging per question…`)
-      const res = await runAdaptiveSearch({ questions }, {
+      progress(params.cursor ? 'adaptive_search: reading result page…' : 'adaptive_search: planning target searches…')
+      const res = await runAdaptiveSearch(params, {
         signal,
         host: 'pi',
         audit,
         onProgress: (message) => progress(`adaptive_search: ${message}`),
       })
       const domains = new Set()
-      for (const q of res.questions) for (const item of q.evidence ?? []) if (item.domain) domains.add(item.domain)
+      for (const item of res.results) { try { domains.add(new URL(item.url).hostname) } catch {} }
       audit.write({
         type: 'research',
         ts: new Date().toISOString(),
@@ -306,12 +294,12 @@ export default function searchBoostExtension(pi) {
         mode: ADAPTIVE_TOOL_NAME,
         rounds: res.rounds,
         stopReason: res.stopReason,
-        sources: res.evidence?.total ?? 0,
+        sources: res.totalResults,
         domains: domains.size,
-        uncovered: (res.uncovered ?? []).map((entry) => entry.id),
+        coverageComplete: res.coverageComplete,
         tookMs: Date.now() - started,
-        subtasks: res.questions.length,
-        successfulSubtasks: res.questions.filter((q) => q.status === 'covered').length,
+        subtasks: params.tasks?.reduce((n, task) => n + task.targets.length, 0) ?? questions.length,
+        pageResults: res.results.length,
       })
       return {
         content: adaptiveTextContent(res),
@@ -710,7 +698,7 @@ export default function searchBoostExtension(pi) {
         if (info.layer === 'api' && info.keyedEngines.enabled === 0) {
           hints.push('no API keys configured — the api layer currently runs the keyless engines only; add keys with `search-boost config keys`, or run /web_change free')
         } else if (info.layer === 'api' && info.keyedEngines.enabled < info.keyedEngines.total) {
-          hints.push(`keyed engines: ${info.keyedEngines.enabledNames.join(', ')} — configure all three (tavily, brave, exa) via \`search-boost config keys\` for the fullest fusion`)
+          hints.push(`keyed engines: ${info.keyedEngines.enabledNames.join(', ')} — configure additional engines (tavily, brave, exa, anysearch) via \`search-boost config keys\` for the fullest fusion`)
         }
         if (info.layer === 'free') {
           hints.push('keyless mode — run /web_change api after configuring keys (`search-boost config keys`) to add tavily/brave/exa to the fusion')

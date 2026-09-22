@@ -80,13 +80,16 @@ assert('apiLayerFreeOnlyWarning null on free layer', apiLayerFreeOnlyWarning('fr
 assert('apiLayerFreeOnlyWarning null when keyed used', apiLayerFreeOnlyWarning('api', ['bing', 'tavily']) === null)
 assert('apiLayerFreeOnlyWarning null with single keyed engine', apiLayerFreeOnlyWarning('api', ['bing', 'ddg', 'tavily']) === null)
 
+assert('anonymous AnySearch does not suppress free-only warning', !!apiLayerFreeOnlyWarning('api', ['anysearch']))
+assert('keyed AnySearch suppresses free-only warning with snapshot evidence', apiLayerFreeOnlyWarning('api', ['anysearch'], { anysearchKeyed: true }) === null)
+
 const tavilyOnlyKeys = { tavily: 'tvly-test-key-12345678', brave: undefined, exa: undefined }
 const emptyRouting = readEngineRoutingFromDoc({})
 assert('resolveKeyedEngines single configured key', resolveKeyedEngines(tavilyOnlyKeys, emptyRouting).join() === 'tavily')
 assert(
   'resolveKeyedEngines enabledEngines filter',
   resolveKeyedEngines(
-    { tavily: 'a', brave: 'b', exa: 'c' },
+    { tavily: 'a', brave: 'b', exa: 'c', anysearch: 'd' },
     readEngineRoutingFromDoc({ enabledEngines: ['exa'] }),
   ).join() === 'exa',
 )
@@ -100,9 +103,9 @@ assert(
 
 const partialSummary = keyedPoolSummary(tavilyOnlyKeys, emptyRouting)
 const poolWarn = partialKeyedPoolWarning(partialSummary)
-assert('partialKeyedPoolWarning when 1 of 3', poolWarn?.includes('1/3 keyed engine') && poolWarn?.includes('tavily'))
-assert('partialKeyedPoolWarning null when all three', partialKeyedPoolWarning(keyedPoolSummary(
-  { tavily: 'a', brave: 'b', exa: 'c' },
+assert('partialKeyedPoolWarning when 1 of 4', poolWarn?.includes('1/4 keyed engine') && poolWarn?.includes('tavily'))
+assert('partialKeyedPoolWarning null when all four', partialKeyedPoolWarning(keyedPoolSummary(
+  { tavily: 'a', brave: 'b', exa: 'c', anysearch: 'd' },
   emptyRouting,
 )) === null)
 assert('partialKeyedPoolWarning null when none enabled', partialKeyedPoolWarning(keyedPoolSummary(
@@ -182,8 +185,8 @@ const singleKeyedFused = await fusedSearch({ ...scoreOpts, singleKeyedPool: true
 const discountedFused = await fusedSearch({ ...scoreOpts, singleKeyedPool: false })
 const skipScore = singleKeyedFused.results[0]?.score ?? 0
 const discScore = discountedFused.results[0]?.score ?? 0
-assert('singleKeyedPool skips single-engine discount', skipScore > 0 && Math.abs(discScore / skipScore - 0.9) < 0.001)
-assert('default single-engine discount applies', discScore < skipScore)
+assert('legacy singleKeyedPool no longer changes quality', skipScore > 0 && discScore === skipScore)
+assert('single-source score remains its evidence plus bounded metadata', discScore === discountedFused.results[0].evidenceScore * (1 + discountedFused.results[0].metadataDelta))
 
 if (failed) {
   console.error(`\n${failed} test(s) failed`)

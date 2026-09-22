@@ -30,7 +30,6 @@ import {
 } from '../../lib/runtime.mjs'
 import {
   ADAPTIVE_DESCRIPTION,
-  ADAPTIVE_QUESTIONS_PARAM,
   ADAPTIVE_TOOL_NAME,
   renderAdaptiveSummary,
 } from '../../lib/search/adaptive/describe.js'
@@ -73,13 +72,13 @@ function summarizeAdaptive(result) {
         excludeDomains: args.exclude_domains,
         recency: args.recency,
         complexity: args.complexity ?? 'medium',
-        enginePool: args.engine_pool, ranking: args.ranking, engineWeights: args.engine_weights, community: args.community,
+        minScore: args.min_score ?? 0, enginePool: args.engine_pool, ranking: args.ranking, engineWeights: args.engine_weights, community: args.community,
         layer: args.layer ?? null,
         signal,
       })
       const hits = result.results.map(fusedHitToJson)
       const structured = {
-        query: result.query,
+        query: result.query, scoreVersion: result.scoreVersion,
         layer: result.layer ?? getLayer(),
         tier: result.tier,
         tookMs: result.tookMs,
@@ -220,11 +219,7 @@ function summarizeAdaptive(result) {
     annotations: { ...ANNOTATIONS.search, title: 'Multi-question adaptive evidence loop (Jev)' },
   }, async (args, extra) => {
     try {
-      const questions = args?.questions
-      if (!Array.isArray(questions) || questions.length === 0) {
-        return toolErr('adaptive_search: questions is required (1-6 non-empty strings)')
-      }
-      const result = await runAdaptiveSearch({ questions }, {
+      const result = await runAdaptiveSearch(args, {
         signal: abortSignal(extra, 150_000),
         host: 'mcp',
         audit: extra?.audit,
@@ -233,7 +228,7 @@ function summarizeAdaptive(result) {
       const suffix = result.stopReason === 'not_configured'
         ? `\n\nJev is not configured: run \`${result.configurationHint ?? 'search-boost config jev'}\`, or use fused_search / fetch_page / x_search directly.`
         : ''
-      const text = `${renderAdaptiveSummary(result)}${suffix}`
+      const text = `${renderAdaptiveSummary(result)}${suffix}\n\n${JSON.stringify(result)}`
       return isError ? toolErr(text, summarizeAdaptive(result)) : toolOk(text, summarizeAdaptive(result))
     } catch (err) {
       return toolErr(err instanceof Error ? err.message : String(err))

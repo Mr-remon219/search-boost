@@ -3,7 +3,7 @@
 **Multi-engine web search & evidence synthesis for AI coding agents**  
 *One shared core runtime, deeply adapted for MCP, Pi, and DeepSeek Harness*
 
-[![version](https://img.shields.io/badge/version-v0.2.1-orange?style=flat-square)](#)
+[![version](https://img.shields.io/badge/version-v0.2.2-orange?style=flat-square)](#)
 [![npm version](https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm)](https://www.npmjs.com/package/search-boost)
 [![Node version](https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
@@ -19,7 +19,7 @@
 
 ---
 
-> **v0.2.1 repairs**: fixes Pi transport isolation, configuration preservation, updater process cleanup, page-version identity and Jev accounting/retries; adds Vercel Jev support. This code is not an npm release: `@latest` does not guarantee these repairs. See the [delivery freeze notes](./docs/v0.2.1-delivery.md) for the current scope and the [earlier repair record](./docs/v0.2.1-repair-audit.md).
+> **v0.2.2**: adds AnySearch, correlation-aware fusion scoring and batched Jev target research with approved-result pagination. Includes release-audit fixes for version matching, publication timestamps and cache clearing. See the [release and migration notes](./docs/v0.2.2-release.md). A source merge does not publish npm; `@latest` only includes this version after a separate npm publication.
 
 ## Table of Contents
 
@@ -48,19 +48,19 @@
 ## Key Features
 
 - **Multi-Engine Parallel Fusion (`fused_search`)**  
-  Queries multiple search providers in parallel. Features an out-of-the-box **keyless free pool** (Bing, DuckDuckGo, Yahoo, Exa-free) and a high-tier **API pool** (Tavily, Brave, Exa). Automatically performs cross-engine URL deduplication, domain routing, and relevance re-ranking.
+  Queries multiple search providers in parallel. Features an out-of-the-box **keyless free pool** (Bing, DuckDuckGo, Yahoo, Exa-free, AnySearch) and a keyed **API pool** (Tavily, Brave, Exa, AnySearch). Automatically performs cross-engine URL deduplication, domain routing, and relevance re-ranking.
 - **Clean Webpage Content Extractor (`fetch_page`)**  
   Fetches the origin first for low latency, with optional same-route curl compatibility fallback and Jina Reader backup. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
 - **X / Twitter Community Intelligence (`x_search`)**  
   Retrieves public posts, user timelines, and discussion threads via official xAI API or an anonymous fallback channel. Recovers accurate UTC timestamps from Snowflake post IDs and enforces local author/date filtering without hallucination.
 - **Jev Adaptive Evidence Loop (`adaptive_search` · Experimental)**  
-  Connects with TypeSafe Jev to orchestrate multi-step search loops and evaluate evidence fragments across 1–6 targeted questions. Operates under strict token/step budgets and returns deterministic coverage states (`covered`, `insufficient`, `unassessed`, `not_searched`, `failed`).
+  Accepts task context, keyword alternatives and acceptance targets. Each round uses at most three Jev calls: plan, score and coverage. Returns approved URLs, titles and descriptions with cursor pagination and no fixed cumulative result-count cap; execution remains budgeted.
 - **Native Multi-Agent Parallel Research**  
   Bundles `search-boost` and `search-boost-parallel-research` skills. In hosts supporting subagents (Cursor, Claude Code, Pi, DSH), tasks can be dispatched to parallel Searchers (gathering evidence) and Summarizers (pure synthesis without tools), supporting both Fast and Complex waves.
 - **Unified Core Across All Host Ecosystems**  
   A single, host-neutral core runtime powering standard Model Context Protocol (MCP) servers, alongside native extensions for Pi and Cordis plugin bundles for DeepSeek Harness (DSH).
 - **Zero-Config Onboarding & Strict Security**  
-  **Requires zero API keys to start** using the free engine pool. Sensitive credentials are encrypted in local private configs (POSIX `0600`). Uses local networking and proxy DNS, with bounded requests and explicit fallback, with zero credential leakage into model prompts.
+  **Requires zero API keys to start** using the free engine pool. Sensitive credentials are stored as plaintext in local private configs with restricted file permissions (POSIX `0600`); this is not encryption at rest. Uses local networking and proxy DNS, with bounded requests and explicit fallback, with zero credential leakage into model prompts.
 
 ---
 
@@ -178,7 +178,7 @@ Launch `search-boost` without arguments to access the interactive dashboard buil
 | **Setup** | Complete initial walkthrough: configure engines, search layers, X credentials, and install agents. |
 | **Install / update agents** | Install or refresh selected host integrations, preserving existing credentials and layer settings. |
 | **Update** | **One-click upgrade**: checks npm for updates, upgrades SearchBoost, and refreshes all installed agents (including legacy Pi/DSH adapters). |
-| **API keys / Search layer** | Manage paid engine credentials (Tavily, Brave, Exa) and change the default search layer (`free` / `api`). |
+| **API keys / Search layer** | Manage Tavily, Brave, Exa and optional AnySearch credentials, and change the default search layer (`free` / `api`). |
 | **X credentials** | Manage X (Twitter) authentication; supports one-click import from local Grok login. |
 | **Jev credentials (experimental)** | Configure TypeSafe Jev cognitive engine endpoint and Bearer token. |
 | **Native web search** | Enable or disable host-native search for hosts supporting config switches. |
@@ -199,7 +199,7 @@ When integrated, agents automatically receive standard tool definitions and auto
 | `fused_search` | Parallel multi-engine querying, deduplication, and diversity re-ranking | A single search step; follow-up decisions remain with the parent agent |
 | `fetch_page` | Reading clean content from public URLs with optional keyword focus | Not a browser with login state; cannot access internal/private networks |
 | `x_search` | Retrieving public X posts, author timelines, or discussion threads | Does not guarantee exhaustive comment threads or total sentiment sampling |
-| `adaptive_search` | **Experimental**: Jev-guided autonomous follow-up and evidence evaluation | Not a final-answer generator; `covered` is model evaluation, not verified truth |
+| `adaptive_search` | **Experimental**: Jev-guided autonomous follow-up and evidence evaluation | Approved URLs and descriptions; model approval is not independent verification |
 | `search_stats` | Reading engine status, memory cache hits, and recent diagnostic stats | Read-only; configuration readiness does not guarantee active external network reachability |
 | `search_layer` | Viewing or switching compatibility search layer in MCP | `show` is read-only; changing layers mutates persistent configuration on disk |
 
@@ -268,41 +268,49 @@ Designed for real-time technical tracking and first-party developer updates. Sup
 
 **Vercel support**: in TUI → Jev credentials, enter `https://ai-gateway.vercel.sh/v1` and a Vercel AI Gateway key. SearchBoost selects the official SDK evaluation model `typesafe-ai/jev`, not chat completions. The default TypeSafe `/systemone` path remains supported. Both paths use only the canonical user Jev credential, not environment keys, and respect server rate-limit delays.
 
-When rigorous verification is required for complex technical claims, agents can call `adaptive_search`. The Jev cognitive loop formulates targeted queries, selects allowable engines, fetches relevant passages, and assesses coverage.
+The caller supplies task context, keyword alternatives and explicit acceptance questions. Jev chooses query strategies and engines, then scores retrieved evidence and judges which targets need another round. Each round has at most three logical requests, not one request per URL.
 
-**Tool Arguments Example**:
 ```json
 {
-  "questions": [
-    "What cancellation guarantees does the official documentation provide for this API?",
-    "In which stable release was this behavior originally introduced?"
-  ]
+  "tasks": [{
+    "context": "ExampleDB 4.2 upgrade impact",
+    "targets": [{
+      "id": "migration",
+      "keywords": ["migration guide", "upgrade guide"],
+      "question": "What migration steps are required from 4.1 to 4.2?"
+    }]
+  }],
+  "page_size": 20
 }
 ```
 
-- Accepts 1–6 non-empty questions, each up to 400 characters.
-- **Returns per-question coverage status**:
-  - `covered`: Assessed fragments satisfy the question's criteria (model judgment).
-  - `insufficient`: Retrieved material does not fully answer the claim.
-  - `unassessed`: Intermediate state or evaluation not completed.
-  - `not_searched`: Query budget or deadline exhausted before execution.
-  - `failed`: An error occurred during retrieval or parsing.
+- Up to 6 tasks, 4 targets per task, 12 total targets; legacy `questions` input remains supported.
+- `results` is a flat `{url, title, description}` list containing only assessed, approved material, not unassessed/rejected candidates.
+- Read more with `{"cursor":"<nextCursor>"}`: no new search or Jev call. Pages default to 20 results (max 50) and have a byte budget, but cumulative approved results have no fixed count cap.
+- Inspect `coverageComplete` and warnings. End of pagination is not exhaustive search, and model approval is not independent fact verification.
+- Results are process-local, retained for up to 30 minutes / 32 recent result sets; expiry, eviction or restart invalidates cursors.
+- Optional task `time_range` distinguishes publication dates from event dates; unknown dates cannot qualify as today's evidence.
+
+See the [adaptive-search contract and limitations](./docs/jev-adaptive-search.md).
 
 ---
 
 ### Engine Pools & Scoring Presets
 
-In `fused_search`, base weights are governed by `engine_pool` and `ranking`:
+`engine_pool` selects engines, `ranking` selects shared cross-pool weights, and `complexity` controls only budget. AnySearch is one logical engine: anonymous in free, key-required in api, and key-preferred in hybrid. Configure `ANYSEARCH_API_KEY` or `config keys --set anysearch=KEY`.
 
-| Pool-Ranking Preset | Bing | DuckDuckGo | Yahoo | Exa-free | Tavily | Brave | Exa (API) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **free-balanced** | 1.00 | 1.05 | 1.00 | 1.10 | — | — | — |
-| **free-research** | 0.95 | 0.90 | 0.85 | 1.30 | — | — | — |
-| **free-fresh** | 1.15 | 0.95 | 0.90 | 1.00 | — | — | — |
-| **api-balanced** | — | — | — | — | 1.20 | 1.10 | 1.20 |
-| **api-research** | — | — | — | — | 1.35 | 1.00 | 1.45 |
-| **api-fresh** | — | — | — | — | 1.30 | 1.40 | 1.25 |
-| **hybrid-balanced** | 1.00 | 1.05 | 1.00 | 1.10 | 1.20 | 1.10 | 1.20 |
+| Engine | balanced | research | fresh |
+| --- | ---: | ---: | ---: |
+| bing | 0.957 | 0.927 | 1.020 |
+| ddg | 0.981 | 0.903 | 0.927 |
+| yahoo | 0.957 | 0.877 | 0.902 |
+| exa-free | 1.004 | 1.085 | 0.951 |
+| tavily | 1.049 | 1.105 | 1.084 |
+| brave | 1.004 | 0.951 | 1.125 |
+| exa | 1.049 | 1.146 | 1.063 |
+| anysearch | 1.004 | 1.042 | 0.951 |
+
+These are uncalibrated cold-start priors, not measured quality rankings. `consensus-v2.1` combines original ranks, related-provider discounts and max+log consensus, with metadata adjustments capped at 20%. Quality and list-selection scores stay separate; zero-weight sources cannot vote. Recalibrate old `min_score` thresholds. See [scoring and migration](docs/fusion-scoring.md) and [pool routing](docs/search-routing.md).
 
 ---
 
@@ -352,7 +360,7 @@ API keys use a credential store this tool owns. They are not written into prompt
 
 - **Private file permissions**: keys live in `~/.search-boost/config/keys.json` (redirect the root with `SEARCH_BOOST_HOME`). On POSIX the store directory is `0700` and the file is `0600`; a rewrite is built from a fresh `0600` temporary file rather than written in place, so an existing file is never widened. Backups and upgrade receipts under the same root are `0600` as well. An env-overridden directory keeps its own mode, while the credential file is still created `0600`. Windows has no POSIX mode bits — ACL inheritance applies there.
 - **Atomic, locked writes**: replacement uses an `O_EXCL` temporary file plus rename, so a reader sees either the old or the new file and never a partial one; a failed write cleans up after itself and leaves the previous file untouched. Read-modify-write cycles take an exclusive lock, so two writers cannot silently lose each other's update, and a rejected change does not touch the file at all.
-- **Never echoed back**: a key is only sent to the engine it belongs to (Tavily, Brave and Exa request parameters/headers). Status output, `search-boost config keys --show` and the doctor report print masked values (`abcd****wxyz`); error messages are tested not to contain credential material, and Jev evaluation payloads deliberately carry no key, masked key or fingerprint.
+- **Never echoed back**: a key is only sent to the engine it belongs to (Tavily, Brave, Exa and AnySearch request parameters/headers). Status output, `search-boost config keys --show` and the doctor report print masked values (`abcd****wxyz`); error messages are tested not to contain credential material, and Jev evaluation payloads deliberately carry no key, masked key or fingerprint. AnySearch uses anonymous quota in free, requires a key in api, and prefers a configured key in hybrid. Its potentially credential-bearing error envelopes are never echoed or persisted.
 
 
 ---
@@ -377,6 +385,7 @@ search-boost install -t cursor --dry-run    # Preview installation without writi
 
 # ----------------- Configuration Management -----------------
 search-boost config keys                    # Manage API keys from CLI
+search-boost config keys --set anysearch=KEY  # Configure the AnySearch key (ANYSEARCH_API_KEY)
 search-boost config layer                   # Switch default layer (free / api)
 search-boost config x --import-grok         # Import X credentials from local Grok login
 search-boost config jev                     # Configure Jev endpoint and token
