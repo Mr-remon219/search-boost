@@ -3,7 +3,7 @@
 **面向 AI Coding Agent 的多引擎网络搜索与证据聚合工具箱**  
 *一个核心代码库，深度适配 MCP、Pi 与 DeepSeek Harness 三大生态*
 
-[![version](https://img.shields.io/badge/version-v0.2.1-orange?style=flat-square)](#)
+[![version](https://img.shields.io/badge/version-v0.2.2-orange?style=flat-square)](#)
 [![npm version](https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm)](https://www.npmjs.com/package/search-boost)
 [![Node version](https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
@@ -19,7 +19,7 @@
 
 ---
 
-> **v0.2.1 修复内容**：修复 Pi 网络适配、配置保护、更新进程清理、网页版本缓存和 Jev 统计/限流，并新增 Vercel Jev 适配。该版本尚未发布到 npm；`@latest` 不保证包含这些修复。当前交付范围见 [v0.2.1 交付冻结说明](./docs/v0.2.1-delivery.md)，此前修复见 [修复与验收记录](./docs/v0.2.1-repair-audit.md)。
+> **v0.2.2**：新增 AnySearch、考虑来源相关性的融合计分，以及批量 Jev 目标审查和合格结果分页；修复版本匹配、发布时间校验与缓存清理问题。详见 [发布与迁移说明](./docs/v0.2.2-release.md)。源码合并不等于 npm 发布；只有单独发布 npm 后，`@latest` 才会包含此版本。
 
 ## 目录
 
@@ -48,7 +48,7 @@
 ## 核心特性
 
 - **多引擎并行检索与去重 (`fused_search`)**  
-  同时聚合多个搜索引擎的实时结果。内置**免密钥免费池**（Bing、DuckDuckGo、Yahoo、Exa-free）与**高质量 API 池**（Tavily、Brave、Exa），自动执行跨引擎 URL 规范化去重、域名过滤与权重重排。
+  同时聚合多个搜索引擎的实时结果。内置**免密钥免费池**（Bing、DuckDuckGo、Yahoo、Exa-free、AnySearch）与**高质量 API 池**（Tavily、Brave、Exa、AnySearch），自动执行跨引擎 URL 规范化去重、域名过滤与权重重排。
 - **高净度网页正文提取 (`fetch_page`)**  
   优先抓取原站降低等待；必要时使用同线路 curl 兼容兜底，Jina Reader 作为备用读取方式。自动剔除 CSS、JS 及广告噪音，支持 `focus` 关键词段落提炼，具备内存缓存与大体积熔断保护。
 - **X / Twitter 社区情报检索 (`x_search`)**  
@@ -125,7 +125,7 @@ search-boost
 ```
 
 > [!TIP]
-> **零 Key 即可起步**：SearchBoost 默认提供免费引擎池（Bing、DuckDuckGo、Yahoo、Exa-free）。即便不填写任何 API Key，也能立刻享受高质量多引擎聚合搜索！
+> **零 Key 即可起步**：SearchBoost 默认提供免费引擎池（Bing、DuckDuckGo、Yahoo、Exa-free、AnySearch）。即便不填写任何 API Key，也能立刻享受高质量多引擎聚合搜索！
 
 ### 2. 三步完成配置
 1. 在 TUI 菜单中选择 **`Setup`**，跟随向导配置搜索引擎（可选填 API Key，或直接跳过使用免费池）。

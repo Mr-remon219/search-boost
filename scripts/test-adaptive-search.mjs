@@ -1406,5 +1406,93 @@ await test('paging preserves an oversized approved row and explicitly reports th
   assert.ok(page.warnings.some((w) => /exceeds the page byte budget/.test(w)))
 })
 
+
+// v0.2.2 release audit: counterexamples for deterministic acceptance guards.
+await test('release: dotted versions have two boundaries and accept an explicit v prefix', async () => {
+  const { textStatesToken } = await import('../lib/search/adaptive/prompts.js')
+  for (const text of ['ExampleDB 4.2 is supported.', 'ExampleDB v4.2 is supported.', 'ExampleDB V4.2.1 is supported.']) {
+    assert.equal(textStatesToken(text, '4.2'), true, text)
+  }
+  for (const text of ['ExampleDB 4.20 is supported.', 'ExampleDB v4.200 is supported.', 'ExampleDB 14.2 is supported.', 'ExampleDB v1.4.2 is supported.', 'code x4.2suffix']) {
+    assert.equal(textStatesToken(text, '4.2'), false, text)
+  }
+  assert.equal(textStatesToken('Node v22.13.0', '22'), true)
+  assert.equal(textStatesToken('Node 220', '22'), false)
+})
+
+await test('release: an optimistic judge cannot cover a different version; v-prefixed evidence can cover', async () => {
+  for (const [version, covered] of [['4.20', false], ['v4.2', true]]) {
+    const h = harness({ limits: { ...ADAPTIVE_LIMITS, maxRounds: 1 },
+      search: () => ({ results: [hit(`ExampleDB ${version} has a row limit of 42.`, 'https://example.com/limits')] }),
+    })
+    const result = await runAdaptiveLoop({ questions: ['What is the row limit for ExampleDB 4.2?'] }, h.deps)
+    assert.equal(result.questions[0].status === 'covered', covered, version)
+    if (!covered) assert.ok(result.questions[0].uncoveredReasons.includes(REASONS.explicitRequirementUnmet))
+  }
+})
+
+await test('release: publication timestamps are validated and compared on the UTC calendar', async () => {
+  const { strictDay, inspectDates } = await import('../lib/search/adaptive/temporal.js')
+  assert.equal(strictDay('2026-09-22'), '2026-09-22')
+  assert.equal(strictDay('2024-02-29'), '2024-02-29')
+  assert.equal(strictDay('2026-09-21T23:30:00-07:00'), '2026-09-22')
+  assert.equal(strictDay('2026-09-22T01:30:00+08:00'), '2026-09-21')
+  assert.equal(strictDay('2026-09-22T06:30:00.123Z'), '2026-09-22')
+  for (const invalid of ['2026-02-29', '2026-09-22Tgarbage', '2026-09-22T99:00:00Z', '2026-09-22T24:00:00Z', '2026-09-22T12:60:00Z', '2026-09-22T12:00:00+25:00', '2026-09-22T12:00:00', '2026-02-30T00:00:00Z']) {
+    assert.equal(strictDay(invalid), null, invalid)
+  }
+  const window = { start: '2026-09-22', end: '2026-09-22', basis: 'published', timeZone: 'UTC' }
+  assert.equal(inspectDates({ published: '2026-09-21T23:30:00-07:00' }, window).status, 'eligible')
+  assert.equal(inspectDates({ published: '2026-09-22T01:30:00+08:00' }, window).status, 'outside_window')
+  assert.equal(inspectDates({ published: '2026-09-22Tgarbage' }, window).status, 'unknown')
+})
+
+await test('release: task publication windows enforce timestamp validity even with optimistic time judgments', async () => {
+  const input = { tasks: [{ context: 'ExampleDB documentation', time_range: { start: '2026-09-22', end: '2026-09-22', basis: 'published' }, targets: [{ id: 'limit', keywords: ['row limit'], question: 'What is the row limit?' }] }] }
+  for (const [published, covered] of [['2026-09-22Tgarbage', false], ['2026-09-22T01:30:00+08:00', false], ['2026-09-21T23:30:00-07:00', true]]) {
+    const h = harness({ limits: { ...ADAPTIVE_LIMITS, maxRounds: 1 },
+      sourceScore: ({ field }) => field === 'time_match' ? 0.99 : DEFAULT_SOURCE[field],
+      search: () => ({ results: [hit('ExampleDB has a documented row limit of 42.', 'https://example.com/limits', { published })] }),
+    })
+    const result = await runAdaptiveLoop(input, h.deps)
+    assert.equal(result.questions[0].status === 'covered', covered, published)
+    if (!covered) assert.ok(result.questions[0].uncoveredReasons.includes(REASONS.dateUnqualified))
+  }
+})
+
+await test('release: explicit cache clearing invalidates adaptive cursors without starting a new search', async () => {
+  const { resultPages } = await import('../lib/search/adaptive/pages.js')
+  const { clearAllCaches, runAdaptiveSearch } = await import('../lib/runtime.mjs')
+  const rows = Array.from({ length: 2 }, (_, i) => ({ url: `https://example.com/private/${i}`, title: 'Private result', description: 'Reviewed cached description.' }))
+  const metadata = { coverageComplete: true, stopReason: 'all_covered', warnings: [] }
+  const local = createResultPages()
+  const page = local.save(rows, metadata, 1)
+  local.clear()
+  assert.throws(() => local.read(page.nextCursor), /expired|evicted|cleared/)
+  const shared = resultPages.save(rows, metadata, 1)
+  clearAllCaches()
+  await assert.rejects(() => runAdaptiveSearch({ cursor: shared.nextCursor }), /expired|evicted|cleared/)
+})
+
+await test('release: cursor validation rejects coercible non-string values before any I/O', async () => {
+  const { resultPages } = await import('../lib/search/adaptive/pages.js')
+  for (const cursor of [null, 42, {}, [], '', 'x'.repeat(101)]) {
+    assert.throws(() => validatePageInput({ cursor }), /cursor/)
+  }
+  const page = resultPages.save(Array.from({ length: 2 }, (_, i) => ({ url: `https://example.com/${i}`, title: 'Title', description: 'Fact' })), { coverageComplete: true, stopReason: 'all_covered', warnings: [] }, 1)
+  assert.throws(() => resultPages.read({ toString: () => page.nextCursor }), /cursor/)
+  assert.doesNotThrow(() => validatePageInput({ cursor: page.nextCursor, page_size: 1 }))
+})
+
+await test('release: package, lockfile and bundled plugin versions agree', async () => {
+  const { readFileSync } = await import('node:fs')
+  const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'))
+  const pkg = read('../package.json')
+  const lock = read('../package-lock.json')
+  assert.equal(lock.version, pkg.version)
+  assert.equal(lock.packages[''].version, pkg.version)
+  assert.equal(read('../grok-plugin/plugin.json').version, pkg.version)
+})
+
 console.log(`\n${tests} adaptive_search loop tests passed.`)
 if (process.exitCode) console.error('FAILURES PRESENT')
