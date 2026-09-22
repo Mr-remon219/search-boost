@@ -64,7 +64,7 @@ MCP / Pi / DSH x_search
 
 池成员固定，实际可用性动态读取。API-only 池没有可用 key 时返回空集合与 warnings，不偷偷启用免费池。
 
-`keys.json` 另外接受尚未接入适配器的密钥槽（目前为 `anysearch`）：可以存储、掩码展示与 `--set/--unset`，后台也可用 `ANYSEARCH_API_KEY` 提供。它不进入 `enabledEngines`、per-engine `enabled` 标记、`engine_weights` 与 api 池，也不参与 layer 推断（只存该 key 时 layer 仍为 free），因此上表中没有它的位置；适配器与池接线完成后才把名字移入 `KEY_NAMES`。
+`anysearch` 同时属于 free/api 池，hybrid 去重后只调用一次；`ANYSEARCH_API_KEY` 或 keys.json 的 `anysearch` 保存密钥。free 匿名调用，api 要求 key，hybrid 有 key 时用 key、否则匿名。显式禁用/白名单也作用于匿名路径，不降级绕过禁用。匿名限额和网络错误正常报告，不从错误正文自动注册或保存凭据。
 
 ## 兼容方案
 

@@ -178,7 +178,7 @@ search-boost
 | **Setup** | 首次引导式全流程配置，依次设置引擎、搜索层、X 凭据并安装 Agent 集成。 |
 | **Install / update agents** | 快速安装或刷新指定 Agent 的集成文件，跳过凭据与搜索层设置。 |
 | **Update** | **一键全量更新**：检查 npm 最新版本，更新 SearchBoost 并同步刷新所有已接入的 Agent（含 Pi/DSH 旧适配器）。 |
-| **API keys / Search layer** | 管理 Tavily、Brave、Exa 等付费引擎密钥，以及 anysearch 密钥槽（可存储、可掩码展示，适配器接入前不进入 api 池），切换默认搜索层 (`free` / `api`)。 |
+| **API keys / Search layer** | 管理 Tavily、Brave、Exa 等付费引擎密钥，以及 AnySearch 密钥（free 匿名、api 带 key、hybrid 优先已配置 key），切换默认搜索层 (`free` / `api`)。 |
 | **X credentials** | 管理 X (Twitter) 认证，支持一键导入本机已有的 Grok 登录状态。 |
 | **Jev credentials (experimental)** | 配置 TypeSafe Jev 认知引擎的端点与 Bearer Token。 |
 | **Native web search** | 开启或关闭宿主自带的原生网页搜索（若宿主提供相应配置开关）。 |
@@ -357,7 +357,7 @@ API Key 存放在由 SearchBoost 自己管理的凭据文件中，不写入提�
 
 - **文件权限**：密钥存放在 `~/.search-boost/config/keys.json`（可用 `SEARCH_BOOST_HOME` 重定向根目录）。在 POSIX 系统上目录为 `0700`、文件为 `0600`；覆盖写入时先生成全新的 `0600` 临时文件再改名替换，已存在的文件不会被放宽权限。同一根目录下的备份与升级状态同样为 `0600`。环境变量指定的自定义目录会保留其原有权限，但凭据文件仍以 `0600` 创建。Windows 没有 POSIX 权限位，由 ACL 继承决定。
 - **原子写入与加锁**：写入使用 `O_EXCL` 临时文件加改名替换，读取方只会看到旧文件或新文件，不会读到写了一半的内容；写入失败会自行清理临时文件并保留原文件。读改写流程持有独占锁，两个写入者不会静默互相覆盖，被拒绝的修改也不会触碰原文件。
-- **不回显**：API Key 只在调用所属引擎时随请求发送（Tavily、Brave、Exa 的请求参数或请求头）。状态输出、`search-boost config keys --show` 与 doctor 报告只显示掩码（`abcd****wxyz`）；错误信息经过测试不会包含凭据内容，Jev 评测请求中也不含 Key、掩码 Key 或指纹。anysearch 属于仅存储密钥槽：适配器接入前不会用它发起任何请求，也不参与 engine routing、api 池与 layer 推断。
+- **不回显**：API Key 只在调用所属引擎时随请求发送（Tavily、Brave、Exa 的请求参数或请求头）。状态输出、`search-boost config keys --show` 与 doctor 报告只显示掩码（`abcd****wxyz`）；错误信息经过测试不会包含凭据内容，Jev 评测请求中也不含 Key、掩码 Key 或指纹。AnySearch 已参与引擎路由：free 使用匿名额度，api 要求 key，hybrid 优先使用已配置 key；同次融合只计一票。
 
 
 ---
@@ -382,7 +382,7 @@ search-boost install -t cursor --dry-run    # 仅演练安装过程，不写磁�
 
 # ----------------- 凭据与配置管理 -----------------
 search-boost config keys                    # 命令行配置/查看搜索引擎 Keys
-search-boost config keys --set anysearch=KEY  # 存储 anysearch 密钥（仅密钥槽，适配器待接入）
+search-boost config keys --set anysearch=KEY  # 配置 AnySearch 密钥（ANYSEARCH_API_KEY）
 search-boost config layer                   # 切换默认搜索层 (free / api)
 search-boost config x --import-grok         # 从本机 Grok 客户端快速导入 X 凭据
 search-boost config jev                     # 配置 Jev 认知引擎端点与 Token

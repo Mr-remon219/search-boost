@@ -544,59 +544,36 @@ writeKeysFile({ tavily: 'tvly-test-key-12345678' })
 setLayer('api')
 assert('layer api with keys no warning', layerApiNoKeysWarning() === null)
 const partialKeyLines = formatKeyStatusLines()
-assert('formatKeyStatusLines partial pool count', partialKeyLines.some((l) => l.includes('Keyed pool: 1/3')))
+assert('formatKeyStatusLines partial pool count', partialKeyLines.some((l) => l.includes('Keyed pool: 1/4')))
 assert('formatKeyStatusLines partial recommendation', partialKeyLines.some((l) => l.includes(RECOMMEND_ALL_KEYED_ENGINES)))
-writeKeysFile({ tavily: 'tvly-test-key-12345678', brave: 'brave-test-key-12345678', exa: 'exa-test-key-1234567890' })
+writeKeysFile({ tavily: 'tvly-test-key-12345678', brave: 'brave-test-key-12345678', exa: 'exa-test-key-1234567890', anysearch: 'as-test-key-1234567890' })
 const fullKeyLines = formatKeyStatusLines()
-assert('formatKeyStatusLines no recommendation when all three', !fullKeyLines.some((l) => l.includes(RECOMMEND_ALL_KEYED_ENGINES)))
+assert('formatKeyStatusLines no recommendation when all four', !fullKeyLines.some((l) => l.includes(RECOMMEND_ALL_KEYED_ENGINES)))
 writeKeysFile({ tavily: undefined, brave: undefined, exa: undefined })
 const keyLines = formatKeyStatusLines()
 assert('formatKeyStatusLines has keys header', keyLines[0].includes('API keys'))
 assert('formatKeyStatusLines has file path', keyLines.some((l) => l.startsWith('File:')))
 
 // ---------------------------------------------------------------------------
-// anysearch: config-layer key slot whose engine adapter has not landed yet.
-// It must behave like tavily/brave/exa in the store and the wizard while
-// changing no routing, pool or layer decision (no core wiring).
-// ---------------------------------------------------------------------------
+// AnySearch is now a routable optional-key engine.
 writeKeysFile({ tavily: undefined, brave: undefined, exa: undefined, anysearch: undefined, enabledEngines: null })
-assert(
-  'anysearch is a config key slot, not a routing engine',
-  CONFIG_KEY_NAMES.includes('anysearch') && PENDING_ENGINE_KEY_NAMES.includes('anysearch') && !KEY_NAMES.includes('anysearch'),
-)
-assert('anysearch has a documented env name', ENV_MAP.anysearch === 'ANYSEARCH_API_KEY')
-
+assert('anysearch routable and storable', CONFIG_KEY_NAMES.includes('anysearch') && KEY_NAMES.includes('anysearch') && !PENDING_ENGINE_KEY_NAMES.includes('anysearch'))
+assert('anysearch env name', ENV_MAP.anysearch === 'ANYSEARCH_API_KEY')
 setKey('anysearch', 'anysearch-test-key-123456')
-assert('setKey stores the anysearch key', readKeysFile().anysearch === 'anysearch-test-key-123456')
-assert('anysearch key is masked like the others', keyStatus().anysearch.source === 'file' && keyStatus().anysearch.masked === 'anys****3456')
-assert('anysearch never joins keyed-engine routing', !readKeysRouting().enabledNames.includes('anysearch'))
-assert(
-  'anysearch does not count toward the keyed pool',
-  readKeysRouting().summary.configured === 0 && readKeysRouting().summary.enabled === 0 && readKeysRouting().summary.total === 3,
-)
-assert('engineRegistry exposes no anysearch engine', engineRegistry(readKeys(), null).anysearch === undefined)
-assert('a stored anysearch key is not a runnable api key', hasAnyKey() === false && hasStoredKey() === true)
-// A layer file written earlier in this suite would mask the inference path.
+assert('anysearch stored and masked', readKeysFile().anysearch === 'anysearch-test-key-123456' && keyStatus().anysearch.masked === 'anys****3456')
+assert('anysearch joins keyed routing', readKeysRouting().enabledNames.includes('anysearch'))
+assert('anysearch keyed pool count', readKeysRouting().summary.configured === 1 && readKeysRouting().summary.total === 4)
+assert('anysearch registry wired', engineRegistry(readKeys(), null).anysearch.availableForPool('api'))
+assert('anysearch is a runnable key', hasAnyKey() && hasStoredKey())
 const layerBeforePendingKey = getLayer()
 rmSync(layerFilePath(), { force: true })
-assert('anysearch-only store does not switch the layer to api', getLayer() === 'free')
-assert('anysearch-only store leaves the default layer unwritten', shouldPersistDefaultLayer() === true)
-setLayer(/** @type {'free'|'api'} */ (layerBeforePendingKey))
-
-assert('--set/--unset accept the anysearch key slot', assertKeySlotNames(['anysearch'])[0] === 'anysearch')
-let anysearchRoutingRejected = false
-try { assertEngineNames(['anysearch']) } catch { anysearchRoutingRejected = true }
-assert('routing engine names still reject anysearch', anysearchRoutingRejected)
-let anysearchEnableRejected = false
-try { setEnabledEngines(['anysearch']) } catch { anysearchEnableRejected = true }
-assert('enabledEngines cannot select anysearch', anysearchEnableRejected && readEngineRouting().enabledEngines === undefined)
-assert('a rejected routing write leaves the stored key intact', readKeysFile().anysearch === 'anysearch-test-key-123456')
-
+assert('anysearch key enables inferred api layer', getLayer() === 'api')
+setLayer(layerBeforePendingKey)
+assert('anysearch key and routing names accepted', assertKeySlotNames(['anysearch'])[0] === 'anysearch' && assertEngineNames(['anysearch'])[0] === 'anysearch')
+setEnabledEngines(['anysearch'])
+assert('anysearch can be selected', readEngineRouting().enabledEngines.join() === 'anysearch')
 const anysearchLines = formatKeyStatusLines()
-assert('formatKeyStatusLines lists anysearch in the keys header', anysearchLines[0].includes('anysearch'))
-assert('formatKeyStatusLines marks anysearch stored-only', anysearchLines.some((l) => l.includes('stored only (adapter pending)')))
-assert('formatKeyStatusLines keeps anysearch out of the keyed pool', !anysearchLines.some((l) => l.includes('Keyed pool:')))
-assert('formatKeyStatusLines states the api pool does not use anysearch yet', anysearchLines.some((l) => l.includes('Stored, not in the api pool yet: anysearch')))
+assert('anysearch status shows enabled keyed pool', anysearchLines.some((l) => l.includes('Keyed pool: 1/4')) && !anysearchLines.some((l) => l.includes('stored only')))
 
 // An unrelated write must never discard the stored pending key.
 writeKeysFile({ tavily: 'tvly-mixed-key-12345678' })
@@ -642,10 +619,10 @@ assert(
   'anysearch prompt offers the same keep/set/remove choices',
   pendingWizard.selects[3].options.map((o) => o.value).join(',') === 'keep,set,remove',
 )
-assert('wizard marks anysearch as stored-only', pendingWizard.selects[3].message.includes('adapter pending'))
-assert('wizard warns that anysearch stays out of routing', pendingWizard.logs.some((l) => l.includes('ANYSEARCH_API_KEY') && l.includes('also work')) && pendingWizard.logs.some((l) => l.includes('stays out of api-layer routing')))
+assert('wizard anysearch is no longer pending', !pendingWizard.selects[3].message.includes('adapter pending'))
+assert('wizard explains AnySearch auth modes', pendingWizard.logs.some((l) => l.includes('ANYSEARCH_API_KEY') && l.includes('also work')) && pendingWizard.logs.some((l) => l.includes('anonymous quota')))
 assert(
-  'wizard asks no api-layer question when only anysearch exists',
+  'wizard asks no keyed routing question without keys',
   !pendingWizard.selects.some((s) => /api layer/.test(s.message)),
 )
 assert('anysearch-only wizard run persists no routing decision', readEngineRouting().enabledEngines === undefined)
@@ -659,13 +636,13 @@ const routingPrompt = routedWizard.selects.find((s) => /api layer/.test(s.messag
 assert('wizard asks the routing question when a runnable key exists', Boolean(routingPrompt))
 assert(
   'routing question offers exactly the runnable engines',
-  routingPrompt?.options.map((o) => o.value).join(',') === 'tavily,brave,exa',
+  routingPrompt?.options.map((o) => o.value).join(',') === 'tavily,brave,exa,anysearch',
 )
 assert('wizard stores the anysearch key it was given', readKeysFile().anysearch === 'as-wizard-key-123456')
 assert('wizard routing stays limited to tavily', JSON.stringify(readEngineRouting().enabledEngines) === JSON.stringify(['tavily']))
 assert(
-  'wizard tells the user anysearch routing waits for the adapter',
-  routedWizard.logs.some((l) => l.includes('api-layer routing stays tavily, brave, exa until the adapter lands')),
+  'wizard offers configured anysearch for routing',
+  routingPrompt.options.find((o) => o.value === 'anysearch').disabled === false,
 )
 writeKeysFile({ tavily: undefined, brave: undefined, exa: undefined, anysearch: undefined, enabledEngines: null })
 

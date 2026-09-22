@@ -11,7 +11,7 @@ process.env.SEARCH_BOOST_HOME = join(temp, 'state')
 process.env.PI_CODING_AGENT_DIR = join(temp, 'pi')
 for (const key of ['KEYS', 'LAYER', 'XAUTH', 'XGUEST']) process.env[`SEARCH_BOOST_${key}_FILE`] = join(temp, `${key}.json`)
 process.env.SEARCH_BOOST_LAYER = 'free'
-for (const key of ['TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY', 'XAI_API_KEY']) delete process.env[key]
+for (const key of ['TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'ANYSEARCH_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY', 'XAI_API_KEY']) delete process.env[key]
 mkdirSync(process.env.HOME)
 const runtime = await import('../lib/runtime.mjs')
 const { ENGINE_POOLS, RANKING_WEIGHTS } = await import('../lib/search/routing.js')
@@ -61,9 +61,9 @@ globalThis.fetch = async (raw) => {
 try {
   await test('all nine exact ranking presets; no ranking-dependent engine selection', async () => {
     const expected = {
-      free: [[1,1.05,1,1.1], [.95,.90,.85,1.30], [1.15,.95,.90,1]],
-      api: [[1.2,1.1,1.2], [1.35,1,1.45], [1.3,1.4,1.25]],
-      hybrid: [[1,1.05,1,1.1,1.2,1.1,1.2], [.9,.85,.8,1.2,1.35,1,1.45], [1.05,.9,.85,1,1.3,1.4,1.25]],
+      free: [[1,1.05,1,1.1,1.1], [.95,.90,.85,1.30,1.2], [1.15,.95,.90,1,1]],
+      api: [[1.2,1.1,1.2,1.1], [1.35,1,1.45,1.2], [1.3,1.4,1.25,1]],
+      hybrid: [[1,1.05,1,1.1,1.1,1.2,1.1,1.2], [.95,.9,.85,1.3,1.2,1.35,1,1.45], [1.15,.95,.9,1,1,1.3,1.4,1.25]],
     }
     for (const [pool, presets] of Object.entries(expected)) for (const [i, ranking] of ['balanced','research','fresh'].entries()) {
       calls = []
@@ -82,7 +82,7 @@ try {
       const out = await fused({ enginePool: 'api', queries: ['alpha beta guide','alpha beta benchmark'], complexity })
       assert.deepEqual(out.enginesUsed, ENGINE_POOLS.api)
       assert.equal(out.queriesUsed.length, i + 1)
-      assert.equal(calls.length, 3 * (i + 1))
+      assert.equal(calls.length, ENGINE_POOLS.api.length * (i + 1))
       assert.ok(calls.every((c) => c.depth === (i === 2 ? 'advanced' : 'basic')))
     }
     const out = await runtime.runFused({ query: 'alpha beta', enginePool: 'api' }, { snapshot })
@@ -97,7 +97,7 @@ try {
     calls = []
     const fresh = await fused({ enginePool: 'api', ranking: 'fresh' })
     assert.equal(fresh.results[0].engines[0], 'brave')
-    assert.equal(calls.length, 3)
+    assert.equal(calls.length, ENGINE_POOLS.api.length)
     calls = []
     const custom = await fused({ enginePool: 'api', engineWeights: { tavily: 0, brave: 8, bing: 99 } })
     assert.equal(custom.results[0].engines[0], 'brave')
@@ -120,7 +120,7 @@ try {
     const out = await fused({ enginePool: 'free', engineList: ['exa','exa'], ranking: 'research' })
     assert.deepEqual(out.enginesUsed, ['exa'])
     assert.deepEqual(out.effectiveWeights, { exa: 1.45 })
-    enabled = new Set(ENGINE_POOLS.free); calls = []
+    enabled = new Set(ENGINE_POOLS.free.filter((n) => n !== 'anysearch')); calls = []
     const missing = await fused({ enginePool: 'api' })
     assert.deepEqual(missing.enginesUsed, [])
     assert.equal(calls.length, 0)
@@ -133,7 +133,7 @@ try {
     assert.equal((await fused({ layer: 'free', enginePool: 'api' })).enginePool, 'api')
     calls = []; credentialVersion++
     assert.equal((await fused({ layer: 'free', enginePool: 'api' })).cacheHit, false)
-    assert.equal(calls.length, 3)
+    assert.equal(calls.length, ENGINE_POOLS.api.length)
   })
   await test('community uses actual X Core once without recursion; cross-path dedupe and author diversity precede final cap', async () => {
     mode = 'community'; auth = true

@@ -382,7 +382,7 @@ search-boost install -t cursor --dry-run    # Preview installation without writi
 
 # ----------------- Configuration Management -----------------
 search-boost config keys                    # Manage API keys from CLI
-search-boost config keys --set anysearch=KEY  # Store the AnySearch key (key slot only; adapter pending)
+search-boost config keys --set anysearch=KEY  # Configure the AnySearch key (ANYSEARCH_API_KEY)
 search-boost config layer                   # Switch default layer (free / api)
 search-boost config x --import-grok         # Import X credentials from local Grok login
 search-boost config jev                     # Configure Jev endpoint and token

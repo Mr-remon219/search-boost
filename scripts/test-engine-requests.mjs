@@ -12,8 +12,8 @@ const originalFetch = globalThis.fetch
 __setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...args) => globalThis.fetch(...args) }))
 const calls = []
 globalThis.fetch = async (input, init = {}) => {
-  calls.push({ url: new URL(String(input)), body: init.body ? JSON.parse(init.body) : null })
-  return new Response(JSON.stringify({ results: [], web: { results: [] } }), {
+  calls.push({ url: new URL(String(input)), body: init.body ? JSON.parse(init.body) : null, headers: init.headers })
+  return new Response(JSON.stringify({ results: [], web: { results: [] }, code: 0, data: { results: [{ title: '', url: 'https://example.org/doc', snippet: 'summary', content: 'body' }] } }), {
     status: 200,
     headers: { 'content-type': 'application/json' },
   })
@@ -46,6 +46,36 @@ try {
     assert.equal(lastCall().body.time_range, 'month')
     await engines.brave.search('fixture query', 3, { recency: 'month' })
     assert.equal(lastCall().url.searchParams.get('freshness'), 'pm')
+  })
+
+  await test('AnySearch pool readiness, optional auth and bounded documented envelope', async () => {
+    const anonymous = engineRegistry({}).anysearch
+    assert.equal(anonymous.available(), true)
+    assert.equal(anonymous.availableForPool('api'), false)
+    assert.equal(engineRegistry({}, new Set()).anysearch.available(), false)
+    const keyed = engineRegistry({ anysearch: 'fixture-key' }).anysearch
+    for (const pool of ['free', 'api', 'hybrid']) {
+      const rows = await keyed.search('fixture query', 20, { enginePool: pool })
+      assert.equal(lastCall().url.href, 'https://api.anysearch.com/v1/search')
+      assert.deepEqual(lastCall().body, { query: 'fixture query', max_results: 10, format: 'json' })
+      assert.equal(lastCall().headers.authorization, pool === 'free' ? undefined : 'Bearer fixture-key')
+      assert.equal(rows[0].content, 'body')
+    }
+    await anonymous.search('query', 3, { enginePool: 'hybrid' })
+    assert.equal(lastCall().headers.authorization, undefined)
+  })
+  await test('AnySearch quota/business/malformed errors never echo credential-bearing bodies', async () => {
+    const saved = globalThis.fetch
+    try {
+      for (const status of [401, 402, 403, 429, 502]) {
+        globalThis.fetch = async () => new Response('username=SECRET password=SECRET api_key=SECRET', { status })
+        await assert.rejects(() => engineRegistry({}).anysearch.search('query', 3), (err) => err.message === `anysearch http ${status}`)
+      }
+      globalThis.fetch = async () => Response.json({ code: -1, message: 'api_key=SECRET', data: { results: [] } })
+      await assert.rejects(() => engineRegistry({}).anysearch.search('query', 3), /invalid or unsuccessful response/)
+      globalThis.fetch = async () => new Response('SECRET malformed')
+      await assert.rejects(() => engineRegistry({}).anysearch.search('query', 3), (err) => err.message === 'anysearch: invalid JSON response')
+    } finally { globalThis.fetch = saved }
   })
 
   console.log(`\n${count} engine request tests passed.`)
