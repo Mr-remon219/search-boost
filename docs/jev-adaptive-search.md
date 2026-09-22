@@ -1,109 +1,243 @@
-# Jev adaptive search: implementation reference
+# Jev adaptive search: keyword targets and paginated results
 
-This document describes the current `jev` / `v0.2.0` implementation, not a future roadmap. Historical design drafts remain in Git history. The package version or branch name alone does not mean this code has been published to npm.
+This documents the current working-tree implementation, not an npm release promise.
 
-## Role and entry points
+## Public tool input (MCP, Pi and DSH)
 
-`adaptive_search` is an optional bounded evidence-collection loop. It accepts `questions`, an array of 1–6 nonblank strings of at most 400 characters each. Identical questions share execution but retain separate output positions. Invalid input is rejected, not silently truncated.
+Supply **exactly one** of `tasks`, legacy `questions`, or a pagination `cursor`.
+`page_size` is optional for either a new search or a page read.
 
-Use `fused_search` for a precise lookup, `fetch_page` for a known public URL, and `x_search` for X-specific retrieval. Use `adaptive_search` when automatic follow-up and per-question evidence assessment are useful. It is not a subagent runner, a final-answer generator or an independent fact checker.
+```json
+{
+  "tasks": [{
+    "context": "ExampleDB 4.2 upgrade impact",
+    "targets": [
+      {
+        "id": "compatibility",
+        "keywords": ["breaking changes", "不兼容变更"],
+        "question": "What incompatible changes affect an upgrade from 4.1 to 4.2?"
+      },
+      {
+        "id": "migration",
+        "keywords": ["migration guide", "升级指南"],
+        "question": "What migration steps address those changes?"
+      }
+    ]
+  }],
+  "page_size": 20
+}
+```
 
-MCP, Pi and DSH register the same core operation. The tool remains discoverable without a Jev credential: a call then returns `not_configured` without making a network request. Direct search/read/X tools do not depend on Jev. Capability output reports configuration readiness, not successful connectivity.
+- 1–6 tasks, each with a nonblank context of at most 400 characters.
+- 1–4 targets per task, at most 12 targets across the call.
+- Target IDs are unique within a task: 1–64 ASCII letters, digits, `_` or `-`.
+- Each target has 1–4 nonblank keyword alternatives, at most 100 characters each,
+  and an acceptance question of at most 400 characters.
+- Keywords guide retrieval; **mentioning them does not satisfy the question**.
+  Synonyms belong to one target, not separate acceptance checks.
+- Put the stable entity/product/scope in `context`; keep it concise. Avoid placing
+  every desired fact in every query. Put required conditions in the target question.
+- Legacy `{"questions":["..."]}` still accepts 1–6 independent strings, each at
+  most 400 characters. Identical target text, hints and time constraints reuse
+  execution. Invalid input is rejected rather than silently shortened.
 
-## Configuration authority
+An optional task-level `time_range` provides inclusive calendar-day constraints:
 
-Run `search-boost config jev` or use the TUI. The Jev endpoint and key come only from the canonical `config/keys.json` under `~/.search-boost/` (relocatable with `SEARCH_BOOST_HOME`). `TYPESAFE_API_KEY`, a project keys file, legacy adapter files and `SEARCH_BOOST_KEYS_FILE` cannot supply the Jev block. Clearing it does not resurrect an environment or legacy key.
+```json
+{
+  "start": "2026-07-19",
+  "end": "2026-07-19",
+  "basis": "event"
+}
+```
 
-Jev is not a search engine. It never joins `KEY_NAMES`, engine routing or the API-engine pool. Other providers retain their own documented compatibility rules; the Jev config-only rule does not remove Tavily/Brave/Exa or X environment fallbacks.
+`basis` is `event` or `published`. Publication dates and event dates are not
+interchangeable. Implicit today/yesterday uses the UTC calendar day at call start,
+reported in warnings. Explicit ISO dates in acceptance questions (including legacy
+questions) also create a date window, reported with its basis and bounds. Dates in
+task context alone do not impose a hard window; “as of”/“截至” wording is treated as
+a knowledge cutoff, not a same-day event requirement. For precise temporal intent, prefer `time_range`. Current event extraction
+is conservative: it recognizes ISO-dated event statements, not arbitrary dates in
+URLs or titles; unsupported/ambiguous date wording stays unknown. This can exclude
+valid sources and is not a general temporal-language parser.
 
-Relevant code: [`lib/jev-config.mjs`](../lib/jev-config.mjs), [`lib/keys.mjs`](../lib/keys.mjs), and [`lib/private-file.mjs`](../lib/private-file.mjs).
+## Public output
 
-## Client protocol and trust boundary
+The tool returns a **flat list of approved URLs and extractive descriptions**, not
+its internal evidence table or per-target score matrix:
 
-The client sends `POST {baseUrl}/systemone` with a bearer credential and a JSON body containing `state`, `model` and typed `questions`. The default service is TypeSafe; a user-configured base URL can select a different gateway. The model alias is defined in `JEV_DEFAULT_MODEL`, not repeated as a version promise in prompts.
+```json
+{
+  "results": [{
+    "url": "https://example.com/releases/4.2",
+    "title": "ExampleDB 4.2 release notes",
+    "description": "An excerpt of the material Jev actually reviewed."
+  }],
+  "totalResults": 37,
+  "nextCursor": "opaque-cursor-returned-by-the-server",
+  "expiresAt": "2026-07-19T12:30:00.000Z",
+  "coverageComplete": false,
+  "stopReason": "budget_rounds",
+  "warnings": ["Some targets remain uncovered; approved URLs are not a complete answer."]
+}
+```
 
-The two primitives used here are:
+Only currently assessed, source-qualified material is returned. Navigation-only,
+unassessed, injection-suspected, off-topic and date-unqualified candidates are
+excluded. One canonical URL appears once; repeated search-engine discoveries are
+not independent corroboration. Descriptions are reviewed excerpts, not generated
+claims. Results are ordered by Jev source judgments rather than fusion weights.
 
-- `noul`: a probability for the supplied yes/no criteria. There is no separate confidence field to invent.
-- `choice`: a selection from the supplied closed set, with its supported probability/confidence fields.
+**Approval is not independently verified truth.** A source can support part of a
+target even when that target remains uncovered. `coverageComplete` reports target
+coverage, not exhaustive discovery of all matching web pages. Empty results do not
+prove absence. If Jev fails before assessment, fallback retrieval may collect
+internal material, but unassessed links are not promoted into public results.
 
-Code validates expected IDs, types, finite probability ranges and offered choices. Missing or invalid answers are missing signals, not zero scores or successful judgments. Unknown IDs are ignored and bounded in diagnostics. Response validation verifies shape, **not the truth of the response**.
+Read more with the same tool:
 
-Retries, HTTP attempts, request sizes and deadlines are bounded. Credential-bearing redirects are not followed. Errors expose controlled diagnostic codes, not raw response bodies; echoed credentials in server error/model/unknown-ID metadata are suppressed.
+```json
+{"cursor":"<nextCursor>","page_size":20}
+```
 
-See [`lib/jev/client.mjs`](../lib/jev/client.mjs), [`lib/jev/questions.js`](../lib/jev/questions.js), and the [TypeSafe API reference](https://docs.typesafe.ai/api).
+- Page reads perform **zero searches, page fetches or Jev calls**, and do not need
+  Jev credentials to remain configured.
+- Page size defaults to 20, with a maximum of 50; result rows use a soft 45 KB
+  byte budget (metadata is additional). A single oversized row is returned intact
+  with a warning rather than truncating its URL or dropping an approved result.
+- **There is no fixed cumulative approved-result count cap.** The old six-items-
+  per-question diagnostic preview does not constrain public results.
+- Retrieval is still bounded by deadlines, rounds and request/token budgets. Not
+  capping result count does not mean unlimited execution or guaranteed volume.
+- `nextCursor: null` means all collected approved results have been returned,
+  not that every research target passed or that the web has been exhausted.
+- Cursors are local to the running server process. Results are retained for up to
+  30 minutes and 32 recent result sets; restart, expiry or eviction invalidates
+  them. An expired cursor returns an error, never silently reruns research.
+- Do not combine a cursor with tasks/questions. Page reads do not extend expiry.
 
-## Execution flow
+This replaces the previous public question/evidence/usage object. The internal
+loop still produces diagnostics (schema version 2); the evaluation harness requests
+those explicitly with the programmatic `diagnostics: true` option. That option is
+not a tool parameter and cannot be used to bypass the approved-only result policy.
 
-1. Validate input and credential readiness; establish the host deadline and the available engine set. No allowed engines produces `no_engines`, not an automatic configuration change.
-2. Canonicalize duplicate questions and build per-question evidence state. Ask Jev to choose from the engines/actions actually offered by code.
-3. Reserve the relevant budgets before dispatch. Reuse the existing search/fetch core rather than create a second transport or bypass engine restrictions.
-4. Associate material with each question and retain its provenance and reviewed text. Judge relevance, whether the text states evidence, premise conflicts and suspected prompt injection separately.
-5. Fetch useful pages within the remaining budgets when snippets are insufficient. A text change invalidates judgments tied to its previous version.
-6. Assess coverage from eligible, reviewed evidence, expose conflicts and missing requirements, and continue only when a permitted action can address a useful gap. Return partial results on a stopping condition.
+## Three-stage round
 
-The core owns the hard limits. The model cannot raise a budget, enable an engine or lower a threshold through tool arguments. The parent agent still owns the overall user task and the decision to make another tool call.
+Each round makes **at most three logical Jev requests**, one for each phase:
 
-Implementation map:
+1. **Plan:** task context, unresolved acceptance targets, query candidates, engine
+   traits, previous retrievals/failures and remaining budgets. Jev chooses a query
+   strategy and engines or a permitted read/review/stop action. Code then searches
+   or fetches pages through the existing core transports.
+2. **Score:** newly arrived or changed fragments, with distinct relevance,
+   substantive-support, premise-conflict and injection checks. Temporal targets
+   add a time-match judgment. Canonical URLs appear once in a source registry;
+   target-specific fragments reference that registry rather than duplicate bodies.
+3. **Coverage:** only qualified evidence for each target. Jev judges completeness,
+   disagreement and (when needed) snippet sufficiency, plus a closed-set missing
+   category. Code combines these independent answers with hard constraints to
+   continue or stop. Planning the next retrieval happens in the next round's first
+   request, not a fourth request.
+
+Empty/unchanged phases can be skipped; cancellation and budget stops never make
+filler requests just to reach three. HTTP retries are counted separately. Oversize
+batches defer whole plans or judgments rather than split into extra calls. Deferred
+unassessed material is not returned as approved evidence.
+
+Jev's API supports typed `choice` and `noul`, **not free-form query generation**.
+The calling agent supplies target questions and keyword alternatives. Code builds
+bounded combinations of context, one alternative and explicit constraints; Jev
+selects them. It can change engines or reuse a healthy engine with a new query.
+Missing categories (fact, official source, date, region, independent corroboration)
+feed subsequent query options; they are not an unrestricted generated subquestion.
+
+The default fusion weights remain unchanged. Adaptive retrieval reserves candidate
+opportunities per selected engine before final source assessment, so fusion weights
+cannot crowd every low-weight engine out before Jev sees any of its candidates.
+The candidate pass prefers up to two rows per domain, then fills unused slots if
+only same-domain alternatives remain. It honors the score floor but intentionally
+does not add a single-engine discount: engine consensus is not source verification.
+Repeated failures temporarily exclude an engine across targets for this call.
+A failed page read is not retried each round; exact engine/query/depth combinations
+are not repeated, and follow-up choices are restricted to unexecuted combinations. No
+selection can enable a disabled/unconfigured engine or change the persistent pool.
+
+## Evidence, budgets and remaining limits
+
+- Sources are URL-keyed; associations are target × source. Sharing a URL does not
+  share a relevance verdict or a snippet selected for another target.
+- Source judgments are bound to exact fragment versions; unchanged judgments are
+  reused. Changed material invalidates old judgments. Coverage uses qualified-set
+  signatures to avoid unchanged re-evaluation.
+- Boilerplate filtering also applies on the excerpt fallback path and to snippets.
+  This is a heuristic cleaner, not a guarantee that every advertisement is removed.
+- Explicit date eligibility is a code gate plus a model judgment. Unknown dates
+  cannot be compensated for by a high relevance/coverage score.
+- Source and coverage thresholds are heuristic and require evaluation; `0.85`
+  coverage is not a claim of 85% factual accuracy.
+- Source batch selection rotates among targets. Fetch scheduling gives targets
+  with fewer successful page reads earlier opportunity. It is not an optimal
+  information-gain scheduler or a guarantee of equal spend.
+- Deduplication is URL-level, not a general cross-publisher event clustering system.
+- A source `description` can still be a search snippet. Full-page reading is not
+  mandatory when the snippet is sufficient for the specific target.
+- The model cannot raise limits, lower thresholds, or change credentials. See
+  [`limits.js`](../lib/search/adaptive/limits.js) for execution ceilings.
+
+## Implementation map
 
 | Module | Responsibility |
 | --- | --- |
-| [`lib/runtime.mjs`](../lib/runtime.mjs) | Shared host entry point and existing core operations. |
-| [`lib/search/adaptive/loop.mjs`](../lib/search/adaptive/loop.mjs) | Scheduling, budgets, cancellation, degradation and final results. |
-| [`lib/search/adaptive/engine-brief.js`](../lib/search/adaptive/engine-brief.js) | Available-engine briefs, not credential transport. |
-| [`lib/search/adaptive/prompts.js`](../lib/search/adaptive/prompts.js) | Typed planning/evidence/coverage questions. |
-| [`lib/search/adaptive/evidence.js`](../lib/search/adaptive/evidence.js) | Question/source associations, text versions and evidence state. |
-| [`lib/search/adaptive/limits.js`](../lib/search/adaptive/limits.js) | Authoritative budgets, per-host deadlines and heuristic thresholds. |
-| [`lib/search/adaptive/describe.js`](../lib/search/adaptive/describe.js) | Shared tool wording and host-independent rendering. |
+| `lib/search/adaptive/input.js` | Shared input schema, strict task/target normalization |
+| `lib/search/adaptive/planning.js` | Query alternatives and per-engine candidate selection |
+| `lib/search/adaptive/material.js` | Unique-source wire representation and request-size accounting |
+| `lib/search/adaptive/loop.mjs` | Three-phase scheduling, budgets, partial results and diagnostics |
+| `lib/search/adaptive/prompts.js` | Typed plan/source/coverage questions |
+| `lib/search/adaptive/evidence.js` | Source/target associations, cleaning, provenance and versions |
+| `lib/search/adaptive/temporal.js` | Conservative calendar-date constraints and witnesses |
+| `lib/search/adaptive/pages.js` | Approved-only projection and process-local cursors |
+| `lib/runtime.mjs` | Shared execution and public paginated entry point |
+| `adapters/{mcp,pi,dsh}` | Matching host input/output contracts |
 
-## Result interpretation
+## Configuration, network and privacy
 
-Each input position receives a question result:
+Configure Jev with `search-boost config jev` or the TUI. Credentials/endpoint come
+from canonical configuration, never model-selected engines or tool parameters.
+Without credentials a new research call returns `not_configured` without network
+requests. Existing result pages remain readable. Readiness is not connectivity.
 
-| Status | Interpretation |
-| --- | --- |
-| `covered` | The eligible reviewed fragments met the current model-judged coverage conditions. **Not independently verified truth.** |
-| `insufficient` | The assessed material did not satisfy the coverage conditions. |
-| `unassessed` | Material or a question lacks a valid assessment; do not substitute confidence from retrieval ranking. |
-| `not_searched` | No search was completed for this question. Inspect the stop reason and budget state. |
-| `failed` | Execution could not produce a usable result for this question. Inspect its reasons. |
+The configured Jev service receives task text and required evidence, never engine
+credentials or fingerprints. Queries go to selected engines; URLs can go to the
+existing page-fetch fallback. The shared network policy, cancellation, bounded
+retries and credential-bearing redirect protections remain in force. This feature
+does not grant delegation or authorize persistent configuration changes.
 
-Read `assessed`, `coverage`, `evidence`, `uncoveredReasons`, `conflicts` and `searchedEngines` together. Evidence preserves identifiers, URLs, source engines, reviewed fragments, text basis/version and assessment status. `textBasis` distinguishes snippets, engine content and fetched-page material. Unassessed, off-topic or suspected-injection material must not silently become supporting coverage.
+Source pools and paginated results are in process memory. This is not a promise of
+no persistence: hosts can retain tool results and audit/session history. The
+programmatic diagnostic/evaluation path can retain more than public tool output.
 
-The aggregate result exposes `stopReason`, `stopDetail`, rounds, usage, engine attempts, Jev degradation, warnings and output truncation. A numerical coverage probability is a heuristic model judgment, not a calibrated correctness rate. Different judgment types are not summed into one truth score. `insufficient` or an empty result does not prove that the requested fact does not exist.
-
-A degraded plain-search fallback can collect useful material, but newly collected material without a valid Jev assessment stays unassessed. Fatal client problems disable Jev for that call. Budget exhaustion and cancellation must not start unlimited follow-up work.
-
-## Evidence visibility and output limits
-
-The compact summary is navigation, not the entire evidence record. MCP returns the core result in `structuredContent`. Pi preserves that result in `details` **and** includes the bounded JSON as model-visible text. DSH also renders the bounded JSON alongside the summary. This avoids a host UI metadata field becoming the only place where reviewed evidence exists.
-
-Output limits can omit evidence. `evidenceCount`, `evidenceTruncated` and `outputTruncated` expose this; the summary distinguishes extra returned items from items omitted by a cap. It never describes omitted items as available in a hidden structured result. A parent should answer from the material actually returned and describe important gaps.
-
-## Network, privacy and authorization
-
-Queries go to the selected engines; fetched URLs may go to Jina Reader. Questions and the necessary evidence fragments go to the configured Jev service. Engine credentials and key fingerprints do not belong in the Jev body.
-
-The core evidence pool is in memory. **This is not a promise of no persistence:** hosts can retain conversation/tool results and audit events. Pi's search audit can record queries and source URLs; `/search-audit clear` affects that audit, not host conversation history. Local credential files are private configuration, not encrypted storage.
-
-The existing shared network policy governs service requests and arbitrary page fetches. Local page connections validate and pin resolved addresses; failure to support a proxy is explicit, not permission to use a shell/network bypass. The tool does not configure credentials, change persistent layers or grant delegation permissions.
-
-## Prompt responsibilities
-
-Descriptions/schemas own selection and argument contracts. Injected text owns the small verification/budget/authorization policy. Dynamic capabilities own current readiness. Skills own multi-step workflow and child-role guidance. Executable code owns enforceable limits and security checks. None is a prerequisite ceremony before calling an otherwise suitable tool.
-
-Jev rounds, a parent agent's search rounds, and parallel-subagent waves are different counters. Avoid copying the loop's changing numerical limits into host prompts or README promises. See [the prompt responsibility contract](prompt-contract.md).
-
-## Verification
+## Validation and primary references
 
 ```bash
-npm run test:jev
-npm run test:jev-client
 npm run test:adaptive
-npm run test:keys-authority
-npm run test:network
+npm run test:jev-client
 npm run test:adapters
 npm run test:mcp
+npm run test:fusion
+npm run test:search
+npm run check
 ```
 
-These tests cover deterministic fixtures, not a live-service accuracy or cost claim. `jev:probe` and `eval:adaptive` are separate, explicitly invoked network exercises that require appropriate credentials and can incur charges. Do not infer live provider availability, calibrated accuracy, pricing or universal host compatibility from an offline green test suite.
+The tests use deterministic fixtures, not live-service accuracy or cost claims.
+`jev:probe` and `eval:adaptive` are separately opted-in network exercises and can
+incur charges. No threshold calibration or search-quality improvement should be
+inferred solely from an offline green suite.
+
+- [TypeSafe API](https://docs.typesafe.ai/api): typed request/response protocol.
+- [TypeSafe primitives](https://docs.typesafe.ai/primitives): independent judgments
+  in one request; genuine dependencies belong in a subsequent request.
+- [TypeSafe Noul](https://docs.typesafe.ai/primitives/noul): probability semantics,
+  separate conditions and application-specific thresholds.
+- [Azure agentic retrieval](https://learn.microsoft.com/en-gb/azure/search/agentic-retrieval-overview):
+  focused subqueries and merged retrieval; architectural context, not a benchmark
+  for this implementation.

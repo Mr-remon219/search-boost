@@ -439,9 +439,9 @@ function mockDshCtx() {
   assert('dsh presentationMeta maps sources', meta.sources[0].publishedAt === '2026-01-01' && fused.presentResult({}, { meta }).card === 'web')
   await rejects('dsh x_search requires subject', () => m.tools.get('x_search').execute({}, {}), /provide query/)
   const adaptive = m.tools.get('adaptive_search')
-  assert('dsh adaptive_search takes only questions and caps them at 6', Object.keys(adaptive.parameters.properties).join() === 'questions' && adaptive.parameters.properties.questions.maxItems === 6 && adaptive.parameters.required.join() === 'questions')
+  assert('dsh adaptive_search exposes tasks, legacy questions and pagination', ['tasks', 'questions', 'cursor', 'page_size'].every((key) => key in adaptive.parameters.properties) && adaptive.parameters.properties.questions.maxItems === 6)
   const adaptiveUnconfigured = await adaptive.execute({ questions: ['fixture question'] }, {})
-  assert('dsh adaptive_search is honest when Jev is unconfigured', adaptiveUnconfigured.stopReason === 'not_configured' && adaptiveUnconfigured.questions.length === 1 && adaptiveUnconfigured.questions[0].status === 'not_searched')
+  assert('dsh adaptive_search is honest when Jev is unconfigured', adaptiveUnconfigured.stopReason === 'not_configured' && adaptiveUnconfigured.results.length === 0 && !adaptiveUnconfigured.coverageComplete)
   const adaptiveInvalid = await adaptive.execute({ questions: ['ok', '  '] }, {})
   assert('dsh adaptive_search rejects blank input instead of truncating', adaptiveInvalid.stopReason === 'invalid_input')
   assert('dsh adaptive_search output schema declares every emitted top-level field', Object.keys(adaptiveUnconfigured).every((key) => key in adaptive.output.schema.properties))
@@ -452,6 +452,21 @@ function mockDshCtx() {
   const m = mockDshCtx()
   dsh.apply(m.ctx, { xSearch: false, researchParallel: false, searchProvider: false, policy: false })
   assert('dsh config flags disable surfaces', !m.tools.has('x_search') && !m.tools.has('research_parallel') && !m.providers.search && !m.sections.some((s) => s.name === 'search:policy'))
+}
+
+// Actual MCP handler + same-process cursor store: approved URLs and the next
+// cursor must reach text-only clients, without credentials or network calls.
+{
+  const { registerAll } = await import('../adapters/mcp/register.mjs')
+  const { resultPages } = await import('../lib/search/adaptive/pages.js')
+  const handlers = new Map()
+  registerAll({ registerTool: (name, _schema, handler) => handlers.set(name, handler), registerResource() {}, registerPrompt() {} })
+  const first = resultPages.save(Array.from({ length: 3 }, (_, i) => ({ url: `https://example.com/mcp-${i}`, title: `Approved ${i}`, description: `Reviewed fact ${i}` })), { coverageComplete: true, stopReason: 'all_covered', warnings: [] }, 1)
+  const result = await handlers.get('adaptive_search')({ cursor: first.nextCursor, page_size: 1 }, { signal: new AbortController().signal })
+  const text = result.content.map((part) => part.text).join('\n')
+  assert('mcp adaptive approved URL/title/description reach text-only clients', ['https://example.com/mcp-1', 'Approved 1', 'Reviewed fact 1'].every((value) => text.includes(value)))
+  assert('mcp adaptive next cursor reaches text-only clients', Boolean(result.structuredContent.nextCursor) && text.includes(result.structuredContent.nextCursor))
+  assert('mcp adaptive paging works without Jev credentials', !result.isError && result.structuredContent.results.length === 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -472,11 +487,15 @@ function mockDshCtx() {
   assert('pi fused_search keeps pi-only params', ['site', 'min_score', 'depth'].every((k) => k in tools.get('fused_search').parameters.properties) && tools.get('fused_search').parameters.properties.max_results.maximum === 20)
   assert('pi x_search requires type', tools.get('x_search').parameters.required.includes('type'))
   const piAdaptive = tools.get('adaptive_search')
-  assert('pi adaptive_search exposes only questions, 1..6 x 400 chars', Object.keys(piAdaptive.parameters.properties).join() === 'questions' && piAdaptive.parameters.properties.questions.minItems === 1 && piAdaptive.parameters.properties.questions.maxItems === 6 && piAdaptive.parameters.properties.questions.items.maxLength === 400)
+  assert('pi adaptive_search exposes tasks and pagination alongside legacy questions', ['tasks', 'questions', 'cursor', 'page_size'].every((key) => key in piAdaptive.parameters.properties) && piAdaptive.parameters.properties.questions.items.maxLength === 400)
   const piAdaptiveOut = await piAdaptive.execute('id', { questions: ['fixture question'] })
   assert('pi adaptive_search reports not_configured without pretending to search', piAdaptiveOut.details.stopReason === 'not_configured' && /not configured|adaptive_search/.test(piAdaptiveOut.content[0].text))
   const piAdaptiveJson = JSON.parse(piAdaptiveOut.content.at(-1).text)
-  assert('pi adaptive_search exposes the complete core result to the model, not just UI details', JSON.stringify(piAdaptiveJson) === JSON.stringify(piAdaptiveOut.details) && Array.isArray(piAdaptiveJson.questions[0].evidence))
+  const { resultPages } = await import('../lib/search/adaptive/pages.js')
+  const initialPage = resultPages.save([{ url: 'https://example.com/1', title: 'One', description: 'Fact one' }, { url: 'https://example.com/2', title: 'Two', description: 'Fact two' }], { coverageComplete: false, stopReason: 'budget_rounds', warnings: [] }, 1)
+  const continued = await piAdaptive.execute('page', { cursor: initialPage.nextCursor, page_size: 1 })
+  assert('pi cursor reads approved results without needing Jev configuration', continued.details.results[0].url === 'https://example.com/2' && continued.details.nextCursor === null)
+  assert('pi adaptive_search exposes the complete core result to the model, not just UI details', JSON.stringify(piAdaptiveJson) === JSON.stringify(piAdaptiveOut.details) && Array.isArray(piAdaptiveJson.results))
   const emptySearch = await tools.get('fused_search').execute('fixture', { query: 'fixture-pi', engine_pool: 'api', ranking: 'fresh', engine_weights: { exa: 0 }, community: false })
   assert('pi passes routing and returns all actual diagnostics', emptySearch.details.enginePool === 'api' && emptySearch.details.ranking === 'fresh' && emptySearch.details.enginesUsed.length === 0 && emptySearch.details.communityUsed === false && emptySearch.details.warnings.length > 0)
   const injected = await handlers.get('before_agent_start')({ systemPrompt: 'BASE' })

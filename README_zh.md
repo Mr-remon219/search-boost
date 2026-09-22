@@ -54,7 +54,7 @@
 - **X / Twitter 社区情报检索 (`x_search`)**  
   支持通过官方 xAI API 或免登录回退通道获取推文、作者动态与讨论串。基于 Snowflake ID 逆向还原精准发布时间戳，本地执行作者与日期范围过滤，杜绝幻觉。
 - **Jev 辅助自适应证据闭环 (`adaptive_search` · 实验功能)**  
-  连接 TypeSafe Jev 认知引擎，针对 1~6 个复杂问题进行自主多轮搜索与证据碎片评估。严格受控执行预算，输出明确的证据覆盖状态（`covered`、`insufficient`、`unassessed`、`not_searched`、`failed`），帮助 Agent 快速核实事实断言。
+  输入任务背景、关键词和验收问题，每轮最多三次 Jev 调用：规划、评分、覆盖验收。只输出 Jev 认可的 URL、标题和简介，支持游标分页，不设固定的累计结果条数上限；检索仍受时间和请求预算约束。
 - **原生多智能体并行研究工作流**  
   随包提供 `search-boost` 与 `search-boost-parallel-research` Skills。在支持子代理的宿主（如 Cursor、Claude Code、Pi、DSH）中，可将复杂调研拆分为多路 Searcher（抓取证据）与 Summarizer（无工具综合），提供 Fast 与 Complex 两种研究波次。
 - **统一架构，全宿主覆盖**  
@@ -178,7 +178,7 @@ search-boost
 | **Setup** | 首次引导式全流程配置，依次设置引擎、搜索层、X 凭据并安装 Agent 集成。 |
 | **Install / update agents** | 快速安装或刷新指定 Agent 的集成文件，跳过凭据与搜索层设置。 |
 | **Update** | **一键全量更新**：检查 npm 最新版本，更新 SearchBoost 并同步刷新所有已接入的 Agent（含 Pi/DSH 旧适配器）。 |
-| **API keys / Search layer** | 管理 Tavily、Brave、Exa 等付费引擎密钥，切换默认搜索层 (`free` / `api`)。 |
+| **API keys / Search layer** | 管理 Tavily、Brave、Exa 等付费引擎密钥，以及 anysearch 密钥槽（可存储、可掩码展示，适配器接入前不进入 api 池），切换默认搜索层 (`free` / `api`)。 |
 | **X credentials** | 管理 X (Twitter) 认证，支持一键导入本机已有的 Grok 登录状态。 |
 | **Jev credentials (experimental)** | 配置 TypeSafe Jev 认知引擎的端点与 Bearer Token。 |
 | **Native web search** | 开启或关闭宿主自带的原生网页搜索（若宿主提供相应配置开关）。 |
@@ -199,7 +199,7 @@ search-boost
 | `fused_search` | 多引擎多角度并行查询、结果合并与去重排序 | 仅完成单次搜索；后续是否需要继续检索由主 Agent 判断 |
 | `fetch_page` | 读取已知公开 URL 的完整正文或特定关注段落 | 不是带登录态的无头浏览器，无法穿透内网私有地址 |
 | `x_search` | 检索 X 平台的公开推文、博主资料或单篇讨论串 | 不承诺完整抓取所有回复，无法代表全平台完整舆论倾向 |
-| `adaptive_search` | **实验功能**：由 Jev 驱动的自动多轮追问与碎片评测 | 并非最终答案生成器，`covered` 是模型评判而非不可动摇的事实 |
+| `adaptive_search` | **实验功能**：由 Jev 驱动的自动多轮追问与碎片评测 | 返回认可的 URL 与简介；模型认可不等于独立事实核查 |
 | `search_stats` | 查看引擎就绪状态、内存缓存命中与近期活动诊断 | 本地配置就绪不代表此时此刻外部网络一定通畅 |
 | `search_layer` | 在 MCP 环境中查看或切换兼容搜索层模式 | 查看为只读；修改会持久化写入磁盘并需要用户授权 |
 
@@ -268,25 +268,30 @@ search-boost
 
 **Vercel 接入**：在 TUI → Jev credentials 填写 `https://ai-gateway.vercel.sh/v1` 和 Vercel AI Gateway Key。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级配置中的 Jev Key，不读取环境变量；服务端限流等待不会被缩短。
 
-当需要对高度专业的断言进行严格考证时，Agent 可调用 `adaptive_search`。Jev 认知内核会自动拆解问题、选择允许的引擎、抓取关键网页片段并评估证据充分性。
+调用方准备任务背景、关键词同义词和明确的验收问题。Jev 选择查询与引擎，系统检索、去重、清洗，然后 Jev 评分并判断哪些目标还需要继续。每轮最多三次逻辑调用，不按 URL 单独调用。
 
-**调用参数范例**：
 ```json
 {
-  "questions": [
-    "官方文档对该 API 的 AbortSignal 取消机制有何明确保证？",
-    "该特性最早是在哪个稳定版本中引入的？"
-  ]
+  "tasks": [{
+    "context": "ExampleDB 4.2 升级影响",
+    "targets": [{
+      "id": "migration",
+      "keywords": ["migration guide", "升级指南"],
+      "question": "从 4.1 升级到 4.2 需要做哪些迁移？"
+    }]
+  }],
+  "page_size": 20
 }
 ```
 
-- 接受 1~6 个非空问题，每题限长 400 字符以内。
-- **返回结果包含逐题状态**：
-  - `covered`：已有证据片段能够充分回答该问题（模型评判）。
-  - `insufficient`：当前检索到的材料不足以支撑该结论。
-  - `unassessed`：未完成全部评测的中间状态。
-  - `not_searched`：因预算或时间耗尽而未执行搜索。
-  - `failed`：网络或解析异常导致失败。
+- 最多 6 个任务、每任务 4 个目标、总计 12 个目标；兼容旧 `questions` 输入。
+- `results` 是扁平的 `{url, title, description}` 列表，只包含已经评估并认可的材料，不包含待评估或被排除的候选。
+- 用 `{"cursor":"<nextCursor>"}` 读取后续页，不重新检索，也不调用 Jev。单页默认 20 条、最多 50 条，并有字节预算；累计认可结果不设固定条数上限。
+- `coverageComplete` 和警告说明检索是否满足目标。读完分页不等于搜遍全网；Jev 认可不等于事实已经独立核实。
+- 结果在当前服务进程中暂存，最多保留 30 分钟、32 次最近结果；过期、被淘汰或重启后游标失效。
+- 时间敏感任务可设置 `time_range`，分别约束文章发布时间或事件时间；未知日期不计入“今日”证据。
+
+完整输入输出、执行边界与已知限制见 [Jev 自适应搜索说明](./docs/jev-adaptive-search.md)。
 
 ---
 
@@ -352,7 +357,7 @@ API Key 存放在由 SearchBoost 自己管理的凭据文件中，不写入提�
 
 - **文件权限**：密钥存放在 `~/.search-boost/config/keys.json`（可用 `SEARCH_BOOST_HOME` 重定向根目录）。在 POSIX 系统上目录为 `0700`、文件为 `0600`；覆盖写入时先生成全新的 `0600` 临时文件再改名替换，已存在的文件不会被放宽权限。同一根目录下的备份与升级状态同样为 `0600`。环境变量指定的自定义目录会保留其原有权限，但凭据文件仍以 `0600` 创建。Windows 没有 POSIX 权限位，由 ACL 继承决定。
 - **原子写入与加锁**：写入使用 `O_EXCL` 临时文件加改名替换，读取方只会看到旧文件或新文件，不会读到写了一半的内容；写入失败会自行清理临时文件并保留原文件。读改写流程持有独占锁，两个写入者不会静默互相覆盖，被拒绝的修改也不会触碰原文件。
-- **不回显**：API Key 只在调用所属引擎时随请求发送（Tavily、Brave、Exa 的请求参数或请求头）。状态输出、`search-boost config keys --show` 与 doctor 报告只显示掩码（`abcd****wxyz`）；错误信息经过测试不会包含凭据内容，Jev 评测请求中也不含 Key、掩码 Key 或指纹。
+- **不回显**：API Key 只在调用所属引擎时随请求发送（Tavily、Brave、Exa 的请求参数或请求头）。状态输出、`search-boost config keys --show` 与 doctor 报告只显示掩码（`abcd****wxyz`）；错误信息经过测试不会包含凭据内容，Jev 评测请求中也不含 Key、掩码 Key 或指纹。anysearch 属于仅存储密钥槽：适配器接入前不会用它发起任何请求，也不参与 engine routing、api 池与 layer 推断。
 
 
 ---
@@ -377,6 +382,7 @@ search-boost install -t cursor --dry-run    # 仅演练安装过程，不写磁�
 
 # ----------------- 凭据与配置管理 -----------------
 search-boost config keys                    # 命令行配置/查看搜索引擎 Keys
+search-boost config keys --set anysearch=KEY  # 存储 anysearch 密钥（仅密钥槽，适配器待接入）
 search-boost config layer                   # 切换默认搜索层 (free / api)
 search-boost config x --import-grok         # 从本机 Grok 客户端快速导入 X 凭据
 search-boost config jev                     # 配置 Jev 认知引擎端点与 Token

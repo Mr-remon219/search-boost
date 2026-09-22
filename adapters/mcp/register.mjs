@@ -30,7 +30,6 @@ import {
 } from '../../lib/runtime.mjs'
 import {
   ADAPTIVE_DESCRIPTION,
-  ADAPTIVE_QUESTIONS_PARAM,
   ADAPTIVE_TOOL_NAME,
   renderAdaptiveSummary,
 } from '../../lib/search/adaptive/describe.js'
@@ -220,11 +219,7 @@ function summarizeAdaptive(result) {
     annotations: { ...ANNOTATIONS.search, title: 'Multi-question adaptive evidence loop (Jev)' },
   }, async (args, extra) => {
     try {
-      const questions = args?.questions
-      if (!Array.isArray(questions) || questions.length === 0) {
-        return toolErr('adaptive_search: questions is required (1-6 non-empty strings)')
-      }
-      const result = await runAdaptiveSearch({ questions }, {
+      const result = await runAdaptiveSearch(args, {
         signal: abortSignal(extra, 150_000),
         host: 'mcp',
         audit: extra?.audit,
@@ -233,7 +228,7 @@ function summarizeAdaptive(result) {
       const suffix = result.stopReason === 'not_configured'
         ? `\n\nJev is not configured: run \`${result.configurationHint ?? 'search-boost config jev'}\`, or use fused_search / fetch_page / x_search directly.`
         : ''
-      const text = `${renderAdaptiveSummary(result)}${suffix}`
+      const text = `${renderAdaptiveSummary(result)}${suffix}\n\n${JSON.stringify(result)}`
       return isError ? toolErr(text, summarizeAdaptive(result)) : toolOk(text, summarizeAdaptive(result))
     } catch (err) {
       return toolErr(err instanceof Error ? err.message : String(err))

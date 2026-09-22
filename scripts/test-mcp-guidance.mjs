@@ -38,7 +38,7 @@ try {
   for (const [field, schema] of Object.entries(byName.adaptive_search.inputSchema.properties)) {
     assert(schema.description, `adaptive_search.${field}: missing direct-call guidance`)
   }
-  assert.deepEqual(byName.adaptive_search.inputSchema.required, ['questions'])
+  assert.ok(['tasks', 'questions', 'cursor', 'page_size'].every((key) => key in byName.adaptive_search.inputSchema.properties))
   assert.equal(byName.adaptive_search.inputSchema.properties.questions.minItems, 1)
   assert.equal(byName.adaptive_search.inputSchema.properties.questions.maxItems, 6)
   assert.equal(byName.adaptive_search.inputSchema.properties.questions.items.maxLength, 400)
@@ -75,9 +75,15 @@ try {
   const adaptive = await client.callTool({ name: 'adaptive_search', arguments: { questions: ['fixture question'] } })
   assert.equal(adaptive.isError, true)
   assert.equal(adaptive.structuredContent.stopReason, 'not_configured')
-  assert.equal(adaptive.structuredContent.questions.length, 1)
+  assert.equal(adaptive.structuredContent.results.length, 0)
+  assert.equal(adaptive.structuredContent.coverageComplete, false)
   assert.match(adaptive.content[0].text, /search-boost config jev/)
   assert.ok(!JSON.stringify(adaptive.structuredContent).includes('fixture-secret'), 'no credential material in the result')
+  const taskCall = await client.callTool({ name: 'adaptive_search', arguments: { tasks: [{ context: 'Fixture product', targets: [{ id: 'pricing', keywords: ['pricing', 'price'], question: 'What is the price?' }] }] } })
+  assert.equal(taskCall.structuredContent.stopReason, 'not_configured')
+  assert.deepEqual(taskCall.structuredContent.results, [])
+  const mixedCall = await client.callTool({ name: 'adaptive_search', arguments: { questions: ['x'], cursor: 'invalid' } })
+  assert.equal(mixedCall.isError, true)
   let invalidRejected = false
   try {
     const invalid = await client.callTool({ name: 'adaptive_search', arguments: { questions: [] } })

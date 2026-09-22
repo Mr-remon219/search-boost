@@ -1,3 +1,4 @@
+import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/adaptive/input.js'
 import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
 // pi host adapter — pi coding agent extension.
@@ -44,7 +45,6 @@ import { normalizeTasks, runSearchParallel } from './search-parallel-subagent.js
 import {
   ADAPTIVE_DESCRIPTION,
   ADAPTIVE_PROMPT_GUIDELINES,
-  ADAPTIVE_QUESTIONS_PARAM,
   ADAPTIVE_TOOL_NAME,
   adaptiveTextContent,
 } from '../../lib/search/adaptive/describe.js'
@@ -271,34 +271,22 @@ export default function searchBoostExtension(pi) {
     name: ADAPTIVE_TOOL_NAME,
     label: 'Adaptive Search (Jev)',
     description: ADAPTIVE_DESCRIPTION,
-    promptSnippet: 'Gather per-question coverage evidence for 1–6 independent questions (Jev-driven)',
+    promptSnippet: 'Search keyword-guided targets with Jev; page through approved URLs and descriptions',
     promptGuidelines: ADAPTIVE_PROMPT_GUIDELINES,
-    parameters: {
-      type: 'object',
-      properties: {
-        questions: {
-          type: 'array',
-          minItems: 1,
-          maxItems: 6,
-          items: { type: 'string', minLength: 1, maxLength: 400 },
-          description: ADAPTIVE_QUESTIONS_PARAM,
-        },
-      },
-      required: ['questions'],
-    },
+    parameters: ADAPTIVE_INPUT_SCHEMA,
     async execute(_toolCallId, params, signal, onUpdate) {
       const progress = onProgress(onUpdate)
       const started = Date.now()
       const questions = Array.isArray(params?.questions) ? params.questions : []
-      progress(`adaptive_search: ${questions.length} question(s) — planning engines, judging per question…`)
-      const res = await runAdaptiveSearch({ questions }, {
+      progress(params.cursor ? 'adaptive_search: reading result page…' : 'adaptive_search: planning target searches…')
+      const res = await runAdaptiveSearch(params, {
         signal,
         host: 'pi',
         audit,
         onProgress: (message) => progress(`adaptive_search: ${message}`),
       })
       const domains = new Set()
-      for (const q of res.questions) for (const item of q.evidence ?? []) if (item.domain) domains.add(item.domain)
+      for (const item of res.results) { try { domains.add(new URL(item.url).hostname) } catch {} }
       audit.write({
         type: 'research',
         ts: new Date().toISOString(),
@@ -306,12 +294,12 @@ export default function searchBoostExtension(pi) {
         mode: ADAPTIVE_TOOL_NAME,
         rounds: res.rounds,
         stopReason: res.stopReason,
-        sources: res.evidence?.total ?? 0,
+        sources: res.totalResults,
         domains: domains.size,
-        uncovered: (res.uncovered ?? []).map((entry) => entry.id),
+        coverageComplete: res.coverageComplete,
         tookMs: Date.now() - started,
-        subtasks: res.questions.length,
-        successfulSubtasks: res.questions.filter((q) => q.status === 'covered').length,
+        subtasks: params.tasks?.reduce((n, task) => n + task.targets.length, 0) ?? questions.length,
+        pageResults: res.results.length,
       })
       return {
         content: adaptiveTextContent(res),

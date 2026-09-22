@@ -16,6 +16,7 @@ import { join } from 'node:path'
 const { runAdaptiveLoop, validateQuestions, canonicalizeQuestions, STOP_REASONS, REASONS } = await import('../lib/search/adaptive/loop.mjs')
 const { ADAPTIVE_LIMITS, ADAPTIVE_THRESHOLDS } = await import('../lib/search/adaptive/limits.js')
 const { createEvidencePool, excerptForContent } = await import('../lib/search/adaptive/evidence.js')
+const { dateWindow } = await import('../lib/search/adaptive/temporal.js')
 const { JevError, JEV_ERROR_KINDS } = await import('../lib/jev/client.mjs')
 
 let tests = 0
@@ -37,6 +38,7 @@ const slug = (text) => String(text).replace(/[^a-z0-9]+/gi, '-').slice(0, 40).to
 const hit = (text, url, extra = {}) => ({ title: `Fixture ${url}`, url, snippet: text, score: 1, engines: ['bing'], ...extra })
 
 const DEFAULT_SOURCE = { relevant: 0.9, states_evidence: 0.9, premise_conflict: 0.05, injection: 0.02 }
+const unpack = (state, ref) => ({ ...state.sources[ref.source_index], ...state.sources[ref.source_index].fragments[ref.fragment_index], ...ref })
 
 /** Scripted Jev transport: policy(ctx) -> { answers } | { error }. */
 function makeFakeJev(policy, calls) {
@@ -97,7 +99,7 @@ function defaultPolicy(overrides = {}) {
     if (phase === 'source_judge') {
       for (const id of Object.keys(questions)) {
         const match = /^src\.(e\d+)\.(.+)$/.exec(id)
-        const candidate = state.candidates.find((entry) => entry.id === match[1])
+        const candidate = unpack(state, state.candidates.find((entry) => entry.id === match[1]))
         const override = overrides.sourceScore
         if (typeof override === 'number') {
           answers[id] = ['relevant', 'states_evidence'].includes(match[2]) ? override : 0.05
@@ -217,7 +219,7 @@ await test('six independent questions each get one runFused call, keep order, an
   const questions = ['alpha one', 'beta two', 'gamma three', 'delta four', 'epsilon five', 'zeta six']
   const h = harness({ search: ({ query }) => answerable(query) })
   const res = await runAdaptiveLoop({ questions }, h.deps)
-  assert.equal(res.schemaVersion, 1)
+  assert.equal(res.schemaVersion, 2)
   assert.equal(res.tool, 'adaptive_search')
   assert.deepEqual(res.questions.map((q) => q.question), questions)
   assert.deepEqual(res.questions.map((q) => q.id), ['q1', 'q2', 'q3', 'q4', 'q5', 'q6'])
@@ -432,16 +434,16 @@ await test('the coverage request never sees a source the code filter excluded', 
     }),
     sourceScore: ({ field, candidate }) => (candidate.url.includes('a.example.com')
       ? { relevant: 0.95, states_evidence: 0.95, premise_conflict: 0.05, injection: 0.95 }[field]
-      : { relevant: 0.9, states_evidence: 0.6, premise_conflict: 0.05, injection: 0.02 }[field]),
+      : { relevant: 0.9, states_evidence: 0.8, premise_conflict: 0.05, injection: 0.02 }[field]),
     coverageScore: ({ field, ctx }) => (field === 'coverage'
-      ? (ctx.state.evidence.some((entry) => entry.url.includes('a.example.com')) ? 0.99 : 0.1)
+      ? (ctx.state.sources.some((entry) => entry.url.includes('a.example.com')) ? 0.99 : 0.1)
       : field === 'snippet_self_sufficient' ? 0.9 : 0.05),
   })
   const res = await runAdaptiveLoop({ questions: ['what is the answer'] }, h.deps)
   const coverageCalls = h.calls.jev.filter((call) => call.phase === 'coverage_judge')
   assert.ok(coverageCalls.length >= 1)
   for (const call of coverageCalls) {
-    assert.ok(!call.state.evidence.some((entry) => entry.url.includes('a.example.com')), 'excluded sources must not reach the coverage judgement')
+    assert.ok(!call.state.sources.some((entry) => entry.url.includes('a.example.com')), 'excluded sources must not reach the coverage judgement')
   }
   assert.notEqual(res.questions[0].status, 'covered')
   assert.ok(res.questions[0].evidence.some((item) => item.status === 'excluded_injection'))
@@ -658,7 +660,7 @@ await test('a better fragment for the same URL advances: re-judged, and coverage
   assert.equal(h.calls.jev.filter((call) => call.phase === 'source_judge').length, 2, 'changed text is judged again')
   const coverageCalls = h.calls.jev.filter((call) => call.phase === 'coverage_judge')
   assert.equal(coverageCalls.length, 2)
-  assert.ok(coverageCalls[1].state.evidence[0].text.includes('documented answer for alpha question is 42'))
+  assert.ok(unpack(coverageCalls[1].state, coverageCalls[1].state.evidence[0]).text.includes('documented answer for alpha question is 42'))
   assert.equal(res.usage.fetchCalls, 1)
 })
 
@@ -856,10 +858,11 @@ await test('a retryable Jev failure exhausts bounded retries and degrades instea
 
 await test('a later Jev failure keeps earlier verdicts about unchanged evidence and marks the rest unassessed', async () => {
   const h = harness({
-    limits: { ...ADAPTIVE_LIMITS, maxStateChars: 400 },
+    engineScore: (id) => id.endsWith('bing') ? 0.9 : 0.1,
     search: ({ query }) => answerable(query),
+    fetchPage: (url) => ({ url, content: 'Beta question is answered by a newly documented concrete fact with complete details.', word_count: 16 }),
     raw: (ctx) => (ctx.phase === 'coverage_judge' && ctx.callIndex > 0 ? null : null),
-    coverageScore: ({ field }) => (field === 'coverage' ? 0.9 : field === 'snippet_self_sufficient' ? 0.9 : 0.05),
+    coverageScore: ({ field, questionId }) => (field === 'coverage' ? (questionId === 'q1' ? 0.9 : 0.2) : field === 'snippet_self_sufficient' ? 0.9 : 0.05),
   })
   let coverageCalls = 0
   const inner = h.deps.jev.ask.bind(h.deps.jev)
@@ -1131,6 +1134,276 @@ await test('a Jev request that does not fit the remaining token estimate is neve
   assert.equal(res.usage.jevCalls, h.calls.jev.length, 'every counted Jev call was really dispatched')
   assert.equal(res.stopReason, STOP_REASONS.budgetTokens, 'the stop is our own budget stop')
   assert.equal(res.jev.degraded, false, 'a budget stop is never reported as a Jev failure')
+})
+
+
+// v2: keyword targets, bounded three-phase rounds, compact source references,
+// and presentation-only pagination. All transports remain hermetic.
+const { normalizeAdaptiveInput } = await import('../lib/search/adaptive/input.js')
+const { createResultPages, approvedResults, validatePageInput } = await import('../lib/search/adaptive/pages.js')
+const { selectEngineCandidates } = await import('../lib/search/adaptive/planning.js')
+const { requestFits } = await import('../lib/search/adaptive/material.js')
+const taskInput = (targets, extra = {}) => ({ tasks: [{ context: 'ExampleDB 4.2', targets, ...extra }] })
+const target = (id, keywords = [id]) => ({ id, keywords, question: `What is the documented ${id} behavior?` })
+
+await test('v2 input binds synonyms to acceptance targets and rejects ambiguity before I/O', async () => {
+  const input = taskInput([target('migration', ['migration guide', '升级指南'])])
+  const normalized = normalizeAdaptiveInput(input)
+  assert.equal(normalized.targets.length, 1)
+  assert.equal(normalized.targets[0].keywords.length, 2)
+  for (const invalid of [
+    { ...input, questions: ['x'] }, taskInput([target('same'), target('same')]),
+    taskInput([{ ...target('empty'), keywords: [' '] }]),
+    taskInput([target('date')], { time_range: { start: '2026-02-30', end: '2026-03-01', basis: 'event' } }),
+    { tasks: Array.from({ length: 4 }, () => ({ context: 'x', targets: ['a', 'b', 'c', 'd'].map((id) => target(id)) })) },
+  ]) {
+    const h = harness()
+    const result = await runAdaptiveLoop(invalid, h.deps)
+    assert.equal(result.stopReason, 'invalid_input')
+    assert.equal(h.calls.jev.length + h.calls.fused.length, 0)
+  }
+})
+
+await test('v2 a full round batches all targets into exactly three logical calls', async () => {
+  const h = harness({ search: ({ query }) => answerable(query), limits: { ...ADAPTIVE_LIMITS, maxRounds: 1 } })
+  await runAdaptiveLoop(taskInput([target('migration'), target('pricing'), target('license')]), h.deps)
+  assert.deepEqual(h.calls.jev.map((call) => call.phase), ['plan', 'source_judge', 'coverage_judge'])
+  assert.ok(h.calls.fused.every((call) => call.query.includes('ExampleDB 4.2')))
+  assert.ok(h.calls.fused.every((call) => call.ranking === 'balanced' && call.engineWeights === undefined && call.candidateSelection === 'per_engine'))
+})
+
+await test('v2 source overflow is deferred instead of adding a fourth Jev request', async () => {
+  const h = harness({
+    limits: { ...ADAPTIVE_LIMITS, maxRounds: 1 },
+    search: ({ query }) => ({ results: Array.from({ length: 6 }, (_, i) => hit(`${query} has a concrete answer and documented details.`, `https://docs.example.com/${slug(query)}/${i}`)) }),
+  })
+  const result = await runAdaptiveLoop({ questions: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'] }, h.deps)
+  assert.equal(h.calls.jev.filter((call) => call.phase === 'source_judge').length, 1)
+  const source = h.calls.jev.find((call) => call.phase === 'source_judge')
+  assert.equal(source.state.candidates.length, 12)
+  assert.equal(new Set(source.state.candidates.map((c) => c.for_question)).size, 6)
+  assert.equal(result.roundLog[0].deferredSourceJudgments, 24)
+  for (const call of h.calls.jev) assert.ok(requestFits(call, ADAPTIVE_LIMITS))
+})
+
+await test('v2 shared URL appears once in each scoring/coverage payload with target-specific fragments', async () => {
+  const h = harness({ search: ({ query }) => ({ results: [hit(`${query} has a documented concrete answer with details.`, 'https://example.com/shared?utm_source=test', { title: 'Shared source' })] }) })
+  await runAdaptiveLoop({ questions: ['alpha', 'beta'] }, h.deps)
+  for (const call of h.calls.jev.filter((c) => c.phase !== 'plan')) {
+    assert.equal(call.state.sources.length, 1)
+    assert.equal(call.state.sources[0].fragments.length, 2)
+    assert.equal(JSON.stringify(call.state).split('https://example.com/shared').length - 1, 1)
+    const refs = call.state.candidates ?? call.state.evidence
+    assert.equal(new Set(refs.map((r) => r.for_question)).size, 2)
+  }
+})
+
+await test('v2 only unresolved targets search again and Jev can reuse an engine with a new synonym query', async () => {
+  let plans = 0
+  const h = harness({
+    engineScore: (id, ctx) => { if (id === 'plan.q1.bing') plans++; return id.endsWith('.bing') ? 0.95 : 0.1 },
+    actionChoice: (id, ctx) => id.startsWith('query.') ? (ctx.state.round > 1 ? 'v2' : 'v1') : 'search_gap',
+    search: ({ query }) => ({ results: [hit(`ExampleDB 4.2 ${query} states a concrete documented answer.`, `https://example.com/${encodeURIComponent(query)}`)] }),
+    coverageScore: ({ questionId, field, ctx }) => field === 'coverage'
+      ? (questionId === 'q1' || ctx.state.sources.some((source) => source.url.includes('upgrade')) ? 0.99 : 0.1)
+      : field === 'source_conflict' ? 0.01 : 0.99,
+  })
+  const result = await runAdaptiveLoop(taskInput([target('pricing'), target('migration', ['migration', 'upgrade'])]), h.deps)
+  assert.equal(result.questions[0].status, 'covered')
+  assert.equal(result.questions[1].status, 'covered')
+  assert.equal(h.calls.fused.filter((call) => call.query.includes('pricing')).length, 1)
+  assert.ok(h.calls.fused.some((call) => call.query === 'ExampleDB 4.2 upgrade' && call.engineList.includes('bing')))
+  for (const round of result.roundLog) {
+    const phases = result.jev.perPhase.filter((p) => p.round === round.round).map((p) => p.phase)
+    assert.equal(phases.length, new Set(phases).size)
+    assert.ok(phases.length <= 3)
+  }
+})
+
+await test('v2 page-cleaning fallback cannot reintroduce pure navigation', async () => {
+  const nav = '[News](https://example.com/news) [Pricing](https://example.com/pricing) [Support](https://example.com/support) [About](https://example.com/about) [Contact](https://example.com/contact)'
+  assert.equal(excerptForContent(nav, 'pricing').text, '')
+  const h = harness({ limits: { ...ADAPTIVE_LIMITS, maxRounds: 1 }, search: () => ({ results: [hit(nav, 'https://example.com/navigation', { content: nav })] }) })
+  let full
+  const result = await runAdaptiveLoop({ questions: ['pricing'] }, { ...h.deps, onComplete: (value) => { full = value } })
+  assert.equal(result.evidence.withText, 0)
+  assert.equal(approvedResults(full.evidence).length, 0)
+  assert.equal(h.calls.jev.filter((c) => c.phase === 'source_judge').length, 0)
+})
+
+await test('v2 unknown and old event dates never pass even under an optimistic model', async () => {
+  for (const [published, text] of [[null, 'ExampleDB 4.2 released a new API with useful features.'], ['2026-07-19', 'ExampleDB 4.2 was released on 2020-01-01 with useful features.']]) {
+    const h = harness({ sourceScore: ({ field }) => ['relevant', 'states_evidence', 'time_match'].includes(field) ? 0.99 : 0.01,
+      limits: { ...ADAPTIVE_LIMITS, maxRounds: 1 }, search: () => ({ results: [hit(text, 'https://example.com/old', { published })] }) })
+    let full
+    const result = await runAdaptiveLoop(taskInput([target('release')], { time_range: { start: '2026-07-19', end: '2026-07-19', basis: 'event' } }), { ...h.deps, onComplete: (value) => { full = value } })
+    assert.notEqual(result.questions[0].status, 'covered')
+    assert.equal(approvedResults(full.evidence).length, 0)
+    assert.ok(full.evidence.every((e) => e.status === 'date_unqualified'))
+  }
+})
+
+await test('v2 event and publication constraints stay distinct and valid event dates qualify', async () => {
+  const make = () => harness({ sourceScore: ({ field }) => ['relevant', 'states_evidence', 'time_match'].includes(field) ? 0.99 : 0.01,
+    limits: { ...ADAPTIVE_LIMITS, maxRounds: 1 }, search: () => ({ results: [hit('ExampleDB 4.2 was released on 2026-07-19 with a new API.', 'https://example.com/release', { published: '2026-07-20' })] }) })
+  for (const basis of ['event', 'published']) {
+    const h = make()
+    let full
+    await runAdaptiveLoop(taskInput([target('release')], { time_range: { start: '2026-07-19', end: '2026-07-19', basis } }), { ...h.deps, onComplete: (value) => { full = value } })
+    assert.equal(approvedResults(full.evidence).length, basis === 'event' ? 1 : 0)
+  }
+})
+
+await test('v2 repeated engine failures are shared across questions without widening the pool', async () => {
+  const h = harness({ available: ['bing'], limits: { ...ADAPTIVE_LIMITS, maxRounds: 1, concurrency: 1 },
+    search: () => ({ results: [], engineErrors: { bing: 'transport failed' } }),
+  })
+  const result = await runAdaptiveLoop({ questions: ['one', 'two', 'three', 'four'] }, h.deps)
+  assert.equal(h.calls.fused.length, 2)
+  assert.ok(h.calls.fused.every((call) => call.engineList.join() === 'bing'))
+  assert.ok(result.warnings.some((warning) => warning.includes('temporarily skipped')))
+})
+
+await test('v2 engine candidate reservation preserves a low-weight engine\'s own top result', async () => {
+  const rows = [
+    ...Array.from({ length: 8 }, (_, i) => ({ url: `https://bing.example/${i}`, engines: ['bing'], score: 100 - i, engineRanks: { bing: i } })),
+    { url: 'https://exa.example/first', engines: ['exa-free'], score: 0.1, engineRanks: { 'exa-free': 0 } },
+  ]
+  const selected = selectEngineCandidates(rows, ['bing', 'exa-free'], 4)
+  assert.ok(selected.results.some((r) => r.url === 'https://exa.example/first'))
+})
+
+await test('v2 public pages contain only approved unique URLs and descriptions without a total result cap', async () => {
+  const evidence = Array.from({ length: 205 }, (_, i) => ({ url: `https://example.com/${i}`, title: `Source ${i}`, reviewedText: `Reviewed fact ${i}`, status: 'answer_capable', assessed: true, judgment: { relevance: 0.9, states_evidence: 0.9 } }))
+  evidence.push({ ...evidence[0], url: evidence[0].url + '?utm_source=duplicate' }, { ...evidence[1], url: 'https://bad.example/', status: 'unassessed' })
+  const approved = approvedResults(evidence)
+  assert.equal(approved.length, 205)
+  const pages = createResultPages()
+  let page = pages.save(approved, { coverageComplete: false, stopReason: 'budget_rounds', warnings: ['partial'] }, 50)
+  const all = [...page.results]
+  while (page.nextCursor) { page = pages.read(page.nextCursor, 50); all.push(...page.results) }
+  assert.equal(all.length, 205)
+  assert.equal(new Set(all.map((row) => row.url)).size, 205)
+  assert.ok(all.every((row) => Object.keys(row).sort().join() === 'description,title,url'))
+  assert.equal(page.coverageComplete, false, 'end of pagination is not full research coverage')
+})
+
+await test('v2 paging respects bytes, expires honestly, and rejects mixed search/cursor input', async () => {
+  let clock = 0
+  const pages = createResultPages({ now: () => clock, ttlMs: 100, maxPageBytes: 500 })
+  const page = pages.save(Array.from({ length: 5 }, (_, i) => ({ title: 'Title', url: `https://example.com/${i}`, description: '界'.repeat(60) })), { coverageComplete: true, stopReason: 'all_covered', warnings: [] }, 50)
+  assert.ok(page.results.length < 5)
+  assert.ok(page.nextCursor)
+  assert.throws(() => validatePageInput({ cursor: page.nextCursor, tasks: [] }), /cannot be combined/)
+  assert.throws(() => validatePageInput({ page_size: 0 }), /page_size/)
+  assert.throws(() => pages.read('bad'), /Invalid/)
+  clock = 101
+  assert.throws(() => pages.read(page.nextCursor), /expired/)
+})
+
+await test('v2 public result selection uses all reviewed items, not the old six-item diagnostic preview', async () => {
+  const h = harness({ limits: { ...ADAPTIVE_LIMITS, maxRounds: 1, maxSourceJudgeCandidatesPerQuestion: 12 },
+    search: () => ({ results: Array.from({ length: 9 }, (_, i) => hit('The requested behavior is explicitly documented as the default setting.', `https://example.com/${i}`)) }),
+  })
+  let full
+  const result = await runAdaptiveLoop({ questions: ['requested behavior'] }, { ...h.deps, onComplete: (value) => { full = value } })
+  assert.equal(result.questions[0].evidence.length, 6)
+  assert.equal(approvedResults(full.evidence).length, 9)
+})
+
+
+await test('v2 worst-size valid plans are deferred within the three-call envelope, not rejected wholesale', async () => {
+  const input = { tasks: Array.from({ length: 3 }, (_, i) => ({ context: `Context ${i} ` + 'product '.repeat(48), targets: Array.from({ length: 4 }, (_, j) => ({ id: `target${j}`, question: 'Which facts ' + 'matter '.repeat(54), keywords: ['a', 'b', 'c', 'd'].map((k) => k + 'alternative '.repeat(8)) })) })) }
+  const h = harness({ pool: 'hybrid', available: [...FREE, ...API], limits: { ...ADAPTIVE_LIMITS, maxRounds: 2 }, search: () => ({ results: [] }) })
+  const result = await runAdaptiveLoop(input, h.deps)
+  assert.notEqual(result.stopReason, 'invalid_input')
+  assert.notEqual(result.stopReason, 'budget_tokens')
+  assert.ok(h.calls.fused.length > 0)
+  assert.equal(result.questions.length, 12)
+  assert.ok(h.calls.jev.every((call) => requestFits(call, ADAPTIVE_LIMITS)))
+  for (const round of result.roundLog) assert.ok(result.jev.perPhase.filter((p) => p.round === round.round).length <= 3)
+})
+
+await test('v2 fetched-page plan serializes shared URLs once, not in each action description/parameter', async () => {
+  const h = harness({ search: ({ query }) => ({ results: [hit(`${query} is discussed in the detailed documentation below.`, 'https://example.com/shared', { title: 'Shared documentation' })] }),
+    fetchPage: (url) => ({ url, content: 'Alpha and beta each have a concrete documented value of 42.', word_count: 13 }),
+    coverageScore: ({ field, ctx }) => field === 'coverage' ? (ctx.state.evidence.some((e) => e.text_basis === 'fetched_page') ? 0.99 : 0.1) : field === 'source_conflict' ? 0.01 : 0.99,
+  })
+  await runAdaptiveLoop({ questions: ['alpha', 'beta'] }, h.deps)
+  const secondPlan = h.calls.jev.filter((c) => c.phase === 'plan')[1]
+  assert.ok(secondPlan)
+  assert.equal(secondPlan.state.sources.length, 1)
+  assert.equal(JSON.stringify(secondPlan.state).split('https://example.com/shared').length - 1, 1)
+})
+
+await test('v2 the evidence pool does not drop sources at the former 120-item ceiling', async () => {
+  const pool = createEvidencePool({ questions: [{ id: 'q1', text: 'alpha' }] })
+  pool.ingestSearch({ questionId: 'q1', round: 1, results: Array.from({ length: 135 }, (_, i) => hit('Alpha is explicitly described by this supporting fact.', `https://example.com/${i}`)) })
+  assert.equal(pool.size(), 135)
+  assert.equal(pool.droppedAssociations(), 0)
+})
+
+
+await test('review F2: reselecting a query only dispatches still-unused engines; missing actions prefer useful work', async () => {
+  for (const choose of [() => 'search_gap', () => undefined]) {
+    const h = harness({ actionChoice: choose, coverageScore: 0.1,
+      limits: { ...ADAPTIVE_LIMITS, maxRounds: 4, maxFetchCalls: 0, maxFetchReads: 0 },
+      search: () => ({ results: [hit('Alpha target has a concrete documented supporting fact.', 'https://example.com/alpha')] }),
+    })
+    const result = await runAdaptiveLoop({ questions: ['alpha target'] }, h.deps)
+    assert.ok(h.calls.fused.length > 1)
+    const signatures = h.calls.fused.flatMap((call) => call.engineList.map((engine) => `${engine}|${call.query}|${call.complexity}`))
+    assert.equal(signatures.length, new Set(signatures).size)
+    assert.ok(!result.warnings.some((w) => /became unavailable/.test(w)))
+    assert.ok(h.calls.fused.some((call) => call.engineList.includes('exa-free')))
+    if (choose() === undefined) assert.equal(result.roundLog[1].plan.actions[0].action, 'deepen')
+  }
+})
+
+await test('review F3/F4: background dates do not exclude timeless targets; inferred windows are explicit and reasons accurate', async () => {
+  for (const context of ['ExampleDB 4.2', 'ExampleDB 4.2 as of today', 'ExampleDB 4.2 release notes as of 2026-07-19']) {
+    const h = harness({ search: () => ({ results: [hit('ExampleDB 4.2 supports an unlimited row count.', 'https://example.com/manual')] }) })
+    let full
+    const result = await runAdaptiveLoop({ tasks: [{ context, targets: [{ id: 'limits', keywords: ['row limits'], question: 'What is the row limit?' }] }] }, { ...h.deps, onComplete: (value) => { full = value } })
+    assert.equal(result.questions[0].status, 'covered')
+    assert.equal(approvedResults(full.evidence).length, 1)
+  }
+  const h = harness({ limits: { ...ADAPTIVE_LIMITS, maxRounds: 1 }, search: () => ({ results: [hit('ExampleDB was released with several documented new features.', 'https://example.com/release')] }) })
+  const result = await runAdaptiveLoop({ questions: ['What did ExampleDB release on 2026-07-19?'] }, h.deps)
+  assert.ok(result.warnings.some((w) => /inferred event date window 2026-07-19/.test(w)))
+  assert.ok(result.questions[0].uncoveredReasons.includes(REASONS.dateUnqualified))
+  assert.ok(!result.questions[0].uncoveredReasons.includes(REASONS.noAnswerCapableEvidence))
+  assert.equal(dateWindow('What was known as of today?', Date.now()), null)
+})
+
+await test('review F5: per-engine candidates prefer domain diversity, honor the floor, and fill spare slots', async () => {
+  const rows = Array.from({ length: 6 }, (_, i) => ({ url: `https://same.example/${i}`, engines: ['bing'], engineRanks: { bing: i + 1 }, score: 1 }))
+  rows.push({ url: 'https://other.example/news', engines: ['bing'], engineRanks: { bing: 7 }, score: 0.8 })
+  const selected = selectEngineCandidates(rows, ['bing'], 3).results
+  assert.ok(selected.some((row) => row.url.includes('other.example')))
+  assert.equal(selectEngineCandidates(rows, ['bing'], 6, { minScore: 0.9 }).results.length, 6)
+  assert.ok(selectEngineCandidates(rows, ['bing'], 7, { minScore: 0.9 }).results.every((row) => row.score >= 0.9))
+})
+
+await test('review F6: failed page reads are not repeated on later rounds', async () => {
+  const h = harness({ limits: { ...ADAPTIVE_LIMITS, maxRounds: 4 }, coverageScore: 0.1,
+    actionChoice: (id, ctx) => Object.keys(ctx.questions[id].criteria ?? {}).includes('fetch_pages') ? 'fetch_pages' : Object.keys(ctx.questions[id].criteria ?? {})[0],
+    search: () => ({ results: [hit('Alpha target has some documented but incomplete evidence.', 'https://example.com/blocked')] }),
+    fetchPage: () => { throw new Error('HTTP 403 fixture') },
+  })
+  const result = await runAdaptiveLoop({ questions: ['alpha target'] }, h.deps)
+  assert.equal(h.calls.fetch.length, 1)
+  assert.ok(result.warnings.some((w) => /HTTP 403 fixture/.test(w)))
+  assert.ok(h.calls.fused.length > 1)
+})
+
+await test('paging preserves an oversized approved row and explicitly reports the soft-budget exception', async () => {
+  const pages = createResultPages({ maxPageBytes: 100 })
+  const row = { url: 'https://example.com/large', title: 'Large', description: 'Reviewed fact. '.repeat(100) }
+  const page = pages.save([row], { coverageComplete: true, stopReason: 'all_covered', warnings: [] })
+  assert.deepEqual(page.results, [row])
+  assert.equal(page.nextCursor, null)
+  assert.ok(page.warnings.some((w) => /exceeds the page byte budget/.test(w)))
 })
 
 console.log(`\n${tests} adaptive_search loop tests passed.`)

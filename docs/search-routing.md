@@ -64,6 +64,8 @@ MCP / Pi / DSH x_search
 
 池成员固定，实际可用性动态读取。API-only 池没有可用 key 时返回空集合与 warnings，不偷偷启用免费池。
 
+`keys.json` 另外接受尚未接入适配器的密钥槽（目前为 `anysearch`）：可以存储、掩码展示与 `--set/--unset`，后台也可用 `ANYSEARCH_API_KEY` 提供。它不进入 `enabledEngines`、per-engine `enabled` 标记、`engine_weights` 与 api 池，也不参与 layer 推断（只存该 key 时 layer 仍为 free），因此上表中没有它的位置；适配器与池接线完成后才把名字移入 `KEY_NAMES`。
+
 ## 兼容方案
 
 - 保留原 layer 配置、环境变量、`search_layer` 与 `/web_change`：旧 `free → free`，旧 `api → hybrid`。这是保留旧 api layer 原本包含免费引擎的语义，不是新 API-only 池的定义。

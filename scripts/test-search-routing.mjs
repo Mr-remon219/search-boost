@@ -105,6 +105,17 @@ try {
     assert.ok(!('bing' in custom.effectiveWeights))
     assert.deepEqual(calls.map((c) => c.name), ENGINE_POOLS.api)
   })
+  await test('adaptive engine lanes preserve candidate opportunities and use a separate final-selection cache', async () => {
+    const args = { engineList: ['bing', 'exa-free'], engineWeights: { bing: 5, 'exa-free': 0.1 }, maxResults: 2 }
+    const ranked = await fused(args)
+    assert.ok(ranked.results.every((row) => row.engines.includes('bing')))
+    const lanes = await fused({ ...args, candidateSelection: 'per_engine' })
+    assert.equal(lanes.cacheHit, false)
+    assert.ok(lanes.results.some((row) => row.engines.includes('exa-free')))
+    assert.ok(lanes.results.every((row) => Number.isFinite(row.engineRanks[row.engines[0]])))
+    assert.deepEqual(lanes.effectiveWeights, ranked.effectiveWeights)
+    assert.equal((await fused({ ...args, candidateSelection: 'per_engine' })).cacheHit, true)
+  })
   await test('explicit engine override crosses pools but cannot enable missing/disabled engines', async () => {
     const out = await fused({ enginePool: 'free', engineList: ['exa','exa'], ranking: 'research' })
     assert.deepEqual(out.enginesUsed, ['exa'])

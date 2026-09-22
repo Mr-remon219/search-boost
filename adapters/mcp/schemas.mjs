@@ -117,102 +117,32 @@ export const searchStatsOutput = {
 }
 
 export const adaptiveSearchInput = {
-  questions: z.array(z.string().min(1).max(400)).min(1).max(6)
-    .describe('1–6 independent questions (blank questions and over-long items are rejected, never truncated). Each question is searched and judged on its own and keeps its output position; identical questions reuse one execution.'),
+  questions: z.array(z.string().min(1).max(400)).min(1).max(6).optional()
+    .describe('Legacy independent questions. Supply exactly one of questions, tasks or cursor.'),
+  tasks: z.array(z.object({
+    context: z.string().min(1).max(400),
+    time_range: z.object({ start: z.string(), end: z.string(), basis: z.enum(['published', 'event']) }).strict().optional(),
+    targets: z.array(z.object({
+      id: z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/),
+      keywords: z.array(z.string().min(1).max(100)).min(1).max(4),
+      question: z.string().min(1).max(400),
+    }).strict()).min(1).max(4),
+  }).strict()).min(1).max(6).optional()
+    .describe('Task context plus keyword-guided acceptance targets; at most 12 targets total. Keywords are search variants, not acceptance criteria.'),
+  cursor: z.string().min(1).max(100).optional()
+    .describe('Read the next approved-result page. Do not combine with tasks/questions. No network or Jev calls; cursors are temporary and server-local.'),
+  page_size: z.number().int().min(1).max(50).optional()
+    .describe('Results per page: default 20, max 50. Total approved results have no fixed count cap; pages also have a byte limit.'),
 }
 
-const adaptiveJudgment = z.object({
-  relevance: z.number().nullable(),
-  states_evidence: z.number().nullable(),
-  premise_conflict: z.number().nullable(),
-  injection: z.number().nullable(),
-})
-
-const adaptiveEvidence = z.object({
-  evidenceId: z.string(),
-  url: z.string(),
-  title: z.string(),
-  domain: z.string(),
-  published: z.string().nullable(),
-  textBasis: z.enum(['snippet', 'engine_content', 'fetched_page']).nullable(),
-  reviewedText: z.string(),
-  textVersion: z.string().nullable(),
-  engines: z.array(z.string()),
-  fusionScore: z.number(),
-  status: z.enum(['answer_capable', 'mention_only', 'off_topic', 'unassessed', 'excluded_injection', 'no_text']),
-  assessed: z.boolean(),
-  judgment: adaptiveJudgment.nullable(),
-  premiseConflict: z.boolean(),
-  injectionSuspected: z.boolean(),
-  usedForCoverage: z.boolean(),
-  firstRound: z.number().optional(),
-  changeCount: z.number().optional(),
-  textTruncated: z.boolean().optional(),
-  fetch: z.object({ state: z.string(), via: z.string().nullable(), words: z.number() }).nullable().optional(),
-})
-
-const adaptiveCoverage = z.object({
-  probability: z.number().nullable(),
-  threshold: z.number(),
-  basis: z.string().nullable(),
-  textBasis: z.string().nullable(),
-  snippetOnly: z.boolean(),
-  snippetSelfSufficient: z.number().nullable(),
-  judgedAtRound: z.number().nullable(),
-  evidenceVersionSignature: z.string(),
-  missingExplicitRequirements: z.array(z.string()),
-  evidenceIds: z.array(z.string()),
-})
-
-const adaptiveQuestion = z.object({
-  id: z.string(),
-  canonicalId: z.string().nullable(),
-  question: z.string(),
-  status: z.enum(['covered', 'insufficient', 'unassessed', 'not_searched', 'failed']),
-  assessed: z.boolean(),
-  coverage: adaptiveCoverage.nullable(),
-  evidence: z.array(adaptiveEvidence),
-  evidenceCount: z.number(),
-  evidenceTruncated: z.boolean(),
-  conflictCount: z.number(),
-  uncoveredReason: z.string().nullable(),
-  uncoveredReasons: z.array(z.string()),
-  conflicts: z.array(z.record(z.unknown())),
-  searchedEngines: z.array(z.string()),
-})
-
 export const adaptiveSearchOutput = {
-  schemaVersion: z.number(),
-  tool: z.string(),
-  questions: z.array(adaptiveQuestion),
-  uncovered: z.array(z.object({
-    id: z.string(),
-    canonicalId: z.string().nullable(),
-    question: z.string(),
-    status: z.string(),
-    reasons: z.array(z.string()),
-    qualifiedEvidence: z.number(),
-    conflicts: z.number(),
-  })),
-  rounds: z.number(),
+  results: z.array(z.object({ url: z.string(), title: z.string(), description: z.string() })),
+  totalResults: z.number(),
+  nextCursor: z.string().nullable(),
+  expiresAt: z.string(),
+  coverageComplete: z.boolean(),
   stopReason: z.string(),
-  stopDetail: z.string().nullable(),
-  evidence: z.object({
-    total: z.number(),
-    sources: z.number(),
-    withText: z.number(),
-    answerCapable: z.number(),
-    dropped: z.number(),
-    byBasis: z.record(z.number()),
-  }),
-  usage: z.record(z.unknown()),
-  roundLog: z.array(z.record(z.unknown())),
-  jev: z.record(z.unknown()),
-  limits: z.record(z.unknown()),
   warnings: z.array(z.string()),
-  outputTruncated: z.boolean().optional(),
-  fallback: z.record(z.unknown()).optional(),
-  configurationHint: z.string().optional(),
 }
 
 /** MCP tool annotations (hints for clients) */export const ANNOTATIONS = {
