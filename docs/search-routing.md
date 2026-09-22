@@ -50,17 +50,18 @@ MCP / Pi / DSH x_search
 
 ### 引擎池与权重
 
-| pool-ranking | bing | ddg | yahoo | exa-free | tavily | brave | exa |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| free-balanced | 1.00 | 1.05 | 1.00 | 1.10 | — | — | — |
-| free-research | 0.95 | 0.90 | 0.85 | 1.30 | — | — | — |
-| free-fresh | 1.15 | 0.95 | 0.90 | 1.00 | — | — | — |
-| api-balanced | — | — | — | — | 1.20 | 1.10 | 1.20 |
-| api-research | — | — | — | — | 1.35 | 1.00 | 1.45 |
-| api-fresh | — | — | — | — | 1.30 | 1.40 | 1.25 |
-| hybrid-balanced | 1.00 | 1.05 | 1.00 | 1.10 | 1.20 | 1.10 | 1.20 |
-| hybrid-research | 0.90 | 0.85 | 0.80 | 1.20 | 1.35 | 1.00 | 1.45 |
-| hybrid-fresh | 1.05 | 0.90 | 0.85 | 1.00 | 1.30 | 1.40 | 1.25 |
+| 引擎 | balanced | research | fresh |
+| --- | ---: | ---: | ---: |
+| bing | 0.957 | 0.927 | 1.020 |
+| ddg | 0.981 | 0.903 | 0.927 |
+| yahoo | 0.957 | 0.877 | 0.902 |
+| exa-free | 1.004 | 1.085 | 0.951 |
+| tavily | 1.049 | 1.105 | 1.084 |
+| brave | 1.004 | 0.951 | 1.125 |
+| exa | 1.049 | 1.146 | 1.063 |
+| anysearch | 1.004 | 1.042 | 0.951 |
+
+同一引擎、同一策略的权重跨池共享。上表为固定八引擎原生先验的对数收缩冷启动值（几何均值为 1），不是实测质量排名；完整精度在 routing.js。free 为 bing/ddg/yahoo/exa-free/anysearch；api 为 tavily/brave/exa/anysearch；hybrid 为去重并集。不可按本次成功/可用引擎重新归一化。后续离线标注评估须包含全 1 权重 neutral baseline。
 
 池成员固定，实际可用性动态读取。API-only 池没有可用 key 时返回空集合与 warnings，不偷偷启用免费池。
 

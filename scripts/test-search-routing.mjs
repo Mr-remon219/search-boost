@@ -60,17 +60,19 @@ globalThis.fetch = async (raw) => {
 }
 try {
   await test('all nine exact ranking presets; no ranking-dependent engine selection', async () => {
-    const expected = {
-      free: [[1,1.05,1,1.1,1.1], [.95,.90,.85,1.30,1.2], [1.15,.95,.90,1,1]],
-      api: [[1.2,1.1,1.2,1.1], [1.35,1,1.45,1.2], [1.3,1.4,1.25,1]],
-      hybrid: [[1,1.05,1,1.1,1.1,1.2,1.1,1.2], [.95,.9,.85,1.3,1.2,1.35,1,1.45], [1.15,.95,.9,1,1,1.3,1.4,1.25]],
+    const priors = {
+      balanced: { bing: 1, ddg: 1.05, yahoo: 1, 'exa-free': 1.1, tavily: 1.2, brave: 1.1, exa: 1.2, anysearch: 1.1 },
+      research: { bing: .95, ddg: .9, yahoo: .85, 'exa-free': 1.3, tavily: 1.35, brave: 1, exa: 1.45, anysearch: 1.2 },
+      fresh: { bing: 1.15, ddg: .95, yahoo: .9, 'exa-free': 1, tavily: 1.3, brave: 1.4, exa: 1.25, anysearch: 1 },
     }
-    for (const [pool, presets] of Object.entries(expected)) for (const [i, ranking] of ['balanced','research','fresh'].entries()) {
+    for (const pool of Object.keys(ENGINE_POOLS)) for (const ranking of ['balanced','research','fresh']) {
       calls = []
       const out = await fused({ enginePool: pool, ranking })
-      const wanted = Object.fromEntries(ENGINE_POOLS[pool].map((name, j) => [name, presets[i][j]]))
-      assert.deepEqual(RANKING_WEIGHTS[pool][ranking], wanted)
-      assert.deepEqual(out.effectiveWeights, wanted)
+      const prior = priors[ranking]
+      const gm = Math.exp(Object.values(prior).reduce((sum, w) => sum + Math.log(w), 0) / 8)
+      const wanted = Object.fromEntries(ENGINE_POOLS[pool].map((name) => [name, Math.sqrt(prior[name] / gm)]))
+      for (const name of ENGINE_POOLS[pool]) assert.ok(Math.abs(RANKING_WEIGHTS[pool][ranking][name] - wanted[name]) < 1e-12)
+      assert.deepEqual(out.effectiveWeights, RANKING_WEIGHTS[pool][ranking])
       assert.deepEqual(out.enginesUsed, ENGINE_POOLS[pool])
       assert.deepEqual(calls.map((c) => c.name), ENGINE_POOLS[pool])
       assert.ok(calls.every((c) => c.depth === 'basic' && c.recency === undefined))
@@ -119,7 +121,7 @@ try {
   await test('explicit engine override crosses pools but cannot enable missing/disabled engines', async () => {
     const out = await fused({ enginePool: 'free', engineList: ['exa','exa'], ranking: 'research' })
     assert.deepEqual(out.enginesUsed, ['exa'])
-    assert.deepEqual(out.effectiveWeights, { exa: 1.45 })
+    assert.deepEqual(out.effectiveWeights, { exa: RANKING_WEIGHTS.api.research.exa })
     enabled = new Set(ENGINE_POOLS.free.filter((n) => n !== 'anysearch')); calls = []
     const missing = await fused({ enginePool: 'api' })
     assert.deepEqual(missing.enginesUsed, [])
