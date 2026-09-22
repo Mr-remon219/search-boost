@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, main, v0.2.0, v0.2.1, jev]
+    branches: [master, main, v0.2.0, v0.2.1, v0.2.2, Mr-remon219/v0.2.2, jev]
   pull_request:
 
 concurrency:
