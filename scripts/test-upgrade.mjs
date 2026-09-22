@@ -14,7 +14,7 @@ process.env.USERPROFILE = home
 process.env.SEARCH_BOOST_HOME = join(home, '.search-boost')
 process.env.PI_CODING_AGENT_DIR = join(home, '.pi', 'agent')
 process.env.DSH_HOME = join(home, '.dsh')
-for (const key of ['SEARCH_BOOST_KEYS_FILE', 'SEARCH_BOOST_LAYER_FILE', 'SEARCH_BOOST_XAUTH_FILE', 'SEARCH_BOOST_XGUEST_FILE', 'SEARCH_BOOST_WORKSPACES_FILE', 'SEARCH_BOOST_UPGRADE_HANDOFF', 'TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY']) delete process.env[key]
+for (const key of ['SEARCH_BOOST_KEYS_FILE', 'SEARCH_BOOST_LAYER_FILE', 'SEARCH_BOOST_XAUTH_FILE', 'SEARCH_BOOST_XGUEST_FILE', 'SEARCH_BOOST_WORKSPACES_FILE', 'SEARCH_BOOST_UPGRADE_HANDOFF', 'TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'ANYSEARCH_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY']) delete process.env[key]
 const cwd = process.cwd()
 process.chdir(project)
 const write = (path, value) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, typeof value === 'string' ? value : JSON.stringify(value, null, 2)) }

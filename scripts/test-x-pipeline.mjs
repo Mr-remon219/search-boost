@@ -12,7 +12,7 @@ process.env.SEARCH_BOOST_HOME = join(temp, 'state')
 process.env.PI_CODING_AGENT_DIR = join(temp, 'pi')
 for (const key of ['KEYS', 'LAYER', 'XAUTH', 'XGUEST']) process.env[`SEARCH_BOOST_${key}_FILE`] = join(temp, `${key.toLowerCase()}.json`)
 process.env.SEARCH_BOOST_LAYER = 'free'
-for (const key of ['XAI_API_KEY', 'TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY']) delete process.env[key]
+for (const key of ['XAI_API_KEY', 'TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'ANYSEARCH_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY']) delete process.env[key]
 mkdirSync(process.env.HOME, { recursive: true })
 
 const { createXPipeline, normalizePosts, normalizeUsers, snowflakeDate, xIdentity } = await import('../lib/search/x/x-pipeline.js')

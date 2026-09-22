@@ -118,8 +118,8 @@ export default function searchBoostExtension(pi) {
         site: { type: 'string', description: 'Deprecated: restrict to a domain (alias for include_domains)' },
         include_domains: { type: 'array', items: { type: 'string' }, description: 'Only keep results from these domains, including subdomains; provider hints plus a client-side hard filter' },
         exclude_domains: { type: 'array', items: { type: 'string' }, description: 'Drop results from these domains, e.g. exclude wikipedia.org when a term is ambiguous' },
-        recency: { type: 'string', enum: RECENCY_ENUM, description: 'Recency window: results with a publish date outside the window decay exponentially (half-life scaled to window); undated results are mildly demoted (default any)' },
-        min_score: { type: 'number', minimum: 0, maximum: 5, default: 0, description: 'Drop results below this fused score floor (Grok\'s min_score, default 0 = off)' },
+        recency: { type: 'string', enum: RECENCY_ENUM, description: 'Soft freshness preference for dated results; unknown dates are neutral (default any)' },
+        min_score: { type: 'number', minimum: 0, default: 0, description: 'Minimum consensus-v2 quality score; old thresholds need recalibration (default 0)'  },
         depth: { type: 'string', enum: ['basic', 'advanced'], description: 'Tavily search depth: basic or advanced. Advanced may return extracted content; fetch the source only when the returned text is insufficient' },
       },
       required: ['query'],
@@ -169,7 +169,7 @@ export default function searchBoostExtension(pi) {
         `Fused search: "${res.query}"`,
         `Layer: ${res.layer} — ${LAYER_LABELS[res.layer]}`,
         `Tier: ${res.tier} — Queries used: ${(res.queriesUsed ?? []).join(' | ')}`,
-        `Pool: ${res.enginePool}; ranking: ${res.ranking}; enginesUsed: ${res.enginesUsed.join(', ')}; effectiveWeights: ${JSON.stringify(res.effectiveWeights)}; communityUsed: ${res.communityUsed}`,
+        `Score: ${res.scoreVersion}; Pool: ${res.enginePool}; ranking: ${res.ranking}; enginesUsed: ${res.enginesUsed.join(', ')}; effectiveWeights: ${JSON.stringify(res.effectiveWeights)}; communityUsed: ${res.communityUsed}`,
         `Engines: ${stats}${res.cacheHit ? ' — cache hit' : ''} — ${res.tookMs}ms`,
         ...(res.warnings ?? []).map((w) => `WARNING: ${w}`),
         includeDomains.length > 0 ? `Include domains: ${includeDomains.join(', ')}` : '',
@@ -195,7 +195,7 @@ export default function searchBoostExtension(pi) {
       })
       return {
         content: [text(lines.join('\n').trim())],
-        details: { enginesUsed: res.enginesUsed, effectiveWeights: res.effectiveWeights, communityUsed: res.communityUsed, warnings: res.warnings, enginePool: res.enginePool, ranking: res.ranking, engineStats: res.engineStats, cacheHit: Boolean(res.cacheHit), tookMs: res.tookMs, layer: res.layer, tier: res.tier },
+        details: { scoreVersion: res.scoreVersion, results: res.results, enginesUsed: res.enginesUsed, effectiveWeights: res.effectiveWeights, communityUsed: res.communityUsed, warnings: res.warnings, enginePool: res.enginePool, ranking: res.ranking, engineStats: res.engineStats, cacheHit: Boolean(res.cacheHit), tookMs: res.tookMs, layer: res.layer, tier: res.tier },
       }
     },
   })
@@ -698,7 +698,7 @@ export default function searchBoostExtension(pi) {
         if (info.layer === 'api' && info.keyedEngines.enabled === 0) {
           hints.push('no API keys configured — the api layer currently runs the keyless engines only; add keys with `search-boost config keys`, or run /web_change free')
         } else if (info.layer === 'api' && info.keyedEngines.enabled < info.keyedEngines.total) {
-          hints.push(`keyed engines: ${info.keyedEngines.enabledNames.join(', ')} — configure all three (tavily, brave, exa) via \`search-boost config keys\` for the fullest fusion`)
+          hints.push(`keyed engines: ${info.keyedEngines.enabledNames.join(', ')} — configure additional engines (tavily, brave, exa, anysearch) via \`search-boost config keys\` for the fullest fusion`)
         }
         if (info.layer === 'free') {
           hints.push('keyless mode — run /web_change api after configuring keys (`search-boost config keys`) to add tavily/brave/exa to the fusion')

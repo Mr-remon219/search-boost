@@ -15,7 +15,7 @@ const client = new Client({ name: 'guidance-test', version: '1.0.0' })
 const env = { ...process.env, HOME: home, USERPROFILE: home, SEARCH_BOOST_HOME: home,
   PI_CODING_AGENT_DIR: join(home, 'pi'), SEARCH_BOOST_LAYER: 'free', SEARCH_BOOST_KEYS_FILE: join(home, 'keys.json'),
   SEARCH_BOOST_LAYER_FILE: join(home, 'layer.json'), SEARCH_BOOST_XAUTH_FILE: join(home, 'xauth.json') }
-for (const key of ['TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY', 'XAI_API_KEY']) delete env[key]
+for (const key of ['TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'ANYSEARCH_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY', 'XAI_API_KEY']) delete env[key]
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [fileURLToPath(new URL('../cli.mjs', import.meta.url)), 'serve'],
@@ -59,6 +59,11 @@ try {
   assert(resources.some((r) => r.uri === 'search-boost://capabilities'))
   const capability = async () => JSON.parse((await client.readResource({ uri: 'search-boost://capabilities' })).contents[0].text)
   assert.equal((await capability()).defaultEnginePool, 'free')
+  assert.equal((await capability()).scoreVersion, 'consensus-v2.1')
+  assert.ok((await capability()).pools.free.includes('anysearch'))
+  assert.ok(!(await capability()).pools.api.includes('anysearch'))
+  assert.ok(byName.fused_search.inputSchema.properties.engines.items.enum.includes('anysearch'))
+  assert.equal(byName.fused_search.inputSchema.properties.min_score.minimum, 0)
   const empty = await client.callTool({ name: 'fused_search', arguments: { query: 'fixture', engine_pool: 'api', ranking: 'research', engine_weights: { exa: 0 }, community: false } })
   assert(!empty.isError)
   assert.deepEqual(empty.structuredContent.enginesUsed, [])

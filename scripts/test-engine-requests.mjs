@@ -64,6 +64,31 @@ try {
     await anonymous.search('query', 3, { enginePool: 'hybrid' })
     assert.equal(lastCall().headers.authorization, undefined)
   })
+  await test('AnySearch runtime forwards pool auth and caches anonymous/keyed requests separately', async () => {
+    const { runFused, invalidateSearchCaches } = await import('../lib/runtime.mjs')
+    invalidateSearchCaches()
+    const engines = engineRegistry({ anysearch: 'fixture-key' })
+    const snapshot = () => ({ engines, fingerprint: 'anysearch-fixture', capability: { x: { official: { available: false } } } })
+    for (const pool of ['free', 'api', 'hybrid']) {
+      const before = calls.length
+      const out = await runFused({ query: 'fixture', enginePool: pool, engineList: ['anysearch'], complexity: 'simple' }, { snapshot })
+      assert.equal(calls.length, before + 1)
+      assert.equal(lastCall().headers.authorization, pool === 'free' ? undefined : 'Bearer fixture-key')
+      assert.equal(out.results[0].engineRanks.anysearch, 1)
+      assert.equal(out.results[0].scoreVersion, 'consensus-v2.1')
+      assert.equal((await runFused({ query: 'fixture', enginePool: pool, engineList: ['anysearch'], complexity: 'simple' }, { snapshot })).cacheHit, true)
+    }
+    invalidateSearchCaches()
+  })
+  await test('JSON API adapters preserve positions before dropping malformed result entries', async () => {
+    const saved = globalThis.fetch
+    try {
+      globalThis.fetch = async () => Response.json({ code: 0, data: { results: [null, { title: 'valid', url: 'https://example.org' }] } })
+      const rows = await engineRegistry({}).anysearch.search('fixture', 5)
+      assert.equal(rows.length, 1)
+      assert.equal(rows[0].providerRank, 2)
+    } finally { globalThis.fetch = saved }
+  })
   await test('AnySearch quota/business/malformed errors never echo credential-bearing bodies', async () => {
     const saved = globalThis.fetch
     try {

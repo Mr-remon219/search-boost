@@ -18,11 +18,13 @@ export const fusedSearchInput = {
   engine_pool: z.enum(['free', 'api', 'hybrid']).optional().describe('Which engines to search. Omitted: compatibility layer free→free, api→hybrid'),
   ranking: z.enum(['balanced', 'research', 'fresh']).optional().describe('Final engine-weight preset only; default balanced'),
   engine_weights: z.object(Object.fromEntries(ENGINE_ORDER.map((name) => [name, z.number().finite().min(0).optional()]))).strict().optional().describe('Override preset engine weights; never enables or selects engines'),
+  min_score: z.number().finite().min(0).optional().describe('Minimum consensus-v2 quality score; old thresholds need recalibration, default 0'),
   community: z.boolean().optional().describe('Add X developer/community voices when relevant; default false; shares final max_results'),
   layer: z.enum(['free', 'api']).optional().describe('Deprecated compatibility alias: free→free pool, api→hybrid pool; engine_pool takes precedence; not persisted'),
 }
 
 export const fusedSearchOutput = {
+  scoreVersion: z.string(),
   query: z.string(),
   layer: z.string(),
   tier: z.string(),
@@ -49,6 +51,12 @@ export const fusedSearchOutput = {
     domain: z.string(),
     snippet: z.string(),
     score: z.number(),
+    scoreVersion: z.string(),
+    rankScore: z.number(), evidenceScore: z.number(), consensusBoost: z.number(),
+    metadataDelta: z.number(), selectionScore: z.number().optional(),
+    engineRanks: z.record(z.number()), contributions: z.record(z.number()),
+    provenance: z.array(z.object({ engine: z.string(), rank: z.number(), variant: z.string().optional(), url: z.string(), title: z.string(), snippet: z.string(), published: z.string().nullable() })),
+    dateStatus: z.enum(['known', 'unknown', 'conflicting']),
     engines: z.array(z.string()),
     published: z.string().nullable(),
     kind: z.enum(['web', 'x']).optional(),

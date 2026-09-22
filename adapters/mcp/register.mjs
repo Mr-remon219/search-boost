@@ -72,13 +72,13 @@ function summarizeAdaptive(result) {
         excludeDomains: args.exclude_domains,
         recency: args.recency,
         complexity: args.complexity ?? 'medium',
-        enginePool: args.engine_pool, ranking: args.ranking, engineWeights: args.engine_weights, community: args.community,
+        minScore: args.min_score ?? 0, enginePool: args.engine_pool, ranking: args.ranking, engineWeights: args.engine_weights, community: args.community,
         layer: args.layer ?? null,
         signal,
       })
       const hits = result.results.map(fusedHitToJson)
       const structured = {
-        query: result.query,
+        query: result.query, scoreVersion: result.scoreVersion,
         layer: result.layer ?? getLayer(),
         tier: result.tier,
         tookMs: result.tookMs,

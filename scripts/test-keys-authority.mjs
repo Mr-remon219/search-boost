@@ -19,7 +19,7 @@ process.env.HOME = home
 process.env.USERPROFILE = home
 delete process.env.SEARCH_BOOST_HOME
 delete process.env.SEARCH_BOOST_KEYS_FILE
-for (const name of ['TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY']) {
+for (const name of ['TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'ANYSEARCH_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY']) {
   delete process.env[name]
 }
 

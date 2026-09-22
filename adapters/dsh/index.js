@@ -185,7 +185,8 @@ function registerFusedSearchTool(ctx) {
         max_results: { type: 'number', description: 'Max results to return (default 6, max 10).' },
         include_domains: { type: 'array', items: { type: 'string' }, description: 'Only keep results from these domains (subdomain match).' },
         exclude_domains: { type: 'array', items: { type: 'string' }, description: 'Drop results from these domains (subdomain match).' },
-        recency: { type: 'string', enum: ['day', 'week', 'month', 'year'], description: 'Recency window; older results decay exponentially.' },
+        recency: { type: 'string', enum: ['day', 'week', 'month', 'year'], description: 'Soft freshness preference; unknown dates are neutral.' },
+        min_score: { type: 'number', minimum: 0, description: 'Minimum consensus-v2 quality score; old thresholds need recalibration (default 0).' },
         layer: { type: 'string', enum: ['free', 'api'], description: 'Deprecated compatibility alias: free→free, api→hybrid. engine_pool takes precedence.' },
       },
       required: ['query'],
@@ -201,6 +202,7 @@ function registerFusedSearchTool(ctx) {
         type: 'object',
         additionalProperties: false,
         properties: {
+          scoreVersion: { type: 'string' },
           query: { type: 'string' },
           queriesUsed: { type: 'array', items: { type: 'string' } },
           tier: { type: 'string' },
@@ -218,6 +220,12 @@ function registerFusedSearchTool(ctx) {
               additionalProperties: false,
               properties: {
                 title: { type: 'string' }, url: { type: 'string' }, domain: { type: 'string' },
+                scoreVersion: { type: 'string' },
+                rankScore: { type: 'number' }, evidenceScore: { type: 'number' }, consensusBoost: { type: 'number' },
+                metadataDelta: { type: 'number' }, selectionScore: { type: 'number' },
+                engineRanks: { type: 'object', additionalProperties: { type: 'number' } },
+                contributions: { type: 'object', additionalProperties: { type: 'number' } },
+                provenance: { type: 'array', items: { type: 'object' } }, dateStatus: { type: 'string' },
                 snippet: { type: 'string' }, score: { type: 'number' }, engines: { type: 'array', items: { type: 'string' } },
                 published: { type: ['string', 'null'] }, content: { type: 'string' }, kind: { type: 'string' }, username: { type: 'string' }, id: { type: 'string' },
               },
@@ -261,7 +269,7 @@ function registerFusedSearchTool(ctx) {
         excludeDomains: args.exclude_domains,
         recency: args.recency,
         complexity: args.complexity ?? 'medium',
-        enginePool: args.engine_pool, ranking: args.ranking, engineWeights: args.engine_weights, community: args.community,
+        minScore: args.min_score ?? 0, enginePool: args.engine_pool, ranking: args.ranking, engineWeights: args.engine_weights, community: args.community,
         layer: args.layer ?? null,
         signal: exec?.signal,
       }))
@@ -272,7 +280,7 @@ function registerFusedSearchTool(ctx) {
 function renderFused(value) {
   const lines = []
   lines.push(`**fused_search: "${value.query}"** — layer ${value.layer ?? 'api'}, tier ${value.tier}, ${value.results.length} hits, ${value.tookMs}ms${value.cacheHit ? ' (cache hit)' : ''}`)
-  lines.push(`engine_pool: ${value.enginePool}; ranking: ${value.ranking}; enginesUsed: ${(value.enginesUsed ?? []).join(', ')}; effectiveWeights: ${JSON.stringify(value.effectiveWeights ?? {})}; communityUsed: ${!!value.communityUsed}`)
+  lines.push(`scoreVersion: ${value.scoreVersion}; engine_pool: ${value.enginePool}; ranking: ${value.ranking}; enginesUsed: ${(value.enginesUsed ?? []).join(', ')}; effectiveWeights: ${JSON.stringify(value.effectiveWeights ?? {})}; communityUsed: ${!!value.communityUsed}`)
   for (const [i, r] of value.results.entries()) {
     const eng = (r.engines ?? []).join('+')
     lines.push(`${i + 1}. [${r.score}] ${r.title} — ${r.domain} (${eng})${r.published ? `, ${r.published}` : ''}`)

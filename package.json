@@ -57,7 +57,7 @@
     "plugin:sync-grok": "node scripts/sync-grok-plugin.mjs",
     "build:plugin": "node scripts/build-plugin.mjs",
     "check": "node scripts/check-syntax.mjs",
-    "test:fusion": "node scripts/test-fusion-errors.mjs",
+    "test:fusion": "node scripts/test-fusion-errors.mjs && node scripts/test-fusion-scoring.mjs",
     "test:x": "node scripts/test-x-pipeline.mjs",
     "test:engines": "node scripts/test-engine-requests.mjs",
     "test:xauth": "node scripts/test-xauth.mjs",

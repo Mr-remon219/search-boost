@@ -20,7 +20,7 @@ process.env.PI_CODING_AGENT_DIR = join(TMP, 'pi-agent')
 process.env.DSH_HOME = join(TMP, 'dsh-home')
 delete process.env.XAI_API_KEY
 delete process.env.SEARCH_BOOST_LAYER
-for (const k of ['TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY']) delete process.env[k]
+for (const k of ['TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'ANYSEARCH_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY']) delete process.env[k]
 mkdirSync(process.env.HOME, { recursive: true })
 
 const {
@@ -350,7 +350,7 @@ for (const fn of ['runFused', 'runFetchPage', 'runXSearch', 'describeLayer', 'sw
   assert(`runtime exports ${fn}`, fn in runtime)
 }
 const info = runtime.describeLayer()
-assert('describeLayer shape', info.layer === 'free' && Array.isArray(info.engines) && typeof info.xOfficial === 'boolean' && info.keyedEngines.total === 3)
+assert('describeLayer shape', info.layer === 'free' && Array.isArray(info.engines) && typeof info.xOfficial === 'boolean' && info.keyedEngines.total === 4)
 const k1 = runtime.xSearchCacheKey('keyword', { query: 'a' }, 5)
 runtime.switchLayer('api')
 const k2 = runtime.xSearchCacheKey('keyword', { query: 'a' }, 5)
