@@ -14,7 +14,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const { runAdaptiveLoop, validateQuestions, canonicalizeQuestions, STOP_REASONS, REASONS } = await import('../lib/search/adaptive/loop.mjs')
-const { ADAPTIVE_LIMITS, ADAPTIVE_THRESHOLDS } = await import('../lib/search/adaptive/limits.js')
+const { ADAPTIVE_LIMITS: V2_LIMITS, ADAPTIVE_THRESHOLDS: V2_THRESHOLDS } = await import('../lib/search/adaptive/limits.js')
+// Frozen V1 policy regression. V2/default behavior has its own test:keywords suite.
+const ADAPTIVE_LIMITS = {...V2_LIMITS, keywordAccumulation:false, maxEnginesPerQuestionPerRound:3,
+ round1EnginesPerQuestion:5,maxPoolRowsPerSearch:20,maxJevCalls:18,maxJevInputTokens:240000,
+ maxSourceJudgeCandidatesPerQuestion:6,maxSourceJudgeCandidatesPerRequest:12,maxSourceJudgeMicroBatches:3}
+const ADAPTIVE_THRESHOLDS = {...V2_THRESHOLDS,relevance:.55,statesEvidence:.55,coverage:.85}
+
 const { createEvidencePool, excerptForContent } = await import('../lib/search/adaptive/evidence.js')
 const { dateWindow } = await import('../lib/search/adaptive/temporal.js')
 const { JevError, JEV_ERROR_KINDS } = await import('../lib/jev/client.mjs')
@@ -227,7 +233,8 @@ await test('six independent questions each get one runFused call, keep order, an
   assert.deepEqual([...new Set(h.calls.fused.map((c) => c.query))].sort(), [...questions].sort())
   for (const call of h.calls.fused) {
     assert.equal(call.queries, undefined, 'independent questions must never be packed into queries')
-    assert.ok(call.engineList.length <= 3)
+    // Wide first fan-out (P3): round-1 engine lists may reach the round-1 cap.
+    assert.ok(call.engineList.length <= ADAPTIVE_LIMITS.round1EnginesPerQuestion)
   }
   assert.ok(res.questions.every((q) => q.status === 'covered'), 'each question is covered the same way')
   assert.equal(res.stopReason, STOP_REASONS.allCovered)
@@ -327,6 +334,9 @@ await test('an engine that becomes unavailable between plan and execution is dro
 
 await test('round-2 engine questions name the question list they are merged into', async () => {
   const h = harness({
+    // Keep two engines unused in round 1 so round 2 still offers
+    // search_new_engines — the merged engine_state paths under test.
+    limits: { ...ADAPTIVE_LIMITS, round1EnginesPerQuestion: 2 },
     search: ({ query }) => (query === 'q1 text'
       ? { results: [hit('q1 text is answered here: the documented value is 42 in full detail.', 'https://docs.example.com/q1')] }
       : { results: [hit('q2 text is mentioned but not answered.', 'https://docs.example.com/q2')] }),
@@ -530,7 +540,9 @@ await test('a source judgement that never answers injection cannot be coverage e
   const res = await runAdaptiveLoop({ questions: ['alpha question'] }, h.deps)
   const item = res.questions[0].evidence[0]
   assert.notEqual(res.questions[0].status, 'covered')
-  assert.equal(item.status, 'unassessed', 'injection-unknown material is not answer-capable')
+  // A1 defer semantics: injection-unknown material is retained as a lead
+  // (deferred_lead), never answer-capable and never coverage evidence.
+  assert.equal(item.status, 'deferred_lead', 'injection-unknown material is not answer-capable')
   assert.equal(item.judgmentIncomplete, true)
   assert.equal(item.usedForCoverage, false)
   assert.ok(res.questions[0].uncoveredReasons.includes(REASONS.judgmentMissing))
@@ -898,7 +910,7 @@ await test('missing or invalid coverage answers never become covered', async () 
   })
   const invalidRes = await runAdaptiveLoop({ questions: ['alpha question'] }, invalidSource.deps)
   assert.notEqual(invalidRes.questions[0].status, 'covered')
-  assert.equal(invalidRes.questions[0].evidence[0].status, 'unassessed')
+  assert.equal(invalidRes.questions[0].evidence[0].status, 'deferred_lead', 'invalid judgement defers as a lead, never as a verdict')
 })
 
 await test('cancellation stops the call and starts no further requests', async () => {
@@ -1172,17 +1184,18 @@ await test('v2 a full round batches all targets into exactly three logical calls
   assert.ok(h.calls.fused.every((call) => call.ranking === 'balanced' && call.engineWeights === undefined && call.candidateSelection === 'per_engine'))
 })
 
-await test('v2 source overflow is deferred instead of adding a fourth Jev request', async () => {
+await test('v2 source overflow drains in bounded micro-batches and reports the remainder', async () => {
   const h = harness({
-    limits: { ...ADAPTIVE_LIMITS, maxRounds: 1 },
+    limits: { ...ADAPTIVE_LIMITS, maxRounds: 1, maxSourceJudgeMicroBatches: 2 },
     search: ({ query }) => ({ results: Array.from({ length: 6 }, (_, i) => hit(`${query} has a concrete answer and documented details.`, `https://docs.example.com/${slug(query)}/${i}`)) }),
   })
   const result = await runAdaptiveLoop({ questions: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'] }, h.deps)
-  assert.equal(h.calls.jev.filter((call) => call.phase === 'source_judge').length, 1)
-  const source = h.calls.jev.find((call) => call.phase === 'source_judge')
-  assert.equal(source.state.candidates.length, 12)
-  assert.equal(new Set(source.state.candidates.map((c) => c.for_question)).size, 6)
-  assert.equal(result.roundLog[0].deferredSourceJudgments, 24)
+  const sourceCalls = h.calls.jev.filter((call) => call.phase === 'source_judge')
+  assert.equal(sourceCalls.length, 2, 'pending is drained in bounded micro-batches, never an unbounded burst')
+  for (const call of sourceCalls) {
+    assert.equal(call.state.candidates.length, 12, 'each micro-batch packs at most 12 candidates')
+  }
+  assert.equal(result.roundLog[0].deferredSourceJudgments, 12, 'the undrained remainder is deferred and reported, not hidden')
   for (const call of h.calls.jev) assert.ok(requestFits(call, ADAPTIVE_LIMITS))
 })
 
