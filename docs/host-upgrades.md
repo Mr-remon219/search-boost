@@ -41,17 +41,17 @@ Pi 来源、作用域和过滤规则参考本机所装 Pi 的 `docs/packages.md`
 
 ## DSH
 
-逐一处理已登记 SearchBoost 的 profile，用宿主的 `dsh plugin --profile <name> add <目标目录>` 更新本地链接，再验证：
+逐一处理已登记 SearchBoost 的 profile，与 Install 共用包来源和启动逻辑：源码 checkout 使用 `dsh plugin --profile <name> add <目标目录>`；npm 发布安装使用 `add search-boost@<版本>`，不把全局安装或 npx 缓存目录写成本地链接。缺少全局 `dsh` 或 `pnpm` 时，通过 `npm exec` 临时提供缺失命令，无需全局安装宿主。随后验证：
 
-- profile manifest 的依赖来源确实切换到了目标目录；
-- `node_modules/search-boost` 的真实解析位置指向目标包，而不是同版本旧副本；
+- profile manifest 的依赖来源切换到了目标目录或指定 npm 版本（允许 pnpm 保存的 `^` / `~` 前缀）；
+- 源码链接的真实解析位置指向目标目录，而不是同版本旧副本；npm 安装的实际载荷版本必须与指定版本完全一致；
 - 包名、版本以及必需 adapter 文件完整；
 - bundle 顺序和原来的启用/禁用选择保留；
 - 旧依赖清理后再次验证来源与载荷，不能只相信子进程退出码。
 
 DSH 不一定会重新启用已经安装但禁用的 bundle；这不是失败。升级不以“出现在启用列表里”作为必要条件，也不会替用户启用它。
 
-配置文件可回滚，包管理器对 `node_modules` 的副作用不能假装完全事务化。旧依赖清理发生在新注册验证通过之后；清理失败时保留新注册，报告部分失败及备份位置。解决阻塞后重跑相同命令。
+配置文件（含 `pnpm-workspace.yaml`）可回滚，包管理器对 `node_modules` 的副作用不能假装完全事务化。旧依赖清理发生在新注册验证通过之后；清理失败时保留新注册，报告部分失败及备份位置。解决阻塞后重跑相同命令。
 
 宿主命令契约：[DSH CLI reference](https://github.com/deepseek-ai/deepseek-harness/blob/master/apps/cli/reference/README.md)。
 
@@ -69,4 +69,8 @@ npm run test:upgrade
 - 新进程实际 import fixture adapter，确认加载版本；不仅断言配置里出现新字符串。
 - 同版本重试、dry-run、防降级、包管理器假成功、同版本错误链接、部分失败恢复、外部文件保护和卸载后不复活。
 
-这些是隔离的回归测试，宿主包管理命令被替身替换，不证明用户机器上真实 Pi/DSH 已完成重启或加载。
+`scripts/test-dsh-upgrade.mjs` 另外通过真实子进程启动器覆盖全局命令齐全、仅 npm、缺少 pnpm、缺少 dsh 四种环境，分别验证 checkout 和 npm 包来源；同时检查禁用状态、同版本重试、dry-run、错误版本/缺失文件及失败回滚。命令端点使用隔离 fixture，不下载真实 DSH。
+
+`npm run test:install` 中的 `scripts/test-install-isolation.mjs` 为 installer-helper 测试提供模拟用户 HOME 和重定位状态目录，验证测试不会修改继承的配置或升级记录。真实项目目录不可用时仍阻止升级完成，不自动删除失效记录。
+
+这些测试不证明用户机器上真实 Pi/DSH 已完成重启或加载；宿主行为由隔离替身模拟，全局 npm 迁移另通过本地 fixture registry 执行真实 npm。

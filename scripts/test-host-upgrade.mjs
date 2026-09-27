@@ -49,6 +49,7 @@ function release(version, suffix = version) {
   write(join(root, 'cli.mjs'), '// fixture cli')
   for (const entry of [piEntry(root), dshEntry(root)]) write(entry, `export default () => ${JSON.stringify(version)}\n`)
   write(join(root, 'adapters', 'dsh', 'cordis.patch.yml'), '# fixture bundle')
+  write(join(root, 'adapters', 'dsh', 'schema.js'), '// fixture schema')
   for (const src of [...piSubagentTemplatePaths(), ...piWorkflowPromptPaths()]) write(join(root, relative(PKG_ROOT, src)), `${bytes(src)}\n<!-- release ${version} -->\n`)
   return root
 }
@@ -58,6 +59,12 @@ function loadedVersion(entry) {
 const calls = []
 let noOp = false, staleLink = false, failRemove = false
 async function run(command, args) {
+  // Exercise the shared launcher on machines with or without global DSH/pnpm.
+  if (command === 'npm' && args[0] === 'exec') {
+    const separator = args.indexOf('--')
+    assert.equal(args[separator + 1], 'dsh')
+    command = 'dsh'; args = args.slice(separator + 2)
+  }
   calls.push({ command, args })
   assert.equal(command, 'dsh')
   const [, , profile, verb, source] = args

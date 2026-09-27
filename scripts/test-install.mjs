@@ -1,4 +1,5 @@
 import './isolate-install-tests.mjs'
+import { recordedProjects } from '../lib/upgrade/state.mjs'
 /**
  * Unit-style checks for install helpers (no writes to real home dir).
  */
@@ -762,7 +763,7 @@ const origCwd = process.cwd()
 const grokPrintDir = mkdtempSync(join(tmpdir(), 'sb-grok-print-'))
 process.chdir(grokPrintDir)
 const projectPrint = AGENTS.grok.printConfig({ scope: 'project' })
-const expectedProjectConfig = join(grokPrintDir, '.grok', 'config.toml').replace(/\\/g, '/')
+const expectedProjectConfig = join(process.cwd(), '.grok', 'config.toml').replace(/\\/g, '/')
 assert(
   'grok printConfig project path',
   projectPrint.replace(/\\/g, '/').includes(expectedProjectConfig),
@@ -871,6 +872,7 @@ rmSync(grokNoopDir, { recursive: true, force: true })
   process.chdir(grokFreshDir)
   await AGENTS.grok.install({ skipGrokPlugin: true, scope: 'project', dryRun: false, autoAllow: true })
   assert('grok fresh install creates project config', existsSync(join(grokFreshDir, '.grok', 'config.toml')))
+  assert('grok project receipt is recorded inside the isolated test home', (await recordedProjects()).includes(process.cwd()))
   await AGENTS.grok.uninstall({ skipGrokPlugin: true, scope: 'project', dryRun: false })
   assert('grok fresh uninstall deletes project config', !existsSync(join(grokFreshDir, '.grok', 'config.toml')))
   assert('grok fresh uninstall deletes project rule', !existsSync(join(grokFreshDir, '.grok', 'rules', 'search-boost.md')))

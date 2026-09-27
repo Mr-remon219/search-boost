@@ -87,15 +87,19 @@ try {
   // Lightweight DSH profile manager, exercised through the real updater process.
   const dsh = join(tools, 'dsh.mjs')
   write(dsh, `#!/usr/bin/env node
-import {readFileSync,writeFileSync,mkdirSync,rmSync,symlinkSync} from 'node:fs'; import {join,dirname} from 'node:path';
+import {readFileSync,writeFileSync,mkdirSync,rmSync,cpSync} from 'node:fs'; import {join,dirname} from 'node:path';
 const [command,flag,profile,verb,source]=process.argv.slice(2); if(command!=='plugin'||flag!=='--profile') process.exit(2);
 const dir=join(process.env.DSH_HOME,'profiles',profile),file=join(dir,'package.json'),pkg=JSON.parse(readFileSync(file,'utf8'));
-if(verb==='add'){ const existed=!!pkg.dependencies['search-boost']; pkg.dependencies['search-boost']='link:'+source;
- if(!existed) pkg.dsh.profile.bundles.push('search-boost'); const dest=join(dir,'node_modules','search-boost');mkdirSync(dirname(dest),{recursive:true});rmSync(dest,{recursive:true,force:true});symlinkSync(source,dest,process.platform==='win32'?'junction':'dir');
+if(verb==='add'){ const version=source.match(/^search-boost@(.+)$/)?.[1]; if(!version) process.exit(3);
+ const existed=!!pkg.dependencies['search-boost']; pkg.dependencies['search-boost']='^'+version;
+ if(!existed) pkg.dsh.profile.bundles.push('search-boost'); const dest=join(dir,'node_modules','search-boost');mkdirSync(dirname(dest),{recursive:true});rmSync(dest,{recursive:true,force:true});cpSync(${JSON.stringify(currentRoot)},dest,{recursive:true});
 }else if(verb==='remove'){delete pkg.dependencies[source];pkg.dsh.profile.bundles=pkg.dsh.profile.bundles.filter(x=>x!==source);}else process.exit(2);
 writeFileSync(file,JSON.stringify(pkg,null,2));`)
   if (process.platform === 'win32') write(join(tools, 'dsh.cmd'), `@"${process.execPath}" "${dsh}" %*\r\n`)
   else { write(join(tools, 'dsh'), `#!/bin/sh\nexec "${process.execPath}" "${dsh}" "$@"\n`); const { chmodSync } = await import('node:fs'); chmodSync(join(tools, 'dsh'), 0o755) }
+  // The protocol fixture handles profile mutation itself; satisfy launcher
+  // discovery without depending on (or downloading) the machine's pnpm.
+  cpSync(join(tools, process.platform === 'win32' ? 'dsh.cmd' : 'dsh'), join(tools, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'))
   const sep = process.platform === 'win32' ? ';' : ':'
   // Windows stores the variable as `Path`, so `env.PATH` is undefined there and
   // this rewrite used to drop node itself: npm's generated bin shims start with
@@ -210,7 +214,7 @@ writeFileSync(file,JSON.stringify(pkg,null,2));`)
   assert.equal(json(piSettings).defaultModel, 'keep-model')
   assert.deepEqual(json(projectPi).packages, [{ source: currentRoot, extensions: [] }])
   assert.equal(json(projectPi).userSetting, 'keep')
-  assert.equal(json(dshProfile).dependencies['search-boost'], `link:${currentRoot}`)
+  assert.equal(json(dshProfile).dependencies['search-boost'], '^2.0.0')
   assert.ok(!json(dshProfile).dependencies['dsh-search-boost'])
   assert.deepEqual(json(dshProfile).dsh.profile.bundles, [])
   for (const [file, text] of protectedBytes) assert.equal(bytes(file), text)
@@ -224,7 +228,7 @@ writeFileSync(file,JSON.stringify(pkg,null,2));`)
   assert.equal(json(join(currentRoot, 'package.json')).version, '2.1.0')
   assert.match(updated, /Upgrade complete/)
   assert.ok(bytes(join(env.PI_CODING_AGENT_DIR, 'agents', 'searcher.md')).includes('fixture-release 2.1.0'))
-  assert.equal(json(dshProfile).dependencies['search-boost'], `link:${currentRoot}`)
+  assert.equal(json(dshProfile).dependencies['search-boost'], '^2.1.0')
   assert.deepEqual(json(dshProfile).dsh.profile.bundles, [])
   for (const [file, text] of protectedBytes) assert.equal(bytes(file), text)
   assert.ok(!existsSync(join(home, '.grok', 'config.toml')), 'detected/unconfigured agents must not be newly installed')
