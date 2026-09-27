@@ -10,7 +10,10 @@ import { join, dirname, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { execFileSync } from 'node:child_process'
 
-const temp = mkdtempSync(join(tmpdir(), 'sb future upgrade '))
+// Release roots below are expected to be canonical package identities. macOS
+// tmpdir may use /var while package discovery resolves the same tree via /private/var.
+// The explicit replacement-alias test below still exercises symlinked inputs.
+const temp = realpathSync(mkdtempSync(join(tmpdir(), 'sb future upgrade ')))
 const home = join(temp, 'home'), workspace = join(temp, 'workspace')
 mkdirSync(home); mkdirSync(workspace)
 process.env.HOME = process.env.USERPROFILE = home

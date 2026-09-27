@@ -1,4 +1,5 @@
 import { assertToolEnabled, guardedTool, toolState } from '../../lib/tool-config.mjs'
+import { registerDshTool } from './schema.js'
 import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/adaptive/input.js'
 import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
@@ -66,7 +67,7 @@ export function loadPolicySection() {
 }
 
 function registerGuardedTool(ctx, definition) {
-  return ctx.tools.register(guardedTool(definition))
+  return registerDshTool(ctx, guardedTool(definition))
 }
 
 export function apply(ctx, config = {}) {
@@ -757,6 +758,7 @@ function registerStatsTool(ctx) {
         properties: {
           startedAt: { type: 'string' }, cacheHits: { type: 'number' }, cacheMisses: { type: 'number' },
           tierCounts: { type: 'object' }, engines: { type: 'object' }, grok: { type: 'boolean' },
+          xOfficial: { type: 'boolean' }, xSource: { type: 'string' },
           x: { type: 'object', additionalProperties: true },
           keyedEngines: { type: 'object', additionalProperties: true },
           layer: { type: 'string' },

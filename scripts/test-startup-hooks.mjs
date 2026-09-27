@@ -2,14 +2,20 @@
 /** Real installer and hook subprocesses, isolated from the user's HOME. No network. */
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const self = fileURLToPath(import.meta.url)
 if (!process.argv.includes('--isolated')) {
-  const home = mkdtempSync(join(tmpdir(), 'sb startup hooks '))
+  const temp = mkdtempSync(join(tmpdir(), 'sb startup hooks '))
+  const physicalHome = join(temp, 'physical home')
+  const home = join(temp, 'home alias')
+  mkdirSync(physicalHome)
+  // Node resolves an entry-point symlink while HOME can retain its alias. This
+  // reproduces macOS /var -> /private/var on every platform, not just CI Macs.
+  symlinkSync(physicalHome, home, process.platform === 'win32' ? 'junction' : 'dir')
   try {
     execFileSync(process.execPath, [self, '--isolated'], {
       env: {
@@ -19,7 +25,7 @@ if (!process.argv.includes('--isolated')) {
       },
       stdio: 'inherit',
     })
-  } finally { rmSync(home, { recursive: true, force: true }) }
+  } finally { rmSync(temp, { recursive: true, force: true }) }
 } else {
   const { AGENTS } = await import('../lib/agents/index.mjs')
   const { PATHS, workspaceAgents } = await import('../lib/paths.mjs')

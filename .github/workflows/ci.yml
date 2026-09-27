@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [master, main, v0.2.0, v0.2.1, v0.2.2, Mr-remon219/v0.2.2, jev]
+    # Validate feature branches before opening a PR, not only after submission.
+    branches: [master, main, v0.2.0, v0.2.1, v0.2.2, 'Mr-remon219/**', jev]
   pull_request:
 
 concurrency:
@@ -18,7 +19,7 @@ jobs:
       # One platform failing must not hide the other platform's result.
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -126,6 +127,10 @@ jobs:
       - name: Adapters
         if: always()
         run: npm run test:adapters
+
+      - name: DSH npm global and npx packed artifact
+        if: always()
+        run: npm run test:dsh-package
 
       - name: Parallel research
         if: always()
