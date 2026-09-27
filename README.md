@@ -181,10 +181,23 @@ Launch `search-boost` without arguments to access the interactive dashboard buil
 | **API keys & Base URLs / Search layer** | Manage Tavily, Brave, Exa and optional AnySearch credentials, and change the default search layer (`free` / `api`). |
 | **X credentials** | Manage X (Twitter) authentication; supports one-click import from local Grok login. |
 | **Jev credentials (experimental)** | Configure TypeSafe Jev cognitive engine endpoint and Bearer token. |
+| **Tool switches** | Enable/disable SearchBoost tools across MCP, Pi and DSH; missing Jev locks `adaptive_search`. |
 | **Native web search** | Enable or disable host-native search for hosts supporting config switches. |
 | **Status** | Inspect current engine availability, configuration status, and active integrations. |
 | **Print MCP snippet** | Print MCP JSON configuration snippets to stdout for manual setups. |
 | **Uninstall** | Safely remove SearchBoost integrations from selected agents, keeping user configurations intact. |
+
+### Tool switches
+
+Open **Tool switches**, toggle with Space, press Enter to review, then confirm. Esc or declining confirmation writes nothing; an empty selection disables all tools. Locked `adaptive_search` appears struck through in the status panel and is excluded from selectable choices until Jev is configured. Configuring Jev makes it available by default; an explicit OFF preference is preserved.
+
+Preferences are shared through `~/.search-boost/config/tools.json` (or `$SEARCH_BOOST_HOME/config/tools.json`), using atomic, locked writes. No host restart or reinstall is needed once the updated adapters are loaded:
+
+- **MCP:** tool-list updates within approximately 300ms, with `tools/list_changed` notification; clients ignoring notifications may need reconnecting.
+- **Pi:** active tools refresh within approximately 300ms; unrelated and initially excluded tools are preserved. Watchers stop on session shutdown.
+- **DSH:** registrations remain present but disabled calls fail immediately; the native search/fetch provider paths obey the same switches.
+
+Every new invocation checks the current preference, including stale tool handles. Existing requests finish normally. Removing Jev credentials locks adaptive calls (including pagination); restoring credentials does not override explicit OFF. These are **tool-entry switches**, not engine permissions: enabled adaptive research may still use internal search/fetch, and fused community search may still use internal X retrieval. Slash commands remain available for recovery. Existing processes running older adapter code require one reload/update first. Hosts sharing these settings must use the same SearchBoost home.
 
 ---
 

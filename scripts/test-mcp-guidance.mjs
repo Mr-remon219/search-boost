@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** Check the actual stdio contract without network calls, installed skills, or real HOME. */
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -27,7 +27,8 @@ try {
   const instructions = client.getInstructions()
   assert(instructions.includes('No skill, resource read, or routing prompt is required'))
   const { tools } = await client.listTools()
-  assert.equal(tools.length, 6)
+  assert.equal(tools.length, 5)
+  assert.ok(!tools.some((tool) => tool.name === 'adaptive_search'))
   const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]))
   for (const tool of tools) assert(tool.description?.length > 40)
   for (const name of ['fused_search', 'fetch_page', 'x_search', 'search_layer']) {
@@ -35,13 +36,6 @@ try {
       assert(schema.description, `${name}.${field}: missing direct-call guidance`)
     }
   }
-  for (const [field, schema] of Object.entries(byName.adaptive_search.inputSchema.properties)) {
-    assert(schema.description, `adaptive_search.${field}: missing direct-call guidance`)
-  }
-  assert.ok(['tasks', 'questions', 'cursor', 'page_size'].every((key) => key in byName.adaptive_search.inputSchema.properties))
-  assert.equal(byName.adaptive_search.inputSchema.properties.questions.minItems, 1)
-  assert.equal(byName.adaptive_search.inputSchema.properties.questions.maxItems, 6)
-  assert.equal(byName.adaptive_search.inputSchema.properties.questions.items.maxLength, 400)
   assert.equal(byName.fused_search.inputSchema.properties.max_results.maximum, 10)
   assert.deepEqual(byName.fetch_page.inputSchema.required, ['url'])
   assert.equal(byName.x_search.inputSchema.properties.allowed_x_handles.maxItems, 20)
@@ -76,31 +70,36 @@ try {
   writeFileSync(join(home, 'keys.json'), JSON.stringify({ tavily: 'fixture-secret-tavily', enabledEngines: [] }))
   assert.ok(!(await capability()).availableEngines.includes('tavily'), 'Resource re-reads current routing each time')
   console.log('ok: live MCP capability resource and actual fused output metadata, without live engine calls')
-  // adaptive_search is registered unconditionally and stays honest without Jev.
+  // A missing Jev configuration locks the entry; stale calls also fail.
   const adaptive = await client.callTool({ name: 'adaptive_search', arguments: { questions: ['fixture question'] } })
   assert.equal(adaptive.isError, true)
-  assert.equal(adaptive.structuredContent.stopReason, 'not_configured')
-  assert.equal(adaptive.structuredContent.results.length, 0)
-  assert.equal(adaptive.structuredContent.coverageComplete, false)
-  assert.match(adaptive.content[0].text, /search-boost config jev/)
-  assert.ok(!JSON.stringify(adaptive.structuredContent).includes('fixture-secret'), 'no credential material in the result')
-  const taskCall = await client.callTool({ name: 'adaptive_search', arguments: { tasks: [{ context: 'Fixture product', targets: [{ id: 'pricing', keywords: ['pricing', 'price'], question: 'What is the price?' }] }] } })
-  assert.equal(taskCall.structuredContent.stopReason, 'not_configured')
-  assert.deepEqual(taskCall.structuredContent.results, [])
+  mkdirSync(join(home, 'config'), { recursive: true })
+  writeFileSync(join(home, 'config', 'keys.json'), JSON.stringify({ jev: { apiKey: 'fixture-jev' } }))
+  await new Promise((resolve) => setTimeout(resolve, 700))
+  byName.adaptive_search = (await client.listTools()).tools.find((tool) => tool.name === 'adaptive_search')
+  assert.ok(byName.adaptive_search, 'Jev configuration hot-enables the default tool')
+  for (const [field, schema] of Object.entries(byName.adaptive_search.inputSchema.properties)) {
+    assert(schema.description, `adaptive_search.${field}: missing direct-call guidance`)
+  }
+  assert.ok(['tasks', 'questions', 'cursor', 'page_size'].every((key) => key in byName.adaptive_search.inputSchema.properties))
+  assert.equal(byName.adaptive_search.inputSchema.properties.questions.minItems, 1)
+  assert.equal(byName.adaptive_search.inputSchema.properties.questions.maxItems, 6)
+  assert.equal(byName.adaptive_search.inputSchema.properties.questions.items.maxLength, 400)
   const mixedCall = await client.callTool({ name: 'adaptive_search', arguments: { questions: ['x'], cursor: 'invalid' } })
   assert.equal(mixedCall.isError, true)
-  let invalidRejected = false
-  try {
-    const invalid = await client.callTool({ name: 'adaptive_search', arguments: { questions: [] } })
-    invalidRejected = Boolean(invalid.isError)
-  } catch {
-    invalidRejected = true
-  }
-  assert.ok(invalidRejected, 'an empty question list is rejected at the protocol boundary')
-  const capabilityText = JSON.stringify(await capability())
-  assert.ok(capabilityText.includes('adaptive'), 'capability reports Jev readiness without a key')
-  assert.ok(!/adaptive_search is available/.test(capabilityText) || capabilityText.includes('"configured":false'), 'no advertising while unconfigured')
-  console.log('ok: adaptive_search registers honestly without Jev credentials and never exposes keys')
+  writeFileSync(join(home, 'config', 'tools.json'), JSON.stringify({ tools: { search_stats: false, adaptive_search: false } }))
+  // No waiting: execution guard closes the polling window.
+  assert.equal((await client.callTool({ name: 'search_stats', arguments: {} })).isError, true)
+  await new Promise((resolve) => setTimeout(resolve, 700))
+  assert.ok(!(await client.listTools()).tools.some((tool) => ['search_stats', 'adaptive_search'].includes(tool.name)))
+  writeFileSync(join(home, 'config', 'tools.json'), JSON.stringify({ tools: { search_stats: true } }))
+  await new Promise((resolve) => setTimeout(resolve, 700))
+  assert.ok((await client.listTools()).tools.some((tool) => tool.name === 'search_stats'))
+  assert.ok(!(JSON.stringify(await capability())).includes('fixture-jev'))
+  rmSync(join(home, 'config', 'keys.json'))
+  await new Promise((resolve) => setTimeout(resolve, 700))
+  assert.ok(!(await client.listTools()).tools.some((tool) => tool.name === 'adaptive_search'))
+  console.log('ok: MCP tool switches and Jev lock refresh without restarting the server')
   const resource = await client.readResource({ uri: 'search-boost://policy' })
   const text = resource.contents[0].text
   const examples = [...text.matchAll(/```json\s*([\s\S]*?)```/g)]

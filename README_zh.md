@@ -181,10 +181,23 @@ search-boost
 | **API keys & Base URLs / Search layer** | 管理 Tavily、Brave、Exa 等付费引擎密钥，以及 AnySearch 密钥（free 匿名、api 带 key、hybrid 优先已配置 key），切换默认搜索层 (`free` / `api`)。 |
 | **X credentials** | 管理 X (Twitter) 认证，支持一键导入本机已有的 Grok 登录状态。 |
 | **Jev credentials (experimental)** | 配置 TypeSafe Jev 认知引擎的端点与 Bearer Token。 |
+| **Tool switches** | 统一开关 MCP / Pi / DSH 的 SearchBoost 工具；未配置 Jev 时锁定 `adaptive_search`。 |
 | **Native web search** | 开启或关闭宿主自带的原生网页搜索（若宿主提供相应配置开关）。 |
 | **Status** | 快速查看本地配置就绪状态、引擎启用情况及已接入的宿主清单。 |
 | **Print MCP snippet** | 在终端打印 MCP 配置 JSON 片段，便于手动复制到自定义环境中。 |
 | **Uninstall** | 安全卸载指定 Agent 中的 SearchBoost 配置与挂载，保留用户无关配置。 |
+
+### 工具开关
+
+进入 **Tool switches**，空格勾选，回车查看变更并确认保存。Esc 或取消确认不写入配置；允许全部关闭。未配置 Jev 时，`adaptive_search` 在状态面板中显示删除线和锁定原因，不进入可选列表。配置 Jev 后默认可用，但此前明确关闭的偏好不会被覆盖。
+
+开关统一保存于 `~/.search-boost/config/tools.json`（或 `$SEARCH_BOOST_HOME/config/tools.json`），采用文件锁和原子写入。加载新版适配器后无需重启、重装宿主：
+
+- **MCP**：约 300ms 内刷新工具列表并发送 `tools/list_changed`；忽略通知的客户端可能需要重连。
+- **Pi**：约 300ms 内更新活跃工具，保留其他插件工具和原本被宿主排除的工具；会话结束时清理监听。
+- **DSH**：保留注册但立即拒绝关闭工具的新调用；原生搜索/抓取 provider 也遵守对应开关。
+
+每次调用都会重新检查开关，旧工具句柄也不能绕过；正在执行的请求正常完成。移除 Jev 凭据会锁定 adaptive 调用（包括分页），恢复凭据不覆盖明确关闭的偏好。这里开关的是**工具入口**，不是底层引擎权限：已开启的 adaptive 仍可在内部搜索和抓取，融合搜索的 community 模式仍可内部检索 X。Slash 命令保留用于恢复配置。正在运行旧适配器代码的进程需先更新/重载一次；各宿主需使用同一 SearchBoost 配置目录。
 
 ---
 

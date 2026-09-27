@@ -24,13 +24,17 @@ export function createMcpServer() {
     {
       instructions: loadInstructions(),
       capabilities: {
-        tools: { listChanged: false },
+        tools: { listChanged: true },
         resources: { subscribe: false, listChanged: false },
         prompts: { listChanged: false },
       },
     },
   )
-  registerAll(server)
+  const stopWatching = registerAll(server)
+  const close = server.close.bind(server)
+  server.close = async () => { stopWatching(); return close() }
+  const onclose = server.server.onclose
+  server.server.onclose = () => { stopWatching(); onclose?.() }
   return server
 }
 
