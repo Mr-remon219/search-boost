@@ -3,7 +3,7 @@
 **Multi-engine web search & evidence synthesis for AI coding agents**  
 *One shared core runtime, deeply adapted for MCP, Pi, and DeepSeek Harness*
 
-[![version](https://img.shields.io/badge/version-v0.2.2-orange?style=flat-square)](#)
+[![version](https://img.shields.io/badge/version-v0.2.3-orange?style=flat-square)](#)
 [![npm version](https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm)](https://www.npmjs.com/package/search-boost)
 [![Node version](https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
@@ -19,7 +19,7 @@
 
 ---
 
-> **v0.2.2**: adds AnySearch, correlation-aware fusion scoring and batched Jev target research with approved-result pagination. Includes release-audit fixes for version matching, publication timestamps and cache clearing. See the [release and migration notes](./docs/v0.2.2-release.md). A source merge does not publish npm; `@latest` only includes this version after a separate npm publication.
+> **v0.2.3**: custom API Base URLs, intent-guided Jev retrieval, shared tool switches with MCP/Pi hot refresh, and DSH schema/npm/npx compatibility repairs. See the [release and migration notes](./docs/v0.2.3-release.md), especially the V3 `coverageComplete` / `retrievalSufficient` semantics.
 
 ## Table of Contents
 

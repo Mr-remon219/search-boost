@@ -3,7 +3,7 @@
 **面向 AI Coding Agent 的多引擎网络搜索与证据聚合工具箱**  
 *一个核心代码库，深度适配 MCP、Pi 与 DeepSeek Harness 三大生态*
 
-[![version](https://img.shields.io/badge/version-v0.2.2-orange?style=flat-square)](#)
+[![version](https://img.shields.io/badge/version-v0.2.3-orange?style=flat-square)](#)
 [![npm version](https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm)](https://www.npmjs.com/package/search-boost)
 [![Node version](https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
@@ -19,7 +19,7 @@
 
 ---
 
-> **v0.2.2**：新增 AnySearch、考虑来源相关性的融合计分，以及批量 Jev 目标审查和合格结果分页；修复版本匹配、发布时间校验与缓存清理问题。详见 [发布与迁移说明](./docs/v0.2.2-release.md)。源码合并不等于 npm 发布；只有单独发布 npm 后，`@latest` 才会包含此版本。
+> **v0.2.3**：新增自定义 API Base URL、意图引导的 Jev 检索、共享工具开关与 MCP/Pi 热刷新，修复 DSH Schema 及 npm/npx 安装兼容性。详见[发布与迁移说明](./docs/v0.2.3-release.md)，特别注意 V3 的 `coverageComplete` / `retrievalSufficient` 语义变化。
 
 ## 目录
 
