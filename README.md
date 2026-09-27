@@ -178,7 +178,7 @@ Launch `search-boost` without arguments to access the interactive dashboard buil
 | **Setup** | Complete initial walkthrough: configure engines, search layers, X credentials, and install agents. |
 | **Install / update agents** | Install or refresh selected host integrations, preserving existing credentials and layer settings. |
 | **Update** | **One-click upgrade**: checks npm for updates, upgrades SearchBoost, and refreshes all installed agents (including legacy Pi/DSH adapters). |
-| **API keys / Search layer** | Manage Tavily, Brave, Exa and optional AnySearch credentials, and change the default search layer (`free` / `api`). |
+| **API keys & Base URLs / Search layer** | Manage Tavily, Brave, Exa and optional AnySearch credentials, and change the default search layer (`free` / `api`). |
 | **X credentials** | Manage X (Twitter) authentication; supports one-click import from local Grok login. |
 | **Jev credentials (experimental)** | Configure TypeSafe Jev cognitive engine endpoint and Bearer token. |
 | **Native web search** | Enable or disable host-native search for hosts supporting config switches. |
@@ -355,6 +355,24 @@ For Pi/DSH child-tool loading, stale `pi-search-boost` references, and the retir
 ---
 
 ## Security
+
+### Custom search API bases
+
+Open **API keys & Base URLs** in the TUI (or `search-boost config keys`). Each engine shows its masked key and default/custom Base URL. Choose **Set / replace Base URL**, then keep or edit the key; **Restore default Base URL** resets only the address. Changes are saved when the wizard completes. Status and `config keys --show` also show the effective bases.
+
+```bash
+search-boost config keys --base-url exa=https://gateway.example/exa
+search-boost config keys --reset-base-url exa
+```
+
+| Engine | Default Base URL | Appended path |
+|---|---|---|
+| Tavily | `https://api.tavily.com` | `/search` |
+| Exa | `https://api.exa.ai` | `/search` |
+| Brave | `https://api.search.brave.com/res/v1` | `/web/search` |
+| AnySearch | `https://api.anysearch.com/v1` | `/search` |
+
+Supply an API base, **not a full search endpoint**; gateway prefixes are preserved. Overrides live in `engines.<name>.baseUrl` in the keys file; existing key strings and routing flags are unchanged. Use only trusted API-compatible gateways: queries and configured keys are sent there (AnySearch remains anonymous in the free pool). Prefer HTTPS; HTTP is supported for local gateways. Credentials, query strings and fragments in URLs are rejected. Exa-free is unaffected. Changing a base invalidates the search cache partition.
 
 API keys use a credential store this tool owns. They are not written into prompts, tool results or shell profiles:
 

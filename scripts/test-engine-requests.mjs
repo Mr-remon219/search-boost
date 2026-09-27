@@ -25,6 +25,26 @@ const lastCall = () => calls[calls.length - 1]
 try {
   const engines = engineRegistry({ exa: 'fixture-key', tavily: 'fixture-key', brave: 'fixture-key' })
 
+  await test('custom API bases preserve prefixes, request auth and AnySearch free mode', async () => {
+    const names = ['tavily', 'exa', 'brave', 'anysearch']
+    const bases = Object.fromEntries(names.map((name) => [name, `https://gateway.example/${name}/v1/`]))
+    const custom = engineRegistry(Object.fromEntries(names.map((name) => [name, 'fixture-key'])), null, bases)
+    for (const name of names) {
+      await custom[name].search('a & b', 3, { enginePool: 'api' })
+      assert.equal(lastCall().url.pathname, `/${name}/v1/${name === 'brave' ? 'web/search' : 'search'}`)
+      assert.equal(lastCall().url.hostname, 'gateway.example')
+      if (name === 'tavily') assert.equal(lastCall().body.api_key, 'fixture-key')
+      if (name === 'exa') assert.equal(lastCall().headers['x-api-key'], 'fixture-key')
+      if (name === 'brave') {
+        assert.equal(lastCall().headers['x-subscription-token'], 'fixture-key')
+        assert.equal(lastCall().url.searchParams.get('q'), 'a & b')
+      }
+      if (name === 'anysearch') assert.equal(lastCall().headers.authorization, 'Bearer fixture-key')
+    }
+    await custom.anysearch.search('query', 3, { enginePool: 'free' })
+    assert.equal(lastCall().headers.authorization, undefined)
+  })
+
   await test('exa sends the documented startPublishedDate for recency', async () => {
     await engines.exa.search('fixture query', 3, { recency: 'week' })
     const { url, body } = lastCall()
