@@ -742,6 +742,22 @@ await test('a missing required source answer gets a bounded later-round retry be
   assert.ok(result.questions[0].keywordProgress[0].A > 0, 'retry must invalidate the score cache')
 })
 
+await test('a capped keyword-match assessment allows an explicit exhausted decision without more search', async () => {
+  const h = harness({
+    search: (_, n) => [distinctHit(n)],
+    judge: ({ phase, id }) => phase === 'source_judge' && /\.kw\d+\.match$/.test(id)
+      ? 'omit' : phase === 'keyword_judge' ? 'exhausted' : undefined,
+  })
+  const result = await h.run(TASK_INPUT)
+  assert.equal(result.stopReason, STOP_REASONS.keywordQueueEmpty)
+  assert.equal(result.rounds, 2, 'only the bounded source retry is needed')
+  assert.equal(h.calls.search.length, 1, 'unretryable keyword matches must not trigger more searches')
+  assert.equal(result.questions[0].keywordProgress[0].status, 'exhausted')
+  assert.equal(result.retrievalSufficient, false)
+  assert.equal(result.funnel.pending_associations, 1, 'unresolved matches remain disclosed, not manufactured')
+  assert.match(result.warnings.join('\n'), /keyword-match assessment retries exhausted/)
+})
+
 await test('exhausted is reconsidered when the same URL gains new text', async () => {
   const input = {tasks:[{context:'Testing',targets:[{id:'a',keywords:['alpha','beta'],question:'Alpha and beta?'}]}]}
   const h = harness({search:(_,n)=>[n===1 ? distinctHit(1) : {...distinctHit(1), content:distinctHit(1).snippet+' A new paragraph provides additional details and a useful migration example.'}],judge:({phase,id})=>phase==='keyword_judge' ? (h.calls.search.length===1 ? (id.endsWith('.0')?'exhausted':'continue'):'satisfied') : undefined})
