@@ -53,7 +53,7 @@
     "test:upgrade": "node scripts/test-upgrade.mjs && node scripts/test-host-upgrade.mjs && node scripts/test-migration.mjs && node scripts/test-update-tui.mjs",
     "test:hooks": "node scripts/test-startup-hooks.mjs",
     "test:doctor": "node scripts/test-doctor.mjs",
-    "test:adapters": "node scripts/test-adapters.mjs && node scripts/test-pi-subagent-config.mjs",
+    "test:adapters": "node scripts/test-adapters.mjs && node scripts/test-pi-subagent-config.mjs && node scripts/test-tool-switches.mjs",
     "plugin:sync-grok": "node scripts/sync-grok-plugin.mjs",
     "build:plugin": "node scripts/build-plugin.mjs",
     "check": "node scripts/check-syntax.mjs",
