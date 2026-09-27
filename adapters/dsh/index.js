@@ -213,6 +213,7 @@ function registerFusedSearchTool(ctx) {
           enginesUsed: { type: 'array', items: { type: 'string' } },
           warnings: { type: 'array', items: { type: 'string' } },
           engineStats: { type: 'object' },
+          funnel: { type: 'object' },
           results: {
             type: 'array',
             items: {
@@ -376,9 +377,19 @@ function registerAdaptiveSearchTool(ctx) {
       schema: {
         type: 'object',
         properties: {
-          results: { type: 'array', items: { type: 'object', properties: { url: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' } }, required: ['url', 'title', 'description'] } },
+          results: { type: 'array', items: { type: 'object', properties: { url: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, valueScore:{type:'number'}, directionMatch:{type:['number','null']}, kind:{type:'string'}, matches:{type:'array',items:{type:'object',properties:{taskId:{type:['string','null']},targetId:{type:['string','null']},canonicalId:{type:['string','null']},valueScore:{type:'number'},directionMatch:{type:['number','null']},kind:{type:'string'}},required:['taskId','targetId','canonicalId','valueScore','directionMatch','kind']}} }, required: ['url', 'title', 'description'] } },
           totalResults: { type: 'number' }, nextCursor: { type: ['string', 'null'] }, expiresAt: { type: 'string' },
-          coverageComplete: { type: 'boolean' }, stopReason: { type: 'string' }, warnings: { type: 'array', items: { type: 'string' } },
+          schemaVersion: {type:'number'}, retrievalSufficient: {type:'boolean'},
+          coverageComplete: { type: 'boolean', description:'Deprecated: always false for schemaVersion 3; answer completeness is not assessed.' }, stopReason: { type: 'string' }, warnings: { type: 'array', items: { type: 'string' } },
+          keywordProgress: { type: 'array', items: { type: 'object', properties: {
+            targetId: {type:'string'}, taskId:{type:['string','null']}, canonicalId:{type:'string'}, keyword: {type:'string'}, score: {type:'number'}, ready: {type:'boolean'},
+            distinctEvidence: {type:'number'}, finalStatus: {type:'string'},
+            status:{type:'string',enum:['continue','satisfied','exhausted','pending']}, reason:{type:'string'},
+            A: {type:'number'}, F: {type:'number'}, R: {type:'number'},
+            missingFacts: {type:'array',items:{type:'string'}},
+            factProgress: {type:'array',items:{type:'object',properties:{id:{type:'string'},support:{type:'number'},covered:{type:'boolean'},conflicting:{type:'boolean'}},required:['id','support','covered','conflicting']}},
+          }, required: ['targetId','keyword','score','distinctEvidence','finalStatus'] } },
+          pendingAssessments: { type: 'number' },
         },
         required: ['results', 'totalResults', 'nextCursor', 'expiresAt', 'coverageComplete', 'stopReason', 'warnings'],
       },

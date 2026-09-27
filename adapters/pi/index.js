@@ -296,6 +296,8 @@ export default function searchBoostExtension(pi) {
         stopReason: res.stopReason,
         sources: res.totalResults,
         domains: domains.size,
+        schemaVersion: res.schemaVersion,
+        retrievalSufficient: res.retrievalSufficient,
         coverageComplete: res.coverageComplete,
         tookMs: Date.now() - started,
         subtasks: params.tasks?.reduce((n, task) => n + task.targets.length, 0) ?? questions.length,

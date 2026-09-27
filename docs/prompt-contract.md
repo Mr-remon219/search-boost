@@ -24,9 +24,9 @@ The parent's search rounds, parallel searcher waves and Jev's internal adaptive 
 
 ## Evidence and failure language
 
-`fused_search` is one search operation; `fetch_page` reads a known URL; `x_search` retrieves available X material; `adaptive_search` is a bounded automatic evidence loop, not a delegation tool. The parent still owns the answer.
+`fused_search` is one search operation; `fetch_page` reads a known URL; `x_search` retrieves available X material; `adaptive_search` is a bounded intent-guided search selector, not a research or delegation tool. The parent still owns the answer.
 
-Do not claim complete threads, guaranteed real-time results, a fixed latency, identical results at different reasoning settings, or a fixed token-saving percentage. A `focus` miss is not evidence of absence. `covered` is a model judgment about reviewed fragments, never independently established truth. Domain count alone is not corroboration; an authoritative single source is not automatically invalid.
+Do not claim complete threads, guaranteed real-time results, a fixed latency, identical results at different reasoning settings, or a fixed token-saving percentage. A `focus` miss is not evidence of absence. `retrievalSufficient` is a model judgment of keyword search satisfaction, never answer completeness or independently established truth. Domain count alone is not corroboration; an authoritative single source is not automatically invalid.
 
 For adaptive results, preserve the code-capped structured evidence in model-visible output, not merely in UI-only metadata. Show output truncation explicitly and never say omitted evidence is available in a structured result that no longer contains it.
 

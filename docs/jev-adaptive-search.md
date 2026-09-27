@@ -1,243 +1,92 @@
-# Jev adaptive search: keyword targets and paginated results
+# Jev 意图导向搜索：V3 契约
 
-This documents the current working-tree implementation, not an npm release promise.
+`adaptive_search` 是**搜索结果筛选工具**，不是自主研究或答案验证工具。主 agent 提供问题、关键词和搜索意图；Jev 判断哪些结果值得阅读、哪些关键词值得继续；代码执行查询、维护状态并控制预算。主 agent 负责读原文、证据核实和最终回答。
 
-## Public tool input (MCP, Pi and DSH)
-
-Supply **exactly one** of `tasks`, legacy `questions`, or a pagination `cursor`.
-`page_size` is optional for either a new search or a page read.
+## 输入
 
 ```json
 {
-  "tasks": [{
-    "context": "ExampleDB 4.2 upgrade impact",
-    "targets": [
-      {
-        "id": "compatibility",
-        "keywords": ["breaking changes", "不兼容变更"],
-        "question": "What incompatible changes affect an upgrade from 4.1 to 4.2?"
-      },
-      {
-        "id": "migration",
-        "keywords": ["migration guide", "升级指南"],
-        "question": "What migration steps address those changes?"
-      }
-    ]
-  }],
+  "questions": ["ExampleDB 4.2 升级有哪些兼容风险？"],
+  "keywords": ["migration guide", "breaking changes"],
+  "intent": "优先实际迁移步骤与具体不兼容案例；保留反证，不需要营销介绍。",
   "page_size": 20
 }
 ```
 
-- 1–6 tasks, each with a nonblank context of at most 400 characters.
-- 1–4 targets per task, at most 12 targets across the call.
-- Target IDs are unique within a task: 1–64 ASCII letters, digits, `_` or `-`.
-- Each target has 1–4 nonblank keyword alternatives, at most 100 characters each,
-  and an acceptance question of at most 400 characters.
-- Keywords guide retrieval; **mentioning them does not satisfy the question**.
-  Synonyms belong to one target, not separate acceptance checks.
-- Put the stable entity/product/scope in `context`; keep it concise. Avoid placing
-  every desired fact in every query. Put required conditions in the target question.
-- Legacy `{"questions":["..."]}` still accepts 1–6 independent strings, each at
-  most 400 characters. Identical target text, hints and time constraints reuse
-  execution. Invalid input is rejected rather than silently shortened.
+- `questions`：1–6 个非空问题，每个≤400字符。单问题可配扁平 `keywords`；多问题必须使用逐项对应的二维关键词列表。每组1–4个词，每词≤100字符。不传则以问题本身为检索词。
+- 也可使用 `tasks:[{context, time_range?, targets:[{id, keywords, question, intent?, facts?}]}]`：最多6任务、每任务4目标、总计12目标。任务模式不能传根级 `keywords`，与 `questions` 二选一。
+- 根级 `intent` ≤2000字符，目标级 `intent` ≤1000字符，均须非空；两者共同作为判断上下文并参与执行去重。它们是简洁搜索偏好，不是私密推理、凭据或秘密。意图送往配置的 Jev 服务，但不直接拼入引擎查询。
+- `facts:[{id,question}]` 为兼容旧调用而保留，最多8个、ID唯一。V3将其解释为**可选搜索主题**，不要求全部回答，不自动生成事实。
+- `time_range:{start,end,basis}` 是包含边界的日期约束；`basis` 为 `published` 或 `event`，不以发表时间推断事件时间。相对今天/昨天按调用开始时UTC解释；未知日期不能通过显式日期门。
+- 翻页只传 `cursor` 和可选 `page_size`，不能同时传问题、任务、关键词或意图。
 
-An optional task-level `time_range` provides inclusive calendar-day constraints:
+## 数学模型
 
-```json
-{
-  "start": "2026-07-19",
-  "end": "2026-07-19",
-  "basis": "event"
-}
+每个当前审查片段：切题度 `r`、阅读价值 `v`、方向帮助度 `d`。
+
+```text
+u = min(r,v) × (1−λ+λd)
+λ = 0.2（有 intent），否则 0
+A_k = max_i(u_i × m_ik)
+F = Σ_f w_f max_i(u_i × m_if)
+R_k = Σ_f w_f Σ_{j=2..n_f} (1−ρ)ρ^(j−2)q_fj，ρ=0.5
+S_k = 0.25 A_k + 0.90 F + 0.10 R_k
 ```
 
-`basis` is `event` or `published`. Publication dates and event dates are not
-interchangeable. Implicit today/yesterday uses the UTC calendar day at call start,
-reported in warnings. Explicit ISO dates in acceptance questions (including legacy
-questions) also create a date window, reported with its basis and bounds. Dates in
-task context alone do not impose a hard window; “as of”/“截至” wording is treated as
-a knowledge cutoff, not a same-day event requirement. For precise temporal intent, prefer `time_range`. Current event extraction
-is conservative: it recognizes ISO-dated event statements, not arbitrary dates in
-URLs or titles; unsupported/ambiguous date wording stays unknown. This can exclude
-valid sources and is not a general temporal-language parser.
+`m` 是上下文中的关键词/主题匹配分，仅大于0.5才计分。`w` 为归一化主题权重；有调用方主题时跨关键词共享主题覆盖，没有时以当前关键词为主题（`F=A_k`）。`q_fj` 是同一主题下按质量降序排列、重复分组后各组最强结果的 `u×min(m_ik,m_if)`。新主题的首条只赚F，不冒充该主题的额外重复佐证。
 
-## Public output
+首条建立基础分；新主题按权重增加最大覆盖，不因文档序号打折；只有额外重复主题结果的补充收益递减。同站及近复制保守归组仅影响R，不取消新主题的F。重复轮次不产生分数。这里的R表示补充阅读价值，不证明来源独立或事实得到佐证。
 
-The tool returns a **flat list of approved URLs and extractive descriptions**, not
-its internal evidence table or per-target score matrix:
+筛选门：已知有限的 `r>0.60`、`v>0.50`、注入风险 `≤0.7`，且满足显式日期约束。方向分**不是硬门**；反证也能高度符合任务。方向未知保留null、不加方向奖励；缺失必要判断不通过筛选。可信导航线索、需要进一步打开的页面、局部有用信息均可有高阅读价值，不要求摘要已经包含答案事实。
 
-```json
-{
-  "results": [{
-    "url": "https://example.com/releases/4.2",
-    "title": "ExampleDB 4.2 release notes",
-    "description": "An excerpt of the material Jev actually reviewed."
-  }],
-  "totalResults": 37,
-  "nextCursor": "opaque-cursor-returned-by-the-server",
-  "expiresAt": "2026-07-19T12:30:00.000Z",
-  "coverageComplete": false,
-  "stopReason": "budget_rounds",
-  "warnings": ["Some targets remain uncovered; approved URLs are not a complete answer."]
-}
+这些权重与阈值是未校准的工程起点。`u/S`都不是正确率。S仅供续搜参考，不存在“S过线且所有事实齐全才完成”的规则。
+
+## 执行与停止
+
+```text
+问题＋绑定关键词＋意图
+  → 代码构造候选查询，Jev选择查询/引擎
+  → 搜索、去重、审查摘要或引擎提供的文本
+  → Jev typed noul/choice 判断阅读价值、方向、匹配
+  → 每关键词 typed choice：continue / satisfied / exhausted
+  → 代码维护队列、处理 pending、检查预算并返回结果
 ```
 
-Only currently assessed, source-qualified material is returned. Navigation-only,
-unassessed, injection-suspected, off-topic and date-unqualified candidates are
-excluded. One canonical URL appears once; repeated search-engine discoveries are
-not independent corroboration. Descriptions are reviewed excerpts, not generated
-claims. Results are ordered by Jev source judgments rather than fusion weights.
+- `satisfied` 必须至少有一条**当前有效且符合该关键词**的可用结果；不是完整答案。
+- `exhausted` 意为当前未见值得继续的路径，不是成功或不存在的证明。引擎未成功或候选尚待审查时不接受该结论。
+- `pending` 表示续搜判断缺失、无效或未能完成；不能替代满足/找不到。
+- 已改变片段不能继续支撑旧的满足判断；同URL增加新材料或日期元数据，也会使旧的 exhausted 判断重开。后来补到的发表日期会让日期相关评分重新审查，而不是沿用“日期未知”时的旧判断。当前有效的既有结果不会因后续服务失败被抹掉。
+- 必要字段或可用材料的关键词匹配缺失时，优先有界重审：同一审查版本（文本＋发表日期）最多两次、同一轮最多一次，仍受原调用/HTTP/token上限约束。用尽重审额度仍保留 pending 计数，不把未知改成否定，也不无限阻塞其他查询。
+- 连续分数不变不等于没有可搜内容：还有未尝试的关键词查询或可重审材料时继续；搜索调用额度用尽明确报告 budget_calls。分批续搜判断中断后，未执行批次都标为 pending。
+- 队列全关闭时 `stopReason=keyword_queue_empty`；只要包含 exhausted，`retrievalSufficient` 就为false。预算/截止/取消/服务失败分别报告，不能假装成功。
+- 默认没有自动正文抓取、引用追踪、事实联合判断或最终完整性验收。Jev不自由生成关键词、摘要或答案。
 
-**Approval is not independently verified truth.** A source can support part of a
-target even when that target remains uncovered. `coverageComplete` reports target
-coverage, not exhaustive discovery of all matching web pages. Empty results do not
-prove absence. If Jev fails before assessment, fallback retrieval may collect
-internal material, but unassessed links are not promoted into public results.
+固定上限：6轮、30次搜索、72次逻辑Jev请求、80次HTTP尝试（含重试）、120万估算输入token；每轮全局最多500唯一URL、每微批最多24关联并受字节上限约束。后续轮按待搜关键词比例恢复配额。宿主截止时间仍适用。500是容量，不保证检索得到或全部审查500条；单引擎结果帽仍可远低于500。为续搜决策预留预算，未审查项公开计数。
 
-Read more with the same tool:
+## 输出和兼容
 
-```json
-{"cursor":"<nextCursor>","page_size":20}
-```
+分页结果含：
 
-- Page reads perform **zero searches, page fetches or Jev calls**, and do not need
-  Jev credentials to remain configured.
-- Page size defaults to 20, with a maximum of 50; result rows use a soft 45 KB
-  byte budget (metadata is additional). A single oversized row is returned intact
-  with a warning rather than truncating its URL or dropping an approved result.
-- **There is no fixed cumulative approved-result count cap.** The old six-items-
-  per-question diagnostic preview does not constrain public results.
-- Retrieval is still bounded by deadlines, rounds and request/token budgets. Not
-  capping result count does not mean unlimited execution or guaranteed volume.
-- `nextCursor: null` means all collected approved results have been returned,
-  not that every research target passed or that the web has been exhausted.
-- Cursors are local to the running server process. Results are retained for up to
-  30 minutes and 32 recent result sets; restart, expiry or eviction invalidates
-  them. An expired cursor returns an error, never silently reruns research.
-- Do not combine a cursor with tasks/questions. Page reads do not extend expiry.
+- `schemaVersion:3`
+- `results:[{url,title,description,valueScore,directionMatch,kind,matches}]`，按阅读价值排序、URL去重。`description` 为审查过的抽取文本，不是生成总结。列表按单结果 `u/valueScore` 排序；关键词 `S` 仅供续搜判断参考，不直接作为URL排序分。`kind` 为 direct/lead/counterevidence/context/unknown。同URL跨目标合并时，顶层分数/方向/类别和摘录取最强结果；`matches` 保留各目标 taskId/targetId/canonicalId、分数、方向和类别，不能把顶层方向分套用到所有目标。相同目标复用一次执行时，仍保留每个原始目标身份。
+- `retrievalSufficient`：是否所有关键词均满足搜索需求，**不是答案完整性**。
+- `keywordProgress`：目标身份、关键词、status/reason、score/A/F/R、distinctEvidence和目标状态。
+- `pendingAssessments`：已收集但未完成审查的关联数。
+- `coverageComplete`：废弃兼容字段，V3恒为false，表示不再评估答案完整性。**不得把它改为 retrievalSufficient 的别名**。旧消费者应迁移到新字段和状态，而不是因它为false反复重跑。
+- `stopReason`、`warnings`、`totalResults`、`nextCursor`、`expiresAt`。
 
-This replaces the previous public question/evidence/usage object. The internal
-loop still produces diagnostics (schema version 2); the evaluation harness requests
-those explicitly with the programmatic `diagnostics: true` option. That option is
-not a tool parameter and cannot be used to bypass the approved-only result policy.
+单页默认20、最多50，另有软字节预算；极大单项可完整返回并警告。累计返回没有固定条数帽，但检索和审查有预算。所有候选并非都会获准；未审查/拒绝项不发布。游标只读取本进程内存，最多保留30分钟/32次结果；进程重启、到期或淘汰后失效。分页完毕不代表全网穷尽。
 
-## Three-stage round
+MCP/Pi/DSH共用核心输入、描述与渲染逻辑；MCP的Zod和DSH的输出schema同步维护。未配置Jev时工具仍注册，但返回not_configured且不发起网络请求。任务/意图/必要片段会发送到配置的Jev服务（默认TypeSafe），引擎凭据不会发送。调用授权不包括更改凭据或持久设置。
 
-Each round makes **at most three logical Jev requests**, one for each phase:
+## 验证与限制
 
-1. **Plan:** task context, unresolved acceptance targets, query candidates, engine
-   traits, previous retrievals/failures and remaining budgets. Jev chooses a query
-   strategy and engines or a permitted read/review/stop action. Code then searches
-   or fetches pages through the existing core transports.
-2. **Score:** newly arrived or changed fragments, with distinct relevance,
-   substantive-support, premise-conflict and injection checks. Temporal targets
-   add a time-match judgment. Canonical URLs appear once in a source registry;
-   target-specific fragments reference that registry rather than duplicate bodies.
-3. **Coverage:** only qualified evidence for each target. Jev judges completeness,
-   disagreement and (when needed) snippet sufficiency, plus a closed-set missing
-   category. Code combines these independent answers with hard constraints to
-   continue or stop. Planning the next retrieval happens in the next round's first
-   request, not a fourth request.
+`npm run test:retrieval` 检查新默认控制器、数学性质和公开接口；完整离线门为 `npm run prepublishOnly`。旧V1/V2测试显式冻结内部策略，仅作历史回归，不能证明新默认质量。旧设计资产保持原样，见 [事实控制器历史记录](jev-fact-implementation.md)。
 
-Empty/unchanged phases can be skipped; cancellation and budget stops never make
-filler requests just to reach three. HTTP retries are counted separately. Oversize
-batches defer whole plans or judgments rather than split into extra calls. Deferred
-unassessed material is not returned as approved evidence.
+尚无新方案的独立真实网页质量校准。合成500条测试只证明容量/预算路径；不证明真实召回、阅读价值或时延提升。来源分组可能过度合并同站独立文章，也可能漏掉改写转载。摘要不足不证明原文没有价值；关键论断仍由主agent读原文核实。
 
-Jev's API supports typed `choice` and `noul`, **not free-form query generation**.
-The calling agent supplies target questions and keyword alternatives. Code builds
-bounded combinations of context, one alternative and explicit constraints; Jev
-selects them. It can change engines or reuse a healthy engine with a new query.
-Missing categories (fact, official source, date, region, independent corroboration)
-feed subsequent query options; they are not an unrestricted generated subquestion.
+## 自审回归记录
 
-The default fusion weights remain unchanged. Adaptive retrieval reserves candidate
-opportunities per selected engine before final source assessment, so fusion weights
-cannot crowd every low-weight engine out before Jev sees any of its candidates.
-The candidate pass prefers up to two rows per domain, then fills unused slots if
-only same-domain alternatives remain. It honors the score floor but intentionally
-does not add a single-engine discount: engine consensus is not source verification.
-Repeated failures temporarily exclude an engine across targets for this call.
-A failed page read is not retried each round; exact engine/query/depth combinations
-are not repeated, and follow-up choices are restricted to unexecuted combinations. No
-selection can enable a disabled/unconfigured engine or change the persistent pool.
+本轮主执行器直接自审，先以失败测试复现缺失评分不重审、exhausted未随同URL新内容重开、停滞过早停止、规范化目标丢失归属、分批失败漏标pending、零成功引擎被当成成功、补充发表日期未触发重审，再修复验证。
 
-## Evidence, budgets and remaining limits
-
-- Sources are URL-keyed; associations are target × source. Sharing a URL does not
-  share a relevance verdict or a snippet selected for another target.
-- Source judgments are bound to exact fragment versions; unchanged judgments are
-  reused. Changed material invalidates old judgments. Coverage uses qualified-set
-  signatures to avoid unchanged re-evaluation.
-- Boilerplate filtering also applies on the excerpt fallback path and to snippets.
-  This is a heuristic cleaner, not a guarantee that every advertisement is removed.
-- Explicit date eligibility is a code gate plus a model judgment. Unknown dates
-  cannot be compensated for by a high relevance/coverage score.
-- Source and coverage thresholds are heuristic and require evaluation; `0.85`
-  coverage is not a claim of 85% factual accuracy.
-- Source batch selection rotates among targets. Fetch scheduling gives targets
-  with fewer successful page reads earlier opportunity. It is not an optimal
-  information-gain scheduler or a guarantee of equal spend.
-- Deduplication is URL-level, not a general cross-publisher event clustering system.
-- A source `description` can still be a search snippet. Full-page reading is not
-  mandatory when the snippet is sufficient for the specific target.
-- The model cannot raise limits, lower thresholds, or change credentials. See
-  [`limits.js`](../lib/search/adaptive/limits.js) for execution ceilings.
-
-## Implementation map
-
-| Module | Responsibility |
-| --- | --- |
-| `lib/search/adaptive/input.js` | Shared input schema, strict task/target normalization |
-| `lib/search/adaptive/planning.js` | Query alternatives and per-engine candidate selection |
-| `lib/search/adaptive/material.js` | Unique-source wire representation and request-size accounting |
-| `lib/search/adaptive/loop.mjs` | Three-phase scheduling, budgets, partial results and diagnostics |
-| `lib/search/adaptive/prompts.js` | Typed plan/source/coverage questions |
-| `lib/search/adaptive/evidence.js` | Source/target associations, cleaning, provenance and versions |
-| `lib/search/adaptive/temporal.js` | Conservative calendar-date constraints and witnesses |
-| `lib/search/adaptive/pages.js` | Approved-only projection and process-local cursors |
-| `lib/runtime.mjs` | Shared execution and public paginated entry point |
-| `adapters/{mcp,pi,dsh}` | Matching host input/output contracts |
-
-## Configuration, network and privacy
-
-Configure Jev with `search-boost config jev` or the TUI. Credentials/endpoint come
-from canonical configuration, never model-selected engines or tool parameters.
-Without credentials a new research call returns `not_configured` without network
-requests. Existing result pages remain readable. Readiness is not connectivity.
-
-The configured Jev service receives task text and required evidence, never engine
-credentials or fingerprints. Queries go to selected engines; URLs can go to the
-existing page-fetch fallback. The shared network policy, cancellation, bounded
-retries and credential-bearing redirect protections remain in force. This feature
-does not grant delegation or authorize persistent configuration changes.
-
-Source pools and paginated results are in process memory. This is not a promise of
-no persistence: hosts can retain tool results and audit/session history. The
-programmatic diagnostic/evaluation path can retain more than public tool output.
-
-## Validation and primary references
-
-```bash
-npm run test:adaptive
-npm run test:jev-client
-npm run test:adapters
-npm run test:mcp
-npm run test:fusion
-npm run test:search
-npm run check
-```
-
-The tests use deterministic fixtures, not live-service accuracy or cost claims.
-`jev:probe` and `eval:adaptive` are separately opted-in network exercises and can
-incur charges. No threshold calibration or search-quality improvement should be
-inferred solely from an offline green suite.
-
-- [TypeSafe API](https://docs.typesafe.ai/api): typed request/response protocol.
-- [TypeSafe primitives](https://docs.typesafe.ai/primitives): independent judgments
-  in one request; genuine dependencies belong in a subsequent request.
-- [TypeSafe Noul](https://docs.typesafe.ai/primitives/noul): probability semantics,
-  separate conditions and application-specific thresholds.
-- [Azure agentic retrieval](https://learn.microsoft.com/en-gb/azure/search/agentic-retrieval-overview):
-  focused subqueries and merged retrieval; architectural context, not a benchmark
-  for this implementation.
+新默认测试：12项评分代数、41项循环与边界测试、公开接口检查；完整 `npm run prepublishOnly` 通过。日志：`/tmp/jev-self-review-prepublish.log`。本轮没有子代理、真实搜索或在线Jev质量校准；离线通过不是线上效果证明。未提交或发布。

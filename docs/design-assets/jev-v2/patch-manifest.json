@@ -1,0 +1,32 @@
+{
+  "at": "2026-09-27T10:31:56.503895+00:00",
+  "base_repo": "https://github.com/Mr-remon219/search-boost.git",
+  "base_commit": "ef0a3e7ef4584314e436393fecbba22d47a64843",
+  "candidate_head": "ef0a3e7ef4584314e436393fecbba22d47a64843",
+  "candidate_tree": "b38749c16a4dfc0b566205aabd34d9922fce963f",
+  "patch": "artifacts/candidate.patch",
+  "sha256": "fc8b4c8372efbce48b42d2527e269e283b5a9c4303e82a653eb4da43be133439",
+  "changed_paths": [
+    "adapters/dsh/index.js",
+    "adapters/mcp/schemas.mjs",
+    "docs/adaptive-keyword-index.md",
+    "lib/runtime.mjs",
+    "lib/search/adaptive/describe.js",
+    "lib/search/adaptive/keyword-progress.js",
+    "lib/search/adaptive/limits.js",
+    "lib/search/adaptive/loop.mjs",
+    "lib/search/adaptive/pages.js",
+    "lib/search/adaptive/prompts.js",
+    "lib/search/fusion.js",
+    "package.json",
+    "scripts/test-adaptive-search.mjs",
+    "scripts/test-funnel.mjs",
+    "scripts/test-keywords.mjs",
+    "scripts/test-recursion.mjs"
+  ],
+  "patch_roundtrip_verified": true,
+  "has_changes": true,
+  "acceptance": "not_assessed",
+  "pushed": false,
+  "warning": "Secret scan is best-effort. Review all changes and run regression tests before publishing."
+}

@@ -2,3 +2,8 @@
 # compared byte-for-byte, and Git for Windows defaults to core.autocrlf=true,
 # which otherwise turns every newline comparison into a platform failure.
 * text=auto eol=lf
+
+# Historical experiment patch: preserve the exact bytes covered by its SHA256.
+# Diff syntax includes space-prefixed blank context lines; do not treat this
+# archival payload as active source or normalize it on Windows checkout.
+docs/design-assets/jev-v2/candidate.patch -text -diff

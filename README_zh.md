@@ -34,7 +34,7 @@
   - [1. `fused_search` 多引擎融合搜索](#1-fused_search-多引擎融合搜索)
   - [2. `fetch_page` 智能网页提炼](#2-fetch_page-智能网页提炼)
   - [3. `x_search` X (Twitter) 动态检索](#3-x_search-x-twitter-动态检索)
-  - [4. `adaptive_search` Jev 自适应证据链（实验功能）](#4-adaptive_search-jev-自适应证据链实验功能)
+  - [4. `adaptive_search` Jev 意图导向搜索（实验功能）](#4-adaptive_search-jev-意图导向搜索实验功能)
   - [引擎池与评分预设](#引擎池与评分预设)
 - [多智能体并行研究工作流](#多智能体并行研究工作流)
 - [安全](#安全)
@@ -53,8 +53,8 @@
   优先抓取原站降低等待；必要时使用同线路 curl 兼容兜底，Jina Reader 作为备用读取方式。自动剔除 CSS、JS 及广告噪音，支持 `focus` 关键词段落提炼，具备内存缓存与大体积熔断保护。
 - **X / Twitter 社区情报检索 (`x_search`)**  
   支持通过官方 xAI API 或免登录回退通道获取推文、作者动态与讨论串。基于 Snowflake ID 逆向还原精准发布时间戳，本地执行作者与日期范围过滤，杜绝幻觉。
-- **Jev 辅助自适应证据闭环 (`adaptive_search` · 实验功能)**  
-  输入任务背景、关键词和验收问题，每轮最多三次 Jev 调用：规划、评分、覆盖验收。只输出 Jev 认可的 URL、标题和简介，支持游标分页，不设固定的累计结果条数上限；检索仍受时间和请求预算约束。
+- **Jev 意图导向搜索 (`adaptive_search` · 实验功能)**
+  输入问题、绑定关键词和搜索意图。Jev 筛选值得阅读的结果，包括可信线索、局部信息和有价值反证，并判断关键词是否继续搜索。保留全局每轮500候选容量、分批审查和分页；不自动读原文、不验收答案完整性。
 - **原生多智能体并行研究工作流**  
   随包提供 `search-boost` 与 `search-boost-parallel-research` Skills。在支持子代理的宿主（如 Cursor、Claude Code、Pi、DSH）中，可将复杂调研拆分为多路 Searcher（抓取证据）与 Summarizer（无工具综合），提供 Fast 与 Complex 两种研究波次。
 - **统一架构，全宿主覆盖**  
@@ -74,7 +74,7 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
                               │
                     Shared SearchBoost Core
                      lib/runtime.mjs 核心门面
-               搜索 · 抓取 · X · Jev 自适应证据链
+               搜索 · 抓取 · X · Jev 意图导向搜索
                               │
               ┌───────────────┼───────────────┐
               │               │               │
@@ -199,7 +199,7 @@ search-boost
 | `fused_search` | 多引擎多角度并行查询、结果合并与去重排序 | 仅完成单次搜索；后续是否需要继续检索由主 Agent 判断 |
 | `fetch_page` | 读取已知公开 URL 的完整正文或特定关注段落 | 不是带登录态的无头浏览器，无法穿透内网私有地址 |
 | `x_search` | 检索 X 平台的公开推文、博主资料或单篇讨论串 | 不承诺完整抓取所有回复，无法代表全平台完整舆论倾向 |
-| `adaptive_search` | **实验功能**：由 Jev 驱动的自动多轮追问与碎片评测 | 返回认可的 URL 与简介；模型认可不等于独立事实核查 |
+| `adaptive_search` | **实验功能**：意图导向筛选与关键词续搜 | 值得阅读的 URL 和摘录，不是已核实答案 |
 | `search_stats` | 查看引擎就绪状态、内存缓存命中与近期活动诊断 | 本地配置就绪不代表此时此刻外部网络一定通畅 |
 | `search_layer` | 在 MCP 环境中查看或切换兼容搜索层模式 | 查看为只读；修改会持久化写入磁盘并需要用户授权 |
 
@@ -264,11 +264,11 @@ search-boost
 
 ---
 
-### 4. `adaptive_search` Jev 自适应证据链（实验功能）
+### 4. `adaptive_search` Jev 意图导向搜索（实验功能）
 
 **Vercel 接入**：在 TUI → Jev credentials 填写 `https://ai-gateway.vercel.sh/v1` 和 Vercel AI Gateway Key。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级配置中的 Jev Key，不读取环境变量；服务端限流等待不会被缩短。
 
-调用方准备任务背景、关键词同义词和明确的验收问题。Jev 选择查询与引擎，系统检索、去重、清洗，然后 Jev 评分并判断哪些目标还需要继续。每轮最多三次逻辑调用，不按 URL 单独调用。
+调用方提供问题、绑定关键词，以及可选的 `intent` 表达搜索方向。Jev 判断切题度、阅读价值、方向匹配（对任务有帮助，而非赞同预设结论），再为各关键词选择继续、满足或暂时找不到；代码处理待判断状态和预算。可信线索与局部信息也能返回。评分奖励优质首条、新搜索主题和收益递减的补充结果，仅用于参考，不验收答案完整性。旧 `facts` 字段作为可选搜索主题，不要求全部回答。详见[实现契约](docs/jev-adaptive-search.md)。
 
 ```json
 {
@@ -287,7 +287,7 @@ search-boost
 - 最多 6 个任务、每任务 4 个目标、总计 12 个目标；兼容旧 `questions` 输入。
 - `results` 是扁平的 `{url, title, description}` 列表，只包含已经评估并认可的材料，不包含待评估或被排除的候选。
 - 用 `{"cursor":"<nextCursor>"}` 读取后续页，不重新检索，也不调用 Jev。单页默认 20 条、最多 50 条，并有字节预算；累计认可结果不设固定条数上限。
-- `coverageComplete` 和警告说明检索是否满足目标。读完分页不等于搜遍全网；Jev 认可不等于事实已经独立核实。
+- 查看 `retrievalSufficient`、`keywordProgress`、`pendingAssessments` 和警告。`coverageComplete` 已废弃，schemaVersion 3 中恒为 false，表示不评估答案完整性。关键词满足、读完分页和模型认可均不等于事实核实或搜索穷尽。
 - 结果在当前服务进程中暂存，最多保留 30 分钟、32 次最近结果；过期、被淘汰或重启后游标失效。
 - 时间敏感任务可设置 `time_range`，分别约束文章发布时间或事件时间；未知日期不计入“今日”证据。
 

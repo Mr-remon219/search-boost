@@ -125,6 +125,8 @@ export const searchStatsOutput = {
 }
 
 export const adaptiveSearchInput = {
+  intent: z.string().min(1).max(2000).optional().describe('Concise search intent/preferences, sent to Jev but not appended to engine queries. Not secrets or private reasoning.'),
+  keywords: z.union([z.array(z.string().min(1).max(100)).min(1).max(4), z.array(z.array(z.string().min(1).max(100)).min(1).max(4)).min(1).max(6)]).optional().describe('Only with questions: flat list for one question, otherwise a list per question aligned by position. Omit to use each question itself.'),
   questions: z.array(z.string().min(1).max(400)).min(1).max(6).optional()
     .describe('Legacy independent questions. Supply exactly one of questions, tasks or cursor.'),
   tasks: z.array(z.object({
@@ -134,21 +136,34 @@ export const adaptiveSearchInput = {
       id: z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/),
       keywords: z.array(z.string().min(1).max(100)).min(1).max(4),
       question: z.string().min(1).max(400),
+      intent: z.string().min(1).max(1000).optional(),
+      facts: z.array(z.object({id:z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/),question:z.string().min(1).max(400)}).strict()).min(1).max(8).optional(),
     }).strict()).min(1).max(4),
   }).strict()).min(1).max(6).optional()
-    .describe('Task context plus keyword-guided acceptance targets; at most 12 targets total. Keywords are search variants, not acceptance criteria.'),
+    .describe('Task context plus keyword-guided search targets; at most 12 total. Optional facts are search topics, not answer-completeness requirements.'),
   cursor: z.string().min(1).max(100).optional()
-    .describe('Read the next approved-result page. Do not combine with tasks/questions. No network or Jev calls; cursors are temporary and server-local.'),
+    .describe('Read the next approved-result page. Do not combine with tasks/questions/intent/keywords. No network or Jev calls; cursors are temporary and server-local.'),
   page_size: z.number().int().min(1).max(50).optional()
     .describe('Results per page: default 20, max 50. Total approved results have no fixed count cap; pages also have a byte limit.'),
 }
 
 export const adaptiveSearchOutput = {
-  results: z.array(z.object({ url: z.string(), title: z.string(), description: z.string() })),
+  results: z.array(z.object({ url: z.string(), title: z.string(), description: z.string(), valueScore: z.number().optional(), directionMatch: z.number().nullable().optional(), kind: z.string().optional(), matches: z.array(z.object({taskId:z.string().nullable(),targetId:z.string().nullable(),canonicalId:z.string().nullable(),valueScore:z.number(),directionMatch:z.number().nullable(),kind:z.string()})).optional() })),
   totalResults: z.number(),
   nextCursor: z.string().nullable(),
   expiresAt: z.string(),
-  coverageComplete: z.boolean(),
+  schemaVersion: z.number().optional(),
+  retrievalSufficient: z.boolean().optional().describe('All keyword searches satisfied; never means the answer is complete or verified.'),
+  coverageComplete: z.boolean().describe('Deprecated: always false in schemaVersion 3 because answer completeness is not assessed.'),
+  keywordProgress: z.array(z.object({
+    targetId: z.string(), taskId:z.string().nullable().optional(), canonicalId:z.string().optional(), keyword: z.string(), score: z.number(), ready: z.boolean().optional(),
+    status: z.enum(['continue', 'satisfied', 'exhausted', 'pending']).optional(), reason: z.string().optional(),
+    distinctEvidence: z.number(), finalStatus: z.string(),
+    A: z.number().optional(), F: z.number().optional(), R: z.number().optional(),
+    missingFacts: z.array(z.string()).optional(),
+    factProgress: z.array(z.object({id:z.string(),support:z.number(),covered:z.boolean(),conflicting:z.boolean()})).optional(),
+  })).optional(),
+  pendingAssessments: z.number().optional(),
   stopReason: z.string(),
   warnings: z.array(z.string()),
 }

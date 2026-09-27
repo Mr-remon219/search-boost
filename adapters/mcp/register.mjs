@@ -216,7 +216,7 @@ function summarizeAdaptive(result) {
     description: ADAPTIVE_DESCRIPTION,
     inputSchema: adaptiveSearchInput,
     outputSchema: adaptiveSearchOutput,
-    annotations: { ...ANNOTATIONS.search, title: 'Multi-question adaptive evidence loop (Jev)' },
+    annotations: { ...ANNOTATIONS.search, title: 'Intent-guided search result selection (Jev)' },
   }, async (args, extra) => {
     try {
       const result = await runAdaptiveSearch(args, {

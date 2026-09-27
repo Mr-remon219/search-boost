@@ -7,9 +7,9 @@
  *   node scripts/eval-adaptive-search.mjs --yes --arm baseline --questions my-8-12.json
  *
  * What it measures (per question):
- *   * whether an answer-supporting fragment exists (adaptive: answer_capable
+ *   * whether a worth-reading fragment exists (adaptive: useful_result
  *     evidence; baseline: a fetchable result or a result already carrying text)
- *   * what the adaptive loop claimed (status/coverage) so a human can judge false
+ *   * what the adaptive loop claimed (keyword search satisfaction) so a human can judge false
  *     positives and false negatives against the BASELINE material
  *   * request volume: search calls, internal engine requests, page fetches,
  *     Jev calls / HTTP attempts / input tokens, wall-clock time
@@ -21,7 +21,7 @@
  *     6h search cache and the 24h page cache do not leak between arms
  *   * Jev's own probabilities are NEVER used as evidence that Jev is better: the
  *     report only prints them for a human/independent rubric to compare against
- *     the retrieved material. Coverage must be judged by reading the sources.
+ *     the retrieved material. Reading value must be judged independently against the task.
  *
  * The script therefore prints a rubric worksheet and a metrics table, and writes
  * the same data as JSON for an independent reviewer.
@@ -94,8 +94,8 @@ const report = {
   adaptive: [],
   baseline: [],
   limitations: [
-    'Judging coverage requires reading the returned material; this script does not score correctness.',
-    'Jev status/coverage values are model judgements, not measured accuracy or verified facts.',
+    'Judging reading value requires independent review of returned material; this script does not score correctness.',
+    'Jev search satisfaction and value scores are model judgements, not measured accuracy or answer completeness.',
     'Cache state differs between runs and arms; run arms in separate processes for comparability.',
   ],
 }
@@ -124,10 +124,10 @@ async function runAdaptiveArm() {
         question: q.question,
         status: q.status,
         assessed: q.assessed,
-        coverage: q.coverage?.probability ?? null,
-        basis: q.coverage?.textBasis ?? null,
+        retrievalSufficient: q.retrievalSufficient === true,
+        basis: [...new Set(q.evidence.map(item => item.textBasis))].join(', '),
         reasons: q.uncoveredReasons,
-        answerCapable: q.evidence.filter((item) => item.status === 'answer_capable').length,
+        usefulResults: q.usefulResults ?? 0,
         evidenceCount: q.evidenceCount,
         topEvidence: q.evidence.slice(0, 3).map((item) => ({ evidenceId: item.evidenceId, url: item.url, basis: item.textBasis, status: item.status, reviewedText: String(item.reviewedText ?? '').slice(0, 400) })),
       })),
@@ -183,7 +183,7 @@ const adaptiveTotals = {
   jevInputTokens: sum(report.adaptive.map((entry) => entry.jev?.inputTokens)),
   jevInputTokensEstimated: sum(report.adaptive.map((entry) => entry.jev?.inputTokensEstimated)),
   tookMs: sum(report.adaptive.map((entry) => entry.tookMs)),
-  covered: report.adaptive.flatMap((entry) => entry.perQuestion).filter((q) => q.status === 'covered').length,
+  satisfied: report.adaptive.flatMap((entry) => entry.perQuestion).filter((q) => q.retrievalSufficient).length,
 }
 const baselineTotals = {
   searchCalls: sum(report.baseline.map((entry) => entry.searchCalls)),
@@ -210,23 +210,23 @@ lines.push(`| Jev calls / HTTP attempts | ${adaptiveTotals.jevCalls} / ${adaptiv
 lines.push(`| Jev input tokens (server / estimated) | ${adaptiveTotals.jevInputTokens} / ${adaptiveTotals.jevInputTokensEstimated} | n/a |`)
 lines.push(`| wall clock (sum of calls) | ${adaptiveTotals.tookMs} ms | ${baselineTotals.tookMs} ms |`)
 lines.push('')
-lines.push(`Adaptive reported covered: ${adaptiveTotals.covered}/${questions.length} question(s). These are MODEL judgements about the cited fragments — NOT verified facts and NOT proof this tool is better.`)
+lines.push(`Adaptive reported search satisfied: ${adaptiveTotals.satisfied}/${questions.length} question(s). These are MODEL judgements about the cited fragments — NOT verified facts and NOT proof this tool is better.`)
 lines.push('')
 lines.push('## Rubric worksheet (fill in by reading the sources)')
 lines.push('')
-lines.push('| # | question | adaptive status | coverage (model) | basis | answer-capable items | baseline results / fetched words | judged covered? (human) | false positive? | sources cited |')
+lines.push('| # | question | adaptive status | search satisfied (model) | preview basis | useful results | baseline results / fetched words | worth reading? (human) | key source missed? | duplicate rate |')
 lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |')
 const adaptiveFlat = report.adaptive.flatMap((entry) => entry.perQuestion)
 questions.forEach((question, index) => {
   const adaptive = adaptiveFlat[index]
   const baseline = report.baseline[index]
-  lines.push(`| ${index + 1} | ${question.replace(/\|/g, '/').slice(0, 90)} | ${adaptive?.status ?? '—'} | ${adaptive?.coverage ?? '—'} | ${adaptive?.basis ?? '—'} | ${adaptive?.answerCapable ?? '—'} | ${baseline ? `${baseline.results} / ${baseline.fetchedWords ?? '—'}` : '—'} | | | |`)
+  lines.push(`| ${index + 1} | ${question.replace(/\|/g, '/').slice(0, 90)} | ${adaptive?.status ?? '—'} | ${adaptive?.retrievalSufficient ?? '—'} | ${adaptive?.basis ?? '—'} | ${adaptive?.usefulResults ?? '—'} | ${baseline ? `${baseline.results} / ${baseline.fetchedWords ?? '—'}` : '—'} | | | |`)
 })
 lines.push('')
 lines.push('## How to reach a conclusion')
 lines.push('')
-lines.push('1. For each question, read the adaptive evidence fragments and the baseline result; decide independently whether the question is answered.')
-lines.push('2. Count false positives (adaptive says covered, material does not support it) and false negatives (adaptive says insufficient, material does).')
+lines.push('1. For each question, independently judge result reading value, intent usefulness (including counterevidence), and credible leads, not whether snippets completely answer it.')
+lines.push('2. Measure useful-result rate, missed key sources, duplicate rate, and premature search satisfaction; do not treat search satisfaction as an answer-correctness claim.')
 lines.push('3. Compare request volume and time above; a tie is a valid outcome ("no gain, more expensive" is a reportable result).')
 lines.push('4. Judge in Chinese/English buckets if the set mixes languages; a mixed score hides per-language behaviour.')
 lines.push('')

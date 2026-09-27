@@ -1,0 +1,18 @@
+{
+  "completed_at": "2026-09-27T11:12:36.640650+00:00",
+  "authorization": "User requested recording experimental work in design and deleting the experimental environment/package.",
+  "deleted_experiment_directory": "/home/mrremon/labs/jev-optimization-lab",
+  "deleted_original_archive": "/mnt/c/Users/Administrator/Downloads/jev-optimization-lab.zip",
+  "original_archive_sha256": "4a7d83390cf7cc9d4ece89bd9ccd7e67bbb28627337588b067e41fa950feb475",
+  "retained_files": [
+    "docs/jev-evidence-design.md",
+    "docs/jev-adaptive-search.md",
+    "docs/design-assets/jev-v2/candidate.patch",
+    "docs/design-assets/jev-v2/patch-manifest.json",
+    "docs/design-assets/jev-v2/evidence-summary.json"
+  ],
+  "retained_patch_sha256": "fc8b4c8372efbce48b42d2527e269e283b5a9c4303e82a653eb4da43be133439",
+  "runtime_patch_applied": false,
+  "source_and_global_configuration_unchanged": true,
+  "details": "Removed experiment credentials copy, node_modules, caches, raw data/logs and exported ZIPs with the lab. This is filesystem deletion, not a secure-erasure or key-revocation claim."
+}
