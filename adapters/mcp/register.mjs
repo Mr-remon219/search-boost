@@ -1,3 +1,4 @@
+import { assertToolEnabled, watchToolStates } from '../../lib/tool-config.mjs'
 import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION } from '../../lib/search/routing.js'
 /**
@@ -53,7 +54,17 @@ function summarizeAdaptive(result) {
 }
 
 /** @param {import('@modelcontextprotocol/sdk/server/mcp.js').McpServer} server */export function registerAll(server) {
-  server.registerTool('fused_search', {
+  const handles = new Map()
+  const registerTool = (name, schema, execute) => {
+    const handle = server.registerTool(name, schema, async (...args) => {
+      try { assertToolEnabled(name) } catch (error) { return toolErr(error.message) }
+      return execute(...args)
+    })
+    handles.set(name, handle)
+    return handle
+  }
+
+  registerTool('fused_search', {
     title: 'Fused Web Search',
     description: FUSED_DESCRIPTION + ' Optional live status: search-boost://capabilities Resource.',
     inputSchema: fusedSearchInput,
@@ -100,7 +111,7 @@ function summarizeAdaptive(result) {
     }
   })
 
-  server.registerTool('fetch_page', {
+  registerTool('fetch_page', {
     title: 'Fetch Page',
     description: FETCH_DESCRIPTION,
     inputSchema: fetchPageInput,
@@ -129,7 +140,7 @@ function summarizeAdaptive(result) {
     }
   })
 
-  server.registerTool('x_search', {
+  registerTool('x_search', {
     title: 'X (Twitter) Search',
     description: X_DESCRIPTION,
     inputSchema: xSearchInput,
@@ -162,7 +173,7 @@ function summarizeAdaptive(result) {
     }
   })
 
-  server.registerTool('search_layer', {
+  registerTool('search_layer', {
     title: 'Search Layer',
     description: `Inspect the current search layer with layer=show (default, no change). layer=free or api persists a new default: only change it when authorized. free = ${LAYER_LABELS.free}. api = ${LAYER_LABELS.api}. For a single search, use fused_search.engine_pool instead; legacy api maps to hybrid, not the strict api pool.`,
     inputSchema: searchLayerInput,
@@ -196,7 +207,7 @@ function summarizeAdaptive(result) {
     }
   })
 
-  server.registerTool('search_stats', {
+  registerTool('search_stats', {
     title: 'Search Stats',
     description: 'Read-only diagnostics for failed or empty searches: cache hits/misses, tier counts, engine availability, and recent activity. Call with no arguments. Inspect tool warnings too; an empty result alone does not imply missing credentials or justify changing configuration.',
     inputSchema: {},
@@ -211,7 +222,7 @@ function summarizeAdaptive(result) {
     }
   })
 
-  server.registerTool(ADAPTIVE_TOOL_NAME, {
+  registerTool(ADAPTIVE_TOOL_NAME, {
     title: 'Adaptive Search (Jev)',
     description: ADAPTIVE_DESCRIPTION,
     inputSchema: adaptiveSearchInput,
@@ -275,4 +286,13 @@ function summarizeAdaptive(result) {
       },
     }],
   }))
+  return watchToolStates((states) => {
+    for (const state of states) {
+      const handle = handles.get(state.name)
+      if (handle && handle.enabled !== state.enabled) {
+        if (state.enabled) handle.enable?.()
+        else handle.disable?.()
+      }
+    }
+  })
 }

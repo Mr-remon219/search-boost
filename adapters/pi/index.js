@@ -1,3 +1,4 @@
+import { guardedTool, watchToolStates } from '../../lib/tool-config.mjs'
 import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/adaptive/input.js'
 import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
@@ -68,6 +69,29 @@ const text = (t) => ({ type: 'text', text: t })
 
 /** @param {import('@earendil-works/pi-coding-agent').ExtensionAPI} pi */
 export default function searchBoostExtension(pi) {
+  const registerTool = (definition) => pi.registerTool(guardedTool(definition))
+  let stopWatching
+  let removedBySwitch = new Set()
+  const owned = ['fused_search', 'fetch_page', 'adaptive_search', 'search-parallel-subagent', 'x_search']
+  pi.on('session_start', () => {
+    stopWatching?.()
+    removedBySwitch = new Set()
+    if (!pi.getActiveTools || !pi.setActiveTools) return
+    stopWatching = watchToolStates((states) => {
+      const active = new Set(pi.getActiveTools())
+      for (const name of owned) {
+        const key = name === 'search-parallel-subagent' ? 'research_parallel' : name
+        const enabled = states.find((row) => row.name === key)?.enabled === true
+        if (!enabled) {
+          if (active.has(name)) removedBySwitch.add(name)
+          active.delete(name)
+        } else if (removedBySwitch.delete(name)) active.add(name)
+      }
+      const previous = pi.getActiveTools()
+      if (active.size !== previous.length || previous.some((name) => !active.has(name))) pi.setActiveTools([...active])
+    })
+  })
+  pi.on('session_shutdown', () => { stopWatching?.(); stopWatching = undefined })
   const audit = new AuditLog(auditFilePath())
   const rules = loadSearchBalanceRules()
 
@@ -102,7 +126,7 @@ export default function searchBoostExtension(pi) {
 
   /* ------------------------------ fused_search ------------------------------ */
 
-  pi.registerTool({
+  registerTool({
     name: 'fused_search',
     label: 'Fused Web Search',
     description: FUSED_DESCRIPTION,
@@ -202,7 +226,7 @@ export default function searchBoostExtension(pi) {
 
   /* --------------------------- fetch_page (reader) --------------------------- */
 
-  pi.registerTool({
+  registerTool({
     name: 'fetch_page',
     label: 'Fetch Page (Reader Mode)',
     description: FETCH_DESCRIPTION,
@@ -267,7 +291,7 @@ export default function searchBoostExtension(pi) {
 
   /* --------------------------- adaptive_search (Jev) --------------------------- */
 
-  pi.registerTool({
+  registerTool({
     name: ADAPTIVE_TOOL_NAME,
     label: 'Adaptive Search (Jev)',
     description: ADAPTIVE_DESCRIPTION,
@@ -310,7 +334,7 @@ export default function searchBoostExtension(pi) {
 
   /* ----------------- search-parallel-subagent (pi child processes) ----------------- */
 
-  pi.registerTool({
+  registerTool({
     name: 'search-parallel-subagent',
     label: 'Search Parallel Subagent',
     description: 'Run authorized isolated Pi searcher or summarizer children. Use {agent, task} for one child or {tasks:[{agent,task},...]} for a concurrent wave. Searchers have fused_search/fetch_page; summarizers have no tools. Returns each child report with completion/failure status. The caller chooses the wave size; this runner has no concurrency cap. Use direct search for ordinary lookups.',
@@ -528,7 +552,7 @@ export default function searchBoostExtension(pi) {
 
   /* ------------------------------ x_search ------------------------------ */
 
-  pi.registerTool({
+  registerTool({
     name: 'x_search',
     label: 'X (Twitter) Search',
     description: X_DESCRIPTION,
