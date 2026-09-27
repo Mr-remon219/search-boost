@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /** New TUI/CLI manages OLD Pi/DSH/MCP installations. No real package-manager/host mutations. */
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, statSync, symlinkSync, readlinkSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, statSync, symlinkSync, readlinkSync, realpathSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 
-const temp = mkdtempSync(join(tmpdir(), 'sb upgrade '))
+// Use canonical fixture identities; exercise an aliased caller cwd explicitly
+// in the cache-handoff case below instead of relying on the OS temp-dir spelling.
+const temp = realpathSync(mkdtempSync(join(tmpdir(), 'sb upgrade ')))
 const home = join(temp, 'home'), project = join(temp, 'project')
 mkdirSync(home); mkdirSync(project)
 process.env.HOME = home
@@ -249,6 +251,11 @@ try {
   console.log('ok: handed-off live workers retain the lock after parent timeout')
 
   // A newer release runs from the npx cache, never overwritten imported files.
+  // Enter through an alias to exercise canonical cwd handoff on Linux/Windows
+  // too (macOS tmpdir already commonly aliases /private/var through /var).
+  const projectAlias = join(temp, 'project alias')
+  symlinkSync(project, projectAlias, process.platform === 'win32' ? 'junction' : 'dir')
+  process.chdir(projectAlias)
   const latest = '99.0.0'
   let handoff = false
   const update = await runUpgrade({ log, run: async (command, args, opts) => {
@@ -258,12 +265,15 @@ try {
     assert(args.includes(`--package=search-boost@${latest}`))
     assert.deepEqual(args.slice(args.indexOf('--') + 1), ['search-boost', 'upgrade', '--yes'])
     assert(opts.env.SEARCH_BOOST_UPGRADE_HANDOFF)
-    assert.equal(opts.env.SEARCH_BOOST_UPGRADE_CWD, project)
-    assert.notEqual(opts.cwd, project, 'project package must not shadow the cached updater')
+    // Windows preserves a junction spelling in process.cwd(); POSIX generally
+    // canonicalizes it. The handoff must identify the same directory on both.
+    assert.equal(realpathSync(opts.env.SEARCH_BOOST_UPGRADE_CWD), realpathSync(project))
+    assert.notEqual(realpathSync(opts.cwd), realpathSync(project), 'project package must not shadow the cached updater')
     handoff = true
     return { code: 0, stdout: 'cached updater completed' }
   } })
   assert(update.ok && update.reloaded && handoff)
+  process.chdir(project)
   for (const file of protectedFiles) assert.equal(bytes(file), credentialBytes[file])
   console.log('ok: npm check failures stop cleanly; newer releases hand off to an exact npx cache worker')
 

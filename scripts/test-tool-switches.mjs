@@ -136,7 +136,7 @@ try {
   await assert.rejects(providers.search.search({ query: 'unused' }), /Disabled by user/)
   await assert.rejects(providers.fetch.fetch({ url: 'https://example.com' }), /Disabled by user/)
   await assert.rejects(dshTools.get('research_parallel').execute({}), /Disabled by user/)
-  assert.ok((await dshTools.get('search_stats').execute()).startedAt)
+  assert.ok((await dshTools.get('search_stats').execute({}, {})).startedAt)
   console.log('ok: shared switches, Jev lock, stale calls, atomic/corrupt config, wizard, Pi lifecycle and DSH providers')
 } finally {
   stop?.()

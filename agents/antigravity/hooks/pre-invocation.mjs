@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 // search-boost: startup-hook
 /** Antigravity PreInvocation hook — inject only before the first model call. */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 // A workspace copy defers to our enabled global hook, avoiding duplicate reminders.
 function globalHookActive() {
   const dir = join(homedir(), '.gemini', 'config')
   const script = join(dir, 'hooks', 'search-boost-pre-invocation.mjs')
-  if (resolve(fileURLToPath(import.meta.url)) === resolve(script)) return false
   try {
+    // Node canonicalizes the entry path, but HOME may retain a directory alias
+    // (e.g. macOS /var -> /private/var). A global hook must not defer to itself.
+    if (realpathSync(fileURLToPath(import.meta.url)) === realpathSync(script)) return false
     const entry = JSON.parse(readFileSync(join(dir, 'hooks.json'), 'utf8'))['search-boost-reminder']
     return entry?.enabled !== false && existsSync(script)
       && readFileSync(join(dir, 'hooks', 'search-boost-inject.md'), 'utf8').trim().length > 0
