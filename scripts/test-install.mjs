@@ -616,8 +616,8 @@ const pendingWizard = await runKeysWizardScenario({ seed: {}, actions: ['keep', 
 assert('wizard prompts for all four key slots', pendingWizard.selects.length === 4)
 assert('wizard prompts for anysearch last', pendingWizard.selects[3].message.includes('anysearch'))
 assert(
-  'anysearch prompt offers the same keep/set/remove choices',
-  pendingWizard.selects[3].options.map((o) => o.value).join(',') === 'keep,set,remove',
+  'anysearch prompt offers key and Base URL choices',
+  pendingWizard.selects[3].options.map((o) => o.value).join(',') === 'keep,set,remove,url,reset-url',
 )
 assert('wizard anysearch is no longer pending', !pendingWizard.selects[3].message.includes('adapter pending'))
 assert('wizard explains AnySearch auth modes', pendingWizard.logs.some((l) => l.includes('ANYSEARCH_API_KEY') && l.includes('also work')) && pendingWizard.logs.some((l) => l.includes('anonymous quota')))

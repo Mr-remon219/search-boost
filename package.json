@@ -59,7 +59,7 @@
     "check": "node scripts/check-syntax.mjs",
     "test:fusion": "node scripts/test-fusion-errors.mjs && node scripts/test-fusion-scoring.mjs",
     "test:x": "node scripts/test-x-pipeline.mjs",
-    "test:engines": "node scripts/test-engine-requests.mjs",
+    "test:engines": "node scripts/test-engine-requests.mjs && node scripts/test-engine-base-urls.mjs",
     "test:xauth": "node scripts/test-xauth.mjs",
     "test:jev": "node scripts/test-jev.mjs",
     "test:jev-client": "node scripts/test-jev-client.mjs",

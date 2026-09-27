@@ -178,7 +178,7 @@ search-boost
 | **Setup** | 首次引导式全流程配置，依次设置引擎、搜索层、X 凭据并安装 Agent 集成。 |
 | **Install / update agents** | 快速安装或刷新指定 Agent 的集成文件，跳过凭据与搜索层设置。 |
 | **Update** | **一键全量更新**：检查 npm 最新版本，更新 SearchBoost 并同步刷新所有已接入的 Agent（含 Pi/DSH 旧适配器）。 |
-| **API keys / Search layer** | 管理 Tavily、Brave、Exa 等付费引擎密钥，以及 AnySearch 密钥（free 匿名、api 带 key、hybrid 优先已配置 key），切换默认搜索层 (`free` / `api`)。 |
+| **API keys & Base URLs / Search layer** | 管理 Tavily、Brave、Exa 等付费引擎密钥，以及 AnySearch 密钥（free 匿名、api 带 key、hybrid 优先已配置 key），切换默认搜索层 (`free` / `api`)。 |
 | **X credentials** | 管理 X (Twitter) 认证，支持一键导入本机已有的 Grok 登录状态。 |
 | **Jev credentials (experimental)** | 配置 TypeSafe Jev 认知引擎的端点与 Bearer Token。 |
 | **Native web search** | 开启或关闭宿主自带的原生网页搜索（若宿主提供相应配置开关）。 |
@@ -355,6 +355,24 @@ Pi/DSH 子代理工具加载、旧 `pi-search-boost` 路径与已移除的 `deep
 ---
 
 ## 安全
+
+### 自定义搜索 API 地址
+
+TUI 进入 **API keys & Base URLs**（或执行 `search-boost config keys`），每个引擎同时显示密钥掩码、当前 Base URL 和 default/custom 标记。选择 **Set / replace Base URL** 修改地址后，可继续保留或修改密钥；**Restore default Base URL** 只恢复地址。向导完成后统一保存。状态页和 `config keys --show` 也会显示生效地址。
+
+```bash
+search-boost config keys --base-url exa=https://gateway.example/exa
+search-boost config keys --reset-base-url exa
+```
+
+| 引擎 | 默认 Base URL | 自动追加路径 |
+|---|---|---|
+| Tavily | `https://api.tavily.com` | `/search` |
+| Exa | `https://api.exa.ai` | `/search` |
+| Brave | `https://api.search.brave.com/res/v1` | `/web/search` |
+| AnySearch | `https://api.anysearch.com/v1` | `/search` |
+
+填写 API 基础地址，**不要填写完整搜索端点**；网关路径前缀会保留。地址存放在 keys 文件的 `engines.<name>.baseUrl`，兼容现有密钥字符串和路由开关。请仅使用可信、兼容对应引擎 API 的网关：搜索词与已配置密钥会发送到该地址（AnySearch 在 free 池仍不发送密钥）。推荐 HTTPS，也支持本地网关的 HTTP；拒绝包含用户名密码、查询参数或片段的地址。不影响 Exa-free；地址变更后不会复用旧地址的搜索缓存。
 
 API Key 存放在由 SearchBoost 自己管理的凭据文件中，不写入提示词、工具结果或 shell 配置：
 
