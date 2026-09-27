@@ -6,7 +6,9 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 
-const temp = mkdtempSync(join(tmpdir(), 'sb upgrade '))
+// Use canonical fixture identities; exercise an aliased caller cwd explicitly
+// in the cache-handoff case below instead of relying on the OS temp-dir spelling.
+const temp = realpathSync(mkdtempSync(join(tmpdir(), 'sb upgrade ')))
 const home = join(temp, 'home'), project = join(temp, 'project')
 mkdirSync(home); mkdirSync(project)
 process.env.HOME = home
@@ -263,7 +265,9 @@ try {
     assert(args.includes(`--package=search-boost@${latest}`))
     assert.deepEqual(args.slice(args.indexOf('--') + 1), ['search-boost', 'upgrade', '--yes'])
     assert(opts.env.SEARCH_BOOST_UPGRADE_HANDOFF)
-    assert.equal(opts.env.SEARCH_BOOST_UPGRADE_CWD, realpathSync(project))
+    // Windows preserves a junction spelling in process.cwd(); POSIX generally
+    // canonicalizes it. The handoff must identify the same directory on both.
+    assert.equal(realpathSync(opts.env.SEARCH_BOOST_UPGRADE_CWD), realpathSync(project))
     assert.notEqual(realpathSync(opts.cwd), realpathSync(project), 'project package must not shadow the cached updater')
     handoff = true
     return { code: 0, stdout: 'cached updater completed' }

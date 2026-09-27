@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, existsSync, cpSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, existsSync, cpSync, rmSync, realpathSync } from 'node:fs'
 import { join, dirname, isAbsolute } from 'node:path'
 import { tmpdir } from 'node:os'
 import { pathToFileURL } from 'node:url'
@@ -14,7 +14,9 @@ import { spawnSync } from 'node:child_process'
 import { PKG_ROOT } from '../lib/pkg.mjs'
 import { runCommand, npmCliEntry } from '../lib/upgrade/process.mjs'
 
-const temp = mkdtempSync(join(tmpdir(), 'sb npm migration '))
+// Installed package identities are real paths; do not bake a macOS /var alias
+// into the fixture's expected global prefix and release roots.
+const temp = realpathSync(mkdtempSync(join(tmpdir(), 'sb npm migration ')))
 const home = join(temp, 'home'), prefix = join(temp, 'prefix'), cwd = join(temp, 'workspace'), tools = join(temp, 'tools')
 for (const path of [home, prefix, cwd, tools]) mkdirSync(path)
 const env = { ...process.env, HOME: home, USERPROFILE: home, SEARCH_BOOST_HOME: join(home, '.search-boost'), PI_CODING_AGENT_DIR: join(home, '.pi', 'agent'), DSH_HOME: join(home, '.dsh'), npm_config_prefix: prefix, npm_config_cache: join(temp, 'cache'), npm_config_offline: 'false', npm_config_fetch_retries: '0', npm_config_update_notifier: 'false', npm_config_audit: 'false', npm_config_prefer_online: 'true', NO_PROXY: '127.0.0.1,localhost', no_proxy: '127.0.0.1,localhost' }
