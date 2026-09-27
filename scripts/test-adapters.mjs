@@ -10,6 +10,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { assertObjectJsonSchema, assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
 
 // ---- isolate every state path before importing anything that reads env ----
 const TMP = mkdtempSync(join(tmpdir(), 'sb-adapters-'))
@@ -400,7 +401,7 @@ function mockDshCtx() {
       : n === 'timer' ? { timeout: (ms) => new Promise((r) => setTimeout(r, ms)) }
         : n === 'subagents' ? null : undefined,
     web: { registerSearchProvider: (p) => { providers.search = p }, registerFetchProvider: (p) => { providers.fetch = p } },
-    tools: { register: (t) => { tools.set(t.name, t) } },
+    tools: { register: (t) => { assertObjectJsonSchema(t.parameters); assertSupportedJsonSchema(t.output.schema); tools.set(t.name, t) } },
     systemPrompt: { section: (s) => sections.push(s) },
     timeout: (ms) => new Promise((r) => setTimeout(r, ms)),
   }
@@ -439,7 +440,7 @@ function mockDshCtx() {
   assert('dsh presentationMeta maps sources', meta.sources[0].publishedAt === '2026-01-01' && fused.presentResult({}, { meta }).card === 'web')
   await rejects('dsh x_search requires subject', () => m.tools.get('x_search').execute({}, {}), /provide query/)
   const adaptive = m.tools.get('adaptive_search')
-  assert('dsh adaptive_search exposes tasks, legacy questions and pagination', ['tasks', 'questions', 'cursor', 'page_size'].every((key) => key in adaptive.parameters.properties) && adaptive.parameters.properties.questions.maxItems === 6)
+  assert('dsh adaptive_search exposes tasks, legacy questions and pagination', ['tasks', 'questions', 'cursor', 'page_size'].every((key) => key in adaptive.parameters.properties) && adaptive.parameters.properties.questions.description.includes('maxItems: 6'))
   const adaptiveUnconfigured = await adaptive.execute({ questions: ['fixture question'] }, {})
   assert('dsh adaptive_search is honest when Jev is unconfigured', adaptiveUnconfigured.stopReason === 'not_configured' && adaptiveUnconfigured.results.length === 0 && !adaptiveUnconfigured.coverageComplete)
   const adaptiveInvalid = await adaptive.execute({ questions: ['ok', '  '] }, {})

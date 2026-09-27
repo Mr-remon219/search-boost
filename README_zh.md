@@ -381,6 +381,8 @@ search-boost install -t claude,codex --keep-native  # 安装并保留宿主原�
 search-boost install -t antigravity --workspace /path/to/project # 为指定工作区配置
 search-boost install -t pi -y               # 为 Pi 挂载原生扩展及提示词
 search-boost install -t dsh --profile web   # 为 DeepSeek Harness 接入 web profile
+# 无需全局安装 search-boost / dsh / pnpm（Windows、Linux、macOS）：
+npx --yes search-boost@latest install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # 仅演练安装过程，不写磁盘
 
 # ----------------- 凭据与配置管理 -----------------

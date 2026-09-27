@@ -381,6 +381,8 @@ search-boost install -t claude,codex --keep-native  # Install while preserving h
 search-boost install -t antigravity --workspace /path/to/project # Target a specific workspace
 search-boost install -t pi -y               # Mount Pi extension and prompt templates
 search-boost install -t dsh --profile web   # Connect to DeepSeek Harness web profile
+# No global search-boost / dsh / pnpm required (Windows, Linux, macOS):
+npx --yes search-boost@latest install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # Preview installation without writing files
 
 # ----------------- Configuration Management -----------------

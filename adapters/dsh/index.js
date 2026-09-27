@@ -1,3 +1,4 @@
+import { registerDshTool } from './schema.js'
 import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/adaptive/input.js'
 import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
@@ -172,7 +173,7 @@ function registerStatusSection(ctx) {
 // ---------- fused_search ----------
 
 function registerFusedSearchTool(ctx) {
-  return ctx.tools.register({
+  return registerDshTool(ctx, {
     name: 'fused_search',
     description: FUSED_DESCRIPTION,
     parameters: {
@@ -298,7 +299,7 @@ function renderFused(value) {
 // ---------- fetch_page ----------
 
 function registerFetchPageTool(ctx) {
-  return ctx.tools.register({
+  return registerDshTool(ctx, {
     name: 'fetch_page',
     description: FETCH_DESCRIPTION,
     parameters: {
@@ -362,7 +363,7 @@ function registerFetchPageTool(ctx) {
 // ---------- adaptive_search (Jev) ----------
 
 function registerAdaptiveSearchTool(ctx) {
-  return ctx.tools.register({
+  return registerDshTool(ctx, {
     name: ADAPTIVE_TOOL_NAME,
     description: ADAPTIVE_DESCRIPTION,
     parameters: ADAPTIVE_INPUT_SCHEMA,
@@ -410,7 +411,7 @@ function registerAdaptiveSearchTool(ctx) {
 // ---------- x_search ----------
 
 function registerXSearchTool(ctx) {
-  return ctx.tools.register({
+  return registerDshTool(ctx, {
     name: 'x_search',
     description: X_DESCRIPTION,
     parameters: {
@@ -581,7 +582,7 @@ function registerXLogoutCommand(ctx) {
 // ---------- research_parallel (DSH native subagents) ----------
 
 function registerParallelTool(ctx, provider = 'spawn') {
-  return ctx.tools.register({
+  return registerDshTool(ctx, {
     name: 'research_parallel',
     description: 'Run authorized DSH-native research children: searchers receive fused_search/fetch_page, summarizers receive no tools. Use {agent, task} for one child or {tasks:[{agent,task},...]} for a concurrent wave. Returns reports with execution status; missing capabilities fail explicitly, without a Pi CLI fallback. Legacy {query, sub_queries} remains supported. Ordinary lookups use direct search; the shared workflow governs follow-up waves.',
     parameters: {
@@ -727,7 +728,7 @@ function registerWebChangeCommand(ctx) {
 // ---------- search_stats ----------
 
 function registerStatsTool(ctx) {
-  return ctx.tools.register({
+  return registerDshTool(ctx, {
     name: 'search_stats',
     description: 'search-boost audit: cache hits/misses, tier distribution, engine availability, and the most recent searches.',
     parameters: { type: 'object', additionalProperties: false, properties: {} },
@@ -739,6 +740,7 @@ function registerStatsTool(ctx) {
         properties: {
           startedAt: { type: 'string' }, cacheHits: { type: 'number' }, cacheMisses: { type: 'number' },
           tierCounts: { type: 'object' }, engines: { type: 'object' }, grok: { type: 'boolean' },
+          xOfficial: { type: 'boolean' }, xSource: { type: 'string' },
           x: { type: 'object', additionalProperties: true },
           keyedEngines: { type: 'object', additionalProperties: true },
           layer: { type: 'string' },
