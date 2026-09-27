@@ -99,6 +99,26 @@ jobs:
         if: always()
         run: npm run test:adaptive
 
+      - name: Intent-guided retrieval (default controller, scoring and interfaces)
+        if: always()
+        run: npm run test:retrieval
+
+      - name: Frozen keyword controller regressions
+        if: always()
+        run: npm run test:keywords
+
+      - name: Frozen fact-score regressions
+        if: always()
+        run: npm run test:facts
+
+      - name: Adaptive funnel regressions
+        if: always()
+        run: npm run test:funnel
+
+      - name: Bounded recursion regressions
+        if: always()
+        run: node scripts/test-recursion.mjs
+
       - name: Search routing
         if: always()
         run: npm run test:search

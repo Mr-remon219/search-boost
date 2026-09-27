@@ -34,7 +34,7 @@
   - [1. `fused_search` Multi-Engine Search](#1-fused_search-multi-engine-search)
   - [2. `fetch_page` Smart Content Reader](#2-fetch_page-smart-content-reader)
   - [3. `x_search` X (Twitter) Intelligence](#3-x_search-x-twitter-intelligence)
-  - [4. `adaptive_search` Jev Evidence Loop (Experimental)](#4-adaptive_search-jev-evidence-loop-experimental)
+  - [4. `adaptive_search` Jev Intent-Guided Search (Experimental)](#4-adaptive_search-jev-intent-guided-search-experimental)
   - [Engine Pools & Scoring Presets](#engine-pools--scoring-presets)
 - [Parallel Multi-Agent Research Workflows](#parallel-multi-agent-research-workflows)
 - [Security](#security)
@@ -53,8 +53,8 @@
   Fetches the origin first for low latency, with optional same-route curl compatibility fallback and Jina Reader backup. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
 - **X / Twitter Community Intelligence (`x_search`)**  
   Retrieves public posts, user timelines, and discussion threads via official xAI API or an anonymous fallback channel. Recovers accurate UTC timestamps from Snowflake post IDs and enforces local author/date filtering without hallucination.
-- **Jev Adaptive Evidence Loop (`adaptive_search` · Experimental)**  
-  Accepts task context, keyword alternatives and acceptance targets. Each round uses at most three Jev calls: plan, score and coverage. Returns approved URLs, titles and descriptions with cursor pagination and no fixed cumulative result-count cap; execution remains budgeted.
+- **Jev Intent-Guided Search (`adaptive_search` · Experimental)**
+  Supply questions, bound keywords and search intent. Jev selects relevant material worth reading, including credible pointers and counterevidence, and judges keyword continuation. Global 500-URL round capacity, bounded micro-batches and cursor pagination; no answer-completeness check or automatic page reading.
 - **Native Multi-Agent Parallel Research**  
   Bundles `search-boost` and `search-boost-parallel-research` skills. In hosts supporting subagents (Cursor, Claude Code, Pi, DSH), tasks can be dispatched to parallel Searchers (gathering evidence) and Summarizers (pure synthesis without tools), supporting both Fast and Complex waves.
 - **Unified Core Across All Host Ecosystems**  
@@ -199,7 +199,7 @@ When integrated, agents automatically receive standard tool definitions and auto
 | `fused_search` | Parallel multi-engine querying, deduplication, and diversity re-ranking | A single search step; follow-up decisions remain with the parent agent |
 | `fetch_page` | Reading clean content from public URLs with optional keyword focus | Not a browser with login state; cannot access internal/private networks |
 | `x_search` | Retrieving public X posts, author timelines, or discussion threads | Does not guarantee exhaustive comment threads or total sentiment sampling |
-| `adaptive_search` | **Experimental**: Jev-guided autonomous follow-up and evidence evaluation | Approved URLs and descriptions; model approval is not independent verification |
+| `adaptive_search` | **Experimental**: intent-guided search selection and keyword continuation | Worth-reading URLs and extractive descriptions; not verified answers |
 | `search_stats` | Reading engine status, memory cache hits, and recent diagnostic stats | Read-only; configuration readiness does not guarantee active external network reachability |
 | `search_layer` | Viewing or switching compatibility search layer in MCP | `show` is read-only; changing layers mutates persistent configuration on disk |
 
@@ -264,14 +264,15 @@ Designed for real-time technical tracking and first-party developer updates. Sup
 
 ---
 
-### 4. `adaptive_search` Jev Evidence Loop (Experimental)
+### 4. `adaptive_search` Jev Intent-Guided Search (Experimental)
 
 **Vercel support**: in TUI → Jev credentials, enter `https://ai-gateway.vercel.sh/v1` and a Vercel AI Gateway key. SearchBoost selects the official SDK evaluation model `typesafe-ai/jev`, not chat completions. The default TypeSafe `/systemone` path remains supported. Both paths use only the canonical user Jev credential, not environment keys, and respect server rate-limit delays.
 
-The caller supplies task context, keyword alternatives and explicit acceptance questions. Jev chooses query strategies and engines, then scores retrieved evidence and judges which targets need another round. Each round has at most three logical requests, not one request per URL.
+The caller supplies questions, bound keywords and optional `intent` explaining useful search directions. Jev judges relevance, reading value and direction match (helpfulness, not agreement), then chooses continue/satisfied/exhausted per keyword; code handles unknown/pending decisions and finite budgets. Pointers and partial information can qualify. The score rewards strong results, new supplied topics and diminishing supplementary results; it is advisory, not answer completeness. Legacy `facts` are optional search topics, not mandatory acceptance conditions. See [the implementation contract](docs/jev-adaptive-search.md).
 
 ```json
 {
+  "intent": "Prefer migration guides and concrete incompatibilities; include counterexamples.",
   "tasks": [{
     "context": "ExampleDB 4.2 upgrade impact",
     "targets": [{
@@ -285,9 +286,9 @@ The caller supplies task context, keyword alternatives and explicit acceptance q
 ```
 
 - Up to 6 tasks, 4 targets per task, 12 total targets; legacy `questions` input remains supported.
-- `results` is a flat `{url, title, description}` list containing only assessed, approved material, not unassessed/rejected candidates.
+- `results` contains `{url, title, description, valueScore, directionMatch, kind}`; descriptions are extractive, scores are uncalibrated heuristics, and rejected/unassessed material is excluded.
 - Read more with `{"cursor":"<nextCursor>"}`: no new search or Jev call. Pages default to 20 results (max 50) and have a byte budget, but cumulative approved results have no fixed count cap.
-- Inspect `coverageComplete` and warnings. End of pagination is not exhaustive search, and model approval is not independent fact verification.
+- Inspect `retrievalSufficient`, `keywordProgress`, `pendingAssessments` and warnings. `coverageComplete` is deprecated and always false in schemaVersion 3: answer completeness is not assessed. Search satisfaction, end of pagination and model approval do not establish truth or exhaustiveness.
 - Results are process-local, retained for up to 30 minutes / 32 recent result sets; expiry, eviction or restart invalidates cursors.
 - Optional task `time_range` distinguishes publication dates from event dates; unknown dates cannot qualify as today's evidence.
 

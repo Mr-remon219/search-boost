@@ -1,0 +1,308 @@
+{
+  "preserved_at": "2026-09-27T11:11:46.026887+00:00",
+  "status": "design recorded; V2 patch unapplied/provisional; fact-level formula unimplemented",
+  "base_commit": "ef0a3e7ef4584314e436393fecbba22d47a64843",
+  "candidate_patch_sha256": "fc8b4c8372efbce48b42d2527e269e283b5a9c4303e82a653eb4da43be133439",
+  "retention": "Minimal source patch and aggregate evidence only. Original lab, snapshots, detailed logs, credentials and archives are intentionally deleted; hashes do not constitute a reproducible benchmark.",
+  "v2_formula": {
+    "formula": "log_harmonic_soft",
+    "gate": 0.6,
+    "tau": 0.6
+  },
+  "comparison_configurations": {
+    "round1": 12,
+    "round2": 10,
+    "selection_note": "Second-round nondegeneracy rule was revised after first-round results and recorded before round2; harmonic/geometric not distinguished."
+  },
+  "protocol_replay": {
+    "originalProtocol": {
+      "cases": {
+        "n": 141,
+        "positive": 12,
+        "tp": 6,
+        "fp": 2
+      },
+      "distinctInputBundles": {
+        "n": 140,
+        "positive": 12,
+        "tp": 6,
+        "fp": 2
+      },
+      "distinctContributionSignatureLabelPairs": {
+        "n": 38,
+        "positive": 6,
+        "tp": 3,
+        "fp": 1
+      },
+      "signatureLabelConflicts": [
+        "D01|[]",
+        "D01|[[\"D01-C1\",1.5070641236532871]]",
+        "D08|[[\"D08-C1\",0.7055123773277978]]"
+      ],
+      "perQuestion": {
+        "D01": {
+          "n": 16,
+          "positive": 5,
+          "tp": 3,
+          "fp": 2
+        },
+        "D02": {
+          "n": 13,
+          "positive": 0,
+          "tp": 0,
+          "fp": 0
+        },
+        "D03": {
+          "n": 26,
+          "positive": 3,
+          "tp": 3,
+          "fp": 0
+        },
+        "D04": {
+          "n": 17,
+          "positive": 2,
+          "tp": 0,
+          "fp": 0
+        },
+        "D05": {
+          "n": 16,
+          "positive": 0,
+          "tp": 0,
+          "fp": 0
+        },
+        "D06": {
+          "n": 18,
+          "positive": 0,
+          "tp": 0,
+          "fp": 0
+        },
+        "D07": {
+          "n": 17,
+          "positive": 0,
+          "tp": 0,
+          "fp": 0
+        },
+        "D08": {
+          "n": 17,
+          "positive": 2,
+          "tp": 0,
+          "fp": 0
+        }
+      },
+      "tauSensitivity": [
+        {
+          "tau": 0.595,
+          "n": 141,
+          "positive": 12,
+          "tp": 8,
+          "fp": 3
+        },
+        {
+          "tau": 0.6,
+          "n": 141,
+          "positive": 12,
+          "tp": 6,
+          "fp": 2
+        },
+        {
+          "tau": 0.605,
+          "n": 141,
+          "positive": 12,
+          "tp": 5,
+          "fp": 2
+        }
+      ]
+    },
+    "productionProtocol": {
+      "cases": {
+        "n": 141,
+        "positive": 12,
+        "tp": 8,
+        "fp": 16
+      },
+      "distinctInputBundles": {
+        "n": 140,
+        "positive": 12,
+        "tp": 8,
+        "fp": 16
+      },
+      "distinctContributionSignatureLabelPairs": {
+        "n": 29,
+        "positive": 6,
+        "tp": 4,
+        "fp": 7
+      },
+      "signatureLabelConflicts": [
+        "D01|[]",
+        "D01|[[\"D01-C1\",2.012347347306606]]",
+        "D04|[[\"D04-C1\",1.00109190271033]]",
+        "D08|[[\"D08-C1\",0.672276767575004]]"
+      ],
+      "perQuestion": {
+        "D01": {
+          "n": 16,
+          "positive": 5,
+          "tp": 3,
+          "fp": 2
+        },
+        "D02": {
+          "n": 13,
+          "positive": 0,
+          "tp": 0,
+          "fp": 0
+        },
+        "D03": {
+          "n": 26,
+          "positive": 3,
+          "tp": 3,
+          "fp": 4
+        },
+        "D04": {
+          "n": 17,
+          "positive": 2,
+          "tp": 2,
+          "fp": 3
+        },
+        "D05": {
+          "n": 16,
+          "positive": 0,
+          "tp": 0,
+          "fp": 7
+        },
+        "D06": {
+          "n": 18,
+          "positive": 0,
+          "tp": 0,
+          "fp": 0
+        },
+        "D07": {
+          "n": 17,
+          "positive": 0,
+          "tp": 0,
+          "fp": 0
+        },
+        "D08": {
+          "n": 17,
+          "positive": 2,
+          "tp": 0,
+          "fp": 0
+        }
+      },
+      "tauSensitivity": [
+        {
+          "tau": 0.595,
+          "n": 141,
+          "positive": 12,
+          "tp": 8,
+          "fp": 16
+        },
+        {
+          "tau": 0.6,
+          "n": 141,
+          "positive": 12,
+          "tp": 8,
+          "fp": 16
+        },
+        {
+          "tau": 0.605,
+          "n": 141,
+          "positive": 12,
+          "tp": 6,
+          "fp": 13
+        }
+      ]
+    }
+  },
+  "validation": {
+    "kind": "recorded_web_material_live_jev_not_live_retrieval",
+    "n": 16,
+    "positive": 8,
+    "tp": 8,
+    "fp": [
+      "N05-missing"
+    ],
+    "note": "N05 negative passage itself states mixing question types. Retain original gold and count failure; label ambiguity is not used to turn failure into success."
+  },
+  "live": [
+    {
+      "id": "L1",
+      "pool": 36,
+      "reviewed": 36,
+      "pending": 0,
+      "rounds": 1,
+      "status": [
+        "covered"
+      ],
+      "ms": 6332,
+      "transport": {
+        "engine": 6,
+        "page": 0,
+        "jev": 5
+      },
+      "note": "Model-complete, not independent answer accuracy."
+    },
+    {
+      "id": "L2",
+      "pool": 92,
+      "reviewed": 184,
+      "pending": 0,
+      "rounds": 1,
+      "status": [
+        "covered",
+        "covered"
+      ],
+      "ms": 8587,
+      "transport": {
+        "engine": 18,
+        "page": 0,
+        "jev": 12
+      },
+      "note": "Model-complete, not independent answer accuracy."
+    },
+    {
+      "id": "L3",
+      "pool": 38,
+      "reviewed": 38,
+      "pending": 0,
+      "rounds": 1,
+      "status": [
+        "covered"
+      ],
+      "ms": 4597,
+      "transport": {
+        "engine": 6,
+        "page": 0,
+        "jev": 4
+      },
+      "note": "Model-complete, not independent answer accuracy."
+    }
+  ],
+  "test_evidence": {
+    "v2_hermetic_cases": 16,
+    "legacy_v1_cases": 77,
+    "legacy_fault_cases": 9,
+    "500_candidates": "synthetic; 24 logical Jev calls and approximately 634431 estimated input tokens; not live retrieval proof",
+    "adapter_schemas": "MCP and DSH additive-output mismatch repaired and retested"
+  },
+  "unresolved": [
+    "Fact IDs, provenance grouping and evidence-to-fact assignments not implemented in V2.",
+    "No calibrated production threshold or independently established quality improvement.",
+    "One false-covered validation case retained under original labels; label ambiguity does not erase failure.",
+    "Text containment is not semantic novelty; site bucketing can over-discount independent sources."
+  ],
+  "source_artifact_hashes": {
+    "artifacts/PATCH_MANIFEST.json": "7ac7840b8bed037419abbe37988b115e2aa833a88be1843d6e3b4172c4d059c1",
+    "artifacts/candidate.patch": "fc8b4c8372efbce48b42d2527e269e283b5a9c4303e82a653eb4da43be133439",
+    "artifacts/revision-v2/REPORT.md": "554b2ad2f232574674877abb4c38654c6c436b372229374b9a798f6f3db4721f",
+    "artifacts/revision-v2/FACT_SCORE_REVISION.md": "34f5e4921ec7e1793928086ce4279eb9ad38133de1483da5f67724cbd5168030",
+    "artifacts/revision-v2/formula-comparison.json": "10a9e4e7b80e636e21ccd1e32d180e0cf0a78dcba555a059a601e8a98cf04ba5",
+    "artifacts/revision-v2/formula-comparison-round2.json": "17aaf011fe126d7c7789888fcb40f8d2f1a1d1580bd8ccfb2ba14b5293ec4014",
+    "artifacts/revision-v2/audit-metrics.json": "26dfa947360b7d7d8dd2b31e708c1dfd11697fe128aa628314a831fabf68ff86",
+    "artifacts/revision-v2/validation-cases.json": "ccebedc68ce3be51f78d2dceb0c8b8a1d5c5b32186f21a0ea95513a52ee9cfc1",
+    "artifacts/revision-v2/validation-freeze.json": "d435cccdad05d61011e77c86ec884ba451d858cc19cea13bd63707e23c29921c",
+    "artifacts/revision-v2/validation-results.json": "895b68ac2333d0922f190f900f133eb194d4b2a7d4a97022d2bc67a280e8513b",
+    "artifacts/revision-v2/math-review.md": "7594eec1065b812bcd50151b6f6c685bddd8792aa90bda0ee21818519bd2ee29",
+    "artifacts/revision-v2/REVIEW_DISPOSITION.md": "a9e20f73c58f30ec1bf0c7dfdb5b70c558c3091324305689c2793b014dfb43bc",
+    "artifacts/REGRESSION.md": "e92e6fdd8b5b77d0993e7a90963d418981028ec1b9ef44f9aac22a96f2821e46"
+  }
+}
