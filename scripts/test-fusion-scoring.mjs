@@ -1,3 +1,4 @@
+import './isolate-tests.mjs'
 import assert from 'node:assert/strict'
 import * as z from 'zod'
 import { fusedSearchOutput } from '../adapters/mcp/schemas.mjs'

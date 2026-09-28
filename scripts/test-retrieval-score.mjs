@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /**
  * Default reading-value score algebra — hermetic unit tests (no network, no loop).
  *

@@ -1,3 +1,4 @@
+import './isolate-tests.mjs'
 import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
 // Engine request bodies — assert what actually goes on the wire.
 //

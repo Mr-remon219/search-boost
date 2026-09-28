@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /**
  * Default adaptive_search retrieval mode — hermetic contract tests.
  *

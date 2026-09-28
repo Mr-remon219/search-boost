@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** Real installer and hook subprocesses, isolated from the user's HOME. No network. */
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -7,26 +8,14 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const self = fileURLToPath(import.meta.url)
-if (!process.argv.includes('--isolated')) {
-  const temp = mkdtempSync(join(tmpdir(), 'sb startup hooks '))
-  const physicalHome = join(temp, 'physical home')
-  const home = join(temp, 'home alias')
-  mkdirSync(physicalHome)
-  // Node resolves an entry-point symlink while HOME can retain its alias. This
-  // reproduces macOS /var -> /private/var on every platform, not just CI Macs.
-  symlinkSync(physicalHome, home, process.platform === 'win32' ? 'junction' : 'dir')
-  try {
-    execFileSync(process.execPath, [self, '--isolated'], {
-      env: {
-        ...process.env, HOME: home, USERPROFILE: home,
-        SEARCH_BOOST_WORKSPACES_FILE: join(home, 'workspaces.json'),
-        SEARCH_BOOST_CURSOR_INSTALL_STATE: join(home, 'cursor-state.json'),
-      },
-      stdio: 'inherit',
-    })
-  } finally { rmSync(temp, { recursive: true, force: true }) }
-} else {
+const temp = mkdtempSync(join(tmpdir(), 'sb startup hooks '))
+const physicalHome = join(temp, 'physical home'), aliasHome = join(temp, 'home alias')
+mkdirSync(physicalHome)
+symlinkSync(physicalHome, aliasHome, process.platform === 'win32' ? 'junction' : 'dir')
+process.env.HOME = process.env.USERPROFILE = aliasHome
+process.env.SEARCH_BOOST_WORKSPACES_FILE = join(aliasHome, 'workspaces.json')
+process.env.SEARCH_BOOST_CURSOR_INSTALL_STATE = join(aliasHome, 'cursor-state.json')
+try {
   const { AGENTS } = await import('../lib/agents/index.mjs')
   const { PATHS, workspaceAgents } = await import('../lib/paths.mjs')
   const { installStartupHook, uninstallStartupHook, STARTUP_HOOK_KEY } = await import('../lib/startup-hooks.mjs')
@@ -213,4 +202,4 @@ if (!process.argv.includes('--isolated')) {
   await AGENTS.grok.uninstall({ skipGrokPlugin: true })
   console.log('ok: grok uses startup rule fallback')
   console.log('All startup hook tests passed.')
-}
+} finally { rmSync(temp, { recursive: true, force: true }) }

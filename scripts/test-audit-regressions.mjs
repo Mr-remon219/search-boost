@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 // Release-audit regressions: real loopback proxy traffic plus hermetic boundary
 // cases. No external service, user configuration or real credential is used.
 import assert from 'node:assert/strict'

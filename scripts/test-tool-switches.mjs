@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'

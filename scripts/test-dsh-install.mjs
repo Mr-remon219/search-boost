@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import './isolate-install-tests.mjs'
+import './isolate-tests.mjs'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'

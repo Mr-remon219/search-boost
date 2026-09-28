@@ -1,11 +1,11 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /**
  * P4 fault-injection suite: bounded recursion + safe stopping invariants.
  * Hermetic (fake Jev/engines/pages/clock). Scenarios assert the acceptance
  * rules directly: depth-2 recursion, branch cap, loop/duplicate detection,
  * and — critically — that "no new qualified items this round" never drops
  * pending/lead material and never forges a covered verdict.
- * Writes artifacts/04-fault-tests.json with per-scenario results.
  */
 import assert from 'node:assert/strict'
 

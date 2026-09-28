@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 // Config authority + credential storage regressions (B1 / B2 / B4).
 //
 // These exercise the real modules through their public entry points. Where the

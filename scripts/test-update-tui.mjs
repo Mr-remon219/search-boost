@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** Exercise the existing Clack menu with an injected Update operation. */
 import assert from 'node:assert/strict'
 import { runTui } from '../lib/installer/tui.mjs'

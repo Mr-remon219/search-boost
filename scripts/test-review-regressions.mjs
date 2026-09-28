@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** Independent-review R1–R4: real upgrade/CLI writes in isolated homes.
  * TOML assertions use Python 3.11+ tomllib, not textual scope heuristics. */
 import assert from 'node:assert/strict'

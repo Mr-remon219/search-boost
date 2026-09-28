@@ -1,3 +1,4 @@
+import './isolate-tests.mjs'
 /**
  * Unit checks for fused_search engine failure surfacing.
  */
