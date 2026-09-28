@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Default adaptive_search retrieval mode — hermetic contract tests.
+ * Frozen pre-scope V3 controller — hermetic historical comparison tests.
+ * Production scope-first behavior is tested in test-single-target.mjs.
  *
  * Fake engines, fake page fetch, scripted Jev transport, fake clock: no network,
  * no real Jev. These check the reading-value controller's invariants (pointer
@@ -11,8 +12,10 @@
 import assert from 'node:assert/strict'
 
 const { runAdaptiveLoop, STOP_REASONS, REASONS, ADAPTIVE_RETRIEVAL_SCHEMA_VERSION } = await import('../lib/search/adaptive/loop.mjs')
-const { ADAPTIVE_LIMITS, ADAPTIVE_THRESHOLDS } = await import('../lib/search/adaptive/limits.js')
-const { normalizeAdaptiveInput, canonicalTargets } = await import('../lib/search/adaptive/input.js')
+const { ADAPTIVE_LIMITS: CURRENT_LIMITS, ADAPTIVE_THRESHOLDS: CURRENT_THRESHOLDS } = await import('../lib/search/adaptive/limits.js')
+const ADAPTIVE_LIMITS = { ...CURRENT_LIMITS, scopeFirst: false, maxQuestions: 6, maxTargets: 12, maxSourceJudgeCandidatesPerQuestion: 24, maxSourceJudgeCandidatesPerRequest: 24 }
+const ADAPTIVE_THRESHOLDS = { ...CURRENT_THRESHOLDS, relevance: .60, directionMatch: null, directionLambda: .2 }
+const { normalizeLegacyAdaptiveInput: normalizeAdaptiveInput, canonicalTargets } = await import('../lib/search/adaptive/legacy-input.js')
 const { requestFits } = await import('../lib/search/adaptive/material.js')
 
 let passed = 0

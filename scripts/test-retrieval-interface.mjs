@@ -35,11 +35,13 @@ for (const page of [first, second]) {
   assert.match(renderAdaptiveSummary(page), /answer completeness not assessed/)
 }
 assert.equal(second.nextCursor, null)
-for (const key of ['intent', 'keywords', 'tasks', 'questions']) assert.throws(() => validatePageInput({ cursor: first.nextCursor, [key]: [] }), /cannot be combined/)
-for (const input of [{ questions: ['migration?'], keywords:['upgrade'], intent:'Find primary guides and counterexamples.' }, { questions:['a?', 'b?'], keywords:[['a'], ['b']] }, { tasks:[{ context:'Product', targets:[{ id:'a', keywords:['a'], question:'Where?', intent:'A credible pointer is useful.' }] }] }]) {
+for (const key of ['intent', 'keywords', 'constraints', 'questions']) assert.throws(() => validatePageInput({ cursor: first.nextCursor, [key]: [] }), /cannot be combined/)
+for (const input of [{ questions: ['migration?'], keywords:['upgrade'], intent:'Find primary guides and counterexamples.', constraints:['Only official sources'] }, { questions:['a?'], constraints:[] }]) {
   validatePageInput(input)
   assert.deepEqual(z.object(adaptiveSearchInput).strict().parse(input), input)
 }
+for (const bad of [{questions:['a','b']}, {tasks:[]}, {questions:['a'],keywords:[['k']]}]) assert.equal(z.object(adaptiveSearchInput).strict().safeParse(bad).success, false)
+
 // Invalid input is checked before credentials/network even in the runtime path.
 const invalid = await runAdaptiveSearch({ questions:['a?', 'b?'], keywords:['ambiguous'] })
 assert.equal(invalid.stopReason, 'invalid_input')

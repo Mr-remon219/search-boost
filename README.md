@@ -54,7 +54,7 @@
 - **X / Twitter Community Intelligence (`x_search`)**  
   Retrieves public posts, user timelines, and discussion threads via official xAI API or an anonymous fallback channel. Recovers accurate UTC timestamps from Snowflake post IDs and enforces local author/date filtering without hallucination.
 - **Jev Intent-Guided Search (`adaptive_search` · Experimental)**
-  Supply questions, bound keywords and search intent. Jev selects relevant material worth reading, including credible pointers and counterevidence, and judges keyword continuation. Global 500-URL round capacity, bounded micro-batches and cursor pagination; no answer-completeness check or automatic page reading.
+  Supply one question, research intent, search points and explicit restrictions. Jev selects a query then its engines, checks explicit constraints before quality, retains useful supporting material, and reviews ALL admitted material before stopping. Global 500-URL round capacity, bounded page recovery and cursor pagination; no claim of verified or complete answers.
 - **Native Multi-Agent Parallel Research**  
   Bundles `search-boost` and `search-boost-parallel-research` skills. In hosts supporting subagents (Cursor, Claude Code, Pi, DSH), tasks can be dispatched to parallel Searchers (gathering evidence) and Summarizers (pure synthesis without tools), supporting both Fast and Complex waves.
 - **Unified Core Across All Host Ecosystems**  
@@ -281,31 +281,24 @@ Designed for real-time technical tracking and first-party developer updates. Sup
 
 **Vercel support**: in TUI → Jev credentials, enter `https://ai-gateway.vercel.sh/v1` and a Vercel AI Gateway key. SearchBoost selects the official SDK evaluation model `typesafe-ai/jev`, not chat completions. The default TypeSafe `/systemone` path remains supported. Both paths use only the canonical user Jev credential, not environment keys, and respect server rate-limit delays.
 
-The caller supplies questions, bound keywords and optional `intent` explaining useful search directions. Jev judges relevance, reading value and direction match (helpfulness, not agreement), then chooses continue/satisfied/exhausted per keyword; code handles unknown/pending decisions and finite budgets. Pointers and partial information can qualify. The score rewards strong results, new supplied topics and diminishing supplementary results; it is advisory, not answer completeness. Legacy `facts` are optional search topics, not mandatory acceptance conditions. See [the implementation contract](docs/jev-adaptive-search.md).
+Supply **one question** (`questions` has exactly one item), optional research `intent`, flat `keywords` and explicit hard document `constraints`. Each search chooses a query using current gaps/materials/search feedback, then assesses engines for that exact query. A **separate Boolean prefilter** checks ALL explicit constraints; empty constraints skip it. Quality retains useful focused and supporting material; direction controls focus ordering and keyword matches attribute contributions, not document retention. After bounded assessment opportunities and current contributions for all points, final review sees **ALL valid admitted materials**, against question and intent without rechecking constraints. Pass returns; not-passed names an existing keyword to re-search. Oversized full-set requests and execution failures stay incomplete. The agent owns analysis and fact verification.
 
 ```json
 {
-  "intent": "Prefer migration guides and concrete incompatibilities; include counterexamples.",
-  "tasks": [{
-    "context": "ExampleDB 4.2 upgrade impact",
-    "targets": [{
-      "id": "migration",
-      "keywords": ["migration guide", "upgrade guide"],
-      "question": "What migration steps are required from 4.1 to 4.2?"
-    }]
-  }],
+  "questions": ["What are the migration risks from ExampleDB 4.1 to 4.2?"],
+  "intent": "Find migration steps and concrete incompatibilities; include counterexamples.",
+  "keywords": ["migration steps", "breaking changes", "failure cases"],
+  "constraints": ["Only official sources"],
   "page_size": 20
 }
 ```
 
-- Up to 6 tasks, 4 targets per task, 12 total targets; legacy `questions` input remains supported.
-- `results` contains `{url, title, description, valueScore, directionMatch, kind}`; descriptions are extractive, scores are uncalibrated heuristics, and rejected/unassessed material is excluded.
-- Read more with `{"cursor":"<nextCursor>"}`: no new search or Jev call. Pages default to 20 results (max 50) and have a byte budget, but cumulative approved results have no fixed count cap.
-- Inspect `retrievalSufficient`, `keywordProgress`, `pendingAssessments` and warnings. `coverageComplete` is deprecated and always false in schemaVersion 3: answer completeness is not assessed. Search satisfaction, end of pagination and model approval do not establish truth or exhaustiveness.
-- Results are process-local, retained for up to 30 minutes / 32 recent result sets; expiry, eviction or restart invalidates cursors.
-- Optional task `time_range` distinguishes publication dates from event dates; unknown dates cannot qualify as today's evidence.
-
-See the [adaptive-search contract and limitations](./docs/jev-adaptive-search.md).
+- `constraints` contains complete, checkable hard conditions such as applicable version, event/publication date, platform or ONLY official sources. **Do not put research direction, soft preferences, keywords or desired conclusions here**; omit or use `[]` when none. Restrictions are ANDed; put every mandatory document condition here, not only in the question. Useful supporting material need not match a listed search point.
+- Multi-question lists, `tasks/targets/facts/time_range` and nested keyword arrays are no longer public inputs. Independent questions require separate calls.
+- Results contain approved URLs, titles, reviewed extracts, valueScore, directionMatch, kind and focus/supporting tier, not generated answers. Unadmitted candidates are excluded; missing optional direction/match judgments remain disclosed.
+- Inspect `reviewSummary`, `scopeSummary`, `finalReview`, `keywordProgress`, `pendingAssessments` and warnings. `retrievalSufficient` requires a successful whole-question final review, not proof of truth or complete answer coverage. Deprecated `coverageComplete` stays false in schemaVersion 3.
+- Read saved pages with `{"cursor":"<nextCursor>"}` only (optional `page_size`): no new search/Jev calls. Default20/max50 per page with a byte budget; no fixed cumulative result-count cap. Cursors last up to30 minutes/32 recent sets in the current process; pagination is not exhaustive search.
+- Thresholds remain uncalibrated engineering starting points. See the [contract, budgets and migration notes](docs/jev-adaptive-search.md).
 
 ---
 

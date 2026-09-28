@@ -81,9 +81,9 @@ try {
   for (const [field, schema] of Object.entries(byName.adaptive_search.inputSchema.properties)) {
     assert(schema.description, `adaptive_search.${field}: missing direct-call guidance`)
   }
-  assert.ok(['tasks', 'questions', 'cursor', 'page_size'].every((key) => key in byName.adaptive_search.inputSchema.properties))
+  assert.ok(['questions', 'intent', 'keywords', 'constraints', 'cursor', 'page_size'].every((key) => key in byName.adaptive_search.inputSchema.properties))
   assert.equal(byName.adaptive_search.inputSchema.properties.questions.minItems, 1)
-  assert.equal(byName.adaptive_search.inputSchema.properties.questions.maxItems, 6)
+  assert.equal(byName.adaptive_search.inputSchema.properties.questions.maxItems, 1)
   assert.equal(byName.adaptive_search.inputSchema.properties.questions.items.maxLength, 400)
   const mixedCall = await client.callTool({ name: 'adaptive_search', arguments: { questions: ['x'], cursor: 'invalid' } })
   assert.equal(mixedCall.isError, true)

@@ -218,7 +218,7 @@ await test('invalid input is rejected before any Jev or network call, without tr
     assert.ok(res.warnings.length >= 1)
   }
   assert.equal(validateQuestions(['  padded  ']).questions[0], 'padded')
-  assert.match(validateQuestions([]).error, /1\.\.6/)
+  assert.match(validateQuestions([]).error, /exactly one/)
 })
 
 await test('six independent questions each get one runFused call, keep order, and never share a queries array', async () => {
@@ -1151,7 +1151,7 @@ await test('a Jev request that does not fit the remaining token estimate is neve
 
 // v2: keyword targets, bounded three-phase rounds, compact source references,
 // and presentation-only pagination. All transports remain hermetic.
-const { normalizeAdaptiveInput } = await import('../lib/search/adaptive/input.js')
+const { normalizeLegacyAdaptiveInput: normalizeAdaptiveInput } = await import('../lib/search/adaptive/legacy-input.js')
 const { createResultPages, approvedResults, validatePageInput } = await import('../lib/search/adaptive/pages.js')
 const { selectEngineCandidates } = await import('../lib/search/adaptive/planning.js')
 const { requestFits } = await import('../lib/search/adaptive/material.js')
@@ -1307,7 +1307,7 @@ await test('v2 paging respects bytes, expires honestly, and rejects mixed search
   const page = pages.save(Array.from({ length: 5 }, (_, i) => ({ title: 'Title', url: `https://example.com/${i}`, description: '界'.repeat(60) })), { coverageComplete: true, stopReason: 'all_covered', warnings: [] }, 50)
   assert.ok(page.results.length < 5)
   assert.ok(page.nextCursor)
-  assert.throws(() => validatePageInput({ cursor: page.nextCursor, tasks: [] }), /cannot be combined/)
+  assert.throws(() => validatePageInput({ cursor: page.nextCursor, constraints: [] }), /cannot be combined/)
   assert.throws(() => validatePageInput({ page_size: 0 }), /page_size/)
   assert.throws(() => pages.read('bad'), /Invalid/)
   clock = 101
