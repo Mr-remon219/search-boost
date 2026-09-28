@@ -10,6 +10,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import * as z from 'zod'
 import { fusedSearchInput, fetchPageInput, xSearchInput } from '../adapters/mcp/schemas.mjs'
+import { ADAPTIVE_INPUT_SCHEMA } from '../lib/search/adaptive/input.js'
 
 const home = mkdtempSync(join(tmpdir(), 'sb mcp guidance '))
 const client = new Client({ name: 'guidance-test', version: '1.0.0' })
@@ -82,9 +83,13 @@ try {
   for (const [field, schema] of Object.entries(byName.adaptive_search.inputSchema.properties)) {
     assert(schema.description, `adaptive_search.${field}: missing direct-call guidance`)
   }
-  assert.ok(['tasks', 'questions', 'cursor', 'page_size'].every((key) => key in byName.adaptive_search.inputSchema.properties))
+  assert.ok(['questions', 'intent', 'keywords', 'constraints', 'cursor', 'page_size'].every((key) => key in byName.adaptive_search.inputSchema.properties))
+  for (const field of ['intent', 'keywords']) {
+    assert.equal(byName.adaptive_search.inputSchema.properties[field].description,
+      ADAPTIVE_INPUT_SCHEMA.properties[field].description, `${field}: MCP must preserve supporting-material admission guidance`)
+  }
   assert.equal(byName.adaptive_search.inputSchema.properties.questions.minItems, 1)
-  assert.equal(byName.adaptive_search.inputSchema.properties.questions.maxItems, 6)
+  assert.equal(byName.adaptive_search.inputSchema.properties.questions.maxItems, 1)
   assert.equal(byName.adaptive_search.inputSchema.properties.questions.items.maxLength, 400)
   const mixedCall = await client.callTool({ name: 'adaptive_search', arguments: { questions: ['x'], cursor: 'invalid' } })
   assert.equal(mixedCall.isError, true)

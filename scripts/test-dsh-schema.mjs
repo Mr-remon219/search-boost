@@ -67,27 +67,24 @@ result.results[0].published = '2026-01-01'
 assert.deepEqual(validateJsonSchemaValue(fused.output.schema, result), [])
 console.log('ok: nullable dates/cursors, engine maps, and real stats/adaptive outputs pass DSH validation')
 
-// PR integration: keyword unions must compile for DSH without weakening the
+// The single-question contract must compile for DSH without weakening the
 // shared MCP/Pi schema, and the switch gate must survive schema translation.
-for (const keywords of [['alpha'], [['alpha'], ['beta']]]) {
-  const input = { questions: keywords[0] instanceof Array ? ['a?', 'b?'] : ['a?'], keywords, intent: 'Find useful pointers' }
+for (const keywords of [['alpha'], ['alpha', 'beta']]) {
+  const input = { questions: ['a?'], keywords, intent: 'Find useful pointers', constraints: ['Only official sources'] }
   assert.deepEqual(validateJsonSchemaValue(adaptive.parameters, input), [])
   await assert.rejects(() => adaptive.execute(input, {}), /Jev not configured/)
 }
-for (const keywords of [[], ['alpha', ['beta']], [1], [[]]]) {
+for (const keywords of [[], ['alpha', ['beta']], [1], [[]], [['alpha'], ['beta']]]) {
   await assert.rejects(() => adaptive.execute({ questions: ['a?'], keywords }, {}), /invalid arguments/)
 }
 saveJevConfig({ apiKey: 'fixture-no-network' })
 try {
-  const invalid = await adaptive.execute({ questions: ['a?', 'b?'], keywords: ['ambiguous'] }, {})
-  assert.equal(invalid.stopReason, 'invalid_input')
-  assert.equal(invalid.schemaVersion, 3)
-  assert.deepEqual(validateJsonSchemaValue(adaptive.output.schema, invalid), [])
+  await assert.rejects(() => adaptive.execute({ questions: ['a?', 'b?'], keywords: ['ambiguous'] }, {}), /invalid arguments/)
   saveToolPreferences({ adaptive_search: false })
   await assert.rejects(() => adaptive.execute({ questions: ['a?'] }, {}), /Disabled by user/)
   saveToolPreferences({ adaptive_search: true })
 } finally { clearJevConfig() }
-console.log('ok: Jev keyword unions, v3 output, credential lock and live switches survive real DSH registration')
+console.log('ok: Jev single-question restrictions, v3 output, credential lock and live switches survive real DSH registration')
 
 // Conversion must not mutate contracts shared with MCP/Pi. Property names that
 // resemble keywords must remain property names, not be stripped recursively.

@@ -54,7 +54,7 @@
 - **X / Twitter 社区情报检索 (`x_search`)**  
   支持通过官方 xAI API 或免登录回退通道获取推文、作者动态与讨论串。基于 Snowflake ID 逆向还原精准发布时间戳，本地执行作者与日期范围过滤，杜绝幻觉。
 - **Jev 意图导向搜索 (`adaptive_search` · 实验功能)**
-  输入问题、绑定关键词和搜索意图。Jev 筛选值得阅读的结果，包括可信线索、局部信息和有价值反证，并判断关键词是否继续搜索。保留全局每轮500候选容量、分批审查和分页；不自动读原文、不验收答案完整性。
+  输入一个问题、研究倾向、搜索点和明确限制。Jev 先判限制再评质量，方向不符拒绝，各点就绪后整体终检。保留每轮500候选容量、有界页面补查与分页；不宣称答案已核实或完整。
 - **原生多智能体并行研究工作流**  
   随包提供 `search-boost` 与 `search-boost-parallel-research` Skills。在支持子代理的宿主（如 Cursor、Claude Code、Pi、DSH）中，可将复杂调研拆分为多路 Searcher（抓取证据）与 Summarizer（无工具综合），提供 Fast 与 Complex 两种研究波次。
 - **统一架构，全宿主覆盖**  
@@ -281,30 +281,24 @@ search-boost
 
 **Vercel 接入**：在 TUI → Jev credentials 填写 `https://ai-gateway.vercel.sh/v1` 和 Vercel AI Gateway Key。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级配置中的 Jev Key，不读取环境变量；服务端限流等待不会被缩短。
 
-调用方提供问题、绑定关键词，以及可选的 `intent` 表达搜索方向。Jev 判断切题度、阅读价值、方向匹配（对任务有帮助，而非赞同预设结论），再为各关键词选择继续、满足或暂时找不到；代码处理待判断状态和预算。可信线索与局部信息也能返回。评分奖励优质首条、新搜索主题和收益递减的补充结果，仅用于参考，不验收答案完整性。旧 `facts` 字段作为可选搜索主题，不要求全部回答。详见[实现契约](docs/jev-adaptive-search.md)。
+调用方提供**一个问题**（`questions` 恰好一项）、研究目的 `intent`、研究点 `keywords` 和明确硬条件 `constraints`。每次实际搜索先依据缺口、材料与历史反馈选择查询，再针对选定查询选择引擎。候选入池后，**一个独立 Boolean 前筛判断全部显式条件**；条件为空则跳过。质量判断保留重点及有用补充材料，方向用于重点排序、关键词用于贡献归属，不再共同否决整篇材料。经过有界审查窗口且各点已有贡献后，终审按原问题与方向检查**全部当前有效入库材料**，不重审条件：通过则返回，不通过则指定一个已有关键词重新搜索。全量终审装不下或执行异常时明确未完成，不截取少量材料冒充全审。主 Agent 仍负责分析和事实核实。
 
 ```json
 {
-  "tasks": [{
-    "context": "ExampleDB 4.2 升级影响",
-    "targets": [{
-      "id": "migration",
-      "keywords": ["migration guide", "升级指南"],
-      "question": "从 4.1 升级到 4.2 需要做哪些迁移？"
-    }]
-  }],
+  "questions": ["ExampleDB 从 4.1 升级到 4.2 有哪些兼容风险？"],
+  "intent": "寻找实际迁移步骤、具体不兼容案例及反证，不需要营销介绍。",
+  "keywords": ["迁移步骤", "不兼容变更", "失败案例"],
+  "constraints": ["仅使用官方资料"],
   "page_size": 20
 }
 ```
 
-- 最多 6 个任务、每任务 4 个目标、总计 12 个目标；兼容旧 `questions` 输入。
-- `results` 是扁平的 `{url, title, description}` 列表，只包含已经评估并认可的材料，不包含待评估或被排除的候选。
-- 用 `{"cursor":"<nextCursor>"}` 读取后续页，不重新检索，也不调用 Jev。单页默认 20 条、最多 50 条，并有字节预算；累计认可结果不设固定条数上限。
-- 查看 `retrievalSufficient`、`keywordProgress`、`pendingAssessments` 和警告。`coverageComplete` 已废弃，schemaVersion 3 中恒为 false，表示不评估答案完整性。关键词满足、读完分页和模型认可均不等于事实核实或搜索穷尽。
-- 结果在当前服务进程中暂存，最多保留 30 分钟、32 次最近结果；过期、被淘汰或重启后游标失效。
-- 时间敏感任务可设置 `time_range`，分别约束文章发布时间或事件时间；未知日期不计入“今日”证据。
-
-完整输入输出、执行边界与已知限制见 [Jev 自适应搜索说明](./docs/jev-adaptive-search.md)。
+- `constraints` 仅填明确可核验的完整硬条件，如适用版本、事件/发布日期范围、平台或仅限官方来源。**不要填研究方向、软偏好、关键词或期望结论**；没有明确限制则省略或传 `[]`。所有条件按AND判断；每项强制文档条件均须显式放入该字段，不暗中从问题补猜。有用补充材料不必命中列出的研究点。
+- 多问题列表、`tasks/targets/facts/time_range` 和二维关键词不再是公开入口；独立问题请分次调用。
+- 返回认可的 URL、标题、审查摘录及 valueScore/directionMatch/kind及focus/supporting分层，不生成答案，不混入尚未完成准入的候选；可选方向或关键词判断缺失仍单独披露。
+- 查看 `reviewSummary`、`scopeSummary`、`finalReview`、`keywordProgress`、`pendingAssessments` 和警告。`retrievalSufficient` 需要整体终检通过，不等于事实核实或答案全集覆盖；`coverageComplete` 在 schemaVersion 3 中仍恒为 false。
+- 用 `{"cursor":"<nextCursor>"}` 读取后续页，可选 page_size，不重搜或重问 Jev。默认20、最多50条/页并有字节预算，累计认可结果无固定条数帽；结果暂存本进程最多30分钟/32次，分页完毕不是全网穷尽。
+- 阈值仍是未标定工程起点。完整契约、预算和迁移说明见 [Jev 单问题研究检索](docs/jev-adaptive-search.md)。
 
 ---
 

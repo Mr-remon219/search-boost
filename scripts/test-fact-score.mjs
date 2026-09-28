@@ -4,7 +4,7 @@ import './isolate-tests.mjs'
 import assert from 'node:assert/strict'
 import { scoreEvidence, FACT_SCORE_WEIGHTS } from '../lib/search/adaptive/keyword-progress.js'
 import { factUnits } from '../lib/search/adaptive/facts.js'
-import { normalizeAdaptiveInput, canonicalTargets } from '../lib/search/adaptive/input.js'
+import { normalizeLegacyAdaptiveInput as normalizeAdaptiveInput, canonicalTargets } from '../lib/search/adaptive/legacy-input.js'
 import { buildSourceJudgeRequest, factBundleRequest } from '../lib/search/adaptive/prompts.js'
 import { createHash } from 'node:crypto'
 const approx = (a,b) => assert.ok(Math.abs(a-b)<1e-10,`${a} != ${b}`)

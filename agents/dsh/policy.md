@@ -5,7 +5,7 @@
 从一轮聚焦检索开始，优先阅读命中的原始材料，不重复等价查询。证据足够即停；同一问题约三轮后整理已有结论和缺口，不擅自扩大范围。更深入的研究仍受用户与宿主预算约束。引述已检查的来源，区分事实、推断、摘要和不确定性；检索不足不等于信息不存在。
 
 ## 工具路由与权限
-工具描述负责说明用途，参数 schema 负责调用方式；动态 search:status section 仅反映配置就绪状态，不保证网络连通。主动 Web 检索使用 fused_search，已知 URL 直接使用 fetch_page，X 专项使用 x_search。adaptive_search 是可选的意图导向搜索筛选与逐关键词续搜判断，不负责验收答案完整性，不是子代理编排器。普通调用无需先读 skill 或派子代理。
+工具描述负责说明用途，参数 schema 负责调用方式；动态 search:status section 仅反映配置就绪状态，不保证网络连通。主动 Web 检索使用 fused_search，已知 URL 直接使用 fetch_page，X 专项使用 x_search。adaptive_search 为单个疑问自动检索材料：questions 恰好一项，intent 表达研究倾向，keywords 表达搜索点，constraints 只填明确可核验的硬条件而非方向或偏好。先选查询再选对应引擎；只前筛显式constraints，空条件跳过；质量保留重点及有用补充，方向排序而非否决；全部有效入库材料终审不重审条件，不通过则指定已有关键词续搜。查看reviewSummary区分未审查、判断异常与未通过；不负责证明答案完整性，不是子代理编排器。普通调用无需先读 skill 或派子代理。
 
 并行研究仅在获授权且宿主支持时使用 research_parallel，具体流程见下方共享工作流。它使用 DSH 原生 provider，不依赖 Pi。缺少工具隔离、深度限制或角色提示能力时应明确失败，不得换 CLI 绕过。web_search 是宿主兼容入口；/web_change 和 /x-login 等配置命令只在用户授权时执行，不把一次空结果当成改配置的理由。
 

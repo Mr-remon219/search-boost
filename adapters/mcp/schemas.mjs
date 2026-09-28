@@ -3,6 +3,7 @@
  */
 import * as z from 'zod'
 import { ENGINE_ORDER } from '../../lib/runtime.mjs'
+import { ADAPTIVE_INPUT_SCHEMA, CONSTRAINTS_DESCRIPTION } from '../../lib/search/adaptive/input.js'
 
 const engineEnum = z.enum(ENGINE_ORDER)
 
@@ -125,40 +126,38 @@ export const searchStatsOutput = {
 }
 
 export const adaptiveSearchInput = {
-  intent: z.string().min(1).max(2000).optional().describe('Concise search intent/preferences, sent to Jev but not appended to engine queries. Not secrets or private reasoning.'),
-  keywords: z.union([z.array(z.string().min(1).max(100)).min(1).max(4), z.array(z.array(z.string().min(1).max(100)).min(1).max(4)).min(1).max(6)]).optional().describe('Only with questions: flat list for one question, otherwise a list per question aligned by position. Omit to use each question itself.'),
-  questions: z.array(z.string().min(1).max(400)).min(1).max(6).optional()
-    .describe('Legacy independent questions. Supply exactly one of questions, tasks or cursor.'),
-  tasks: z.array(z.object({
-    context: z.string().min(1).max(400),
-    time_range: z.object({ start: z.string(), end: z.string(), basis: z.enum(['published', 'event']) }).strict().optional(),
-    targets: z.array(z.object({
-      id: z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/),
-      keywords: z.array(z.string().min(1).max(100)).min(1).max(4),
-      question: z.string().min(1).max(400),
-      intent: z.string().min(1).max(1000).optional(),
-      facts: z.array(z.object({id:z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/),question:z.string().min(1).max(400)}).strict()).min(1).max(8).optional(),
-    }).strict()).min(1).max(4),
-  }).strict()).min(1).max(6).optional()
-    .describe('Task context plus keyword-guided search targets; at most 12 total. Optional facts are search topics, not answer-completeness requirements.'),
+  questions: z.array(z.string().min(1).max(400)).length(1).optional()
+    .describe('Exactly ONE coherent research question; comparisons may have related aspects. Supply questions or cursor. Independent questions require separate calls.'),
+  intent: z.string().min(1).max(2000).optional()
+    .describe(ADAPTIVE_INPUT_SCHEMA.properties.intent.description),
+  keywords: z.array(z.string().min(1).max(100)).min(1).max(8).optional()
+    .describe(ADAPTIVE_INPUT_SCHEMA.properties.keywords.description),
+  constraints: z.array(z.string().min(1).max(300)).max(8).optional().describe(CONSTRAINTS_DESCRIPTION),
   cursor: z.string().min(1).max(100).optional()
-    .describe('Read the next approved-result page. Do not combine with tasks/questions/intent/keywords. No network or Jev calls; cursors are temporary and server-local.'),
+    .describe('Read a saved result page. Do not combine with questions/intent/keywords/constraints. No network or Jev calls; temporary and server-local.'),
   page_size: z.number().int().min(1).max(50).optional()
     .describe('Results per page: default 20, max 50. Total approved results have no fixed count cap; pages also have a byte limit.'),
 }
 
 export const adaptiveSearchOutput = {
-  results: z.array(z.object({ url: z.string(), title: z.string(), description: z.string(), valueScore: z.number().optional(), directionMatch: z.number().nullable().optional(), kind: z.string().optional(), matches: z.array(z.object({taskId:z.string().nullable(),targetId:z.string().nullable(),canonicalId:z.string().nullable(),valueScore:z.number(),directionMatch:z.number().nullable(),kind:z.string()})).optional() })),
+  results: z.array(z.object({ url: z.string(), title: z.string(), description: z.string(), tier: z.enum(['focus', 'supporting']).optional(), valueScore: z.number().optional(), directionMatch: z.number().nullable().optional(), kind: z.string().optional(), matches: z.array(z.object({taskId:z.string().nullable(),targetId:z.string().nullable(),canonicalId:z.string().nullable(),valueScore:z.number(),directionMatch:z.number().nullable(),kind:z.string()})).optional() })),
   totalResults: z.number(),
   nextCursor: z.string().nullable(),
   expiresAt: z.string(),
   schemaVersion: z.number().optional(),
-  retrievalSufficient: z.boolean().optional().describe('All keyword searches satisfied; never means the answer is complete or verified.'),
+  retrievalSufficient: z.boolean().optional().describe('All search points have admitted materials AND whole-question final review accepted returning them. Not answer completeness or verification.'),
+  scopeSummary: z.object({ eligible: z.number(), rejected: z.number(), unknown: z.number() }).optional(),
+  finalReview: z.object({ status: z.enum(['not_ready', 'finish', 'continue', 'pending', 'stale']), checks: z.number(),
+    verdict: z.enum(['pass', 'not_passed']).nullable().optional(), researchKeyword: z.string().nullable().optional(),
+    inputMaterials: z.number().optional(), allMaterialsIncluded: z.boolean().optional() }).optional(),
+  reviewSummary: z.object({ collectedRows: z.number(), assessmentUnavailable: z.number(), unreviewed: z.number(), collected: z.number(), withText: z.number(), scopeAssessed: z.number(), scopeSkipped: z.number(),
+    constraintsNotPassed: z.number(), qualityAssessed: z.number(), qualityNotPassed: z.number(), admitted: z.number(),
+    focus: z.number(), supporting: z.number(), awaitingAdmission: z.number() }).optional(),
   coverageComplete: z.boolean().describe('Deprecated: always false in schemaVersion 3 because answer completeness is not assessed.'),
   keywordProgress: z.array(z.object({
     targetId: z.string(), taskId:z.string().nullable().optional(), canonicalId:z.string().optional(), keyword: z.string(), score: z.number(), ready: z.boolean().optional(),
     status: z.enum(['continue', 'satisfied', 'exhausted', 'pending']).optional(), reason: z.string().optional(),
-    distinctEvidence: z.number(), finalStatus: z.string(),
+    distinctEvidence: z.number(), admitted: z.number().optional(), finalStatus: z.string(),
     A: z.number().optional(), F: z.number().optional(), R: z.number().optional(),
     missingFacts: z.array(z.string()).optional(),
     factProgress: z.array(z.object({id:z.string(),support:z.number(),covered:z.boolean(),conflicting:z.boolean()})).optional(),

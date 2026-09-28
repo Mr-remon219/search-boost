@@ -39,28 +39,28 @@ const score = (input) => {
   return retrievalScore({ keyword: 'alpha', rows: [], topics: [], intentPresent: false, thresholds: ADAPTIVE_THRESHOLDS, groups: contentGroups(rows), ...input })
 }
 
-await test('u = min(r,v) * (1 - lambda + lambda*d); intent adds a direction bonus only', () => {
+await test('u = min(r,v) * (1 - lambda + lambda*d); direction is a bounded ranking bonus', () => {
   const judgment = { relevance: 0.9, reading_value: 0.8, direction_match: 1 }
   assert.equal(readingValue(judgment, { intentPresent: false }), 0.8)
   assert.ok(Math.abs(readingValue(judgment, { intentPresent: true }) - 0.8) < 1e-12)
-  assert.ok(Math.abs(readingValue({ ...judgment, direction_match: 0 }, { intentPresent: true }) - 0.64) < 1e-12)
-  assert.ok(Math.abs(readingValue({ ...judgment, direction_match: 0.5 }, { intentPresent: true }) - 0.72) < 1e-12)
+  assert.ok(Math.abs(readingValue({ ...judgment, direction_match: 0 }, { intentPresent: true }) - .52) < 1e-12)
+  assert.ok(Math.abs(readingValue({ ...judgment, direction_match: 0.5 }, { intentPresent: true }) - .66) < 1e-12)
 })
 
-await test('missing direction match loses the bonus but stays unknown, never a successful match', () => {
+await test('missing direction remains unknown without rejecting useful material', () => {
   const judgment = { relevance: 0.9, reading_value: 0.8 }
   assert.equal(scoreField(judgment, 'direction_match'), null)
-  assert.ok(Math.abs(readingValue(judgment, { intentPresent: true }) - 0.64) < 1e-12)
+  assert.ok(Math.abs(readingValue(judgment, { intentPresent: true }) - .52) < 1e-12)
   assert.equal(readingValue(judgment, { intentPresent: false }), 0.8)
-  // d=0 must not reject otherwise useful material.
+  // d=0 loses the focus bonus, but does not veto admission.
   assert.equal(usefulEligible({ relevance: 0.9, reading_value: 0.8, direction_match: 0, injection: 0.05 }, ADAPTIVE_THRESHOLDS), true)
 })
 
-await test('eligibility requires finite known r>.60, v>.50 and known injection<=.7', () => {
-  const base = { relevance: 0.9, reading_value: 0.8, injection: 0.05 }
+await test('eligibility requires finite known r>.50, v>.50 and known injection<=.7', () => {
+  const base = { relevance: 0.9, reading_value: 0.8, injection: 0.05, direction_match: .9 }
   assert.equal(usefulEligible(base, ADAPTIVE_THRESHOLDS), true)
-  assert.equal(usefulEligible({ ...base, relevance: 0.60 }, ADAPTIVE_THRESHOLDS), false)
-  assert.equal(usefulEligible({ ...base, relevance: 0.61 }, ADAPTIVE_THRESHOLDS), true)
+  assert.equal(usefulEligible({ ...base, relevance: 0.50 }, ADAPTIVE_THRESHOLDS), false)
+  assert.equal(usefulEligible({ ...base, relevance: 0.51 }, ADAPTIVE_THRESHOLDS), true)
   assert.equal(usefulEligible({ ...base, reading_value: 0.50 }, ADAPTIVE_THRESHOLDS), false)
   assert.equal(usefulEligible({ ...base, reading_value: 0.51 }, ADAPTIVE_THRESHOLDS), true)
   assert.equal(usefulEligible({ ...base, injection: 0.70 }, ADAPTIVE_THRESHOLDS), true)
@@ -148,9 +148,9 @@ await test('intent changes u through d only; d=None stays null and topic/keyword
   assert.equal(topicMatchOf(judgment, 'T1'), 0.7)
   const neutral = score({ rows: [row('e1', {}, judgment)], intentPresent: false })
   const directed = score({ rows: [row('e1', {}, judgment)], intentPresent: true })
-  // intent present: u = .8 * (1 - .2 + .2*.9) = .784, match .9
+  // directed: u = .8 * (.65 + .35*.9) = .772, match .9
   assert.ok(Math.abs(neutral.score - (0.25 + 0.90) * 0.9 * 0.8) < 1e-12)
-  assert.ok(Math.abs(directed.score - (0.25 + 0.90) * 0.9 * 0.784) < 1e-12)
+  assert.ok(Math.abs(directed.score - (0.25 + 0.90) * 0.9 * 0.772) < 1e-12)
   assert.ok(directed.score < neutral.score, 'the direction factor is applied to u, never to the match')
 })
 
@@ -180,6 +180,40 @@ await test('first result on a new topic earns F, only repeated same-topic result
   const repeated = score({rows:[a,b,c], topics})
   assert.equal(repeated.F, different.F)
   assert.ok(Math.abs(repeated.R - .5 * .5 * .8 * .9) < 1e-12)
+})
+
+await test('single-question algebra: F=A, geometric R bound, score is not a probability or stop rule', () => {
+  const { alpha, beta, gamma, rho } = RETRIEVAL_SCORE_WEIGHTS
+  for (const r of [.51, .8, 1]) for (const v of [.51, .7, 1]) for (const d of [0, .3, 1]) for (const m of [.51, .8, 1]) {
+    for (const g of [1, 2, 5]) {
+      const rows = Array.from({ length: g }, (_, i) => row(`algebra${i}`, {}, {
+        relevance: r, reading_value: v, direction_match: d, keywords: [{ keyword: 'alpha', match: m }],
+      }))
+      const groups = new Map(rows.map((row, i) => [row, i]))
+      const index = score({ rows, groups, intentPresent: true })
+      const A = Math.min(r, v) * (.65 + .35*d) * m
+      const R = A * (1 - rho ** (g - 1))
+      assert.ok(Math.abs(index.A - A) < 1e-12)
+      assert.equal(index.F, index.A)
+      assert.ok(Math.abs(index.R - R) < 1e-12)
+      assert.ok(Math.abs(index.score - ((alpha + beta) * A + gamma * R)) < 1e-12)
+      assert.ok(index.score >= 0 && index.score <= 1.25)
+      assert.equal(index.ready, undefined, 'this formula cannot decide readiness/finish')
+    }
+  }
+  const perfect = row('perfect', {}, { relevance: 1, reading_value: 1, direction_match: 1, keywords: [{ keyword: 'alpha', match: 1 }] })
+  assert.ok(score({ rows: [perfect], intentPresent: true }).score > 1, 'a valid index may exceed one; not probability')
+})
+
+await test('single-question utility is componentwise monotone only inside the fixed admission/group set', () => {
+  const base = { relevance: .7, reading_value: .6, direction_match: .7, keywords: [{ keyword: 'alpha', match: .6 }] }
+  const evaluate = j => score({ rows: [row('monotone', {}, j)], intentPresent: true }).score
+  for (const field of ['relevance', 'reading_value', 'direction_match']) {
+    assert.ok(evaluate({ ...base, [field]: 1 }) >= evaluate(base))
+  }
+  assert.ok(evaluate({ ...base, keywords: [{ keyword: 'alpha', match: 1 }] }) >= evaluate(base))
+  assert.ok(evaluate({ ...base, direction_match: 0 }) > 0, 'helpful supporting material survives low direction')
+  for (const lambda of [-.1, 1.1, NaN]) assert.throws(()=>readingValue(base,{lambda}), RangeError)
 })
 
 console.log(`${passed} reading-value score tests passed (hermetic; not retrieval quality)`)
