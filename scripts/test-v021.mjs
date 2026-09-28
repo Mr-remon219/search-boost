@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** v0.2.1 repairs: real CLI/config/process/loopback HTTP boundaries, plus typed
  * provider response fixtures. Never consumes a real credential or the host HOME. */
 import assert from 'node:assert/strict'

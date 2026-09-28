@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** Future releases, not today's version: v1 → v2 → v3 at different roots.
  * Host package-manager HTTP/process calls are injected. Installed modules are
  * real symlinks, and fresh Node processes verify the active adapter payload.

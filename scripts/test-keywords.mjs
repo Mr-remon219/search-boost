@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 // HISTORICAL COMPARISON: hermetic V2 keyword/fact controller checks, frozen with
 // retrievalMode:false. These are NOT web-quality experiments and NOT evidence
 // that the default V3 reading-value controller works (see test-retrieval*.mjs).

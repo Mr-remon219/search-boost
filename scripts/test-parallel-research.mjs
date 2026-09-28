@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** Hermetic cross-host contract/lifecycle tests: no LLM, credentials, or external CLI. */
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs'

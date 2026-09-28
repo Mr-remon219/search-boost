@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** Real npm/npx, a loopback fixture registry, and an isolated HOME/global prefix.
  * No transition release, --force, real credentials, or developer installations.
  * DSH alone is a protocol fixture; npm install/uninstall/bin handoff are real.

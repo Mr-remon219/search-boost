@@ -152,6 +152,10 @@ jobs:
         if: always()
         run: npm run test:v021
 
+      - name: All tests under poisoned user environment
+        if: always()
+        run: npm run test:isolation
+
       # Reproduce the tested Linux tree offline, without checkout credentials,
       # HOME configuration, environment variables, or Git metadata.
       - name: Prepare offline audit snapshot

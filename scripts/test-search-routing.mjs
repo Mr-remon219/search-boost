@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
 /** Hermetic Core tests: real fusion/X orchestration, fake engine and hosted transports. */
 import assert from 'node:assert/strict'

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 // Real subprocess launch/verification without network, global hosts or user state.
-import './isolate-install-tests.mjs'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'

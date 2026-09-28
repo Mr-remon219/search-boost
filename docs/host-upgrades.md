@@ -71,6 +71,6 @@ npm run test:upgrade
 
 `scripts/test-dsh-upgrade.mjs` 另外通过真实子进程启动器覆盖全局命令齐全、仅 npm、缺少 pnpm、缺少 dsh 四种环境，分别验证 checkout 和 npm 包来源；同时检查禁用状态、同版本重试、dry-run、错误版本/缺失文件及失败回滚。命令端点使用隔离 fixture，不下载真实 DSH。
 
-`npm run test:install` 中的 `scripts/test-install-isolation.mjs` 为 installer-helper 测试提供模拟用户 HOME 和重定位状态目录，验证测试不会修改继承的配置或升级记录。真实项目目录不可用时仍阻止升级完成，不自动删除失效记录。
+`npm run test:isolation` 为全部自动测试提供模拟用户 HOME、重定位状态目录与假凭据，验证测试不会修改继承的配置、升级记录或源码树；`test:install` 执行其中的安装子集。所有入口统一使用 `scripts/isolate-tests.mjs`，详见[测试隔离说明](test-isolation.md)。真实项目目录不可用时仍阻止升级完成，不自动删除失效记录。
 
 这些测试不证明用户机器上真实 Pi/DSH 已完成重启或加载；宿主行为由隔离替身模拟，全局 npm 迁移另通过本地 fixture registry 执行真实 npm。

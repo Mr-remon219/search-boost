@@ -1,24 +1,17 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** Router/extension installation and retired-skill migration in an isolated HOME. */
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const self = fileURLToPath(import.meta.url)
-if (!process.argv.includes('--isolated')) {
-  const home = mkdtempSync(join(tmpdir(), 'sb router '))
-  try {
-    execFileSync(process.execPath, [self, '--isolated'], {
-      env: { ...process.env, HOME: home, USERPROFILE: home,
-        SEARCH_BOOST_WORKSPACES_FILE: join(home, 'workspaces.json'),
-        SEARCH_BOOST_CURSOR_INSTALL_STATE: join(home, 'cursor-state.json') },
-      stdio: 'inherit',
-    })
-  } finally { rmSync(home, { recursive: true, force: true }) }
-} else {
+const isolatedHome = mkdtempSync(join(tmpdir(), 'sb router '))
+process.env.HOME = process.env.USERPROFILE = isolatedHome
+process.env.SEARCH_BOOST_WORKSPACES_FILE = join(isolatedHome, 'workspaces.json')
+process.env.SEARCH_BOOST_CURSOR_INSTALL_STATE = join(isolatedHome, 'cursor-state.json')
+try {
   const { AGENTS } = await import('../lib/agents/index.mjs')
   const { PATHS, grokInstallPaths, workspaceAgents } = await import('../lib/paths.mjs')
   const { installSkillBundle, uninstallSkillBundle, skillBundleFiles, renderSkillFile } = await import('../lib/agent-skills.mjs')
@@ -213,4 +206,4 @@ if (!process.argv.includes('--isolated')) {
   assert.deepEqual(pluginConfig.mcpServers['search-boost'], { command: 'npx', args: ['-y', 'search-boost', 'serve'] }, 'shipped Antigravity plugin must be portable and omit type')
   console.log('ok: plugin bundles contain the router, not retired tool manuals; launch configuration is portable')
   console.log('All router/extension tests passed.')
-}
+} finally { rmSync(isolatedHome, { recursive: true, force: true }) }

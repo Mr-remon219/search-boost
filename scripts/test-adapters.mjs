@@ -1,3 +1,4 @@
+import './isolate-tests.mjs'
 /**
  * Core ↔ host-adapter boundary tests (hermetic — no network, no writes to the
  * real home dir). Covers:

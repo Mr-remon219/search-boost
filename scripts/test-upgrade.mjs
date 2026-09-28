@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** New TUI/CLI manages OLD Pi/DSH/MCP installations. No real package-manager/host mutations. */
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, statSync, symlinkSync, readlinkSync, realpathSync } from 'node:fs'

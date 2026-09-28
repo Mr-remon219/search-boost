@@ -1,3 +1,4 @@
+import './isolate-tests.mjs'
 // CLI surface: the entry point must survive the paths a user meets first.
 //
 // `node --check` only validates syntax, and no suite ever printed help, so a
