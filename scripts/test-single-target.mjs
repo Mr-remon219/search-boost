@@ -4,7 +4,7 @@ import './isolate-tests.mjs'
 // not semantic accuracy, calibrated thresholds, or real network performance.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { runAdaptiveLoop } from '../lib/search/adaptive/loop.mjs'
+import { runAdaptiveLoop, REASONS } from '../lib/search/adaptive/loop.mjs'
 import { ADAPTIVE_LIMITS, ADAPTIVE_THRESHOLDS } from '../lib/search/adaptive/limits.js'
 import { normalizeAdaptiveInput, ADAPTIVE_INPUT_SCHEMA, canonicalTargets } from '../lib/search/adaptive/input.js'
 import { buildScopeRequest, decodeScopeAnswer, scopeVersion, readScope } from '../lib/search/adaptive/scope.js'
@@ -13,7 +13,7 @@ import { createEvidencePool } from '../lib/search/adaptive/evidence.js'
 import { usefulEligible, readingValue } from '../lib/search/adaptive/retrieval-score.js'
 import { requestFits } from '../lib/search/adaptive/material.js'
 import { queryCandidates } from '../lib/search/adaptive/planning.js'
-import { finalDecisionEstablished, retrievalFinalRequest } from '../lib/search/adaptive/retrieval-final.js'
+import { retrievalConvergence } from '../lib/search/adaptive/convergence.js'
 import { adaptiveSearchInput, adaptiveSearchOutput } from '../adapters/mcp/schemas.mjs'
 import { runAdaptiveSearch } from '../lib/runtime.mjs'
 import { z } from 'zod'
@@ -58,7 +58,6 @@ function harness(options = {}) {
           if (answer && typeof answer === 'object') { entries.set(id, answer); continue }
           if (answer === undefined) {
             if (phase === 'scope_judge') answer = .95
-            else if (phase === 'retrieval_final') answer = 'finish'
             else if (spec.type === 'choice') answer = id.endsWith('.kind') ? 'direct' : Object.keys(spec.criteria)[0]
             else answer = id.endsWith('.injection') ? .01 : .95
           }
@@ -112,13 +111,14 @@ test('invalid multi-question input returns before engines or Jev', async () => {
 
 
 // Point 3: explicit-only Boolean prefilter.
-test('query choice -> selected-query engines -> constraints -> quality -> ALL-material final', async () => {
+test('query -> selected-query engines -> constraints -> quality -> code-only convergence', async () => {
   const h = harness(); const r = await h.run()
-  assert.deepEqual(h.calls.jev.map(c => c.phase), ['query_plan', 'engine_plan', 'scope_judge', 'source_judge', 'retrieval_final'])
-  const engine = h.calls.jev.find(c => c.phase === 'engine_plan')
-  assert.equal(engine.state.selected_search.query, h.calls.search[0].query)
-  assert.equal(r.retrievalSufficient, true); assert.equal(r.finalReview.verdict, 'pass')
-  assert.equal(r.finalReview.inputMaterials, 1); assert.equal(r.finalReview.allMaterialsIncluded, true)
+  assert.deepEqual(h.calls.jev.map(c => c.phase), ['query_plan', 'engine_plan', 'scope_judge', 'source_judge'])
+  assert.equal(h.calls.jev[1].state.selected_search.query, h.calls.search[0].query)
+  assert.equal(r.retrievalSufficient, true)
+  assert.equal(r.convergence.status, 'satisfied'); assert.equal(r.convergence.score, 100)
+  assert.equal(r.finalReview.status, 'not_run'); assert.equal(r.finalReview.verdict, null)
+  assert.equal(r.finalReview.checks, 0)
 })
 
 test('one Boolean over ALL explicit conditions, no subject or inferred restriction questions', () => {
@@ -230,13 +230,13 @@ test('unknown direction is disclosed, not fabricated or used as a veto', async (
   assert.ok(h.calls.jev.find(c => c.phase === 'source_judge').questions['src.e1.direction_match'])
 })
 
-test('focus comes first, but supporting materials are retained and included in final', async () => {
+test('focus comes first, but supporting materials remain retained after score convergence', async () => {
   const h = harness({ search: () => [hit('support'), hit('focus')], judge: ({ phase, id, state }) => {
     if (phase === 'source_judge' && sourceFor(state, id).url.includes('support') && id.endsWith('.direction_match')) return .1
   } })
   const r = await h.run(); const out = approvedResults(h.calls.evidence)
   assert.deepEqual(out.map(i => i.tier), ['focus', 'supporting'])
-  assert.equal(r.reviewSummary.admitted, 2); assert.equal(r.finalReview.inputMaterials, 2)
+  assert.equal(r.reviewSummary.admitted, 2); assert.equal(r.convergence.status, 'satisfied')
 })
 
 test('missing keyword answers do not erase useful material or become fake point contributions', async () => {
@@ -251,13 +251,13 @@ test('missing keyword answers do not erase useful material or become fake point 
 test('current counts retract when material metadata changes and constraints no longer pass', async () => {
   const h = harness({ limits: { maxFetchCalls: 0, maxRounds: 2 }, search: (_, n) => [hit('a', { title: n === 1 ? 'Official Alpha' : 'Unofficial Alpha' })],
     judge: ({ phase, state, id }) => {
-      if (phase === 'retrieval_final') return 'keyword0'
+      if (phase === 'source_judge' && id.endsWith('.relevance')) return .7
       if (phase === 'scope_judge' && sourceFor(state, id).title.startsWith('Unofficial')) return .1
     } })
   const r = await h.run()
   assert.equal(r.questions[0].keywordProgress[0].admitted, 0)
   assert.equal(approvedResults(h.calls.evidence).length, 0)
-  assert.equal(r.finalReview.checks, 1)
+  assert.equal(r.convergence.score, 0)
 })
 
 test('duplicates do not accumulate point groups', async () => {
@@ -265,7 +265,7 @@ test('duplicates do not accumulate point groups', async () => {
   const r = await h.run(); assert.equal(r.questions[0].keywordProgress[0].admitted, 1)
 })
 
-test('200 collected pages are not mistaken for 200 reviewed; breadth window retains medium material', async () => {
+test('200 collected pages are not mistaken for 200 reviewed; low-scoring material remains useful', async () => {
   const h = harness({ search: () => Array.from({ length: 200 }, (_, i) => hit(`page${i}`)), judge: ({ phase, id }) => {
     if (phase === 'source_judge' && id.endsWith('.relevance')) return .55
     if (phase === 'source_judge' && id.endsWith('.direction_match')) return .4
@@ -276,7 +276,7 @@ test('200 collected pages are not mistaken for 200 reviewed; breadth window reta
   assert.ok(r.reviewSummary.admitted >= 64)
   assert.equal(r.reviewSummary.supporting, r.reviewSummary.admitted)
   assert.equal(r.reviewSummary.admitted + r.reviewSummary.awaitingAdmission, 200)
-  assert.equal(h.calls.search.length, 1, 'review existing pool before filling another pool')
+  assert.equal(r.retrievalSufficient, false, 'many weak pages cannot buy stopping credit')
 })
 
 test('a missing point gets a new focused search without first draining the old broad pool', async () => {
@@ -287,8 +287,8 @@ test('a missing point gets a new focused search without first draining the old b
   assert.ok(h.calls.search.length >= 2); assert.ok(h.calls.search[1].query.includes('failures'))
 })
 
-// Point 2: every admitted row in the final request; two normal semantic verdicts.
-test('final sees EVERY admitted material, including the low-ranked counterexample and supplementary non-keyword material', async () => {
+// Deterministic convergence replaces the unbounded whole-material request.
+test('low-ranked counterevidence and non-keyword context remain returned without a final request', async () => {
   const h = harness({ search: () => Array.from({ length: 12 }, (_, i) => hit(`row${i}`)), judge: ({ phase, state, id }) => {
     if (phase !== 'source_judge') return undefined
     const last = sourceFor(state, id).url.includes('row11')
@@ -297,79 +297,69 @@ test('final sees EVERY admitted material, including the low-ranked counterexampl
     if (last && id.endsWith('.match')) return .1
   } })
   const r = await h.run()
-  const final = h.calls.jev.find(c => c.phase === 'retrieval_final').state
-  assert.equal(final.material_count, 12); assert.equal(final.materials.length, 12); assert.equal(final.sources.length, 12)
-  assert.ok(final.materials.some(m => m.kind === 'counterevidence'))
-  assert.equal('constraints' in final, false)
-  assert.ok(!JSON.stringify(final).includes('Only official sources'))
-  assert.equal(r.finalReview.inputMaterials, r.reviewSummary.admitted)
-})
-
-test('full-set final cannot silently sample when the request is too large', async () => {
-  const h = harness({ limits: { maxRounds: 6, minInitialReviewMaterials: 80 }, search: () => Array.from({ length: 80 }, (_, i) => hit(`long${i}`, {
-    snippet: `Alpha concrete implementation ${i} explains preservation. ` + 'Detailed context and operational evidence are provided in this excerpt. '.repeat(10),
-  })) })
-  const r = await h.run()
-  assert.ok(r.reviewSummary.admitted >= 64)
+  assert.equal(r.reviewSummary.admitted, 12)
+  assert.ok(approvedResults(h.calls.evidence).some(m => m.kind === 'counterevidence'))
   assert.equal(h.calls.jev.some(c => c.phase === 'retrieval_final'), false)
-  assert.equal(r.retrievalSufficient, false)
-  assert.equal(r.stopReason, 'budget_tokens')
-  assert.match(r.stopDetail, /full admitted set/)
-  assert.equal(approvedResults(h.calls.evidence).length, r.reviewSummary.admitted)
-})
-
-test('not-passed final names one existing keyword and forces a new search before another verdict', async () => {
-  let checks = 0
-  const h = harness({ search: (_, n) => [hit(`round${n}`)], judge: ({ phase }) => phase === 'retrieval_final' ? (++checks === 1 ? 'keyword1' : 'finish') : undefined })
-  const r = await h.run({ ...input, keywords: ['mechanism', 'failures'] })
-  assert.equal(h.calls.search.length, 2); assert.equal(checks, 2)
-  assert.ok(h.calls.search[1].query.includes('failures'))
-  assert.equal(h.calls.fetch.length, 0, 'do not replace requested re-search with a fetch-only action')
   assert.equal(r.retrievalSufficient, true)
 })
 
-test('mirror arrivals do not automatically resolve a not-passed verdict or repeat final on identical content', async () => {
-  const original = hit('a')
-  const h = harness({ limits: { maxRounds: 3, maxFetchCalls: 0 }, search: (_, n) => [{ ...original, url: `https://mirror${n}.example/article` }], judge: ({ phase }) => phase === 'retrieval_final' ? 'keyword0' : undefined })
+test('large admitted sets converge without ever serializing a full-set Jev request', async () => {
+  const h = harness({ limits: { maxRounds: 6, maxScopeQualityBatchesPerRound: 40, maxFetchCalls: 0 },
+    search: () => Array.from({ length: 80 }, (_, i) => hit(`long${i}`, {
+      snippet: `Alpha concrete implementation ${i} explains preservation. ` + 'Detailed context and operational evidence are provided in this excerpt. '.repeat(20),
+    })), judge: ({ phase, id, calls }) => {
+      const prior = calls.jev.filter(c => c.phase === 'source_judge').slice(0, -1).reduce((n,c) => n+c.state.candidates.length, 0)
+      if (phase === 'source_judge' && prior < 64 && id.endsWith('.relevance')) return .55
+    } })
   const r = await h.run()
-  assert.equal(r.finalReview.checks, 1); assert.equal(r.finalReview.verdict, 'not_passed')
-  assert.equal(r.finalReview.researchKeyword, 'mechanism')
-  assert.equal(r.questions[0].keywordProgress[0].reason, 'final_review_gap')
+  assert.ok(r.reviewSummary.admitted >= 64)
+  assert.ok(JSON.stringify(approvedResults(h.calls.evidence)).length > h.limits.maxRequestChars)
+  assert.equal(h.calls.jev.some(c => c.phase === 'retrieval_final'), false)
+  assert.ok(h.calls.jev.every(c => requestFits(c, h.limits)))
+  assert.equal(r.retrievalSufficient, true)
+  assert.equal(r.stopReason, 'keyword_queue_empty')
+  assert.equal(approvedResults(h.calls.evidence).length, r.reviewSummary.admitted)
 })
 
-test('current gap stays open through an unavailable final answer', async () => {
-  let checks=0
-  const h = harness({ limits: { maxRounds: 2 }, search: (_,n)=>[hit(`new${n}`)], judge: ({phase})=>phase==='retrieval_final' ? (++checks===1?'keyword0':'omit') : undefined })
-  const r=await h.run()
-  assert.equal(r.retrievalSufficient,false)
-  assert.equal(r.questions[0].keywordProgress[0].reason,'final_review_gap')
-  assert.equal(r.finalReview.verdict,null)
+test('weak point triggers a focused search, then new qualified material crosses the gates', async () => {
+  const h = harness({ limits: { maxFetchCalls: 0 }, search: (_, n) => [hit(`round${n}`)], judge: ({ phase, id, state }) => {
+    if (phase === 'source_judge' && id.endsWith('kw1.match') && sourceFor(state,id).url.includes('round1')) return .55
+  } })
+  const r = await h.run({ ...input, keywords: ['mechanism', 'failures'] })
+  assert.equal(h.calls.search.length, 2)
+  assert.ok(h.calls.search[1].query.includes('failures'))
+  assert.equal(r.retrievalSufficient, true)
+  assert.equal(r.finalReview.checks, 0)
 })
 
-test('invalid/unavailable final answers cannot manufacture pass or a new keyword', async () => {
-  for (const answer of ['omit', { type: 'choice', choice: 'keyword99', probabilities: {} },
-    { type: 'choice', choice: 'finish', confidence: .99, probabilities: { finish: .01, keyword0: .99 } }]) {
-    const h = harness({ limits: { maxRounds: 1 }, judge: ({ phase }) => phase === 'retrieval_final' ? answer : undefined })
-    const r = await h.run(); assert.equal(r.retrievalSufficient, false); assert.equal(r.finalReview.verdict, null)
-  }
+test('mirror arrivals and repeated rounds do not increase stopping score', async () => {
+  const original = hit('a')
+  const h = harness({ limits: { maxRounds: 3, maxFetchCalls: 0 },
+    search: (_, n) => [{ ...original, url: `https://mirror${n}.example/article` }],
+    judge: ({ phase, id }) => phase === 'source_judge' && id.endsWith('.relevance') ? .7 : undefined })
+  const r = await h.run()
+  assert.equal(r.retrievalSufficient, false)
+  assert.equal(r.questions[0].keywordProgress[0].admitted, 1)
+  const scores = r.roundLog.map(round => round.convergence.score)
+  assert.ok(scores.length > 1)
+  assert.ok(scores.every(score => score === scores[0]))
 })
 
-test('final uses the action probability distribution, not optional confidence', () => {
-  for (let n=1;n<=8;n++) {
-    const keys=['finish',...Array.from({length:n},(_,i)=>`keyword${i}`)]
-    const p=Object.fromEntries(keys.map(k=>[k,k==='finish'?.1:.9/n]))
-    assert.equal(finalDecisionEstablished({valid:true,choice:'keyword0',confidence:null,probabilities:p},keys),true)
-    assert.equal(finalDecisionEstablished({valid:true,choice:'finish',confidence:1,probabilities:p},keys),false)
-    const pass=Object.fromEntries(keys.map(k=>[k,k==='finish'?.9:.1/n]))
-    assert.equal(finalDecisionEstablished({valid:true,choice:'finish',confidence:.01,probabilities:pass},keys),true)
-  }
+test('unavailable per-material judgments cannot fill a missing point or manufacture success', async () => {
+  const h = harness({ limits: { maxRounds: 2, maxFetchCalls: 0 }, search: (_,n)=>[hit(`new${n}`)],
+    judge: ({ phase, id }) => phase === 'source_judge' && id.endsWith('kw1.match') ? 'omit' : undefined })
+  const r = await h.run({...input, keywords:['mechanism','failures']})
+  assert.equal(r.retrievalSufficient, false)
+  assert.equal(r.convergence.minimumProgress, 0)
+  assert.equal(r.finalReview.verdict, null)
+  assert.ok(r.funnel.pending_associations > 0)
 })
 
-test('final attempt cap stops before another planning round; dispatched failures are counted', async () => {
-  const h=harness({limits:{maxRounds:6},judge:({phase})=>phase==='retrieval_final'?'omit':undefined})
-  const r=await h.run(); assert.equal(r.finalReview.checks,3);assert.equal(r.rounds,3);assert.equal(h.calls.search.length,1)
-  const failed=harness({failPhase:'retrieval_final'});const f=await failed.run()
-  assert.equal(f.finalReview.checks,1);assert.equal(f.retrievalSufficient,false)
+test('four Jev calls suffice for planning, scope and quality; no final-call reserve', async () => {
+  const h = harness({ limits: { maxJevCalls: 4 } }); const r = await h.run()
+  assert.equal(r.retrievalSufficient, true)
+  assert.equal(r.usage.jevCalls, 4)
+  assert.equal(r.rounds, 1)
 })
 
 // Point 1: every actual search chooses a query, THEN evaluates its engines.
@@ -391,13 +381,14 @@ test('invalid query distribution uses a disclosed feasible fallback', async () =
   assert.equal(h.calls.search[0].query,h.calls.jev.find(c=>c.phase==='query_plan').state.options[0].query)
 })
 
-test('follow-up planning sees the named gap, past search outcome and admitted context', async () => {
-  let finals=0
-  const h=harness({search:(_,n)=>[hit(`r${n}`)],judge:({phase})=>phase==='retrieval_final'?(++finals===1?'keyword1':'finish'):undefined})
+test('follow-up planning sees the weakest point, search outcomes and score diagnostics', async () => {
+  const h=harness({limits:{maxFetchCalls:0}, search:(_,n)=>[hit(`r${n}`)], judge:({phase,id,state})=>
+    phase==='source_judge' && id.endsWith('kw1.match') && sourceFor(state,id).url.includes('r1.') ? .55 : undefined})
   await h.run({...input,keywords:['mechanism','failures']})
   const plans=h.calls.jev.filter(c=>c.phase==='query_plan')
   assert.equal(plans.length,2)
   assert.equal(plans[1].state.feedback.requested_keyword,'failures')
+  assert.equal(plans[1].state.feedback.convergence.status,'insufficient')
   assert.equal(plans[1].state.feedback.recent_searches[0].returned,1)
   assert.ok(plans[1].state.feedback.sample_admitted_material.length)
   assert.ok(plans[1].state.options.some(o=>o.query.includes('failures')))
@@ -407,7 +398,7 @@ test('follow-up planning sees the named gap, past search outcome and admitted co
 test('each new query re-evaluates its engines, while exact-query preferences can be reused', async () => {
   const h=harness({limits:{maxRounds:3,maxFetchCalls:0},judge:({phase,id})=>{
     if(phase==='engine_plan')return id.endsWith('.bing')?.9:.1
-    if(phase==='retrieval_final')return 'keyword0'
+    if(phase==='source_judge'&&id.endsWith('.relevance'))return .7
   }})
   await h.run()
   assert.deepEqual(h.calls.search[0].engineList,['bing'])
@@ -419,7 +410,7 @@ test('each new query re-evaluates its engines, while exact-query preferences can
 })
 
 test('no identical engine/query/depth action is executed twice', async () => {
-  const h=harness({limits:{maxRounds:6,maxFetchCalls:0},judge:({phase})=>phase==='retrieval_final'?'keyword0':undefined})
+  const h=harness({limits:{maxRounds:6,maxFetchCalls:0},judge:({phase,id})=>phase==='source_judge'&&id.endsWith('.relevance')?.7:undefined})
   await h.run()
   const keys=h.calls.search.flatMap(s=>s.engineList.map(e=>JSON.stringify([e,s.query,s.complexity])))
   assert.equal(new Set(keys).size,keys.length)
@@ -427,9 +418,9 @@ test('no identical engine/query/depth action is executed twice', async () => {
 
 // Shared invariants: request limits, failure honesty, metadata, output, extraction.
 test('all phases charge existing budgets and preserve downstream headroom', async () => {
-  const h=harness({limits:{maxJevCalls:4,maxRounds:6},search:()=>Array.from({length:30},(_,i)=>hit(`p${i}`))})
+  const h=harness({limits:{maxJevCalls:3,maxRounds:6},search:()=>Array.from({length:30},(_,i)=>hit(`p${i}`))})
   const r=await h.run();assert.equal(r.stopReason,'budget_calls');assert.equal(r.rounds,1)
-  assert.ok(r.usage.jevCalls<=4);assert.equal(r.retrievalSufficient,false)
+  assert.ok(r.usage.jevCalls<=3);assert.equal(r.retrievalSufficient,false)
 })
 
 test('500 candidates with eight conditions stay within bounded requests, calls and partial-result semantics', async () => {
@@ -489,14 +480,15 @@ test('restriction and keyword facets survive extraction among generic paragraphs
   assert.ok(a.text.includes('Zephyr'));assert.ok(a.text.includes('Rollback'))
 })
 
-test('pages preserve tiers, full-set verdict and review funnel without additional calls',async()=>{
+test('pages preserve tiers, convergence and review funnel without additional calls',async()=>{
   const h=harness();const r=await h.run()
   const store=createResultPages();const rows=approvedResults(h.calls.evidence)
   const page=store.save(rows,{schemaVersion:3,retrievalSufficient:r.retrievalSufficient,coverageComplete:false,
-    scopeSummary:r.scopeSummary,finalReview:r.finalReview,reviewSummary:r.reviewSummary,keywordProgress:[],pendingAssessments:0,stopReason:r.stopReason,warnings:[]},20)
+    scopeSummary:r.scopeSummary,convergence:r.convergence,finalReview:r.finalReview,reviewSummary:r.reviewSummary,keywordProgress:[],pendingAssessments:0,stopReason:r.stopReason,warnings:[]},20)
   const parsed=z.object(adaptiveSearchOutput).strict().parse(page)
   assert.equal(parsed.results[0].tier,'focus');assert.deepEqual(parsed.reviewSummary,r.reviewSummary)
-  assert.equal(parsed.finalReview.verdict,'pass')
+  assert.equal(parsed.finalReview.status,'not_run'); assert.equal(parsed.finalReview.verdict,null)
+  assert.deepEqual(parsed.convergence,r.convergence)
   assert.equal(approvedResults([{...h.calls.evidence[0],admitted:false}]).length,0)
 })
 
@@ -524,10 +516,9 @@ test('current public prompts do not extract hidden version/year restrictions',as
   for(const call of h.calls.jev)assert.ok(!JSON.stringify(call.state).includes('explicit_requirements'))
 })
 
-test('every query option after not-passed final is bound to the named point, including the broadest option',async()=>{
-  let finals=0
-  const h=harness({search:(_,n)=>[hit(`gap${n}`)],judge:({phase,spec,state})=>{
-    if(phase==='retrieval_final')return ++finals===1?'keyword1':'finish'
+test('every follow-up option is bound to the weakest point, including the broadest option',async()=>{
+  const h=harness({limits:{maxFetchCalls:0},search:(_,n)=>[hit(`gap${n}`)],judge:({phase,id,spec,state})=>{
+    if(phase==='source_judge'&&id.endsWith('kw1.match')&&sourceFor(state,id).url.includes('gap1.'))return .55
     if(phase==='query_plan'&&state.feedback.requested_keyword)return choice(spec,state.options.at(-1).id)
   }})
   await h.run({...input,keywords:['mechanism','failures']})
@@ -566,10 +557,11 @@ test('planning failure uses a disclosed bounded unassessed fallback, never a pas
   assert.match(r.stopDetail,/fallback/)
 })
 
-test('no-point material is retained but cannot fabricate final readiness or a normal not-passed verdict',async()=>{
+test('no-point material is retained but cannot fabricate score convergence',async()=>{
   const h=harness({limits:{maxRounds:2,maxFetchCalls:0},judge:({phase,id})=>phase==='source_judge'&&id.endsWith('kw1.match')?.1:undefined})
   const r=await h.run({...input,keywords:['mechanism','failures']})
-  assert.equal(r.finalReview.status,'not_ready');assert.equal(r.finalReview.verdict,null)
+  assert.equal(r.convergence.status,'insufficient');assert.equal(r.convergence.minimumProgress,0)
+  assert.equal(r.finalReview.status,'not_run');assert.equal(r.finalReview.verdict,null)
   assert.equal(h.calls.jev.some(c=>c.phase==='retrieval_final'),false)
   assert.ok(approvedResults(h.calls.evidence).length>0)
   assert.ok(h.calls.search[1].query.includes('failures'))
@@ -578,6 +570,7 @@ test('no-point material is retained but cannot fabricate final readiness or a no
 test('current diagnostic partition distinguishes mixed rejection, unavailable and unreviewed rows',async()=>{
   const h=harness({limits:{maxRounds:1,maxSourceJudgeCandidatesPerRequest:6},search:()=>Array.from({length:30},(_,i)=>hit(`mix${i}`)),judge:({phase,id,state})=>{
     if(phase==='scope_judge'&&sourceFor(state,id).url.includes('mix0.'))return .1
+    if(phase==='source_judge'&&id.endsWith('.relevance'))return .7
     if(phase==='source_judge'&&sourceFor(state,id).url.includes('mix1.')&&id.endsWith('.reading_value'))return .1
     if(phase==='source_judge'&&sourceFor(state,id).url.includes('mix10.')&&id.endsWith('.injection'))return 'omit'
   }})
@@ -598,7 +591,53 @@ test('quality event counters can include retries while qualityAssessed counts cu
   assert.equal(r.funnel.reviewed_associations,2)
 })
 
-test('extra closed-set probability keys invalidate final verdicts; invalid scope thresholds throw',()=>{
-  assert.equal(finalDecisionEstablished({valid:true,choice:'finish',probabilities:{finish:.9,keyword0:.1,foreign:0}},['finish','keyword0']),false)
+test('invalid scope thresholds throw',()=>{
   for(const allow of [.5,0,1.01,NaN])assert.throws(()=>decodeScopeAnswer({type:'noul',value:.9},{allow}),RangeError)
+})
+
+const scoreStates = scores => scores.map((score, index) => ({keyword:`point${index}`, score, distinct:score>0?1:0}))
+test('normalized total caps strong points, uses equal weights and enforces every floor', () => {
+  const missing = retrievalConvergence(scoreStates([100,100,100,100,100,100,100,0]))
+  assert.equal(missing.score,87.5); assert.equal(missing.status,'insufficient')
+  const enough = retrievalConvergence(scoreStates([1,.6]))
+  assert.equal(enough.score,80); assert.equal(enough.status,'satisfied')
+  assert.equal(retrievalConvergence(scoreStates([1,.5999])).status,'insufficient')
+  assert.equal(retrievalConvergence(scoreStates([.79,.79])).status,'insufficient')
+  assert.equal(retrievalConvergence(scoreStates([.8,.8])).status,'satisfied')
+  assert.equal(retrievalConvergence(scoreStates([.8,.8,.8,.8])).score,80)
+})
+test('empty, invalid and witness-free scores fail closed; current score removal retracts success', () => {
+  for (const states of [[], scoreStates([NaN]),scoreStates([Infinity]),scoreStates([-1]),[{keyword:'a',score:1,distinct:0}]])
+    assert.equal(retrievalConvergence(states).status,'insufficient')
+  const states=scoreStates([1,1])
+  assert.equal(retrievalConvergence(states).status,'satisfied')
+  states[1].score=0;states[1].distinct=0
+  assert.equal(retrievalConvergence(states).status,'insufficient')
+  assert.equal(retrievalConvergence(states).score,50)
+})
+test('invalid heuristic policy is rejected instead of silently weakening gates',()=>{
+  for(const bad of [{keywordTarget:0},{totalThreshold:0},{totalThreshold:101},{keywordFloor:0},{keywordFloor:1.1},{keywordFloor:.9}])
+    assert.throws(()=>retrievalConvergence(scoreStates([1]),{keywordTarget:1,totalThreshold:80,keywordFloor:.6,...bad}),RangeError)
+})
+test('all points meeting their floor does not stop when total is below threshold',async()=>{
+  const h=harness({limits:{maxRounds:2,maxFetchCalls:0},judge:({phase,id})=>phase==='source_judge'&&id.endsWith('.relevance')?.7:undefined})
+  const r=await h.run({...input,keywords:['mechanism','failures']})
+  assert.ok(r.convergence.points.every(p=>p.minimumMet))
+  assert.ok(r.convergence.score<80)
+  assert.equal(r.retrievalSufficient,false)
+  assert.ok(h.calls.search.length>1)
+})
+test('seven strong points cannot compensate for a missing eighth point even above total threshold',async()=>{
+  const h=harness({limits:{maxRounds:1,maxFetchCalls:0},judge:({phase,id})=>phase==='source_judge'&&id.endsWith('kw7.match')?.1:undefined})
+  const r=await h.run({...input,keywords:Array.from({length:8},(_,i)=>`aspect${i}`)})
+  assert.equal(r.convergence.score,87.5)
+  assert.equal(r.retrievalSufficient,false)
+})
+
+test('score-convergence reasons are declared code-generated categories', async () => {
+  const h=harness({limits:{maxRounds:1,maxFetchCalls:0},judge:({phase,id})=>phase==='source_judge'&&id.endsWith('.relevance')?.55:undefined})
+  const r=await h.run()
+  assert.equal(r.questions[0].keywordProgress[0].reason,REASONS.keywordScoreBelowFloor)
+  assert.ok(r.questions[0].uncoveredReasons.includes(REASONS.retrievalConvergenceNotMet))
+  assert.ok(r.questions[0].uncoveredReasons.every(reason=>Object.values(REASONS).includes(reason)))
 })

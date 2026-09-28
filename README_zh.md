@@ -281,7 +281,7 @@ search-boost
 
 **Vercel 接入**：在 TUI → Jev credentials 填写 `https://ai-gateway.vercel.sh/v1` 和 Vercel AI Gateway Key。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级配置中的 Jev Key，不读取环境变量；服务端限流等待不会被缩短。
 
-调用方提供**一个问题**（`questions` 恰好一项）、研究目的 `intent`、研究点 `keywords` 和明确硬条件 `constraints`。每次实际搜索先依据缺口、材料与历史反馈选择查询，再针对选定查询选择引擎。候选入池后，**一个独立 Boolean 前筛判断全部显式条件**；条件为空则跳过。质量判断保留重点及有用补充材料，方向用于重点排序、关键词用于贡献归属，不再共同否决整篇材料。经过有界审查窗口且各点已有贡献后，终审按原问题与方向检查**全部当前有效入库材料**，不重审条件：通过则返回，不通过则指定一个已有关键词重新搜索。全量终审装不下或执行异常时明确未完成，不截取少量材料冒充全审。主 Agent 仍负责分析和事实核实。
+调用方提供**一个问题**（`questions` 恰好一项）、研究目的 `intent`、研究点 `keywords` 和明确硬条件 `constraints`。每次实际搜索先依据缺口、材料与历史反馈选择查询，再针对选定查询选择引擎。候选入池后，**一个独立 Boolean 前筛判断全部显式条件**；条件为空则跳过。质量判断保留重点及有用补充材料，方向用于重点排序、关键词用于贡献归属，不再共同否决整篇材料。代码按当前有效去重材料计算关键词封顶进度：等权总分达到80/100且每个关键词进度达到0.60后停止（关键词目标分为1）。参数为未校准工程起点，弱点优先续搜。不再发送全量终审，也不再强制64份首轮审查窗口；未完成判断仍如实披露。主 Agent 仍负责分析和事实核实。
 
 ```json
 {
@@ -296,7 +296,7 @@ search-boost
 - `constraints` 仅填明确可核验的完整硬条件，如适用版本、事件/发布日期范围、平台或仅限官方来源。**不要填研究方向、软偏好、关键词或期望结论**；没有明确限制则省略或传 `[]`。所有条件按AND判断；每项强制文档条件均须显式放入该字段，不暗中从问题补猜。有用补充材料不必命中列出的研究点。
 - 多问题列表、`tasks/targets/facts/time_range` 和二维关键词不再是公开入口；独立问题请分次调用。
 - 返回认可的 URL、标题、审查摘录及 valueScore/directionMatch/kind及focus/supporting分层，不生成答案，不混入尚未完成准入的候选；可选方向或关键词判断缺失仍单独披露。
-- 查看 `reviewSummary`、`scopeSummary`、`finalReview`、`keywordProgress`、`pendingAssessments` 和警告。`retrievalSufficient` 需要整体终检通过，不等于事实核实或答案全集覆盖；`coverageComplete` 在 schemaVersion 3 中仍恒为 false。
+- 查看 `reviewSummary`、`scopeSummary`、`convergence`、`keywordProgress`、`pendingAssessments` 和警告。`retrievalSufficient` 表示达到评分检索停止标准，不是语义终审、事实核实或答案全集覆盖；废弃的 `finalReview` 固定为 `not_run`、无判定；`coverageComplete` 在 schemaVersion 3 中仍恒为 false。
 - 用 `{"cursor":"<nextCursor>"}` 读取后续页，可选 page_size，不重搜或重问 Jev。默认20、最多50条/页并有字节预算，累计认可结果无固定条数帽；结果暂存本进程最多30分钟/32次，分页完毕不是全网穷尽。
 - 阈值仍是未标定工程起点。完整契约、预算和迁移说明见 [Jev 单问题研究检索](docs/jev-adaptive-search.md)。
 
