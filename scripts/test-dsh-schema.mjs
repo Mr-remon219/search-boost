@@ -1,6 +1,6 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 // Exercise the actual DSH registry/SDK schema compiler, not a permissive mock.
-import './isolate-install-tests.mjs'
 import assert from 'node:assert/strict'
 import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'

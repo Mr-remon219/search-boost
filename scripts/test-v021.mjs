@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** v0.2.1 repairs: real CLI/config/process/loopback HTTP boundaries, plus typed
  * provider response fixtures. Never consumes a real credential or the host HOME. */
 import assert from 'node:assert/strict'
@@ -168,8 +169,18 @@ process.exit(1);`)
     assert.equal(classifyFetchError(new TypeError('local dispatcher mismatch')).kind, 'transport_error')
   })
   await test('UP02 hung subprocess reaches an independent deadline and tree cleanup', async () => {
-    const start = Date.now(); const result = await runCommand(process.execPath, ['-e', 'process.on("SIGTERM",()=>{});setInterval(()=>{},1000)'], { timeoutMs: 150, killGraceMs: 150, closeGraceMs: 100 })
-    assert.equal(result.code, 124); assert(Date.now() - start < 3000)
+    const callerCwd = process.cwd(), disposable = mkdtempSync(join(temp, 'process-cwd-'))
+    try {
+      process.chdir(disposable)
+      const start = Date.now(); const result = await runCommand(process.execPath, ['-e', 'process.on("SIGTERM",()=>{});setInterval(()=>{},1000)'], { timeoutMs: 150, killGraceMs: 150, closeGraceMs: 100 })
+      assert.equal(result.code, 124); assert(Date.now() - start < 3000)
+    } finally {
+      process.chdir(callerCwd)
+      // In particular, unref'ed Windows taskkill helpers must not pin this cwd
+      // after runCommand returns, including during synchronous exit cleanup.
+      rmSync(disposable, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    }
+    assert(!existsSync(disposable))
     if (process.platform !== 'win32') {
       const result = await runCommand(process.execPath, ['-e', 'require("child_process").spawn(process.execPath,["-e","setInterval(()=>{},1000)"],{stdio:["ignore",1,2]});setTimeout(()=>process.exit(0),25)'], { timeoutMs: 3000, killGraceMs: 100, closeGraceMs: 100 })
       assert.equal(result.code, 125)

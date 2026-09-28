@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 // Hermetic origin/proxy + real optional curl. No external sites or user credentials.
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'

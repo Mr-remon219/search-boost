@@ -1,3 +1,4 @@
+import './isolate-tests.mjs'
 import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
 // Hermetic X contract + runtime regression tests: no credentials or live HTTP.
 import assert from 'node:assert/strict'

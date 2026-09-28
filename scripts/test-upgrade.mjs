@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** New TUI/CLI manages OLD Pi/DSH/MCP installations. No real package-manager/host mutations. */
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, statSync, symlinkSync, readlinkSync, realpathSync } from 'node:fs'
@@ -42,6 +43,12 @@ const logs = [], calls = []
 const log = (message) => logs.push(message)
 let npmVersion = version, failDshRemove = false, failNpm = false
 async function run(command, args) {
+  // Exercise the shared launcher on machines with or without global DSH/pnpm.
+  if (command === 'npm' && args[0] === 'exec') {
+    const separator = args.indexOf('--')
+    assert.equal(args[separator + 1], 'dsh')
+    command = 'dsh'; args = args.slice(separator + 2)
+  }
   calls.push({ command, args })
   if (command === 'npm' && args[0] === 'root') return { code: 0, stdout: globalRoot }
   if (command === 'npm' && args[0] === 'uninstall' && args[1] === '--prefix') {
@@ -85,6 +92,18 @@ async function run(command, args) {
   throw new Error(`Unexpected command in hermetic test: ${command} ${args[0]}`)
 }
 try {
+  // Missing real projects still block completion: never hide all discovery
+  // warnings to compensate for historical test receipts in a user's store.
+  const projectsFile = join(process.env.SEARCH_BOOST_HOME, 'state', 'upgrade-projects.json')
+  const missingProject = join(temp, 'unavailable-user-project')
+  write(projectsFile, { projects: [missingProject] })
+  const missing = await runUpgrade({ dryRun: true, syncOnly: true, run, log })
+  assert.equal(missing.ok, false)
+  assert(missing.warnings.includes(`Recorded project unavailable: ${missingProject}`))
+  assert.deepEqual(json(projectsFile), { projects: [missingProject] }, 'discovery must not prune user records')
+  rmSync(projectsFile)
+  console.log('ok: unavailable real project remains recorded and blocks completion')
+
   assert(compareVersions('1.10.0', '1.9.9') > 0)
   assert(compareVersions('1.0.0', '1.0.0-beta.9') > 0)
   assert(compareVersions('1.0.0-beta.10', '1.0.0-beta.2') > 0)

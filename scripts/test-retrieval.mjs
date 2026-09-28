@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /**
  * Frozen pre-scope V3 controller — hermetic historical comparison tests.
  * Production scope-first behavior is tested in test-single-target.mjs.

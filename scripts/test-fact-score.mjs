@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 // Algebra/provenance invariants, not model accuracy or live retrieval evidence.
 import assert from 'node:assert/strict'
 import { scoreEvidence, FACT_SCORE_WEIGHTS } from '../lib/search/adaptive/keyword-progress.js'

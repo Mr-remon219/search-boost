@@ -1,8 +1,9 @@
+import './isolate-tests.mjs'
 /**
- * Codex uninstall restore integration tests — run via subprocess with HOME set
+ * Codex uninstall restore integration tests — the first import isolates HOME
  * before module load (PATHS is resolved at import time).
  *
- * Usage: HOME=/tmp/xxx node scripts/test-codex-uninstall-integration.mjs <scenario>
+ * Usage: node scripts/test-codex-uninstall-integration.mjs <scenario>
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -13,7 +14,7 @@ const scenario = process.argv[2]
 const home = process.env.HOME
 
 if (!scenario || !home) {
-  console.error('Usage: HOME=/tmp/xxx node scripts/test-codex-uninstall-integration.mjs <scenario>')
+  console.error('Usage: node scripts/test-codex-uninstall-integration.mjs <scenario>')
   process.exit(2)
 }
 

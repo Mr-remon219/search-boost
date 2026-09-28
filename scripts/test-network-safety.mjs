@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 // Network policy: proxy retries/fallback, HTTP/TLS/size/cancellation bounds,
 // ordinary local networking, plus retained legacy DNS/pinning helper contracts.
 // All live requests use loopback fixtures; no external network or credentials.

@@ -1,3 +1,4 @@
+import './isolate-tests.mjs'
 // Jev credentials (experimental) — storage round-trips, trust boundary and CLI surface.
 //
 // Trust boundary under test (B3): the `jev` block is read from and written to the

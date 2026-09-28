@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 // Current production controller. Hermetic scripted Jev answers verify routing,
 // not semantic accuracy, calibrated thresholds, or real network performance.
 import test from 'node:test'

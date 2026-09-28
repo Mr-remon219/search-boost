@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /**
  * adaptive_search loop tests — fully hermetic: fake engines, fake page fetch,
  * fake Jev transport (scripted by policy), fake clock. No network, no HOME.

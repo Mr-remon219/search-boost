@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /**
  * Jev System One client tests — hermetic: a fake fetch, no network, no HOME.
  *

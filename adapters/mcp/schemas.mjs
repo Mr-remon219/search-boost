@@ -3,7 +3,7 @@
  */
 import * as z from 'zod'
 import { ENGINE_ORDER } from '../../lib/runtime.mjs'
-import { CONSTRAINTS_DESCRIPTION } from '../../lib/search/adaptive/input.js'
+import { ADAPTIVE_INPUT_SCHEMA, CONSTRAINTS_DESCRIPTION } from '../../lib/search/adaptive/input.js'
 
 const engineEnum = z.enum(ENGINE_ORDER)
 
@@ -129,9 +129,9 @@ export const adaptiveSearchInput = {
   questions: z.array(z.string().min(1).max(400)).length(1).optional()
     .describe('Exactly ONE coherent research question; comparisons may have related aspects. Supply questions or cursor. Independent questions require separate calls.'),
   intent: z.string().min(1).max(2000).optional()
-    .describe('Research purpose/direction: what material the agent wants to read. Direction mismatch excludes material; relevant counterevidence qualifies. Soft preferences are not hard restrictions. Not appended to queries. No secrets/private reasoning. Omit to use the question as the purpose.'),
+    .describe(ADAPTIVE_INPUT_SCHEMA.properties.intent.description),
   keywords: z.array(z.string().min(1).max(100)).min(1).max(8).optional()
-    .describe('Search points, each interpreted with the FULL question. Each material must help at least ONE point, not all. Omit to use the question as one point.'),
+    .describe(ADAPTIVE_INPUT_SCHEMA.properties.keywords.description),
   constraints: z.array(z.string().min(1).max(300)).max(8).optional().describe(CONSTRAINTS_DESCRIPTION),
   cursor: z.string().min(1).max(100).optional()
     .describe('Read a saved result page. Do not combine with questions/intent/keywords/constraints. No network or Jev calls; temporary and server-local.'),

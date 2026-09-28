@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /**
  * Evidence-funnel instrumentation tests — hermetic (scripted Jev, fake engines,
  * fake page fetch). They assert that every funnel stage is counted separately

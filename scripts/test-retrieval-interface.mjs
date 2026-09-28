@@ -1,3 +1,4 @@
+import './isolate-tests.mjs'
 // Public v3 pagination/schema regression: no network or Jev calls.
 import assert from 'node:assert/strict'
 import { z } from 'zod'

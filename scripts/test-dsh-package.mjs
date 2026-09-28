@@ -1,8 +1,9 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 // Real npm global + npm-exec (npx) installs of the packed artifact. Network is
 // used only by npm to obtain declared dependencies. No real HOME/config writes.
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, existsSync, cpSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -25,7 +26,14 @@ async function run(command, args, cwd = temp) {
   return result.stdout
 }
 try {
-  const packed = JSON.parse(await run('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', temp], root))[0]
+  // Pack the declared payload in a clean cwd: npm must not read a developer's
+  // project .npmrc (which can carry registry auth), even with an isolated HOME.
+  const payload = join(temp, 'payload')
+  mkdirSync(payload)
+  const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+  writeFileSync(join(payload, 'package.json'), JSON.stringify(manifest))
+  for (const file of manifest.files) cpSync(join(root, file), join(payload, file), { recursive: true })
+  const packed = JSON.parse(await run('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', temp], payload))[0]
   for (const name of ['adapters/dsh/schema.js', 'adapters/dsh/index.js', 'adapters/dsh/cordis.patch.yml']) {
     assert(packed.files.some((entry) => entry.path === name), `missing tarball file ${name}`)
   }

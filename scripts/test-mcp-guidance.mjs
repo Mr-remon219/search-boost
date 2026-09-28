@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** Check the actual stdio contract without network calls, installed skills, or real HOME. */
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -9,6 +10,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import * as z from 'zod'
 import { fusedSearchInput, fetchPageInput, xSearchInput } from '../adapters/mcp/schemas.mjs'
+import { ADAPTIVE_INPUT_SCHEMA } from '../lib/search/adaptive/input.js'
 
 const home = mkdtempSync(join(tmpdir(), 'sb mcp guidance '))
 const client = new Client({ name: 'guidance-test', version: '1.0.0' })
@@ -82,6 +84,10 @@ try {
     assert(schema.description, `adaptive_search.${field}: missing direct-call guidance`)
   }
   assert.ok(['questions', 'intent', 'keywords', 'constraints', 'cursor', 'page_size'].every((key) => key in byName.adaptive_search.inputSchema.properties))
+  for (const field of ['intent', 'keywords']) {
+    assert.equal(byName.adaptive_search.inputSchema.properties[field].description,
+      ADAPTIVE_INPUT_SCHEMA.properties[field].description, `${field}: MCP must preserve supporting-material admission guidance`)
+  }
   assert.equal(byName.adaptive_search.inputSchema.properties.questions.minItems, 1)
   assert.equal(byName.adaptive_search.inputSchema.properties.questions.maxItems, 1)
   assert.equal(byName.adaptive_search.inputSchema.properties.questions.items.maxLength, 400)
