@@ -10,6 +10,7 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import { ADAPTIVE_INPUT_SCHEMA } from '../lib/search/adaptive/input.js'
 import { runAdaptiveSearch } from '../lib/runtime.mjs'
+import { retrievalConvergence } from '../lib/search/adaptive/convergence.js'
 import { saveJevConfig, clearJevConfig } from '../lib/jev-config.mjs'
 import { saveToolPreferences } from '../lib/tool-config.mjs'
 import { registerDshTool, toDshSchema } from '../adapters/dsh/schema.js'
@@ -60,6 +61,13 @@ assert.equal(empty.nextCursor, null)
 assert.deepEqual(validateJsonSchemaValue(adaptive.output.schema, empty), [])
 assert.deepEqual(validateJsonSchemaValue(adaptive.output.schema, { ...empty, nextCursor: 'next-page' }), [])
 assert.notEqual(validateJsonSchemaValue(adaptive.output.schema, { ...empty, nextCursor: 42 }).length, 0)
+const scored = { ...empty, retrievalSufficient:true,
+  convergence:retrievalConvergence([{keyword:'test',score:.9,distinct:1}]),
+  finalReview:{status:'not_run',checks:0,verdict:null,researchKeyword:null,inputMaterials:0,allMaterialsIncluded:false},
+  keywordProgress:[{targetId:'q1',keyword:'test',score:.9,progress:.9,ready:true,distinctEvidence:1,finalStatus:'satisfied'}],
+}
+assert.deepEqual(validateJsonSchemaValue(adaptive.output.schema, scored), [])
+assert.notEqual(validateJsonSchemaValue(adaptive.output.schema, { ...scored, convergence:{...scored.convergence,status:'pass'} }).length, 0)
 const fused = tools.get('fused_search')
 const result = { query: 'fixture', effectiveWeights: { bing: 1 }, results: [{ title: 'Title', url: 'https://example.com', domain: 'example.com', published: null, engineRanks: { bing: 1 }, contributions: { bing: 0.5 } }] }
 assert.deepEqual(validateJsonSchemaValue(fused.output.schema, result), [])

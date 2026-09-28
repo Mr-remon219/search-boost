@@ -15,8 +15,8 @@
  *     Jev calls / HTTP attempts / input tokens, wall-clock time
  *
  * Fairness rules baked in:
- *   * 1..6 questions per adaptive call (the tool limit) — 8–12 questions are
- *     grouped, and the group sizes are reported
+ *   * Exactly one question per adaptive call — the 8–12-question suite is
+ *     evaluated as independent calls, and the group sizes are reported
  *   * run each arm in its own process (`--arm adaptive` / `--arm baseline`) so the
  *     6h search cache and the 24h page cache do not leak between arms
  *   * Jev's own probabilities are NEVER used as evidence that Jev is better: the
@@ -56,7 +56,7 @@ if (flag('--help') || !(flag('--yes') || process.env.EVAL_ADAPTIVE === '1')) {
   process.exit(0)
 }
 
-const GROUP_SIZE = 6 // adaptive_search accepts 1..6 questions
+const GROUP_SIZE = 1 // current public contract: exactly one coherent question
 
 const questions = (() => {
   const file = option('--questions')
@@ -95,7 +95,7 @@ const report = {
   baseline: [],
   limitations: [
     'Judging reading value requires independent review of returned material; this script does not score correctness.',
-    'Jev search satisfaction and value scores are model judgements, not measured accuracy or answer completeness.',
+    'Retrieval satisfaction is a heuristic code-side stopping rule over model-scored material, not semantic review, measured accuracy or answer completeness.',
     'Cache state differs between runs and arms; run arms in separate processes for comparability.',
   ],
 }
@@ -104,12 +104,14 @@ async function runAdaptiveArm() {
   for (const [index, group] of groups.entries()) {
     const started = Date.now()
     const result = await runAdaptiveSearch({ questions: group }, { host: 'mcp', diagnostics: true })
+    if (result.stopReason === 'invalid_input') throw new Error('eval: adaptive input was rejected; this is a harness error, not an unsuccessful search')
     report.adaptive.push({
       group: index + 1,
       size: group.length,
       tookMs: Date.now() - started,
       stopReason: result.stopReason,
       rounds: result.rounds,
+      convergence: result.convergence ?? null,
       usage: result.usage,
       jev: {
         used: result.jev.used,
@@ -128,6 +130,7 @@ async function runAdaptiveArm() {
         basis: [...new Set(q.evidence.map(item => item.textBasis))].join(', '),
         reasons: q.uncoveredReasons,
         usefulResults: q.usefulResults ?? 0,
+        keywordProgress: q.keywordProgress ?? [],
         evidenceCount: q.evidenceCount,
         topEvidence: q.evidence.slice(0, 3).map((item) => ({ evidenceId: item.evidenceId, url: item.url, basis: item.textBasis, status: item.status, reviewedText: String(item.reviewedText ?? '').slice(0, 400) })),
       })),
@@ -210,11 +213,11 @@ lines.push(`| Jev calls / HTTP attempts | ${adaptiveTotals.jevCalls} / ${adaptiv
 lines.push(`| Jev input tokens (server / estimated) | ${adaptiveTotals.jevInputTokens} / ${adaptiveTotals.jevInputTokensEstimated} | n/a |`)
 lines.push(`| wall clock (sum of calls) | ${adaptiveTotals.tookMs} ms | ${baselineTotals.tookMs} ms |`)
 lines.push('')
-lines.push(`Adaptive reported search satisfied: ${adaptiveTotals.satisfied}/${questions.length} question(s). These are MODEL judgements about the cited fragments — NOT verified facts and NOT proof this tool is better.`)
+lines.push(`Adaptive reported search satisfied: ${adaptiveTotals.satisfied}/${questions.length} question(s). This is the CODE-SIDE heuristic stopping rule over model-scored material — NOT semantic review, verified facts or proof this tool is better.`)
 lines.push('')
 lines.push('## Rubric worksheet (fill in by reading the sources)')
 lines.push('')
-lines.push('| # | question | adaptive status | search satisfied (model) | preview basis | useful results | baseline results / fetched words | worth reading? (human) | key source missed? | duplicate rate |')
+lines.push('| # | question | adaptive status | retrieval threshold met (heuristic) | preview basis | useful results | baseline results / fetched words | worth reading? (human) | key source missed? | duplicate rate |')
 lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |')
 const adaptiveFlat = report.adaptive.flatMap((entry) => entry.perQuestion)
 questions.forEach((question, index) => {

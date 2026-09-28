@@ -1,5 +1,7 @@
 # 单问题 Jev 检索：历史整体流程与公式自审
 
+> 历史记录：其中全量/代表材料终审及首轮64份审查窗口已被用户批准的“总分＋关键词保底”方案取代。当前实现及返回语义见 [jev-adaptive-search.md](jev-adaptive-search.md)；不再发送 `retrieval_final` 请求。本文旧要求和验证记录不是当前终审契约。
+
 > 历史记录：本文描述四点重构之前的自审。原方向/关键词准入门控、主体/隐含条件检查、代表材料终检及旧公式已由后续用户要求取代。当前行为见 [jev-adaptive-search.md](jev-adaptive-search.md)，实施对照见 [adaptive-review-points.md](adaptive-review-points.md)。以下保留当时反例和修复经过，不作为现行契约。
 
 ## 审查边界
