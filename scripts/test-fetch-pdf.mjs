@@ -5,7 +5,7 @@ import './isolate-tests.mjs'
 // here. The pdfjs-dist path is optional, exactly like the dependency itself.
 import assert from 'node:assert/strict'
 import { fetchPage, makePageCache, PAGE_WINDOW_CHARS, windowPageResult, toFetchPageResult } from '../lib/search/fetch.js'
-import { assemblePdfPageText, isPlausibleText, looksBinary, looksBinaryType, looksLikePdf, pdfAssetPrefix, PDF_MAX_PAGES, __setPdfParserForTests } from '../lib/search/pdf.js'
+import { assemblePdfPageText, extractPdfText, isPlausibleText, looksBinary, looksBinaryType, looksLikePdf, pdfAssetPrefix, PDF_MAX_PAGES, __setPdfParserForTests } from '../lib/search/pdf.js'
 import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
 import { NET_ERROR_KINDS } from '../lib/search/net-policy.mjs'
 
@@ -89,7 +89,10 @@ await test('detection distinguishes PDF, text and binary bodies', async () => {
   assert.equal(looksLikePdf(fixturePdf), true)
   assert.equal(looksLikePdf(fixturePdf, 'text/html'), true, 'magic bytes beat a wrong content-type')
   assert.equal(looksLikePdf(Buffer.from('<html><body>no pdf here</body></html>')), false)
-  assert.equal(looksLikePdf(Buffer.from('<p>a page that discusses %PDF- headers</p>')), true, 'the documented weak signal is intentional')
+  assert.equal(looksLikePdf(Buffer.from('<p>a page that discusses %PDF-1.7 headers</p>')), false)
+  assert.equal(looksLikePdf(new Uint8Array(fixturePdf)), true)
+  assert.equal(looksBinary(Buffer.alloc(400, 7)), true)
+  assert.equal(looksBinary(Buffer.concat([Buffer.alloc(5000, 65), Buffer.from([0])])), true)
   assert.equal(looksBinaryType('application/octet-stream'), true)
   assert.equal(looksBinaryType('image/png'), true)
   assert.equal(looksBinaryType('text/html; charset=utf-8'), false)
@@ -423,6 +426,91 @@ await test('the default window is a hard cap for model-facing content', async ()
   assert.equal(shaped.truncated, false, 'the full body constructor stays unclipped')
   assert.equal(windowPageResult(shaped, 0).content.length, PAGE_WINDOW_CHARS)
   assert.equal(windowPageResult(toFetchPageResult('u', 'local', 'short body', undefined, false, Date.now()), 0).truncated, false)
+})
+
+await test('PDF extraction limitations survive cached continuation and remain truncated', async () => {
+  const seen = stubNetwork(() => pdfResponse(fixturePdf))
+  __setPdfParserForTests({ getDocument: () => ({ promise: Promise.resolve({
+    numPages: PDF_MAX_PAGES + 1,
+    getPage: async () => ({ getTextContent: async () => ({ items: [{ str: prose }] }), cleanup() {} }),
+    destroy: async () => {},
+  }) }) })
+  const cache = makePageCache()
+  const first = await fetchPage('https://example.test/bounded.pdf', undefined, cache)
+  assert.equal(first.limitation.kind, 'pdf_truncated')
+  const last = await fetchPage('https://example.test/bounded.pdf', undefined, cache, undefined, { offset: first.nextOffset, windowChars: Infinity })
+  assert.equal(last.cacheHit, true)
+  assert.deepEqual(last.limitation, first.limitation)
+  const whole = await fetchPage('https://example.test/bounded.pdf', undefined, cache, undefined, { windowChars: Infinity })
+  assert.equal(whole.truncated, true, 'whole cached extract is not the whole PDF')
+  assert.equal(seen.length, 1)
+})
+
+await test('PDF retained text obeys character caps within the final page and across separators', async () => {
+  const parser = texts => ({ getDocument: () => ({ promise: Promise.resolve({
+    numPages: texts.length,
+    getPage: async n => ({ getTextContent: async () => ({ items: [{ str: texts[n - 1] }] }), cleanup() {} }),
+    destroy: async () => {},
+  }) }) })
+  for (const texts of [['x'.repeat(1000)], ['a'.repeat(20), 'b'.repeat(20)]]) {
+    const r = await extractPdfText(fixturePdf, { parser: parser(texts), maxChars: 32 })
+    assert.equal(r.ok, true)
+    assert.equal(r.text, texts.join('\n\n').slice(0, 32))
+    assert.equal(r.chars, r.text.length)
+    assert.equal(r.truncated, true)
+  }
+  const exact = await extractPdfText(fixturePdf, { parser: parser(['x'.repeat(32)]), maxChars: 32 })
+  assert.equal(exact.truncated, false)
+})
+
+await test('abort during document load or final-page extraction settles and requests cleanup', async () => {
+  for (const phase of ['load', 'page', 'text']) {
+    const ac = new AbortController()
+    let destroyed = 0
+    const stall = () => { queueMicrotask(() => ac.abort()); return new Promise(() => {}) }
+    const parser = { getDocument: () => ({
+      destroy: async () => { destroyed++ },
+      promise: phase === 'load' ? stall() : Promise.resolve({
+        numPages: 1,
+        getPage: () => phase === 'page' ? stall() : Promise.resolve({ getTextContent: stall, cleanup() {} }),
+      }),
+    }) }
+    let timeout
+    try {
+      const result = await Promise.race([
+        extractPdfText(fixturePdf, { parser, signal: ac.signal }),
+        new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error(`abort stuck in ${phase}`)), 1000) }),
+      ])
+      assert.equal(result.reason, 'cancelled')
+      assert.equal(destroyed, 1)
+    } finally { clearTimeout(timeout) }
+  }
+  const ac = new AbortController()
+  const cache = makePageCache()
+  const seen = stubNetwork(() => pdfResponse(fixturePdf))
+  __setPdfParserForTests({ getDocument: () => ({ promise: Promise.resolve({
+    numPages: 1,
+    getPage: async () => ({ getTextContent: async () => { ac.abort(); return { items: [{ str: prose }] } }, cleanup() {} }),
+    destroy: async () => {},
+  }) }) })
+  await assert.rejects(fetchPage('https://example.test/cancel-last.pdf', undefined, cache, ac.signal), err => err.kind === NET_ERROR_KINDS.cancelled)
+  assert.equal(cache.size(), 0)
+  assert.equal(seen.length, 1, 'abort must not trigger reader fallback')
+})
+
+await test('control-only short bodies and corrupt tails cannot be delivered by origin or reader', async () => {
+  for (const bytes of [Buffer.alloc(400, 7), Buffer.concat([Buffer.from('a'.repeat(5000)), Buffer.alloc(10000, 0xb2)])]) {
+    stubNetwork(() => new Response(bytes))
+    await assert.rejects(fetchPage('https://example.test/corrupt', undefined, makePageCache()))
+  }
+  stubNetwork(url => url.startsWith('https://r.jina.ai/')
+    ? new Response(prose, { headers: { 'content-type': 'image/png' } })
+    : new Response(Buffer.alloc(400, 7)))
+  await assert.rejects(fetchPage('https://example.test/declared-binary-reader', undefined, makePageCache()))
+  const seen = stubNetwork(() => html(`${prose} A literal %PDF-1.7 header is discussed here.`))
+  const page = await fetchPage('https://example.test/pdf-guide', undefined, makePageCache())
+  assert.equal(page.via, 'local')
+  assert.equal(seen.length, 1)
 })
 
 console.log(`${passed} fetch PDF/binary/window tests passed${realPdfParser ? '' : ' (real pdfjs-dist tests skipped)'}`)
