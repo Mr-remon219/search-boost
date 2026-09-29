@@ -1,6 +1,6 @@
 {
   "name": "search-boost",
-  "version": "0.2.4-beta.3",
+  "version": "0.2.4-beta.4",
   "description": "Optional multi-engine fused web search MCP for Grok Build — citations, X search. Model decides when to search; run `search-boost install -t grok` for routing hints.",
   "author": "search-boost",
   "keywords": [
