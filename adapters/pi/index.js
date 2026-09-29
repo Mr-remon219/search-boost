@@ -237,6 +237,7 @@ export default function searchBoostExtension(pi) {
       properties: {
         url: { type: 'string', description: 'Absolute http(s) URL to fetch' },
         focus: { type: 'string', description: 'Optional focus terms: when provided, only paragraphs relevant to these terms are returned. Pass the research question or the specific thing you need from the page. Omit to keep the full preprocessed body.' },
+        offset: { type: 'integer', minimum: 0, description: 'Character offset into the page body (default 0). Use nextOffset from a previous call to continue a long page; the read is served from cache.' },
       },
       required: ['url'],
     },
@@ -246,7 +247,7 @@ export default function searchBoostExtension(pi) {
       progress(`fetch_page: ${params.url}`)
       let page
       try {
-        page = await runFetchPage(params.url, params.focus, signal)
+        page = await runFetchPage(params.url, params.focus, signal, { offset: params.offset })
       } catch (err) {
         audit.write({
           type: 'fetch',
@@ -280,11 +281,12 @@ export default function searchBoostExtension(pi) {
           params.focus ? (page.focusMiss
             ? '[dynamic filtering: focus matched nothing — retry without focus to read the whole page]'
             : `[dynamic filtering: kept ${page.word_count} words relevant to focus]`) : '',
+          page.windowNote ? `[${page.windowNote}]` : '',
           page.limitation ? `WARNING: ${page.limitation.kind}: ${page.limitation.message}` : '',
           '',
           page.content,
         ].filter((l, i) => l !== '' || i === 3).join('\n'))],
-        details: { via: page.via, fetchedAt: page.fetched_at, wordCount: page.word_count, focusMiss: Boolean(page.focusMiss), ...(page.limitation ? { limitation: page.limitation } : {}) },
+        details: { via: page.via, fetchedAt: page.fetched_at, wordCount: page.word_count, totalChars: page.totalChars, offset: page.offset, nextOffset: page.nextOffset ?? null, focusMiss: Boolean(page.focusMiss), ...(page.limitation ? { limitation: page.limitation } : {}) },
       }
     },
   })

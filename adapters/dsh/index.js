@@ -316,6 +316,7 @@ function registerFetchPageTool(ctx) {
       properties: {
         url: { type: 'string', description: 'The http(s) URL to fetch.' },
         focus: { type: 'string', description: 'Optional topic to keep: only paragraphs containing these terms (plus context) are returned.' },
+        offset: { type: 'integer', minimum: 0, description: 'Character offset into the page body (default 0). Pass nextOffset from a previous call to continue a long page from cache.' },
       },
       required: ['url'],
     },
@@ -332,6 +333,8 @@ function registerFetchPageTool(ctx) {
         properties: {
           url: { type: 'string' }, via: { type: 'string' }, fetched_at: { type: 'string' },
           word_count: { type: 'number' }, content: { type: 'string' }, truncated: { type: 'boolean' },
+          totalChars: { type: 'number' }, offset: { type: 'number' }, nextOffset: { type: 'number' },
+          windowNote: { type: 'string' },
           limitation: { type: 'object', properties: { kind: { type: 'string' }, message: { type: 'string' } }, required: ['kind', 'message'] },
           focusMiss: { type: 'boolean' }, cacheHit: { type: 'boolean' }, tookMs: { type: 'number' },
         },
@@ -339,7 +342,7 @@ function registerFetchPageTool(ctx) {
       },
       render: (_args, value) => [{
         type: 'text',
-        text: `**fetch_page: ${value.url}** — via ${value.via}, ${value.word_count} words, ${value.tookMs}ms${value.cacheHit ? ' (cache)' : ''}${value.truncated ? ' (truncated)' : ''}${value.focusMiss ? ' (focus matched nothing — retry without focus)' : ''}\n\n${value.content}${value.limitation ? `\nWARNING: ${value.limitation.kind}: ${value.limitation.message}` : ''}`,
+        text: `**fetch_page: ${value.url}** — via ${value.via}, ${value.word_count} words, ${value.tookMs}ms${value.cacheHit ? ' (cache)' : ''}${value.truncated ? ' (truncated)' : ''}${value.focusMiss ? ' (focus matched nothing — retry without focus)' : ''}${value.windowNote ? `\n[${value.windowNote}]` : ''}\n\n${value.content}${value.limitation ? `\nWARNING: ${value.limitation.kind}: ${value.limitation.message}` : ''}`,
       }],
       presentationMeta: (_args, value) => ({
         url: value.url,
@@ -363,7 +366,7 @@ function registerFetchPageTool(ctx) {
     timeoutMs: 60000,
     isConcurrencySafe: () => true,
     async execute(args, exec) {
-      return cleanJsonValue(await runFetchPage(args.url, args.focus, exec?.signal))
+      return cleanJsonValue(await runFetchPage(args.url, args.focus, exec?.signal, { offset: args.offset }))
     },
   })
 }

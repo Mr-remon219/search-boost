@@ -122,15 +122,20 @@ function summarizeAdaptive(result) {
       const url = String(args.url ?? '').trim()
       if (!url) return toolErr('fetch_page: url is required')
       const signal = abortSignal(extra, 60_000)
-      const page = await runFetchPage(url, args.focus, signal)
+      const page = await runFetchPage(url, args.focus, signal, { offset: args.offset })
       const focusNote = page.focusMiss ? ' (focus matched nothing — content omitted; retry without focus)' : ''
-      const summary = `fetch_page: ${page.url} — via ${page.via}, ${page.word_count} words, ${page.tookMs}ms${focusNote}${page.limitation ? `; WARNING ${page.limitation.kind}: ${page.limitation.message}` : ''}`
-      return toolOk(`${summary}\n\n${page.content}`, {
+      const windowNote = page.windowNote ? `\n[${page.windowNote}]` : ''
+      const summary = `fetch_page: ${page.url} — via ${page.via}, ${page.word_count} words, ${page.tookMs}ms${focusNote}${page.truncated ? ' [truncated]' : ''}${page.limitation ? `; WARNING ${page.limitation.kind}: ${page.limitation.message}` : ''}`
+      return toolOk(`${summary}${windowNote}\n\n${page.content}`, {
         url: page.url,
         via: page.via,
         word_count: page.word_count,
         tookMs: page.tookMs,
         truncated: Boolean(page.truncated),
+        totalChars: page.totalChars,
+        offset: page.offset,
+        ...(page.nextOffset != null ? { nextOffset: page.nextOffset } : {}),
+        ...(page.windowNote ? { windowNote: page.windowNote } : {}),
         content: page.content,
         focusMiss: Boolean(page.focusMiss),
         ...(page.limitation ? { limitation: page.limitation } : {}),
