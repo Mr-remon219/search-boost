@@ -69,6 +69,7 @@ export const fusedSearchOutput = {
 export const fetchPageInput = {
   url: z.string().url().describe('http(s) URL to fetch'),
   focus: z.string().optional().describe('Keep paragraphs matching these terms (optional; full page is returned when omitted)'),
+  offset: z.number().int().min(0).optional().describe('Character offset into the page body (default 0); pass nextOffset from a previous call to continue a long page from cache'),
 }
 
 export const fetchPageOutput = {
@@ -79,6 +80,10 @@ export const fetchPageOutput = {
   word_count: z.number(),
   tookMs: z.number(),
   truncated: z.boolean().optional(),
+  totalChars: z.number().optional(),
+  offset: z.number().optional(),
+  nextOffset: z.number().optional(),
+  windowNote: z.string().optional(),
   content: z.string(),
 }
 

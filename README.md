@@ -243,7 +243,7 @@ Dispatches queries across engines concurrently, normalizes URLs, strips redirect
 
 ### 2. `fetch_page` Smart Content Reader
 
-Reads webpage content from search URLs. Reads and cleans the origin first; curl handles transport compatibility when installed, and Jina Reader is the backup.
+Reads webpage content from search URLs. Reads and cleans the origin first; PDFs are extracted to text locally and only fall back to Jina Reader when that fails; curl handles transport compatibility when installed.
 
 **Tool Arguments Example**:
 ```json
@@ -256,6 +256,9 @@ Reads webpage content from search URLs. Reads and cleans the origin first; curl 
 - **`focus` (Optional)**: Filters and retains paragraphs matching the target keywords.
   > [!TIP]
   > A `focus` miss does **not** prove the information is absent from the page. If in doubt, re-fetch without `focus` to inspect the full context.
+- **`offset` (Optional)**: Long bodies are returned in bounded windows (60,000 characters by default). The result reports `totalChars` and, while more content follows, `nextOffset`; pass that back as `offset` to continue reading. Continuations are served from the 24h cache without another request.
+  > [!TIP]
+  > Binary responses (images, archives, PDFs with no extractable text) raise a clear error instead of being returned as page text.
 
 ---
 
@@ -437,6 +440,7 @@ Use this path to contribute to SearchBoost, or to test code that is not in a pub
 - **Node.js** `>= 22.13.0` (matching `package.json`)
 - **git** and **npm**
 - Optional: **`curl`**, for the same-route transport-compatibility fallback in `fetch_page`
+- Optional: **`pdfjs-dist`** (optionalDependency) to extract PDF text locally; without it, PDF reads fall back to Jina Reader
 
 ### Set up a checkout
 

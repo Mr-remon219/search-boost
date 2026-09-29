@@ -76,7 +76,7 @@
     "test:search": "node scripts/test-search-routing.mjs",
     "test:keys-authority": "node scripts/test-keys-authority.mjs",
     "test:dry-run": "node scripts/test-dry-run.mjs",
-    "test:network": "node scripts/test-network-safety.mjs && node scripts/test-audit-regressions.mjs && node scripts/test-fetch-fallback.mjs",
+    "test:network": "node scripts/test-network-safety.mjs && node scripts/test-audit-regressions.mjs && node scripts/test-fetch-fallback.mjs && node scripts/test-fetch-pdf.mjs",
     "test:v021": "node scripts/test-v021.mjs && node scripts/test-review-regressions.mjs",
     "test:facts": "node scripts/test-fact-score.mjs",
     "test:retrieval": "node scripts/test-retrieval-score.mjs && node scripts/test-retrieval.mjs && node scripts/test-retrieval-interface.mjs && npm run test:single-target",
@@ -90,6 +90,9 @@
     "ajv": "^8.20.0",
     "undici": "^6.28.1",
     "zod": "^3.25.76"
+  },
+  "optionalDependencies": {
+    "pdfjs-dist": "^5.4.624"
   },
   "engines": {
     "node": ">=22.13"

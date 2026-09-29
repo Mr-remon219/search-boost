@@ -243,7 +243,7 @@ search-boost
 
 ### 2. `fetch_page` 智能网页提炼
 
-获取搜索结果中的链接正文。优先抓取原站并清理正文；安装了 curl 时可用于传输兼容兜底，Jina Reader 作为备用。
+获取搜索结果中的链接正文。优先抓取原站并清理正文；PDF 会先在本地抽取正文，抽取不到时才回退到 Jina Reader；安装了 curl 时可用于传输兼容兜底。
 
 **调用参数范例**：
 ```json
@@ -256,6 +256,9 @@ search-boost
 - **`focus`（可选）**：指定关键词或关注点，抓取器将重点保留匹配的相关上下文段落。
   > [!TIP]
   > 如果带有 `focus` 时未提取到内容，**并不代表原网页中不存在答案**；建议去掉 `focus` 重新抓取完整页面。
+- **`offset`（可选）**：长正文按有界窗口返回（默认 60000 字符）。结果中的 `totalChars` 与 `nextOffset` 说明是否还有后续内容，把 `nextOffset` 传给 `offset` 即可继续读；续读命中 24 小时缓存，不会再次请求网络。
+  > [!TIP]
+  > 二进制响应（图片、压缩包、无法解析的 PDF）会明确报错，不会当作网页正文交给模型。
 
 ---
 
@@ -437,6 +440,7 @@ search-boost uninstall -t cursor,claude -y  # 移除指定宿主的集成与注�
 - **Node.js** `>= 22.13.0`（与 `package.json` 声明一致）
 - **git** 与 **npm**
 - 可选：**`curl`**，用于 `fetch_page` 的同线路传输兼容兜底
+- 可选：**`pdfjs-dist`**（optionalDependency），在本地把 PDF 抽取为正文；未安装时 PDF 读取回退到 Jina Reader
 
 ### 检出并初始化
 
