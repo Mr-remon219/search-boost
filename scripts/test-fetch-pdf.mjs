@@ -5,7 +5,7 @@ import './isolate-tests.mjs'
 // here. The pdfjs-dist path is optional, exactly like the dependency itself.
 import assert from 'node:assert/strict'
 import { fetchPage, makePageCache, PAGE_WINDOW_CHARS, windowPageResult, toFetchPageResult } from '../lib/search/fetch.js'
-import { assemblePdfPageText, isPlausibleText, looksBinary, looksBinaryType, looksLikePdf, PDF_MAX_PAGES, __setPdfParserForTests } from '../lib/search/pdf.js'
+import { assemblePdfPageText, isPlausibleText, looksBinary, looksBinaryType, looksLikePdf, pdfAssetPrefix, PDF_MAX_PAGES, __setPdfParserForTests } from '../lib/search/pdf.js'
 import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
 import { NET_ERROR_KINDS } from '../lib/search/net-policy.mjs'
 
@@ -255,6 +255,49 @@ await test('an unavailable parser and a failing reader report a PDF error, not c
     },
   )
   globalThis.fetch = saved
+})
+
+await test('PDF asset prefixes use the forward-slash form PDF.js requires', async () => {
+  // PDF.js only checks that the value ends with "/" and then reads it as a path
+  // prefix, so a Windows separator is rejected on Windows runners.
+  assert.equal(pdfAssetPrefix('C:\\a\\search-boost\\node_modules\\pdfjs-dist\\cmaps'), 'C:/a/search-boost/node_modules/pdfjs-dist/cmaps/')
+  assert.equal(pdfAssetPrefix('/home/u/nm/pdfjs-dist/standard_fonts/'), '/home/u/nm/pdfjs-dist/standard_fonts/')
+  assert.equal(pdfAssetPrefix('cmaps\\'), 'cmaps/')
+  for (const value of [pdfAssetPrefix('C:\\a\\cmaps'), pdfAssetPrefix('/a/cmaps')]) assert.ok(value.endsWith('/') && !value.includes('\\'))
+})
+
+await test('a rejected asset prefix does not cost the whole extraction, a real parse error is not retried', async () => {
+  stubNetwork(() => pdfResponse(fixturePdf))
+  let attempts = 0
+  __setPdfParserForTests({
+    getDocument: (params) => {
+      attempts++
+      if (attempts === 1) return { promise: Promise.reject(new Error('Invalid factory url: "x" must include trailing slash.')) }
+      assert.equal(params.cMapUrl, undefined, 'the retry drops the optional prefixes')
+      return {
+        promise: Promise.resolve({
+          numPages: 1,
+          getPage: async () => ({ getTextContent: async () => ({ items: [{ str: 'Text without bundled assets.', hasEOL: true, transform: [12, 0, 0, 12, 72, 720] }] }), cleanup() {} }),
+          destroy: async () => {},
+        }),
+      }
+    },
+  })
+  const page = await fetchPage('https://example.test/assets.pdf', undefined, makePageCache())
+  assert.equal(page.via, 'pdf')
+  assert.equal(page.content, 'Text without bundled assets.')
+  assert.equal(attempts, 2)
+
+  let failed = 0
+  __setPdfParserForTests({ getDocument: () => { failed++; return { promise: Promise.reject(new Error('bad xref table')) } } })
+  await assert.rejects(
+    () => fetchPage('https://example.test/badxref.pdf', undefined, makePageCache()),
+    (err) => {
+      assert.match(err.message, /could not be extracted/)
+      return true
+    },
+  )
+  assert.equal(failed, 1, 'an unrelated parse failure is reported, not retried')
 })
 
 // ---------------------------------------------------------------------------
