@@ -29,7 +29,7 @@ try {
     const capture = join(temp, mode, 'argv.json')
     const entry = join(bin, 'capture.mjs')
     writeFileSync(entry, `
-import { writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync, copyFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 const args = process.argv.slice(2);
 writeFileSync(process.env.DSH_TEST_CAPTURE, JSON.stringify(args));
@@ -41,6 +41,13 @@ if (args.includes('add') && !process.env.DSH_TEST_NO_REGISTER) {
   mkdirSync(join(installed, 'adapters', 'dsh'), { recursive: true });
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { 'search-boost': args.at(-1) }, dsh: { profile: { bundles: ['search-boost'] } } }));
   for (const file of ['package.json', 'adapters/dsh/index.js', 'adapters/dsh/schema.js', 'adapters/dsh/cordis.patch.yml']) copyFileSync(join(process.env.DSH_TEST_ROOT, file), join(installed, file));
+}
+if (args.includes('remove')) {
+  const file = join(process.env.DSH_HOME, 'profiles', args[args.indexOf('--profile') + 1], 'package.json');
+  const pkg = JSON.parse(readFileSync(file));
+  delete pkg.dependencies['search-boost'];
+  pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(name => name !== 'search-boost');
+  writeFileSync(file, JSON.stringify(pkg));
 }
 `)
     const launcher = (name) => {
@@ -78,6 +85,9 @@ if (args.includes('add') && !process.env.DSH_TEST_NO_REGISTER) {
     const inert = run(`await host.installDshBundle({ profile: 'unregistered' });`, { DSH_TEST_NO_REGISTER: '1' })
     assert.notEqual(inert.status, 0)
     assert.match(inert.stderr, /installation was not verified/)
+    // Removal now really updates the profile; restore an enabled fixture before
+    // testing payload-version verification independently.
+    assert.equal(run(`await host.installDshBundle({ profile: 'profile with spaces' });`).status, 0)
     const manifest = join(env.DSH_HOME, 'profiles', 'profile with spaces', 'node_modules', 'search-boost', 'package.json')
     const pkg = JSON.parse(readFileSync(manifest, 'utf8'))
     writeFileSync(manifest, JSON.stringify({ ...pkg, version: '0.0.0' }))

@@ -41,7 +41,9 @@ Pi 来源、作用域和过滤规则参考本机所装 Pi 的 `docs/packages.md`
 
 ## DSH
 
-逐一处理已登记 SearchBoost 的 profile，与 Install 共用包来源和启动逻辑：源码 checkout 使用 `dsh plugin --profile <name> add <目标目录>`；npm 发布安装使用 `add search-boost@<版本>`，不把全局安装或 npx 缓存目录写成本地链接。缺少全局 `dsh` 或 `pnpm` 时，通过 `npm exec` 临时提供缺失命令，无需全局安装宿主。随后验证：
+逐一处理已登记 SearchBoost 的 profile，与 Install 共用包来源和启动逻辑。**Desktop 的保留 `desktop` profile 始终使用桌面版 bundled command**：先启动应用初始化，再完全退出后操作；缺失命令或应用锁时报告阻塞，不回退到 npm DSH。本地持久安装以绝对包路径复用，更新保留原来的启用/禁用选择；其他 CLI profiles 保持以下行为。详见 [Desktop 接入说明](dsh-desktop.md)。
+
+CLI 源码 checkout 使用 `dsh plugin --profile <name> add <目标目录>`；npm 发布安装使用 `add search-boost@<版本>`，不把全局安装或 npx 缓存目录写成本地链接。缺少全局 `dsh` 或 `pnpm` 时，通过 `npm exec` 临时提供缺失命令，无需全局安装宿主。随后验证：
 
 - profile manifest 的依赖来源切换到了目标目录或指定 npm 版本（允许 pnpm 保存的 `^` / `~` 前缀）；
 - 源码链接的真实解析位置指向目标目录，而不是同版本旧副本；npm 安装的实际载荷版本必须与指定版本完全一致；
@@ -68,6 +70,8 @@ npm run test:upgrade
 - Pi package、直接路径、相对路径、file URL、排除前缀、shim、手工目录；DSH 启用和禁用 profile。
 - 新进程实际 import fixture adapter，确认加载版本；不仅断言配置里出现新字符串。
 - 同版本重试、dry-run、防降级、包管理器假成功、同版本错误链接、部分失败恢复、外部文件保护和卸载后不复活。
+
+`scripts/test-dsh-desktop.mjs` 覆盖 Desktop / CLI 分别安装和删除、Desktop 更新和旧名迁移、禁用状态、缺失命令/应用锁阻塞、dry-run、失败回滚及诊断输出不泄密。绝对 Desktop 命令和 profile 全部位于测试目录，不操作真实桌面宿主。
 
 `scripts/test-dsh-upgrade.mjs` 另外通过真实子进程启动器覆盖全局命令齐全、仅 npm、缺少 pnpm、缺少 dsh 四种环境，分别验证 checkout 和 npm 包来源；同时检查禁用状态、同版本重试、dry-run、错误版本/缺失文件及失败回滚。命令端点使用隔离 fixture，不下载真实 DSH。
 

@@ -29,6 +29,9 @@ Object.assign(process.env, {
   npm_config_cache: join(home, '.npm'), npm_config_prefix: join(home, 'npm-prefix'),
   npm_config_update_notifier: 'false', npm_config_audit: 'false', npm_config_fund: 'false',
   GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: join(home, '.gitconfig'),
+  // Desktop commands use absolute application paths, bypassing PATH guards.
+  // Authoritative missing override blocks system-wide /Applications discovery.
+  SEARCH_BOOST_DSH_DESKTOP_COMMAND: join(bin, 'unavailable-desktop-command'),
 })
 for (const file of ['.npmrc', 'global.npmrc', '.gitconfig']) writeFileSync(join(home, file), '', { mode: 0o600 })
 

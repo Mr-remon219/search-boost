@@ -5,7 +5,7 @@ import './isolate-tests.mjs'
 // here. The pdfjs-dist path is optional, exactly like the dependency itself.
 import assert from 'node:assert/strict'
 import { fetchPage, makePageCache, PAGE_WINDOW_CHARS, windowPageResult, toFetchPageResult } from '../lib/search/fetch.js'
-import { assemblePdfPageText, extractPdfText, isPlausibleText, looksBinary, looksBinaryType, looksLikePdf, pdfAssetPrefix, PDF_MAX_PAGES, __setPdfParserForTests } from '../lib/search/pdf.js'
+import { assemblePdfPageText, extractPdfText, isPlausibleText, looksBinary, looksBinaryType, looksLikePdf, loadPdfParser, pdfAssetPrefix, PDF_MAX_PAGES, __setPdfParserForTests } from '../lib/search/pdf.js'
 import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
 import { NET_ERROR_KINDS } from '../lib/search/net-policy.mjs'
 
@@ -78,9 +78,15 @@ const fixturePdf = makePdf([
 ])
 
 let realPdfParser = null
-try {
-  realPdfParser = await import('pdfjs-dist/legacy/build/pdf.mjs')
-} catch { /* optional dependency is absent; the injected-parser tests still run */ }
+await test('first concurrent parser loads share the installed or unavailable result', async () => {
+  // Do not preload PDF.js: exercise the real first initialization before any
+  // extraction or injection. This also runs when the optional package is absent.
+  const parsers = await Promise.all(Array.from({ length: 8 }, () => loadPdfParser()))
+  realPdfParser = parsers[0]
+  for (const parser of parsers) assert.equal(parser, realPdfParser, 'loading is not the same as unavailable')
+  const subsequent = await loadPdfParser()
+  assert.equal(subsequent, realPdfParser, 'settled availability remains cached')
+})
 
 // ---------------------------------------------------------------------------
 // Detection units
@@ -127,6 +133,44 @@ await test('page text assembly uses vertical position, gaps and explicit line br
 if (!realPdfParser) {
   console.log('skip: real pdfjs-dist extraction — optional dependency is not installed')
 } else {
+  await test('first concurrent PDF reads stay local whether the reader is available or down', async () => {
+    for (const readerAvailable of [true, false]) {
+      __setPdfParserForTests(null)
+      const seen = stubNetwork((url) => url.startsWith('https://r.jina.ai/')
+        ? new Response(readerAvailable ? prose : 'reader unavailable', { status: readerAvailable ? 200 : 503 })
+        : pdfResponse(fixturePdf))
+      const cache = makePageCache()
+      // Distinct URLs ensure these are independent reads, not cache hits.
+      const results = await Promise.allSettled(Array.from({ length: 8 }, (_, i) =>
+        fetchPage(`https://example.test/first-${readerAvailable}-${i}.pdf`, undefined, cache)))
+      assert.deepEqual(results.map((result) => result.status), Array(8).fill('fulfilled'))
+      for (const result of results) {
+        assert.equal(result.value.via, 'pdf')
+        assert.match(result.value.content, /Retrieval augmented generation/)
+        assert.equal(result.value.cacheHit, false)
+      }
+      assert.equal(seen.length, 8, 'an installed parser must not generate reader fallback requests')
+      assert.equal(cache.size(), 8)
+    }
+  })
+
+  await test('cancelling one first-load waiter does not cancel other PDF extractions', async () => {
+    const ac = new AbortController()
+    const cancelled = extractPdfText(fixturePdf, { signal: ac.signal })
+    const pending = Array.from({ length: 7 }, () => extractPdfText(fixturePdf))
+    // All calls are still awaiting parser initialization here. Cancellation
+    // belongs to this caller, never to the shared parser-loading operation.
+    ac.abort(new Error('cancel this PDF only'))
+    const [aborted, ...results] = await Promise.all([cancelled, ...pending])
+    assert.equal(aborted.reason, 'cancelled')
+    assert.equal(aborted.text, '')
+    for (const result of results) {
+      assert.equal(result.ok, true, result.reason)
+      assert.match(result.text, /Retrieval augmented generation/)
+    }
+    assert.equal(await loadPdfParser(), realPdfParser, 'a cancelled waiter cannot poison later reads')
+  })
+
   await test('a PDF is read as text: no raw bytes, no mojibake, no second request', async () => {
     const seen = stubNetwork(() => pdfResponse(fixturePdf))
     const cache = makePageCache()

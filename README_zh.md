@@ -128,7 +128,7 @@ search-boost
 > **零 Key 即可起步**：SearchBoost 默认提供免费引擎池（Bing、DuckDuckGo、Yahoo、Exa-free、AnySearch）。即便不填写任何 API Key，也能立刻享受高质量多引擎聚合搜索！
 
 ### 2. 三步完成配置
-1. 在 TUI 菜单中选择 **`Setup`**，跟随向导配置搜索引擎（可选填 API Key，或直接跳过使用免费池）。
+1. 在 TUI 中选择 **安装与接入 → 首次配置向导**（英文：Installation & integrations → Setup），跟随向导配置搜索引擎（可选填 API Key，或直接跳过使用免费池）。
 2. 勾选需要接入的 Agent（如 Cursor、Claude Code、Pi 等），确认是否自动设置免审批权限与替换原生搜索。
 3. 重启或重新载入对应的 Agent，即可在对话中直接让模型进行网络检索！
 
@@ -138,12 +138,12 @@ search-boost
 
 ### 1. 日常更新：直接在 TUI 中一键升级
 
-无论你是使用标准的 `search-boost`，还是此前安装过旧版的 `pi-search-boost`、`dsh-search-boost`，**只需启动 TUI 并选择 `Update` 即可完成全部升级**：
+无论你是使用标准的 `search-boost`，还是此前安装过旧版的 `pi-search-boost`、`dsh-search-boost`，**只需启动 TUI 并选择「更新与状态 → 更新 search-boost 与已安装接入」即可完成全部升级**：
 
 ```bash
 # 方式一：进入交互式菜单一键更新
 search-boost
-# -> 选择 "Update"
+# -> 选择「更新与状态 → 更新 search-boost 与已安装接入」
 
 # 方式二：命令行静默更新（推荐脚本或快捷操作使用）
 search-boost upgrade -y
@@ -164,7 +164,7 @@ npx --yes --package=search-boost@latest -- search-boost migrate -y
 
 # 迁移完成后，后续日常更新只需执行：
 search-boost
-# -> 选择 Update (或 search-boost upgrade -y)
+# -> 选择「更新与状态 → 更新」（或 search-boost upgrade -y）
 ```
 
 ---
@@ -173,23 +173,22 @@ search-boost
 
 直接在终端执行 `search-boost` 即可进入基于 Clack 的交互式控制面板。日常所有安装、维护与凭证管理均可在此完成：
 
-| 菜单项 (Action) | 功能说明 |
+| 一级菜单 | 二级功能 |
 | :--- | :--- |
-| **Setup** | 首次引导式全流程配置，依次设置引擎、搜索层、X 凭据并安装 Agent 集成。 |
-| **Install / update agents** | 快速安装或刷新指定 Agent 的集成文件，跳过凭据与搜索层设置。 |
-| **Update** | **一键全量更新**：检查 npm 最新版本，更新 SearchBoost 并同步刷新所有已接入的 Agent（含 Pi/DSH 旧适配器）。 |
-| **API keys & Base URLs / Search layer** | 管理 Tavily、Brave、Exa 等付费引擎密钥，以及 AnySearch 密钥（free 匿名、api 带 key、hybrid 优先已配置 key），切换默认搜索层 (`free` / `api`)。 |
-| **X credentials** | 管理 X (Twitter) 认证，支持一键导入本机已有的 Grok 登录状态。 |
-| **Jev credentials (experimental)** | 配置 TypeSafe Jev 认知引擎的端点与 Bearer Token。 |
-| **Tool switches** | 统一开关 MCP / Pi / DSH 的 SearchBoost 工具；未配置 Jev 时锁定 `adaptive_search`。 |
-| **Native web search** | 开启或关闭宿主自带的原生网页搜索（若宿主提供相应配置开关）。 |
-| **Status** | 快速查看本地配置就绪状态、引擎启用情况及已接入的宿主清单。 |
-| **Print MCP snippet** | 在终端打印 MCP 配置 JSON 片段，便于手动复制到自定义环境中。 |
-| **Uninstall** | 安全卸载指定 Agent 中的 SearchBoost 配置与挂载，保留用户无关配置。 |
+| **安装与接入** | 首次配置向导；安装 / 刷新 Agent 接入；原生搜索替换；输出 MCP 配置片段；卸载 Agent 接入 |
+| **搜索与工具** | 默认搜索层（`free` / `api`）；工具开关（MCP / Pi / DSH 共享） |
+| **服务与凭据** | 搜索引擎 API Keys 与 Base URLs（含 API 引擎池选择）；X 凭据；Jev 配置（实验性） |
+| **更新与状态** | 更新 search-boost 与已安装接入；查看当前状态 |
+| **TUI 设置** | 显示语言：简体中文 / English |
+| **退出** | 关闭控制台 |
+
+操作完成后返回所属二级菜单。向导中按 Esc 取消当前操作并返回所属菜单，二级菜单中按 Esc 返回主菜单；Ctrl+C 退出整个控制台。首次配置保留原有引导流程，安装 / 刷新只配置宿主接入；更新则升级 SearchBoost 和所有已安装接入，保留凭据与权限选择。更新替换运行模块后，旧控制台会结束。
+
+显示语言切换立即生效，保存于 `~/.search-boost/config/tui.json`（或 `$SEARCH_BOOST_HOME/config/tui.json`）。未保存偏好时，中文系统环境使用简体中文，其他环境使用 English。偏好同样适用于独立启动的交互式 setup/config 向导，不影响非交互 CLI 输出、搜索结果或 Agent 回复。工具名、命令、路径、MCP 配置片段与底层原始错误保持原样。dry-run 中仅预览语言，不保存设置。详见 [TUI 导航与语言设置](docs/tui.md)。
 
 ### 工具开关
 
-进入 **Tool switches**，空格勾选，回车查看变更并确认保存。Esc 或取消确认不写入配置；允许全部关闭。未配置 Jev 时，`adaptive_search` 在状态面板中显示删除线和锁定原因，不进入可选列表。配置 Jev 后默认可用，但此前明确关闭的偏好不会被覆盖。
+进入 **搜索与工具 → 工具开关**，空格勾选，回车查看变更并确认保存。Esc 或取消确认不写入配置；允许全部关闭。未配置 Jev 时，`adaptive_search` 在状态面板中显示删除线和锁定原因，不进入可选列表。配置 Jev 后默认可用，但此前明确关闭的偏好不会被覆盖。
 
 开关统一保存于 `~/.search-boost/config/tools.json`（或 `$SEARCH_BOOST_HOME/config/tools.json`），采用文件锁和原子写入。加载新版适配器后无需重启、重装宿主：
 
@@ -282,7 +281,7 @@ search-boost
 
 ### 4. `adaptive_search` Jev 意图导向搜索（实验功能）
 
-**Vercel 接入**：在 TUI → Jev credentials 填写 `https://ai-gateway.vercel.sh/v1` 和 Vercel AI Gateway Key。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级配置中的 Jev Key，不读取环境变量；服务端限流等待不会被缩短。
+**Vercel 接入**：在 TUI → 服务与凭据 → Jev 配置（实验性）填写 `https://ai-gateway.vercel.sh/v1` 和 Vercel AI Gateway Key。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级配置中的 Jev Key，不读取环境变量；服务端限流等待不会被缩短。
 
 调用方提供**一个问题**（`questions` 恰好一项）、研究目的 `intent`、研究点 `keywords` 和明确硬条件 `constraints`。每次实际搜索先依据缺口、材料与历史反馈选择查询，再针对选定查询选择引擎。候选入池后，**一个独立 Boolean 前筛判断全部显式条件**；条件为空则跳过。质量判断保留重点及有用补充材料，方向用于重点排序、关键词用于贡献归属，不再共同否决整篇材料。代码按当前有效去重材料计算关键词封顶进度：等权总分达到80/100且每个关键词进度达到0.60后停止（关键词目标分为1）。参数为未校准工程起点，弱点优先续搜。不再发送全量终审，也不再强制64份首轮审查窗口；未完成判断仍如实披露。主 Agent 仍负责分析和事实核实。
 
@@ -368,7 +367,7 @@ Pi/DSH 子代理工具加载、旧 `pi-search-boost` 路径与已移除的 `deep
 
 ### 自定义搜索 API 地址
 
-TUI 进入 **API keys & Base URLs**（或执行 `search-boost config keys`），每个引擎同时显示密钥掩码、当前 Base URL 和 default/custom 标记。选择 **Set / replace Base URL** 修改地址后，可继续保留或修改密钥；**Restore default Base URL** 只恢复地址。向导完成后统一保存。状态页和 `config keys --show` 也会显示生效地址。
+TUI 进入 **服务与凭据 → 搜索引擎 API Keys 与 Base URLs**（或执行 `search-boost config keys`），每个引擎同时显示密钥掩码、当前 Base URL 和 default/custom 标记。选择 **Set / replace Base URL** 修改地址后，可继续保留或修改密钥；**Restore default Base URL** 只恢复地址。向导完成后统一保存。状态页和 `config keys --show` 也会显示生效地址。
 
 ```bash
 search-boost config keys --base-url exa=https://gateway.example/exa
@@ -395,7 +394,9 @@ API Key 存放在由 SearchBoost 自己管理的凭据文件中，不写入提�
 
 ## CLI 命令参考（自动化与进阶）
 
-除交互式 TUI 外，SearchBoost 还提供了完整的命令行接口，非常适合脚本编写与 CI 自动化：
+除交互式 TUI 外，SearchBoost 还提供了完整的命令行接口，非常适合脚本编写与 CI 自动化。
+
+**DeepSeek Harness Desktop**：TUI 选中 DSH 且检测到桌面版时，可选择 Desktop / CLI / All。桌面版需先启动一次再完全退出（包括托盘）；也可在应用的「插件 → 添加插件」输入 `search-boost` 从 npm 安装，或输入本地包绝对路径复用已有安装。安装、卸载和更新的宿主隔离与限制见 [Desktop 接入说明](docs/dsh-desktop.md)。
 
 ```bash
 # ----------------- 启动与基础 -----------------
@@ -408,7 +409,9 @@ search-boost install -t cursor -y           # 为 Cursor 安装并自动同意�
 search-boost install -t claude,codex --keep-native  # 安装并保留宿主原生搜索
 search-boost install -t antigravity --workspace /path/to/project # 为指定工作区配置
 search-boost install -t pi -y               # 为 Pi 挂载原生扩展及提示词
-search-boost install -t dsh --profile web   # 为 DeepSeek Harness 接入 web profile
+search-boost install -t dsh --profile web   # 为 DeepSeek Harness CLI 接入 web profile
+search-boost install -t dsh --dsh-surface desktop -y # Desktop 原生命令 + 本地包接入
+search-boost install -t dsh --dsh-surface all -y     # Desktop 与 CLI 分别安装
 # 无需全局安装 search-boost / dsh / pnpm（Windows、Linux、macOS）：
 npx --yes search-boost@latest install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # 仅演练安装过程，不写磁盘
