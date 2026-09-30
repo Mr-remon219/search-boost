@@ -48,7 +48,7 @@ assert.equal(installOpts(parseFlags([])).enableDshBundle, false)
 assert.throws(() => parseFlags(['--dsh-surface', 'invalid']))
 console.log('ok: Desktop native discovery, authoritative overrides, surfaces and durable package sources')
 
-writeDshHostFixture(entry, { desktopHost: true })
+writeDshHostFixture(entry, { desktopHost: true, ownerArgument: true })
 write(entry, `
 import { appendFileSync, readFileSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';

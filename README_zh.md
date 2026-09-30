@@ -408,6 +408,7 @@ search-boost --help                         # 查看完整命令行帮助文档
 search-boost install -t cursor -y           # 为 Cursor 安装并自动同意权限
 search-boost install -t claude,codex --keep-native  # 安装并保留宿主原生搜索
 search-boost install -t antigravity --workspace /path/to/project # 为指定工作区配置
+search-boost install -t antigravity -y --antigravity-config legacy # 显式兼容旧宿主；modern 切回现代路径
 search-boost install -t pi -y               # 为 Pi 挂载原生扩展及提示词
 search-boost install -t dsh --profile web   # 为 DeepSeek Harness CLI 接入 web profile
 search-boost install -t dsh --dsh-surface desktop -y # Desktop 原生命令 + 本地包接入

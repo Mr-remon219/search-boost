@@ -4,7 +4,7 @@
 import { mkdirSync, writeFileSync, linkSync, copyFileSync, symlinkSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
-export function writeDshHostFixture(entry, { desktopHost = false } = {}) {
+export function writeDshHostFixture(entry, { desktopHost = false, ownerArgument = false } = {}) {
   const base = dirname(entry)
   const write = (file, value) => {
     mkdirSync(dirname(file), { recursive: true })
@@ -22,7 +22,7 @@ export function writeDshHostFixture(entry, { desktopHost = false } = {}) {
   }
   module('dsh-app-boot', `
 import { createRequire } from 'node:module';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 // Contract from official app-boot/profile.ts: installation first, profile second;
 // inspect manifest existence instead of assuming package.json is exported.
@@ -35,22 +35,45 @@ export function resolveBundleDir(bin, name, anchor, profile) {
   }
   throw Error('bundle not found');
 }
+export const DEFAULT_PROFILE_BUNDLES = [];
+export const PROFILE_TEMPLATES = {};
+export function initProfile(dir, bundles) {
+  requireWrite(join(dir, 'package.json'), { dependencies: {}, dsh: { profile: { bundles } } });
+}
+function requireWrite(file, value) { writeFileSync(file, JSON.stringify(value)); }
 export function loadOverlayPatches(bin, file) {
   if (readFileSync(file, 'utf8').trim() === '[') throw Error('fixture unparseable YAML patch');
   return [];
 }
 `)
   module('dsh-atomic-write', `
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync, renameSync, openSync, closeSync, unlinkSync } from 'node:fs';
 export async function withFileLock(file, fn) {
-  if (existsSync(file + '.lock')) throw Error('locked');
-  return await fn();
+  const fd = openSync(file + '.lock', 'wx');
+  try { return await fn(); } finally { closeSync(fd); unlinkSync(file + '.lock'); }
+}
+export async function writeFileAtomic(file, value, options) {
+  const temp = file + '.fixture-' + process.pid;
+  try { writeFileSync(temp, value, options); renameSync(temp, file); } finally { if (existsSync(temp)) unlinkSync(temp); }
 }
 `)
   module('dsh-plugin-manager', `
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 export async function saveManifest(dir, value) { writeFileSync(join(dir, 'package.json'), JSON.stringify(value, null, 2) + '\\n'); }
+// Invoke the fixture's synthetic package-manager body, not a real DSH main.
+// The outer probe owns the actual write lock for this entire callback.
+export async function runProfilePnpm(context, args, options) {
+  if (!existsSync(join(context.dir, 'package.json.lock'))) throw Error('caller must hold official manifest lock');
+  const prefix = process.argv.slice(2);
+  if (prefix.at(-1) === '--version') prefix.pop();
+  if (${JSON.stringify(ownerArgument)} && !prefix.length) prefix.push(context.profile === 'desktop' ? 'desktop' : 'cli');
+  const result = spawnSync(process.execPath, [${JSON.stringify(entry)}, ...prefix, 'plugin', '--profile', context.profile, ...args], {
+    env: { ...process.env, SEARCH_BOOST_DSH_PROBE_NONCE: '' }, encoding: 'utf8', timeout: 10000,
+  });
+  return { exitCode: result.status ?? 1 };
+}
 `, { './operations': './index.mjs' })
   return { anchor: join(desktopHost ? join(base, 'node_modules/@deepseek-ai/dsh') : base, 'package.json'), modules: join(base, 'node_modules') }
 }

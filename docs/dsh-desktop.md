@@ -77,7 +77,11 @@ TUI Update / `search-boost upgrade` 自动发现所有已登记 SearchBoost 的 
 
 更新同时验证依赖来源、profile 载荷与宿主实际解析的路径/版本及 adapter 文件；保留 bundle 顺序、启用/禁用选择和用户 patch。旧适配器依赖只在新包验证后清理。缺失命令或应用锁在 profile 备份/写入之前阻止同步；完整升级仍可能已完成全局 SearchBoost 更新，需按结果解决阻塞后重试同步。
 
-卸载在宿主命令成功后重新读取 manifest，拒绝“退出码为 0 但仍登记”的假成功。卸载不移除共享的 SearchBoost 安装和配置。
+卸载在宿主命令成功后重新读取 manifest，拒绝“退出码为 0 但仍登记”的假成功。对于 optional 安装启用后遗留的 bundle 登记，确认所有直接依赖字段和 profile 包链接均已移除，再通过所属宿主的官方 manifest 锁和 `saveManifest` 只清除本插件登记，重新验证。不删除应用锁，不修复宿主全局副本。卸载不移除共享的 SearchBoost 安装和配置。
+
+安装在所选宿主运行时中调用官方 `runProfilePnpm`，将 profile 文件、完整 `node_modules` 私有备份、包管理动作、载荷/解析器校验和恢复置于同一个官方 manifest 写锁内。Desktop 使用其 Electron 与 bundled pnpm；不改用系统 npm/pnpm。校验失败时恢复原文件和模块树，避免同版本旧 npm 载荷留在启用的 profile 中。
+
+成功安装删除大体积备份；失败备份保留在 `$SEARCH_BOOST_HOME/backups/dsh-install-<UUID>`，`meta.json` 标明 profile、目录、版本、宿主 anchor，`files.json` 保存配置原字节。操作开始前写入 profile 的 `.search-boost-install-pending.json`。断电、强杀或 15 分钟外层超时可能阻止恢复完成；安装、启用、更新和卸载发现标记都会拒绝新操作，不声称已经回滚。官方 `.plugin-manager/run.json` 尚存在时亦先拒绝快照/写入，避免前一次 pnpm 进程仍在改动模块树。先停止仍存活的包管理进程、退出宿主，再根据标记/备份恢复文件与模块树，确认后再处理标记。不要直接删锁或标记后重试。自动故障恢复不等于抗断电的文件系统事务。
 
 宿主原始 stdout/stderr 可能含认证信息，不复制进 SearchBoost TUI 日志/异常；失败报告退出码和操作状态。需要详细诊断时，在本机直接运行相同宿主命令，分享输出前先检查秘密。
 

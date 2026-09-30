@@ -61,7 +61,7 @@ try {
     symlinkSync(real, alias, process.platform === 'win32' ? 'junction' : 'dir')
     assert.equal(fileResource(join(real, 'new', 'asset')), fileResource(join(alias, 'new', 'asset')))
   })
-  await test('R1 failed legacy Antigravity transaction retains every successful shared asset', async () => {
+  await test('R1 failed second Antigravity refresh retains migrated config and successful shared assets', async () => {
     const { PATHS } = await import('../lib/paths.mjs')
     const { skillBundleFiles } = await import('../lib/agent-skills.mjs')
     const { runUpgrade } = await import('../lib/upgrade/index.mjs')
@@ -69,8 +69,8 @@ try {
     const original = JSON.stringify({ mcpServers: { 'search-boost': { command: 'node', args: ['old.mjs'] } } })
     for (const config of [p.mcp, p.legacyMcp]) write(config, original)
     const shared = [...skillBundleFiles('antigravity', p.skill).map(file => file.path), p.hooks, p.hookScript, p.hookInject, p.agents, p.gemini]
-    const beforeMkdir = fs.mkdir, beforeWrite = fs.writeFile
-    let writers = 0, releaseWriters, releaseSuccess, failed = false, snapshot
+    const beforeMkdir = fs.mkdir, beforeWrite = fs.writeFile, beforeRead = fs.readFile
+    let writers = 0, secondHookReads = 0, releaseWriters, releaseSuccess, failed = false, snapshot
     const twoWriters = new Promise(r => { releaseWriters = r })
     const success = new Promise(r => { releaseSuccess = r })
     async function bounded(promise, ms) {
@@ -87,14 +87,12 @@ try {
       }
       return beforeMkdir.call(this, path, ...args)
     }
-    fs.writeFile = async function(path, ...args) {
-      if (String(path) === p.legacyMcp && !failed) {
-        await bounded(success, 3000)
-        assert(snapshot, 'first target must complete before injecting rollback')
+    fs.readFile = async function(path, ...args) {
+      if (snapshot && String(path) === p.hooks && ++secondHookReads === 2) {
         failed = true
-        throw Object.assign(new Error('injected second-config EACCES'), { code: 'EACCES' })
+        throw Object.assign(new Error('injected second-refresh EACCES'), { code: 'EACCES' })
       }
-      return beforeWrite.call(this, path, ...args)
+      return beforeRead.call(this, path, ...args)
     }
     syncBuiltinESMExports()
     try {
@@ -106,11 +104,11 @@ try {
       assert.deepEqual(result.warnings, [])
       assert.deepEqual(result.results.map(item => item.ok), [true, false])
       assert(failed)
-      assert(result.results[1].error.includes('injected second-config EACCES'))
+      assert(result.results[1].error.includes('EACCES'))
       assert(bytes(p.mcp).includes('cli.mjs'))
-      assert.equal(bytes(p.legacyMcp), original)
+      assert.equal(JSON.parse(bytes(p.legacyMcp)).mcpServers?.['search-boost'], undefined, 'first successful migration remains applied')
       for (const [file, content] of snapshot) assert.equal(bytes(file), content, `successful asset retained: ${file}`)
-    } finally { fs.mkdir = beforeMkdir; fs.writeFile = beforeWrite; syncBuiltinESMExports() }
+    } finally { fs.mkdir = beforeMkdir; fs.writeFile = beforeWrite; fs.readFile = beforeRead; syncBuiltinESMExports() }
   })
   await test('R1 unresolvable asset blocks only its target, not other upgrades', () => {
     const f = fixture('blocked-asset'), cursor = join(f.home, '.cursor', 'mcp.json'), codex = join(f.home, '.codex', 'config.toml')

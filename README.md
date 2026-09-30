@@ -408,6 +408,7 @@ search-boost --help                         # Display full CLI documentation
 search-boost install -t cursor -y           # Install for Cursor with auto-approval
 search-boost install -t claude,codex --keep-native  # Install while preserving host native search
 search-boost install -t antigravity --workspace /path/to/project # Target a specific workspace
+search-boost install -t antigravity -y --antigravity-config legacy # Explicit old-client compatibility; modern switches back
 search-boost install -t pi -y               # Mount Pi extension and prompt templates
 search-boost install -t dsh --profile web   # Connect to DeepSeek Harness CLI web profile
 search-boost install -t dsh --dsh-surface desktop -y # Desktop bundled command + local package

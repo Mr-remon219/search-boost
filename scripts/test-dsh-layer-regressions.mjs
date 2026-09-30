@@ -51,7 +51,9 @@ if (verb === 'add') {
   if (!existed) pkg.dsh.profile.bundles.push('search-boost');
 } else if (verb === 'remove') {
   for (const field of fields) delete pkg[field]?.[source];
-  pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(name => name !== source);
+  // Reproduce the official reconcile bug: optional-only names were not in
+  // before.dependencies, so their enabled bundle row survives removal.
+  if (!process.env.DSH_TEST_OPTIONAL_RESIDUAL) pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(name => name !== source);
   rmSync(join(dir, 'node_modules', source), { recursive: true, force: true });
 } else throw Error('unexpected host operation');
 writeFileSync(file, JSON.stringify(pkg));
@@ -98,6 +100,43 @@ await test('optional-only reinstall is verified without re-enabling; explicit en
     assert.equal(json(manifest).dsh.profile.custom, 'keep')
   }
 })
+await test('optional -> explicit enable -> official-style orphan removal cleans only our bundle under host lock', async () => {
+  reset()
+  assert.equal(run(`await host.installDshBundle({profile:${JSON.stringify(profile)},enableDshBundle:true})`, { DSH_TEST_FIELD: 'optionalDependencies' }).status, 0)
+  assert.deepEqual(json(manifest).dsh.profile.bundles, ['user-plugin', 'search-boost'])
+  const removed = run(`await host.uninstallDshBundle({profile:${JSON.stringify(profile)}})`, { DSH_TEST_OPTIONAL_RESIDUAL: '1' })
+  assert.equal(removed.status, 0, removed.stderr)
+  assert.deepEqual(json(manifest).dsh.profile, { bundles: ['user-plugin'], custom: 'keep' })
+  assert.equal(json(manifest).dependencies['user-plugin'], '1.0.0')
+  assert.equal(existsSync(join(dir, 'node_modules/search-boost')), false)
+})
+await test('interrupted installation marker blocks all new package dispatch until deliberate recovery', async () => {
+  const pendingDir = join(PATHS.dsh.profiles, 'pending-recovery')
+  write(join(pendingDir, 'package.json'), { dependencies: { other: '1.0.0', 'search-boost': getVersion() }, dsh: { profile: { bundles: ['other', 'search-boost'] } } })
+  write(join(pendingDir, '.search-boost-install-pending.json'), { backup: '/private/recovery', state: 'restoring' })
+  const before = existsSync(capture) ? readFileSync(capture) : null
+  const result = run(`await host.installDshBundle({profile:'pending-recovery'})`)
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /pending recovery/)
+  assert.equal(json(join(pendingDir, 'package.json')).dependencies.other, '1.0.0')
+  assert.equal(existsSync(join(pendingDir, '.search-boost-install-pending.json')), true)
+  const removal = run(`await host.uninstallDshBundle({profile:'pending-recovery'})`)
+  assert.notEqual(removal.status, 0)
+  assert.match(removal.stderr, /pending recovery/)
+  const activation = run(`await host.verifyDshBundle(${JSON.stringify(pendingDir)}, {enable:true})`)
+  assert.notEqual(activation.status, 0)
+  assert.match(activation.stderr, /pending recovery/)
+  let dispatched = 0
+  await assert.rejects(() => refreshIntegration({ kind: 'dsh', id: 'dsh', profile: 'pending-recovery', dir: pendingDir }, { run: async () => { dispatched++; throw Error('must not dispatch') } }), /pending recovery/)
+  assert.equal(dispatched, 0)
+  if (before) assert.ok(before.equals(readFileSync(capture)), 'no new package-manager command may run')
+  rmSync(join(pendingDir, '.search-boost-install-pending.json'))
+  write(join(pendingDir, '.plugin-manager/run.json'), { pid: process.pid, grouped: false })
+  const earlierTree = run(`await host.installDshBundle({profile:'pending-recovery'})`)
+  assert.notEqual(earlierTree.status, 0)
+  assert.match(earlierTree.stderr, /earlier package run/)
+  if (before) assert.ok(before.equals(readFileSync(capture)), 'an earlier host run cannot be snapshotted or overwritten')
+})
 await test('optional-only legacy upgrade is discovered, migrated and retained disabled', async () => {
   reset('dsh-search-boost')
   const target = (await discoverIntegrations()).targets.find(target => target.profile === profile)
@@ -126,6 +165,24 @@ await test('npm-exec cache fallback checks content and never retains a cache lin
   const stale = run(`await host.installDshBundle({profile:'cache-stale'})`, {}, cachedHost)
   assert.notEqual(stale.status, 0)
   assert.match(stale.stderr, /installed payload differs/)
+  const failedDir = join(PATHS.dsh.profiles, 'cache-stale')
+  assert.equal(existsSync(join(failedDir, 'package.json')), false, 'failed first install must leave no enabled registration')
+  assert.equal(existsSync(join(failedDir, 'node_modules')), false, 'failed first install must leave no stale package')
+  const previousDir = join(PATHS.dsh.profiles, 'cache-existing')
+  const previousManifest = { optionalDependencies: { 'search-boost': '0.2.3' }, dependencies: { other: '1.0.0' }, dsh: { profile: { bundles: ['other'], custom: 'preserve' } } }
+  write(join(previousDir, 'package.json'), previousManifest)
+  write(join(previousDir, 'pnpm-lock.yaml'), 'old exact lock bytes')
+  write(join(previousDir, 'node_modules/search-boost/package.json'), { name: 'search-boost', version: '0.2.3' })
+  write(join(previousDir, 'node_modules/search-boost/old-runtime.js'), 'old working runtime')
+  write(join(previousDir, 'node_modules/other/user-state.txt'), 'unrelated module content')
+  const before = readFileSync(join(previousDir, 'package.json'))
+  const failedExisting = run(`await host.installDshBundle({profile:'cache-existing'})`, { DSH_TEST_FIELD: 'optionalDependencies' }, cachedHost)
+  assert.notEqual(failedExisting.status, 0)
+  assert.match(failedExisting.stderr, /were restored/)
+  assert.ok(before.equals(readFileSync(join(previousDir, 'package.json'))))
+  assert.equal(readFileSync(join(previousDir, 'pnpm-lock.yaml'), 'utf8'), 'old exact lock bytes')
+  assert.equal(readFileSync(join(previousDir, 'node_modules/search-boost/old-runtime.js'), 'utf8'), 'old working runtime')
+  assert.equal(readFileSync(join(previousDir, 'node_modules/other/user-state.txt'), 'utf8'), 'unrelated module content')
   const exactRegistry = join(base, 'exact-registry')
   copyPackage(own, exactRegistry)
   const exact = run(`await host.installDshBundle({profile:'cache-exact'})`, { DSH_TEST_REGISTRY: exactRegistry }, cachedHost)
