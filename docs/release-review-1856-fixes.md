@@ -22,7 +22,7 @@
 - `npm pack` 精确候选逐文件与源码核对，并检查入口、hooks/prompts/skills/templates、可选 PDF 依赖、敏感文件排除和权限。最终 tgz SHA256 与最终 Git SHA 保存在交付记录中，不能复用中间包哈希。
 - 使用**真实 npm/npx**和隔离 HOME/global prefix/cache/registry，将公开 `0.2.3`、`0.2.4-beta.4` 升级到精确 beta.5 tgz；核对完整载荷、配置/合成凭据/禁用偏好，并在新的 Node 进程重新注册 Pi 工具。registry 的 `latest` 仍指向 `0.2.3`，测试入口显式选择 `beta`；没有手工替换文件冒充升级。
 - 正常 `upgrade` 读取 `latest`，不是 beta 订阅。测试用户应在 beta 发布后显式使用 `npx --yes --package=search-boost@beta -- search-boost upgrade -y`。本轮没有执行 npm publish 或 dist-tag 修改。
-- 推送后必须检查**最终 SHA**的 Windows/macOS/Linux CI，不能继承 1856 的结果。CI 成功不是原生 GUI 或长期在线实测。
+- 推送后必须检查**最终 SHA**的 Windows/macOS/Linux CI，不能继承 1856 的结果。首轮 `1a1b549` 的 Linux/macOS 通过，Windows 暴露普通 Number 文件 ID 的精度碰撞；补丁改用 BigInt 精确 ID，同时保留 canonical path 去重、零 ID 保护和硬链接拒绝。回归注入相邻的 64 位 ID 与零 ID，且核对真实硬链接；最终以补丁 SHA 的三平台 CI 为准。CI 成功不是原生 GUI 或长期在线实测。
 
 配置链接支持范围为 MCP 配置路径；其他升级管理资产（hooks、skills、指令文件）仍要求普通文件。Grok 陈旧本地缓存仍需用户明确批准来源后的保留数据重装，不自动授予 trust。Codex 云端执行、Antigravity 登录会话、真实付费搜索/Jev/xAI、原生 Windows/macOS Desktop GUI 和长期外部并发编辑不在本轮实测放行范围。
 

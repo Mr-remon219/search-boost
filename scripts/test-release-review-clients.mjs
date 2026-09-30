@@ -1,8 +1,10 @@
 import './isolate-tests.mjs'
 import assert from 'node:assert/strict'
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, symlinkSync, readlinkSync, statSync, chmodSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, symlinkSync, readlinkSync, statSync, chmodSync, linkSync } from 'node:fs'
 import { dirname, join, relative, delimiter } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import fsPromises from 'node:fs/promises'
+import { syncBuiltinESMExports } from 'node:module'
 import { PKG_ROOT } from '../lib/pkg.mjs'
 import { PATHS, agentConfigured, grokScopeConfigured, grokScopeHasArtifacts } from '../lib/paths.mjs'
 import { checkCodexWebSearchConfig } from '../lib/doctor/checks/codex.mjs'
@@ -201,3 +203,29 @@ if (symlinks) {
   }
   console.log('ok: empty linked JSON/TOML config targets are cleared on uninstall, not abandoned; reinstall retains links')
 }
+
+// Independent files with adjacent 64-bit IDs collide when represented as Number.
+// Simulate that filesystem boundary, not the backup implementation.
+const identityA = join(dot,'identity-a'), identityB = join(dot,'identity-b'), hard = join(dot,'identity-hard')
+write(identityA,'a'); write(identityB,'b')
+const originalLstat = fsPromises.lstat
+let zeroIdentity = false
+try {
+  fsPromises.lstat = async (path, options) => {
+    const info = await originalLstat(path, options)
+    if (path !== identityA && path !== identityB) return info
+    const precise = zeroIdentity ? 0n : path === identityA ? 9007199254740992n : 9007199254740993n
+    return Object.create(info, { ino: { value: options?.bigint ? precise : Number(precise) } })
+  }
+  syncBuiltinESMExports()
+  const precise = await backupFiles([identityA,identityB]); await precise.rollback()
+  zeroIdentity = true
+  const zero = await backupFiles([identityA,identityB]); await zero.rollback()
+  assert.equal(readFileSync(identityA,'utf8'),'a'); assert.equal(readFileSync(identityB,'utf8'),'b')
+  linkSync(identityA,hard)
+  await assert.rejects(() => backupFiles([identityA,hard]), /identity unavailable/)
+} finally {
+  fsPromises.lstat = originalLstat; syncBuiltinESMExports()
+}
+await assert.rejects(() => backupFiles([identityA,hard]), /alias one file/)
+console.log('ok: adjacent 64-bit file IDs remain distinct; zero IDs use realpaths, real hardlink aliases and unknown hardlink identities fail closed')
