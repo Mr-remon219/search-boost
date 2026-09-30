@@ -7,7 +7,7 @@
 运行 `search-boost`，进入「安装与接入」，选择首次配置向导 / 安装 / 卸载（英文：Setup / Install / Uninstall）；选中 DSH 后，若发现 Desktop 且未指定 profile/surface，会进入 **Desktop / CLI / All** 选择页。
 
 - **Desktop**：`$DSH_HOME/profiles/desktop`，通过桌面安装附带的命令操作。现有持久 SearchBoost 安装使用绝对本地包路径，避免再下载一份；临时 `_npx` 缓存不能用作持久链接，改用当前精确 npm 版本。
-- **CLI**：安装默认 `web` profile，`--profile` 可指定其他 CLI profile。卸载只处理选中的 CLI profile，或所有已登记 SearchBoost 的 CLI profiles。
+- **CLI**：安装默认 `web` profile，`--profile` 可指定其他 CLI profile。与 Desktop 一样优先复用当前持久包路径，包括从本地 tarball 安装到 `node_modules` 的开发包，不以同版本 npm 包替换它。卸载只处理选中的 CLI profile，或所有已登记 SearchBoost 的 CLI profiles。
 - **All**：分别管理 Desktop 与 CLI，分别报告成功/失败；一个失败不会掩盖另一个的结果。
 
 命令行等价入口：
@@ -59,11 +59,15 @@ SearchBoost 只读取 profile/安装路径，不为检测启动 Desktop，也不
 
 ## 安装验证与禁用状态
 
+安装检查、profile/升级发现、显式启用与卸载验证共同识别 `dependencies`、`devDependencies` 和 `optionalDependencies`。即使可选依赖处于禁用状态，也不会漏扫或把仍保留的依赖误报已删除；旧名称的可选依赖同样参与升级迁移。
+
 退出码为 0、profile 中有新包，都不足以证明宿主会加载新代码。官方 bundle 解析器先查 DSH 安装目录，再查 profile；安装目录旁的旧 SearchBoost 可能遮蔽 profile 的新版。
 
-SearchBoost 在选定 launcher 的运行时调用它自带的 `resolveBundleDir`，检查实际解析路径、精确版本、bundle 元数据和 adapter 文件，并要求实际路径与刚安装的载荷具有相同 realpath。成功时显示路径和版本；旧包、同版本但不同目录的副本、缺失解析器或未返回探针结果，都不能报验证成功。冲突错误列出预期和实际路径/版本；请明确移除或更新宿主旁的冲突包后重试，SearchBoost 不自动改写宿主安装目录。
+SearchBoost 在选定 launcher 的运行时调用它自带的 `resolveBundleDir`，检查实际解析路径、精确版本、bundle 元数据和 adapter 文件，并要求实际路径与刚安装的载荷具有相同 realpath。成功时显示路径和版本；旧包、同版本但不同目录的宿主遮蔽副本、缺失解析器或未返回探针结果，都不能报验证成功。复制型安装还会校验当前包声明的发布文件内容与运行时 manifest 字段，不能只凭同一个 `0.2.4-beta.4` 版本号认定代码相同。冲突错误列出预期和实际路径/版本；请明确移除或更新宿主旁的冲突包后重试，SearchBoost 不自动改写宿主安装目录。
 
 Desktop 验证复用官方 launcher 指向的应用二进制及 ASAR carrier，以 `ELECTRON_RUN_AS_NODE=1` 和显式 `--import` 运行一次性探针，不依赖打包 Electron 受限的 `NODE_OPTIONS`。非标准 Desktop launcher 布局会拒绝验证；覆盖变量仍须指向官方 bundled launcher。探针不会启动 profile 或导入 SearchBoost 工具。这是**下次启动的来源验证**，不是证明已有进程已热更新；代码变化仍需重启宿主。
+
+持久本地链接依赖来源目录继续存在，CLI 与 Desktop 都一样。临时 `_npx` 缓存仍不能成为持久链接；精确版本 npm 替换只有在载荷内容与当前运行包一致时才通过，否则明确报未验证，并要求安装当前 tarball 到持久位置或发布新版本。修改代码后的 npm 发布必须使用新版本号，不复用已经发布的版本。
 
 已存在但禁用的 bundle 更新后，报告“已安装并验证，但禁用”，仍算安装成功，不自动启用。可在宿主插件管理器启用，或明确使用 `--enable-dsh-bundle`；后者通过宿主的 manifest 锁与原子写入 API 修改选择，并在启用前解析实际 bundle patch。其他 bundle 的顺序、用户配置与 patch 保留。
 
@@ -77,6 +81,10 @@ TUI Update / `search-boost upgrade` 自动发现所有已登记 SearchBoost 的 
 
 宿主原始 stdout/stderr 可能含认证信息，不复制进 SearchBoost TUI 日志/异常；失败报告退出码和操作状态。需要详细诊断时，在本机直接运行相同宿主命令，分享输出前先检查秘密。
 
+## 搜索层并发写入
+
+共享搜索层设置使用每次独有的私有临时文件和跨进程写锁，迁移与原子替换位于同一临界区。并发修改按写锁顺序保存，后完成的写入生效；锁等待最长 5 秒，超时明确报告冲突。失败写入清理自己的临时文件与锁，不破坏旧配置。此修复不改变插件启用状态按 profile 独立管理的规则。
+
 ## 验证与限制
 
 ```sh
@@ -85,7 +93,7 @@ npm run test:install
 npm run test:isolation
 ```
 
-全部测试先加载 `scripts/isolate-tests.mjs`。Desktop 绝对路径发现额外使用指向测试目录的缺失命令覆盖，不能绕过 PATH 防护执行真实桌面版命令。测试覆盖双宿主安装/删除、旧版及同版本副本遮蔽、禁用成功状态与 TUI/非交互 CLI 显式启用、坏 patch 与锁拒绝启用、Desktop PATH 无系统 npm/pnpm、旧名升级、错误退出与假成功、缺失解析器/命令、dry-run、保留配置和诊断输出不泄密。模拟调用者文件及源码树由隔离门禁做内容快照。
+全部测试先加载 `scripts/isolate-tests.mjs`。Desktop 绝对路径发现额外使用指向测试目录的缺失命令覆盖，不能绕过 PATH 防护执行真实桌面版命令。测试覆盖双宿主安装/删除、旧版及同版本副本遮蔽、可选依赖发现/重装/卸载/旧名升级、同版本本地新包与缓存载荷校验、搜索层跨进程并发和失败写入清理、禁用成功状态与 TUI/非交互 CLI 显式启用、坏 patch 与锁拒绝启用、Desktop PATH 无系统 npm/pnpm、旧名升级、错误退出与假成功、缺失解析器/命令、dry-run、保留配置和诊断输出不泄密。模拟调用者文件及源码树由隔离门禁做内容快照。
 
 Desktop 探针测试使用 Node 模拟应用二进制、目录模拟 ASAR，并测试清空 NODE_OPTIONS 后仍可验证；这些不是 Electron 真机或真实 ASAR 解析测试。这些模拟宿主回归不代表真实 Desktop 已加载新插件。Windows/macOS 命令执行需对应平台 CI / 真机确认。DSH 开发预览版接口仍可能变化。
 

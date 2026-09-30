@@ -31,7 +31,7 @@ try {
     const entry = join(bin, 'capture.mjs')
     writeDshHostFixture(entry, { desktopHost: mode === 'desktop-path' })
     writeFileSync(entry, `
-import { writeFileSync, mkdirSync, copyFileSync, readFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync, cpSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 const args = process.argv.slice(2);
 writeFileSync(process.env.DSH_TEST_CAPTURE, JSON.stringify(args));
@@ -46,7 +46,8 @@ if (args.includes('add') && !process.env.DSH_TEST_NO_REGISTER) {
   pkg.dependencies['search-boost'] = args.at(-1);
   if (!existed) pkg.dsh.profile.bundles.push('search-boost');
   writeFileSync(join(dir, 'package.json'), JSON.stringify(pkg));
-  for (const file of ['package.json', 'adapters/dsh/index.js', 'adapters/dsh/schema.js', 'adapters/dsh/cordis.patch.yml']) copyFileSync(join(process.env.DSH_TEST_ROOT, file), join(installed, file));
+  const sourcePkg = JSON.parse(readFileSync(join(process.env.DSH_TEST_ROOT, 'package.json')));
+  for (const file of ['package.json', ...sourcePkg.files]) cpSync(join(process.env.DSH_TEST_ROOT, file), join(installed, file), { recursive: true });
   if (process.env.DSH_TEST_BAD_PATCH) writeFileSync(join(installed, 'adapters/dsh/cordis.patch.yml'), '[');
 }
 if (args.includes('remove')) {

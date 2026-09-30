@@ -15,9 +15,10 @@ const write = (file, value) => { mkdirSync(dirname(file), { recursive: true }); 
 const json = (file) => JSON.parse(readFileSync(file, 'utf8'))
 try {
   for (const mode of ['global', 'npm-only', 'dsh-only', 'pnpm-only', 'desktop-path']) {
-    for (const source of ['checkout', 'published']) {
+    for (const source of ['checkout', 'published', 'npm-cache']) {
       const base = join(temp, mode, source), bin = mode === 'desktop-path' ? join(base, 'resources/runtime/cli/bin') : join(base, 'bin with spaces')
-      const root = source === 'published' ? join(base, 'global', 'node_modules', 'search-boost') : join(base, 'checkout')
+      const root = source === 'published' ? join(base, 'global', 'node_modules', 'search-boost')
+        : source === 'npm-cache' ? join(base, '_npx', 'cache', 'node_modules', 'search-boost') : join(base, 'checkout')
       write(join(root, 'package.json'), { name: 'search-boost', version: '2.0.0', dsh: { bundle: { patch: './adapters/dsh/cordis.patch.yml' } } })
       for (const file of ['cli.mjs', 'adapters/pi/index.js', 'adapters/dsh/index.js', 'adapters/dsh/schema.js', 'adapters/dsh/cordis.patch.yml']) write(join(root, file), '// fixture 2.0.0')
       const capture = join(base, 'commands.jsonl'), entry = join(bin, 'host.mjs')
@@ -91,16 +92,17 @@ if (process.env.DSH_TEST_FAIL) process.exit(7);
         assert.equal(result.status, 0, result.stderr)
         const commands = readFileSync(capture, 'utf8').trim().split('\n').map(JSON.parse)
         assert.deepEqual(commands, [
-          [...prefix, 'plugin', '--profile', profile, 'add', source === 'published' ? 'search-boost@2.0.0' : root],
+          [...prefix, 'plugin', '--profile', profile, 'add', source === 'npm-cache' ? 'search-boost@2.0.0' : root],
           [...prefix, 'plugin', '--profile', profile, 'remove', 'dsh-search-boost'],
         ])
         const pkg = json(manifest)
-        assert.equal(pkg.dependencies['search-boost'], source === 'published' ? '^2.0.0' : `link:${root}`)
+        assert.equal(pkg.dependencies['search-boost'], source === 'npm-cache' ? '^2.0.0' : `link:${root}`)
         assert.equal(pkg.dependencies['user-plugin'], '1.0.0')
         assert.equal(pkg.dependencies['dsh-search-boost'], undefined)
         assert.deepEqual(pkg.dsh.profile, { custom: 'keep', bundles: disabled ? ['user-plugin'] : ['user-plugin', 'search-boost'] })
         assert.equal(json(join(dir, 'node_modules/search-boost/package.json')).version, '2.0.0')
-        if (source === 'published') assert.notEqual(realpathSync(join(dir, 'node_modules/search-boost')), root)
+        if (source === 'npm-cache') assert.notEqual(realpathSync(join(dir, 'node_modules/search-boost')), root)
+        else assert.equal(realpathSync(join(dir, 'node_modules/search-boost')), root)
         assert.equal(readFileSync(join(dir, 'cordis.yml'), 'utf8'), 'original cordis.yml')
         // Same-version refresh is allowed, including disabled bundles.
         assert.equal(run().status, 0)
@@ -113,7 +115,7 @@ if (process.env.DSH_TEST_FAIL) process.exit(7);
       for (const [extra, message] of [
         [{ DSH_TEST_NOOP: '1' }, /did not register/],
         [{ DSH_TEST_FAIL: '1' }, /exit 7/],
-        ...(source === 'published' ? [
+        ...(source === 'npm-cache' ? [
           [{ DSH_TEST_WRONG_VERSION: '1' }, /version mismatch/],
           [{ DSH_TEST_STALE_SOURCE: '1' }, /dependency source/],
           [{ DSH_TEST_MISSING_FILE: 'adapters/dsh/schema.js' }, /metadata\/schema/],
