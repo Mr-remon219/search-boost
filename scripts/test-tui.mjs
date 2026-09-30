@@ -170,6 +170,13 @@ try {
   const cli = execFileSync(process.execPath, [fileURLToPath(new URL('../cli.mjs', import.meta.url)), 'status'], { env: process.env, encoding: 'utf8' })
   assert(cli.includes('Layer:'), 'saved TUI language does not change non-interactive CLI output')
 
+  for (const language of ['en', 'zh-CN']) {
+    saveTuiLanguage(language)
+    const setup = execFileSync(process.execPath, [fileURLToPath(new URL('../cli.mjs', import.meta.url)), 'setup', '--yes', '--target', 'cursor', '--dry-run'], { env: { ...process.env, LC_ALL: 'zh_CN.UTF-8' }, encoding: 'utf8' })
+    assert(setup.includes('Dry run complete'), 'setup --yes stays English regardless of saved/system language')
+    assert(!setup.includes('安装') && !setup.includes('完成'))
+  }
+
   await withTuiContext(() => {
     assert.equal(integrationWarning('Recorded project unavailable: /tmp/my project'), '已记录的项目不可用：/tmp/my project')
     assert.equal(integrationWarning('Codex: raw upstream failure'), 'Codex: raw upstream failure')
