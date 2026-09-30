@@ -2,10 +2,11 @@
 import './isolate-tests.mjs'
 // Real subprocess launch/verification without network, global hosts or user state.
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, realpathSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, realpathSync, cpSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname, delimiter } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { writeDshHostFixture, writeDesktopProbeFixture } from './dsh-host-fixture.mjs'
 
 const temp = realpathSync(mkdtempSync(join(tmpdir(), 'sb dsh upgrade ')))
 const integrations = new URL('../lib/upgrade/integrations.mjs', import.meta.url).href
@@ -13,13 +14,14 @@ const processModule = new URL('../lib/upgrade/process.mjs', import.meta.url).hre
 const write = (file, value) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value)) }
 const json = (file) => JSON.parse(readFileSync(file, 'utf8'))
 try {
-  for (const mode of ['global', 'npm-only', 'dsh-only', 'pnpm-only']) {
+  for (const mode of ['global', 'npm-only', 'dsh-only', 'pnpm-only', 'desktop-path']) {
     for (const source of ['checkout', 'published']) {
-      const base = join(temp, mode, source), bin = join(base, 'bin with spaces')
+      const base = join(temp, mode, source), bin = mode === 'desktop-path' ? join(base, 'resources/runtime/cli/bin') : join(base, 'bin with spaces')
       const root = source === 'published' ? join(base, 'global', 'node_modules', 'search-boost') : join(base, 'checkout')
       write(join(root, 'package.json'), { name: 'search-boost', version: '2.0.0', dsh: { bundle: { patch: './adapters/dsh/cordis.patch.yml' } } })
       for (const file of ['cli.mjs', 'adapters/pi/index.js', 'adapters/dsh/index.js', 'adapters/dsh/schema.js', 'adapters/dsh/cordis.patch.yml']) write(join(root, file), '// fixture 2.0.0')
       const capture = join(base, 'commands.jsonl'), entry = join(bin, 'host.mjs')
+      writeDshHostFixture(entry, { desktopHost: mode === 'desktop-path' })
       write(entry, `
 import { appendFileSync, readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, symlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -59,8 +61,9 @@ if (process.env.DSH_TEST_FAIL) process.exit(7);
         write(file, process.platform === 'win32' ? `@"${process.execPath}" "${entry}" %*\r\n` : `#!/bin/sh\nexec "${process.execPath}" "${entry}" "$@"\n`)
         chmodSync(file, 0o755)
       }
-      launcher('npm')
-      if (['global', 'dsh-only'].includes(mode)) launcher('dsh')
+      if (mode !== 'desktop-path') launcher('npm')
+      if (['global', 'dsh-only', 'desktop-path'].includes(mode)) launcher('dsh')
+      if (mode === 'desktop-path') writeDesktopProbeFixture(join(bin, process.platform === 'win32' ? 'dsh.cmd' : 'dsh'), entry)
       if (['global', 'pnpm-only'].includes(mode)) launcher('pnpm')
       if (process.platform !== 'win32') { write(join(bin, 'which'), '#!/bin/sh\ncommand -v "$1"\n'); chmodSync(join(bin, 'which'), 0o755) }
       const env = { ...process.env, HOME: join(base, 'home'), USERPROFILE: join(base, 'home'), DSH_HOME: join(base, 'home', '.dsh'), SEARCH_BOOST_HOME: join(base, 'state'),
@@ -81,7 +84,7 @@ if (process.env.DSH_TEST_FAIL) process.exit(7);
         const { runCommand } = await import(${JSON.stringify(processModule)});
         await refreshIntegration({ kind: 'dsh', profile: ${JSON.stringify(name)}, dir: ${JSON.stringify(dir)} }, { packageRoot: ${JSON.stringify(root)}, run: runCommand, dryRun: ${dryRun} });
       `], { env: { ...env, ...extra }, encoding: 'utf8', timeout: 20_000 })
-      const prefix = mode === 'global' ? [] : ['exec', '--yes', ...(['npm-only', 'pnpm-only'].includes(mode) ? ['--package', '@deepseek-ai/dsh'] : []), ...(['npm-only', 'dsh-only'].includes(mode) ? ['--package', 'pnpm'] : []), '--', 'dsh']
+      const prefix = ['global', 'desktop-path'].includes(mode) ? [] : ['exec', '--yes', ...(['npm-only', 'pnpm-only'].includes(mode) ? ['--package', '@deepseek-ai/dsh'] : []), ...(['npm-only', 'dsh-only'].includes(mode) ? ['--package', 'pnpm'] : []), '--', 'dsh']
       for (const disabled of [false, true]) {
         reset(disabled)
         const result = run()
@@ -125,6 +128,20 @@ if (process.env.DSH_TEST_FAIL) process.exit(7);
         assert.deepEqual(files.map(file => readFileSync(join(dir, file), 'utf8')), before, 'restore managed profile files on failure')
         assert.equal(readFileSync(capture, 'utf8').trim().split('\n').length, 1, 'do not remove legacy before verification')
       }
+      const shadow = join(bin, 'node_modules/search-boost')
+      cpSync(root, shadow, { recursive: true })
+      for (const version of ['1.0.0', '2.0.0']) {
+        reset()
+        write(join(shadow, 'package.json'), { ...json(join(root, 'package.json')), version })
+        const result = run()
+        assert.notEqual(result.status, 0)
+        assert.match(result.stderr, /runtime bundle source\/version mismatch/)
+        assert.deepEqual(files.map(file => readFileSync(join(dir, file), 'utf8')), before, 'runtime mismatch rolls back profile files')
+        assert.equal(json(manifest).dependencies['dsh-search-boost'], '0.1.3', 'do not retire legacy registration before runtime verification')
+        assert.equal(readFileSync(capture, 'utf8').trim().split('\n').length, 1)
+        assert.equal(json(join(shadow, 'package.json')).version, version, 'never change the host-owned conflicting copy')
+      }
+      rmSync(shadow, { recursive: true })
       if (process.platform === 'win32') {
         reset()
         assert.match(run({}, false, 'unsafe&profile').stderr, /Unsupported Windows command path characters/)

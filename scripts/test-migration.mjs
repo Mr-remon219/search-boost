@@ -14,6 +14,7 @@ import { pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { PKG_ROOT } from '../lib/pkg.mjs'
 import { runCommand, npmCliEntry } from '../lib/upgrade/process.mjs'
+import { writeDshHostFixture } from './dsh-host-fixture.mjs'
 
 // Installed package identities are real paths; do not bake a macOS /var alias
 // into the fixture's expected global prefix and release roots.
@@ -87,6 +88,7 @@ try {
 
   // Lightweight DSH profile manager, exercised through the real updater process.
   const dsh = join(tools, 'dsh.mjs')
+  writeDshHostFixture(dsh)
   write(dsh, `#!/usr/bin/env node
 import {readFileSync,writeFileSync,mkdirSync,rmSync,cpSync} from 'node:fs'; import {join,dirname} from 'node:path';
 const [command,flag,profile,verb,source]=process.argv.slice(2); if(command!=='plugin'||flag!=='--profile') process.exit(2);

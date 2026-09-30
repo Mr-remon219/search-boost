@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import './isolate-tests.mjs'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, cpSync, symlinkSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, delimiter } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { dshLaunchCommand } from '../lib/agents/host-runtime.mjs'
+import { writeDshHostFixture, writeDesktopProbeFixture } from './dsh-host-fixture.mjs'
 
 const args = ['plugin', '--profile', 'profile with spaces', 'add', 'search-boost']
 assert.deepEqual(dshLaunchCommand(args, { dshAvailable: true, pnpmAvailable: true, npmAvailable: false }), { command: 'dsh', args })
@@ -23,11 +24,12 @@ console.log('ok: global DSH and npm-exec/npx launch selection, with and without 
 const temp = mkdtempSync(join(tmpdir(), 'sb dsh install '))
 const moduleUrl = new URL('../lib/agents/host-runtime.mjs', import.meta.url).href
 try {
-  for (const mode of ['global', 'npx', 'global-no-pnpm']) {
-    const bin = join(temp, mode, 'bin with spaces')
+  for (const mode of ['global', 'npx', 'global-no-pnpm', 'desktop-path']) {
+    const bin = mode === 'desktop-path' ? join(temp, mode, 'resources', 'runtime', 'cli', 'bin') : join(temp, mode, 'bin with spaces')
     mkdirSync(bin, { recursive: true })
     const capture = join(temp, mode, 'argv.json')
     const entry = join(bin, 'capture.mjs')
+    writeDshHostFixture(entry, { desktopHost: mode === 'desktop-path' })
     writeFileSync(entry, `
 import { writeFileSync, mkdirSync, copyFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -39,8 +41,13 @@ if (args.includes('add') && !process.env.DSH_TEST_NO_REGISTER) {
   const dir = join(process.env.DSH_HOME, 'profiles', profile);
   const installed = join(dir, 'node_modules', 'search-boost');
   mkdirSync(join(installed, 'adapters', 'dsh'), { recursive: true });
-  writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { 'search-boost': args.at(-1) }, dsh: { profile: { bundles: ['search-boost'] } } }));
+  let pkg; try { pkg = JSON.parse(readFileSync(join(dir, 'package.json'))); } catch { pkg = { dependencies: {}, dsh: { profile: { bundles: [] } } }; }
+  const existed = !!pkg.dependencies['search-boost'];
+  pkg.dependencies['search-boost'] = args.at(-1);
+  if (!existed) pkg.dsh.profile.bundles.push('search-boost');
+  writeFileSync(join(dir, 'package.json'), JSON.stringify(pkg));
   for (const file of ['package.json', 'adapters/dsh/index.js', 'adapters/dsh/schema.js', 'adapters/dsh/cordis.patch.yml']) copyFileSync(join(process.env.DSH_TEST_ROOT, file), join(installed, file));
+  if (process.env.DSH_TEST_BAD_PATCH) writeFileSync(join(installed, 'adapters/dsh/cordis.patch.yml'), '[');
 }
 if (args.includes('remove')) {
   const file = join(process.env.DSH_HOME, 'profiles', args[args.indexOf('--profile') + 1], 'package.json');
@@ -57,8 +64,9 @@ if (args.includes('remove')) {
         : `#!/bin/sh\nexec "${process.execPath}" "${entry}" "$@"\n`)
       chmodSync(file, 0o755)
     }
-    launcher('npm')
+    if (mode !== 'desktop-path') launcher('npm')
     if (mode !== 'npx') launcher('dsh')
+    if (mode === 'desktop-path') writeDesktopProbeFixture(join(bin, process.platform === 'win32' ? 'dsh.cmd' : 'dsh'), entry)
     if (mode === 'global') launcher('pnpm')
     // Keep command discovery hermetic instead of inheriting globally installed
     // dsh/pnpm. Windows needs where.exe/cmd.exe, POSIX only a shell builtin.
@@ -73,7 +81,7 @@ if (args.includes('remove')) {
     const result = run(`await host.installDshBundle({ profile: 'profile with spaces' });`)
     assert.equal(result.status, 0, result.stderr)
     const actual = JSON.parse(readFileSync(capture, 'utf8'))
-    const prefix = mode === 'global' ? [] : ['exec', '--yes', ...(mode === 'npx' ? ['--package', '@deepseek-ai/dsh'] : []), '--package', 'pnpm', '--', 'dsh']
+    const prefix = ['global', 'desktop-path'].includes(mode) ? [] : ['exec', '--yes', ...(mode === 'npx' ? ['--package', '@deepseek-ai/dsh'] : []), '--package', 'pnpm', '--', 'dsh']
     assert.deepEqual(actual.slice(0, -1), [...prefix, 'plugin', '--profile', 'profile with spaces', 'add'])
     assert.equal(actual.at(-1), fileURLToPath(new URL('..', import.meta.url)).replace(/[\\/]$/, ''))
     const removal = run(`await host.uninstallDshBundle({ profile: 'profile with spaces' });`)
@@ -94,8 +102,74 @@ if (args.includes('remove')) {
     const wrongVersion = run(`await host.verifyDshBundle(${JSON.stringify(join(env.DSH_HOME, 'profiles', 'profile with spaces'))});`)
     assert.notEqual(wrongVersion.status, 0)
     assert.match(wrongVersion.stderr, /version mismatch/)
+    const dir = join(env.DSH_HOME, 'profiles', 'profile with spaces')
+    const profileFile = join(dir, 'package.json')
+    const disabled = JSON.parse(readFileSync(profileFile, 'utf8'))
+    disabled.dependencies['user-plugin'] = '1.0.0'
+    disabled.dsh.profile = { bundles: ['user-plugin'], custom: 'retain' }
+    writeFileSync(profileFile, JSON.stringify(disabled))
+    const statusBody = (enable = false) => `let status; await host.installDshBundle({ profile: 'profile with spaces', enableDshBundle: ${enable}, onDshStatus: value => { status = value } }); console.log(JSON.stringify(status));`
+    const retained = run(statusBody())
+    assert.equal(retained.status, 0, retained.stderr)
+    const status = JSON.parse(retained.stdout)
+    assert.equal(status.enabled, false)
+    assert.equal(status.root, realpathSync(join(dir, 'node_modules/search-boost')))
+    assert.equal(status.version, pkg.version)
+    assert.equal(status.hostVersion, '0.2.0-rc.2')
+    assert.deepEqual(JSON.parse(readFileSync(profileFile)).dsh.profile, disabled.dsh.profile)
+    const warning = run(`await host.installDshBundle({ profile: 'profile with spaces' });`)
+    assert.equal(warning.status, 0, warning.stderr)
+    assert.match(warning.stderr, /installed and verified, but disabled/)
+    const badPatch = run(statusBody(true), { DSH_TEST_BAD_PATCH: '1' })
+    assert.notEqual(badPatch.status, 0, 'explicit activation must validate the actual patch first')
+    assert.deepEqual(JSON.parse(readFileSync(profileFile)).dsh.profile, disabled.dsh.profile)
+    writeFileSync(profileFile + '.lock', 'fixture manifest locked')
+    const lockedEnable = run(statusBody(true))
+    assert.notEqual(lockedEnable.status, 0)
+    assert.deepEqual(JSON.parse(readFileSync(profileFile)).dsh.profile, disabled.dsh.profile)
+    rmSync(profileFile + '.lock')
+    const enabled = run(statusBody(true))
+    assert.equal(enabled.status, 0, enabled.stderr)
+    assert.equal(JSON.parse(enabled.stdout).enabled, true)
+    assert.deepEqual(JSON.parse(readFileSync(profileFile)).dsh.profile, { bundles: ['user-plugin', 'search-boost'], custom: 'retain' })
+    assert.equal(run(statusBody(true)).status, 0, 'explicit enable is idempotent')
+
+    // A profile copy can be correct while the official installation-first
+    // resolver selects another payload. Reject even same-version shadow copies.
+    const shadow = join(bin, 'node_modules', 'search-boost')
+    cpSync(join(dir, 'node_modules/search-boost'), shadow, { recursive: true })
+    const shadowManifest = join(shadow, 'package.json')
+    const shadowPkg = JSON.parse(readFileSync(shadowManifest))
+    for (const version of ['0.0.0', shadowPkg.version]) {
+      writeFileSync(shadowManifest, JSON.stringify({ ...shadowPkg, version }))
+      const shadowed = run(statusBody())
+      assert.notEqual(shadowed.status, 0)
+      assert.match(shadowed.stderr, /runtime bundle source\/version mismatch/)
+      assert.equal(JSON.parse(readFileSync(manifest)).version, pkg.version, 'profile is new, but cannot be reported as the loaded source')
+      assert.equal(JSON.parse(readFileSync(shadowManifest)).version, version, 'never overwrite host-owned shadow package')
+    }
+    rmSync(shadow, { recursive: true })
+    symlinkSync(join(dir, 'node_modules/search-boost'), shadow, process.platform === 'win32' ? 'junction' : 'dir')
+    assert.equal(run(statusBody()).status, 0, 'different aliases of the SAME payload are valid')
+    rmSync(shadow, { recursive: true })
+
+    const carrierFile = join(bin, 'package.json')
+    const carrier = readFileSync(carrierFile, 'utf8')
+    writeFileSync(carrierFile, JSON.stringify({ name: 'foreign-wrapper', type: 'module' }))
+    const unsupported = run(statusBody())
+    assert.notEqual(unsupported.status, 0, 'zero exit without an owning-runtime probe is not verification')
+    assert.match(unsupported.stderr, /verification unavailable/)
+    writeFileSync(carrierFile, carrier)
+    const bootFile = join(bin, 'node_modules/@deepseek-ai/dsh-app-boot/index.mjs')
+    const boot = readFileSync(bootFile, 'utf8')
+    writeFileSync(bootFile, `throw Error('fixture-secret-do-not-log')`)
+    const badResolver = run(statusBody())
+    assert.notEqual(badResolver.status, 0)
+    assert.ok(!(badResolver.stdout + badResolver.stderr).includes('fixture-secret-do-not-log'))
+    writeFileSync(bootFile, boot)
+    console.log(`ok: ${mode} actual host source, old/same-version shadow, disabled/explicit enable, locks, unavailable resolver and safe diagnostics`)
     rmSync(capture)
-    assert.equal(run(`await host.installDshBundle({ dryRun: true });`).status, 0)
+    assert.equal(run(`await host.installDshBundle({ dryRun: true, enableDshBundle: true });`).status, 0)
     assert.throws(() => readFileSync(capture), /ENOENT/)
     console.log(`ok: ${mode} launcher preserves spaced paths/arguments, remove, failure, and dry-run (${process.platform})`)
   }

@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdi
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
+import { writeDshHostFixture } from './dsh-host-fixture.mjs'
 
 // Use canonical fixture identities; exercise an aliased caller cwd explicitly
 // in the cache-handoff case below instead of relying on the OS temp-dir spelling.
@@ -31,7 +32,7 @@ function snapshot(dir = home) {
 }
 const fixtureSecret = 'fixture-value-not-a-real-credential'
 const { runUpgrade } = await import('../lib/upgrade/index.mjs')
-const { compareVersions } = await import('../lib/upgrade/process.mjs')
+const { compareVersions, runCommand } = await import('../lib/upgrade/process.mjs')
 const { refreshTomlMcp } = await import('../lib/upgrade/config.mjs')
 const { discoverIntegrations, refreshIntegration } = await import('../lib/upgrade/integrations.mjs')
 const { PATHS, workspaceAgents } = await import('../lib/paths.mjs')
@@ -42,7 +43,11 @@ mkdirSync(globalRoot)
 const logs = [], calls = []
 const log = (message) => logs.push(message)
 let npmVersion = version, failDshRemove = false, failNpm = false
-async function run(command, args) {
+const probeEntry = join(temp, 'fake-host', 'host.mjs')
+writeDshHostFixture(probeEntry)
+write(probeEntry, 'throw Error("runtime probe must exit before host main")')
+async function run(command, args, options) {
+  if (options?.env?.SEARCH_BOOST_DSH_PROBE_NONCE) return runCommand(process.execPath, [probeEntry, '--version'], options)
   // Exercise the shared launcher on machines with or without global DSH/pnpm.
   if (command === 'npm' && args[0] === 'exec') {
     const separator = args.indexOf('--')

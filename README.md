@@ -396,7 +396,7 @@ API keys use a credential store this tool owns. They are not written into prompt
 
 In addition to the interactive TUI, SearchBoost provides a comprehensive CLI for scripting and automation.
 
-**DeepSeek Harness Desktop:** selecting DSH in the TUI offers Desktop / CLI / All when Desktop is detected. Launch Desktop once, then fully quit it (including its tray) before command-line plugin changes. In the app, Plugins → Add plugin accepts `search-boost` for an npm registry install, or an absolute local package path to reuse an existing installation. See [Desktop integration](docs/dsh-desktop.md) for installation, removal, update ownership and limitations.
+**DeepSeek Harness Desktop:** selecting DSH in the TUI offers Desktop / CLI / All when Desktop is detected. Launch Desktop once, then fully quit it (including its tray) before command-line plugin changes. In the app, Plugins → Add plugin accepts `search-boost` for an npm registry install, or an absolute local package path to reuse an existing installation. Installation/update verifies the bundle selected by the owning host resolver, not just the profile copy; host-side shadow copies fail verification. Retained disabled bundles count as installed-but-disabled; opt in with `--enable-dsh-bundle`. A Desktop launcher actually selected on PATH supplies pnpm for CLI profiles too. See [Desktop integration](docs/dsh-desktop.md) for ownership and validation limits.
 
 ```bash
 # ----------------- Core & Interactive -----------------

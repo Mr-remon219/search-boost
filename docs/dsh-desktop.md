@@ -16,6 +16,8 @@
 search-boost install -t dsh --dsh-surface desktop -y
 search-boost install -t dsh --dsh-surface cli --profile web -y
 search-boost install -t dsh --dsh-surface all -y
+# 明确启用此前已安装但禁用的 bundle（不带此参数则保留禁用）：
+search-boost install -t dsh --profile web --enable-dsh-bundle -y
 search-boost uninstall -t dsh --dsh-surface desktop -y
 search-boost uninstall -t dsh --dsh-surface cli -y
 search-boost uninstall -t dsh --dsh-surface all -y
@@ -53,11 +55,23 @@ SearchBoost 只读取 profile/安装路径，不为检测启动 Desktop，也不
 
 缺少 Desktop 命令、未初始化的 profile 或现存应用锁会阻止实际操作，**不会回退到 npm DSH，也不会擅自删除锁**。一个陈旧锁也不会由 SearchBoost 自动接管；先检查宿主状态。
 
+若 PATH 实际选中的 `dsh` 就是 Desktop 自带 launcher，普通 CLI profiles 也直接使用它及内置 pnpm，不要求系统 pnpm/npm。仅仅检测到另一个 Desktop 安装，不会替换 PATH 上优先选中的独立 CLI。
+
+## 安装验证与禁用状态
+
+退出码为 0、profile 中有新包，都不足以证明宿主会加载新代码。官方 bundle 解析器先查 DSH 安装目录，再查 profile；安装目录旁的旧 SearchBoost 可能遮蔽 profile 的新版。
+
+SearchBoost 在选定 launcher 的运行时调用它自带的 `resolveBundleDir`，检查实际解析路径、精确版本、bundle 元数据和 adapter 文件，并要求实际路径与刚安装的载荷具有相同 realpath。成功时显示路径和版本；旧包、同版本但不同目录的副本、缺失解析器或未返回探针结果，都不能报验证成功。冲突错误列出预期和实际路径/版本；请明确移除或更新宿主旁的冲突包后重试，SearchBoost 不自动改写宿主安装目录。
+
+Desktop 验证复用官方 launcher 指向的应用二进制及 ASAR carrier，以 `ELECTRON_RUN_AS_NODE=1` 和显式 `--import` 运行一次性探针，不依赖打包 Electron 受限的 `NODE_OPTIONS`。非标准 Desktop launcher 布局会拒绝验证；覆盖变量仍须指向官方 bundled launcher。探针不会启动 profile 或导入 SearchBoost 工具。这是**下次启动的来源验证**，不是证明已有进程已热更新；代码变化仍需重启宿主。
+
+已存在但禁用的 bundle 更新后，报告“已安装并验证，但禁用”，仍算安装成功，不自动启用。可在宿主插件管理器启用，或明确使用 `--enable-dsh-bundle`；后者通过宿主的 manifest 锁与原子写入 API 修改选择，并在启用前解析实际 bundle patch。其他 bundle 的顺序、用户配置与 patch 保留。
+
 ## 更新与删除
 
 TUI Update / `search-boost upgrade` 自动发现所有已登记 SearchBoost 的 DSH profiles，并逐个选择其拥有者：Desktop 使用 bundled command，CLI 沿用普通 DSH / npm-exec 路径。不升级 Desktop 本身，不改变其他 profile 的宿主运行时。
 
-更新验证依赖来源、真实载荷版本及 adapter 文件；保留 bundle 顺序、启用/禁用选择和用户 patch。旧适配器依赖只在新包验证后清理。缺失命令或应用锁在 profile 备份/写入之前阻止同步；完整升级仍可能已完成全局 SearchBoost 更新，需按结果解决阻塞后重试同步。
+更新同时验证依赖来源、profile 载荷与宿主实际解析的路径/版本及 adapter 文件；保留 bundle 顺序、启用/禁用选择和用户 patch。旧适配器依赖只在新包验证后清理。缺失命令或应用锁在 profile 备份/写入之前阻止同步；完整升级仍可能已完成全局 SearchBoost 更新，需按结果解决阻塞后重试同步。
 
 卸载在宿主命令成功后重新读取 manifest，拒绝“退出码为 0 但仍登记”的假成功。卸载不移除共享的 SearchBoost 安装和配置。
 
@@ -71,9 +85,9 @@ npm run test:install
 npm run test:isolation
 ```
 
-全部测试先加载 `scripts/isolate-tests.mjs`。Desktop 绝对路径发现额外使用指向测试目录的缺失命令覆盖，不能绕过 PATH 防护执行真实桌面版命令。测试覆盖双宿主安装/删除、禁用和旧名升级、错误退出与假成功、缺失命令、应用锁、dry-run、保留配置和诊断输出不泄密。模拟调用者文件及源码树由隔离门禁做内容快照。
+全部测试先加载 `scripts/isolate-tests.mjs`。Desktop 绝对路径发现额外使用指向测试目录的缺失命令覆盖，不能绕过 PATH 防护执行真实桌面版命令。测试覆盖双宿主安装/删除、旧版及同版本副本遮蔽、禁用成功状态与 TUI/非交互 CLI 显式启用、坏 patch 与锁拒绝启用、Desktop PATH 无系统 npm/pnpm、旧名升级、错误退出与假成功、缺失解析器/命令、dry-run、保留配置和诊断输出不泄密。模拟调用者文件及源码树由隔离门禁做内容快照。
 
-这些是模拟宿主下的回归，不代表真实 Desktop 已加载新插件。Windows/macOS 命令执行需对应平台 CI / 真机确认。DSH 开发预览版接口仍可能变化。
+Desktop 探针测试使用 Node 模拟应用二进制、目录模拟 ASAR，并测试清空 NODE_OPTIONS 后仍可验证；这些不是 Electron 真机或真实 ASAR 解析测试。这些模拟宿主回归不代表真实 Desktop 已加载新插件。Windows/macOS 命令执行需对应平台 CI / 真机确认。DSH 开发预览版接口仍可能变化。
 
 ## 设计依据
 
@@ -84,5 +98,8 @@ npm run test:isolation
 - [Web/Desktop 添加插件界面](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/client/ui-plugin-manager/README.md#installing-a-bundle)
 - [插件管理、npm 与本地路径来源](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/boot/plugin-manager/README.md)
 - [CLI 插件命令](https://github.com/deepseek-ai/deepseek-harness/blob/master/apps/cli/reference/README.md#plugin-management)
+- [官方 installation-first bundle 解析](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/boot/app-boot/src/profile.ts)
+- [Desktop carrier 与内置 pnpm](https://github.com/deepseek-ai/deepseek-harness/blob/master/apps/desktop-host/src/cli.ts)
+- [Electron NODE_OPTIONS 限制](https://www.electronjs.org/docs/latest/api/environment-variables#node_options)
 
 采用宿主原生入口，不增加全局 npm 引导层、安装生命周期脚本或另一套插件市场协议。

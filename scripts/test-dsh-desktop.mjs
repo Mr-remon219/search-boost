@@ -7,12 +7,14 @@ import { join, dirname, delimiter } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { PATHS, agentDetected, dshProfilesWithSearchBoost } from '../lib/paths.mjs'
 import { PKG_ROOT, getVersion } from '../lib/pkg.mjs'
-import { desktopCommandCandidates, dshDesktopStatus, desktopLaunchCommand, DESKTOP_COMMAND_ENV } from '../lib/dsh-desktop.mjs'
+import { desktopCommandCandidates, dshDesktopStatus, desktopLaunchCommand, desktopPathLauncher, desktopRuntimeProbeCommand, DESKTOP_COMMAND_ENV } from '../lib/dsh-desktop.mjs'
 import { dshOperationProfiles, dshDesktopPackageSpec, dshProfileLaunchCommand, dshLaunchCommand } from '../lib/agents/host-runtime.mjs'
 import { executeAgentOps, runDshSurfaceStep, runInstallerWithOptions } from '../lib/installer/index.mjs'
 import { parseFlags, installOpts } from '../lib/cli/args.mjs'
 import { discoverIntegrations, refreshIntegration } from '../lib/upgrade/integrations.mjs'
 import { runCommand } from '../lib/upgrade/process.mjs'
+import { writeDshHostFixture, writeDesktopProbeFixture } from './dsh-host-fixture.mjs'
+import { verifyDshRuntime } from '../lib/dsh-runtime.mjs'
 
 const home = process.env.HOME, base = join(home, 'fake desktop'), bin = join(base, 'bin with spaces')
 const capture = join(base, 'commands.jsonl'), entry = join(base, 'host.mjs')
@@ -41,16 +43,19 @@ for (const opts of [{ dshSurface: 'cli', profile: 'desktop' }, { dshSurface: 'al
 assert.equal(dshDesktopPackageSpec(join(home, '_npx', 'cache', 'node_modules', 'search-boost'), '1.2.3'), 'search-boost@1.2.3')
 assert.equal(dshDesktopPackageSpec(join(home, 'node_modules', 'search-boost'), '1.2.3'), join(home, 'node_modules', 'search-boost'))
 assert.equal(installOpts(parseFlags(['--dsh-surface', 'all'])).dshSurface, 'all')
+assert.equal(installOpts(parseFlags(['--enable-dsh-bundle'])).enableDshBundle, true)
+assert.equal(installOpts(parseFlags([])).enableDshBundle, false)
 assert.throws(() => parseFlags(['--dsh-surface', 'invalid']))
 console.log('ok: Desktop native discovery, authoritative overrides, surfaces and durable package sources')
 
+writeDshHostFixture(entry, { desktopHost: true })
 write(entry, `
 import { appendFileSync, readFileSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 const [owner, ...args] = process.argv.slice(2);
 appendFileSync(process.env.DSH_TEST_CAPTURE, JSON.stringify({ owner, args }) + '\\n');
 const profile = args[args.indexOf('--profile') + 1], verb = args[args.indexOf('--profile') + 2], source = args.at(-1);
-if ((profile === 'desktop') !== (owner === 'desktop')) throw Error('WRONG HOST');
+if (profile === 'desktop' && owner !== 'desktop') throw Error('WRONG HOST');
 // A package manager might echo a token on either a successful or failed run.
 console.log('fixture-secret-do-not-log'); console.error('fixture-secret-do-not-log');
 if (process.env.DSH_TEST_FAIL) process.exit(7);
@@ -83,6 +88,9 @@ function launcher(file, owner) {
 }
 const desktop = join(base, 'resources', 'runtime', 'cli', 'bin', process.platform === 'win32' ? 'dsh.cmd' : 'dsh')
 launcher(desktop, 'desktop')
+const desktopRuntime = writeDesktopProbeFixture(desktop, entry)
+assert.deepEqual(desktopRuntimeProbeCommand(desktop, 'file:///probe.mjs'), { command: desktopRuntime.executable, args: ['--expose-internals', '--import=file:///probe.mjs', desktopRuntime.entry, '--version'] })
+assert.throws(() => desktopRuntimeProbeCommand(entry, 'file:///probe.mjs', { required: true }), /Unsupported Desktop launcher layout/)
 launcher(join(bin, process.platform === 'win32' ? 'dsh.cmd' : 'dsh'), 'cli')
 launcher(join(bin, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'), 'cli')
 if (process.platform !== 'win32') { write(join(bin, 'which'), '#!/bin/sh\ncommand -v "$1"\n'); chmodSync(join(bin, 'which'), 0o700) }
@@ -91,6 +99,8 @@ process.env.DSH_HOME = PATHS.dsh.home
 process.env.DSH_TEST_CAPTURE = capture
 process.env[DESKTOP_COMMAND_ENV] = desktop
 
+assert.equal(desktopPathLauncher({ env: { PATH: join(desktop, '..') } }), desktop)
+assert.equal(desktopPathLauncher({ env: { PATH: [bin, join(desktop, '..')].join(delimiter) } }), null, 'a detected Desktop must not replace the CLI selected first on PATH')
 assert.equal(agentDetected('dsh'), true, 'app detection before first launch')
 assert.throws(() => desktopLaunchCommand(['plugin']), /initialize/)
 assert.ok(!existsSync(profileDir('desktop')), 'preflight must not initialize Desktop')
@@ -138,6 +148,32 @@ assert.deepEqual(json(join(profileDir('desktop'), 'package.json')).dsh.profile.b
 assert.equal(readFileSync(join(profileDir('desktop'), 'cordis.patch.yml'), 'utf8'), '# keep user patch\n')
 assert.ok(!messages.join('\n').includes('fixture-secret-do-not-log'))
 console.log('ok: TUI selection and Desktop + CLI install use separate owners and preserve user configuration')
+
+resetProfile('desktop', { installed: true, disabled: true })
+clearCalls()
+const disabledInstall = await executeAgentOps(['dsh'], { dshSurface: 'desktop' }, clack)
+assert.equal(disabledInstall[0].ok, true, 'retained disabled dependency is a successful installation')
+assert.equal(disabledInstall[0].dsh.enabled, false)
+assert.ok(messages.some(message => /installed and verified, but disabled/.test(message)))
+assert.deepEqual(json(join(profileDir('desktop'), 'package.json')).dsh.profile.bundles, ['user-plugin'])
+const enableInstall = await executeAgentOps(['dsh'], { dshSurface: 'desktop', enableDshBundle: true }, clack)
+assert.equal(enableInstall[0].ok, true)
+assert.equal(enableInstall[0].dsh.enabled, true)
+assert.deepEqual(json(join(profileDir('desktop'), 'package.json')).dsh.profile.bundles, ['user-plugin', 'search-boost'])
+resetProfile('desktop', { installed: true, disabled: true })
+const plain = spawnSync(process.execPath, [join(PKG_ROOT, 'cli.mjs'), 'install', '-t', 'dsh', '--profile', 'desktop', '--enable-dsh-bundle', '-y'], { env: process.env, encoding: 'utf8', timeout: 20_000 })
+assert.equal(plain.status, 0, plain.stderr)
+assert.deepEqual(json(join(profileDir('desktop'), 'package.json')).dsh.profile.bundles, ['user-plugin', 'search-boost'], 'non-interactive CLI forwards the explicit enable flag')
+await verifyDshRuntime(profileDir('desktop'), { command: desktop, args: ['plugin', '--profile', 'desktop', 'add', PKG_ROOT] }, {
+  root: PKG_ROOT, version: getVersion(), desktop: true,
+  run: (command, args, options) => {
+    assert.equal(command, desktopRuntime.executable)
+    assert.equal(options.env.ELECTRON_RUN_AS_NODE, '1')
+    assert.equal(options.env.NODE_OPTIONS, process.env.NODE_OPTIONS, 'Desktop must not inject NODE_OPTIONS')
+    return runCommand(command, args, { ...options, env: { ...options.env, NODE_OPTIONS: '' } })
+  },
+})
+console.log('ok: Desktop disabled status, TUI/plain CLI explicit enable, and owning-runtime probe without NODE_OPTIONS')
 
 // A normal directory can share only its manifest with Desktop, by hardlink
 // (portable on Windows) or symlink. This must also fail before host/backup writes.
