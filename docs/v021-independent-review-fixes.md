@@ -20,11 +20,11 @@
   regular files, atomically update the resolved target and preserve the links.
   Relative/chained links are supported. Dangling/cyclic links and non-file
   targets fail without replacing the link. Credential writers still reject
-  symlinks. **Existing limitations remain:** `upgrade --sync-only` does not
-  support symlinked files in its backup set. During uninstall, paths whose
-  content becomes empty may have the symlink itself removed while the target
-  retains its old contents. This fix restores installation compatibility only;
-  it does not promise a link-preserving install/upgrade/uninstall round trip.
+  symlinks. **Updated in the beta.5 candidate:** MCP configuration paths support
+  link-preserving upgrade and rollback; other managed assets (hooks, skills and
+  instruction files) must remain regular files. Empty JSON/TOML configurations
+  reached through a link are cleared at their target during uninstall, preserving
+  the link for reinstall. Invalid links and configuration aliases fail closed.
 - **R4 — manual Codex configuration:** `print codex` emits the root search
   setting before the MCP table, with instructions to place it before every
   table and avoid duplicate root assignments.

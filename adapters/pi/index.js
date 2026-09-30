@@ -277,7 +277,7 @@ export default function searchBoostExtension(pi) {
       return {
         content: [text([
           `URL: ${page.url}`,
-          `via: ${page.via} — fetched: ${page.fetched_at} — words: ${page.word_count}${page.truncated ? ' — [truncated]' : ''}`,
+          `via: ${page.via} — fetched: ${page.fetched_at ?? 'unknown (legacy cache)'} — words: ${page.word_count}${page.truncated ? ' — [truncated]' : ''}`,
           params.focus ? (page.focusMiss
             ? '[dynamic filtering: focus matched nothing — retry without focus to read the whole page]'
             : `[dynamic filtering: kept ${page.word_count} words relevant to focus]`) : '',
