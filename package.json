@@ -72,6 +72,7 @@
     "jev:probe": "node scripts/jev-probe.mjs",
     "eval:adaptive": "node scripts/eval-adaptive-search.mjs",
     "test:cli": "node scripts/test-cli-surface.mjs",
+    "test:tui": "node scripts/test-tui.mjs && node scripts/test-update-tui.mjs",
     "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:isolation",
     "test:search": "node scripts/test-search-routing.mjs",
     "test:keys-authority": "node scripts/test-keys-authority.mjs",

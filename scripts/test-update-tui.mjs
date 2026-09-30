@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import './isolate-tests.mjs'
-/** Exercise the existing Clack menu with an injected Update operation. */
+/** Exercise grouped Clack menus with an injected Update operation. */
 import assert from 'node:assert/strict'
 import { runTui } from '../lib/installer/tui.mjs'
+import { saveTuiLanguage } from '../lib/installer/i18n.mjs'
 
+saveTuiLanguage('en')
 const savedExit = process.exitCode
 async function scenario(result, actions) {
   const logs = [], menus = [], updates = []
@@ -23,28 +25,27 @@ async function scenario(result, actions) {
   assert.equal(updates[0].workspace, '/fixture/project')
   assert.equal(updates[0].dryRun, true)
   assert.ok(!('target' in updates[0]), 'Update does not restrict to one selected agent')
-  const options = menus[0].options
+  assert.deepEqual(menus[0].options.map((o) => o.value), ['integration', 'search-tools', 'credentials', 'maintenance', 'settings', 'exit'])
+  const options = menus[1].options
   assert.equal(options.find((o) => o.value === 'upgrade').label, 'Update')
   assert.match(options.find((o) => o.value === 'upgrade').hint, /all installed agents/)
   assert.ok(!options.some((o) => o.value === 'migrate'), 'one-time npm rename is not a TUI update action')
-  assert.ok(options.every((o) => !/[\u4e00-\u9fff]/.test(o.label)), 'keep the existing English Clack style')
-  for (const value of ['setup', 'install', 'uninstall', 'keys', 'tools', 'layer', 'x', 'jev', 'search', 'status', 'print', 'exit']) assert.ok(options.some((o) => o.value === value))
-  assert.equal(options.find((o) => o.value === 'keys').label, 'API keys & Base URLs')
-  assert.equal(options.find((o) => o.value === 'tools').label, 'Tool switches')
-  assert.match(options.find((o) => o.value === 'jev').label, /experimental/, 'the Jev option is marked experimental')
+  assert.ok(menus.every((menu) => menu.options.every((o) => !/[\u4e00-\u9fff]/.test(o.label))), 'English keeps the existing Clack style')
+  assert.equal(actions.length, 0)
   return { menus, logs, exitCode: process.exitCode }
 }
 try {
-  let out = await scenario({ ok: true, reloaded: false }, ['upgrade', 'exit'])
-  assert.equal(out.menus.length, 2)
+  let out = await scenario({ ok: true, reloaded: false }, ['maintenance', 'upgrade', 'back', 'exit'])
+  assert.equal(out.menus.length, 4)
+  assert.equal(out.menus[2].message, 'Update & status', 'completed actions stay in the submenu')
   assert.ok(!out.exitCode)
   assert.ok(out.logs.some((line) => line.includes('pi-search-boost') && line.includes('dsh-search-boost')))
-  out = await scenario({ ok: true, reloaded: true }, ['upgrade'])
-  assert.equal(out.menus.length, 1)
-  out = await scenario({ ok: false, reloaded: false }, ['upgrade', 'exit'])
+  out = await scenario({ ok: true, reloaded: true }, ['maintenance', 'upgrade'])
+  assert.equal(out.menus.length, 2)
+  out = await scenario({ ok: false, reloaded: false }, ['maintenance', 'upgrade', 'back', 'exit'])
   assert.equal(out.exitCode, 1)
-  out = await scenario(new Error('fixture update failure'), ['upgrade'])
+  out = await scenario(new Error('fixture update failure'), ['maintenance', 'upgrade'])
   assert.equal(out.exitCode, 1)
   assert.ok(out.logs.includes('error: fixture update failure'))
-  console.log('ok: TUI Update retains the existing style, updates all installed agents including legacy Pi/DSH, and stops after replacement/failure')
+  console.log('ok: grouped TUI Update refreshes all agents, returns to its submenu and stops after replacement/failure')
 } finally { process.exitCode = savedExit }

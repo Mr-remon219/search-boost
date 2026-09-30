@@ -7,7 +7,7 @@
 | TUI **Update**（或 `search-boost upgrade`） | 更新 SearchBoost，刷新全部已接入 agents；包括 `pi-search-boost` / `dsh-search-boost` 适配器到 `search-boost` 的升级 |
 | CLI `migrate` | 仅将全局 npm 包 `search-boost-mcp` 换成 `search-boost`，保留用户配置，最终删除旧全局包 |
 
-TUI 沿用现有英文 Clack 菜单，不增加单独的迁移页面，也不要求用户逐个选择待更新 agent。未接入的 agents 不会因为被检测到而自动安装。
+TUI 保留现有 Clack 样式，支持中英文显示切换；更新入口为「更新与状态 → 更新」，不增加单独的迁移页面，也不要求用户逐个选择待更新 agent。未接入的 agents 不会因为被检测到而自动安装。
 
 ## 旧 npm 包用户
 

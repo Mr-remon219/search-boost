@@ -48,6 +48,10 @@ jobs:
         if: always()
         run: npm run test:cli
 
+      - name: TUI navigation and display language
+        if: always()
+        run: npm run test:tui
+
       - name: Doctor CLI smoke
         if: always()
         run: node scripts/ci-doctor-smoke.mjs

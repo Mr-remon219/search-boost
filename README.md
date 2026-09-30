@@ -128,7 +128,7 @@ search-boost
 > **Zero API Keys Required to Start**: SearchBoost includes a robust free engine pool (Bing, DuckDuckGo, Yahoo, Exa-free). You can begin searching immediately without signing up for any paid provider!
 
 ### 2. 3-Step Setup Wizard
-1. Select **`Setup`** in the TUI menu. Configure engine keys (or skip to use free tier) and optional X credentials.
+1. Select **Installation & integrations → Setup** in the TUI menu. Configure engine keys (or skip to use free tier) and optional X credentials.
 2. Check the agents you want to integrate (Cursor, Claude Code, Pi, etc.), confirming auto-approval and native search replacement.
 3. Restart or reload your chosen agents, then ask them to research anything in conversation!
 
@@ -138,12 +138,12 @@ search-boost
 
 ### 1. Routine Updates: Upgrading via TUI
 
-Whether you run unified `search-boost` or have legacy `pi-search-boost` / `dsh-search-boost` installations, **select `Update` in the TUI to upgrade everything**:
+Whether you run unified `search-boost` or have legacy `pi-search-boost` / `dsh-search-boost` installations, **select Update & status → Update in the TUI to upgrade everything**:
 
 ```bash
 # Option 1: Open the interactive menu
 search-boost
-# -> Select "Update"
+# -> Select "Update & status" → "Update"
 
 # Option 2: Run headless update
 search-boost upgrade -y
@@ -164,7 +164,7 @@ npx --yes --package=search-boost@latest -- search-boost migrate -y
 
 # Once migrated, routine updates only require:
 search-boost
-# -> Select "Update" (or search-boost upgrade -y)
+# -> Select "Update & status" → "Update" (or search-boost upgrade -y)
 ```
 
 ---
@@ -173,23 +173,22 @@ search-boost
 
 Launch `search-boost` without arguments to access the interactive dashboard built with Clack. Manage installation, updates, and credentials effortlessly:
 
-| Menu Option | Purpose |
+| Main menu | Submenu actions |
 | :--- | :--- |
-| **Setup** | Complete initial walkthrough: configure engines, search layers, X credentials, and install agents. |
-| **Install / update agents** | Install or refresh selected host integrations, preserving existing credentials and layer settings. |
-| **Update** | **One-click upgrade**: checks npm for updates, upgrades SearchBoost, and refreshes all installed agents (including legacy Pi/DSH adapters). |
-| **API keys & Base URLs / Search layer** | Manage Tavily, Brave, Exa and optional AnySearch credentials, and change the default search layer (`free` / `api`). |
-| **X credentials** | Manage X (Twitter) authentication; supports one-click import from local Grok login. |
-| **Jev credentials (experimental)** | Configure TypeSafe Jev cognitive engine endpoint and Bearer token. |
-| **Tool switches** | Enable/disable SearchBoost tools across MCP, Pi and DSH; missing Jev locks `adaptive_search`. |
-| **Native web search** | Enable or disable host-native search for hosts supporting config switches. |
-| **Status** | Inspect current engine availability, configuration status, and active integrations. |
-| **Print MCP snippet** | Print MCP JSON configuration snippets to stdout for manual setups. |
-| **Uninstall** | Safely remove SearchBoost integrations from selected agents, keeping user configurations intact. |
+| **Installation & integrations** | Setup; Install / refresh agent integrations; Native web search; Print MCP snippet; Uninstall agent integrations |
+| **Search & tools** | Search layer (`free` / `api`); Tool switches (shared by MCP / Pi / DSH) |
+| **Services & credentials** | API keys & Base URLs (including keyed engine selection); X credentials; Jev credentials (experimental) |
+| **Update & status** | Update SearchBoost and all installed integrations; Status |
+| **TUI settings** | Display language: 简体中文 / English |
+| **Exit** | Close the console |
+
+Completed operations return to their submenu. Escape cancels the current wizard and returns to its submenu; Escape in a submenu returns to the main menu. Ctrl+C exits the console. Setup retains its guided flow, while Install / refresh only configures host integrations. Update upgrades SearchBoost and all installed integrations, preserving credentials and permission choices; a replaced runtime ends the old console.
+
+Language changes apply immediately and are saved in `~/.search-boost/config/tui.json` (or `$SEARCH_BOOST_HOME/config/tui.json`). Without a saved preference, Chinese system locales select Simplified Chinese; other locales select English. The preference also applies to standalone interactive setup/config commands, not non-interactive CLI output, search results or agent replies. Tool names, commands, paths, MCP snippets and raw upstream errors remain unchanged. In dry-run, language changes are session-only previews. See [TUI navigation and language settings](docs/tui.md).
 
 ### Tool switches
 
-Open **Tool switches**, toggle with Space, press Enter to review, then confirm. Esc or declining confirmation writes nothing; an empty selection disables all tools. Locked `adaptive_search` appears struck through in the status panel and is excluded from selectable choices until Jev is configured. Configuring Jev makes it available by default; an explicit OFF preference is preserved.
+Open **Search & tools → Tool switches**, toggle with Space, press Enter to review, then confirm. Esc or declining confirmation writes nothing; an empty selection disables all tools. Locked `adaptive_search` appears struck through in the status panel and is excluded from selectable choices until Jev is configured. Configuring Jev makes it available by default; an explicit OFF preference is preserved.
 
 Preferences are shared through `~/.search-boost/config/tools.json` (or `$SEARCH_BOOST_HOME/config/tools.json`), using atomic, locked writes. No host restart or reinstall is needed once the updated adapters are loaded:
 
@@ -282,7 +281,7 @@ Designed for real-time technical tracking and first-party developer updates. Sup
 
 ### 4. `adaptive_search` Jev Intent-Guided Search (Experimental)
 
-**Vercel support**: in TUI → Jev credentials, enter `https://ai-gateway.vercel.sh/v1` and a Vercel AI Gateway key. SearchBoost selects the official SDK evaluation model `typesafe-ai/jev`, not chat completions. The default TypeSafe `/systemone` path remains supported. Both paths use only the canonical user Jev credential, not environment keys, and respect server rate-limit delays.
+**Vercel support**: in TUI → Services & credentials → Jev credentials, enter `https://ai-gateway.vercel.sh/v1` and a Vercel AI Gateway key. SearchBoost selects the official SDK evaluation model `typesafe-ai/jev`, not chat completions. The default TypeSafe `/systemone` path remains supported. Both paths use only the canonical user Jev credential, not environment keys, and respect server rate-limit delays.
 
 Supply **one question** (`questions` has exactly one item), optional research `intent`, flat `keywords` and explicit hard document `constraints`. Each search chooses a query using current gaps/materials/search feedback, then assesses engines for that exact query. A **separate Boolean prefilter** checks ALL explicit constraints; empty constraints skip it. Quality retains useful focused and supporting material; direction controls focus ordering and keyword matches attribute contributions, not document retention. Code recomputes capped progress from current deduplicated keyword scores: stop when the equally weighted total reaches 80/100 AND every keyword reaches 0.60 (keyword target score 1). These are initial heuristics, not calibrated probabilities. Weak points guide further retrieval. No whole-material final review is sent to Jev, and no minimum 64-material review window is required; pending assessments remain disclosed. The agent owns analysis and fact verification.
 
@@ -368,7 +367,7 @@ For Pi/DSH child-tool loading, stale `pi-search-boost` references, and the retir
 
 ### Custom search API bases
 
-Open **API keys & Base URLs** in the TUI (or `search-boost config keys`). Each engine shows its masked key and default/custom Base URL. Choose **Set / replace Base URL**, then keep or edit the key; **Restore default Base URL** resets only the address. Changes are saved when the wizard completes. Status and `config keys --show` also show the effective bases.
+Open **Services & credentials → API keys & Base URLs** in the TUI (or `search-boost config keys`). Each engine shows its masked key and default/custom Base URL. Choose **Set / replace Base URL**, then keep or edit the key; **Restore default Base URL** resets only the address. Changes are saved when the wizard completes. Status and `config keys --show` also show the effective bases.
 
 ```bash
 search-boost config keys --base-url exa=https://gateway.example/exa
