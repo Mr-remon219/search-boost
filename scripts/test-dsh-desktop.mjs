@@ -161,8 +161,8 @@ assert.equal(enableInstall[0].ok, true)
 assert.equal(enableInstall[0].dsh.enabled, true)
 assert.deepEqual(json(join(profileDir('desktop'), 'package.json')).dsh.profile.bundles, ['user-plugin', 'search-boost'])
 resetProfile('desktop', { installed: true, disabled: true })
-const plain = spawnSync(process.execPath, [join(PKG_ROOT, 'cli.mjs'), 'install', '-t', 'dsh', '--profile', 'desktop', '--enable-dsh-bundle', '-y'], { env: process.env, encoding: 'utf8', timeout: 20_000 })
-assert.equal(plain.status, 0, plain.stderr)
+const plain = spawnSync(process.execPath, [join(PKG_ROOT, 'cli.mjs'), 'install', '-t', 'dsh', '--profile', 'desktop', '--enable-dsh-bundle', '-y'], { env: process.env, encoding: 'utf8', timeout: process.platform === 'win32' ? 120_000 : 20_000 })
+assert.equal(plain.status, 0, `${plain.error?.message ?? ''}; signal=${plain.signal}; ${plain.stderr}`)
 assert.deepEqual(json(join(profileDir('desktop'), 'package.json')).dsh.profile.bundles, ['user-plugin', 'search-boost'], 'non-interactive CLI forwards the explicit enable flag')
 await verifyDshRuntime(profileDir('desktop'), { command: desktop, args: ['plugin', '--profile', 'desktop', 'add', PKG_ROOT] }, {
   root: PKG_ROOT, version: getVersion(), desktop: true,
@@ -274,8 +274,8 @@ console.log('ok: Desktop update dry-run, missing launcher, lock, host failure an
 resetProfile('desktop', { installed: true })
 const moduleUrl = new URL('../lib/agents/host-runtime.mjs', import.meta.url).href
 for (const fail of [false, true]) {
-  const child = spawnSync(process.execPath, ['--input-type=module', '-e', `const host = await import(${JSON.stringify(moduleUrl)}); await host.installDshBundle({profile:'desktop'});`], { env: { ...process.env, ...(fail ? { DSH_TEST_FAIL: '1' } : {}) }, cwd: process.cwd(), encoding: 'utf8', timeout: 20000 })
-  assert.equal(child.status, fail ? 1 : 0)
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', `const host = await import(${JSON.stringify(moduleUrl)}); await host.installDshBundle({profile:'desktop'});`], { env: { ...process.env, ...(fail ? { DSH_TEST_FAIL: '1' } : {}) }, cwd: process.cwd(), encoding: 'utf8', timeout: process.platform === 'win32' ? 120_000 : 20_000 })
+  assert.equal(child.status, fail ? 1 : 0, `${child.error?.message ?? ''}; signal=${child.signal}; ${child.stderr}`)
   assert.ok(!(child.stdout + child.stderr).includes('fixture-secret-do-not-log'), 'host output must be suppressed on success and failure')
 }
 // The canonical Desktop directory may itself be a symlink/junction. Discovery

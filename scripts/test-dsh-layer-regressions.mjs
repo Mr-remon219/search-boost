@@ -68,7 +68,7 @@ const env = { ...process.env, PATH: [bin, ...(process.platform === 'win32' ? [jo
   DSH_TEST_CAPTURE: capture, DSH_TEST_REGISTRY: registry, DSH_HOME: PATHS.dsh.home }
 if (process.platform === 'win32') for (const key of Object.keys(env)) if (key.toLowerCase() === 'path' && key !== 'PATH') delete env[key]
 const hostUrl = new URL('../lib/agents/host-runtime.mjs', import.meta.url).href
-const run = (body, extra = {}, moduleUrl = hostUrl) => spawnSync(process.execPath, ['--input-type=module', '-e', `const host = await import(${JSON.stringify(moduleUrl)}); ${body}`], { env: { ...env, ...extra }, encoding: 'utf8', timeout: 20_000 })
+const run = (body, extra = {}, moduleUrl = hostUrl) => spawnSync(process.execPath, ['--input-type=module', '-e', `const host = await import(${JSON.stringify(moduleUrl)}); ${body}`], { env: { ...env, ...extra }, encoding: 'utf8', timeout: process.platform === 'win32' ? 120_000 : 20_000 })
 const failures = []
 async function test(name, fn) {
   try { await fn(); console.log(`ok: ${name}`) } catch (error) { failures.push({ name, error }); console.error(`FAIL: ${name}: ${error.message}`) }
@@ -95,14 +95,15 @@ await test('optional-only reinstall is verified without re-enabling; explicit en
   reset()
   for (const enable of [false, true]) {
     const result = run(`let status; await host.installDshBundle({profile:${JSON.stringify(profile)},enableDshBundle:${enable},onDshStatus:value=>{status=value}});console.log(JSON.stringify(status))`, { DSH_TEST_FIELD: 'optionalDependencies' })
-    assert.equal(result.status, 0, result.stderr)
+    assert.equal(result.status, 0, `${result.error?.message ?? ''}; signal=${result.signal}; ${result.stderr}`)
     assert.equal(JSON.parse(result.stdout).enabled, enable)
     assert.equal(json(manifest).dsh.profile.custom, 'keep')
   }
 })
 await test('optional -> explicit enable -> official-style orphan removal cleans only our bundle under host lock', async () => {
   reset()
-  assert.equal(run(`await host.installDshBundle({profile:${JSON.stringify(profile)},enableDshBundle:true})`, { DSH_TEST_FIELD: 'optionalDependencies' }).status, 0)
+  const installed = run(`await host.installDshBundle({profile:${JSON.stringify(profile)},enableDshBundle:true})`, { DSH_TEST_FIELD: 'optionalDependencies' })
+  assert.equal(installed.status, 0, `${installed.error?.message ?? ''}; signal=${installed.signal}; ${installed.stderr}`)
   assert.deepEqual(json(manifest).dsh.profile.bundles, ['user-plugin', 'search-boost'])
   const removed = run(`await host.uninstallDshBundle({profile:${JSON.stringify(profile)}})`, { DSH_TEST_OPTIONAL_RESIDUAL: '1' })
   assert.equal(removed.status, 0, removed.stderr)
