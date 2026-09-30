@@ -331,7 +331,7 @@ function registerFetchPageTool(ctx) {
         type: 'object',
         additionalProperties: false,
         properties: {
-          url: { type: 'string' }, via: { type: 'string' }, fetched_at: { type: 'string' },
+          url: { type: 'string' }, requestedUrl: { type: 'string' }, via: { type: 'string' }, fetched_at: { type: 'string' },
           word_count: { type: 'number' }, content: { type: 'string' }, truncated: { type: 'boolean' },
           totalChars: { type: 'number' }, offset: { type: 'number' }, nextOffset: { type: 'number' },
           windowNote: { type: 'string' },

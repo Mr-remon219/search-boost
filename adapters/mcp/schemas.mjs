@@ -73,6 +73,7 @@ export const fetchPageInput = {
 }
 
 export const fetchPageOutput = {
+  requestedUrl: z.string().optional(),
   focusMiss: z.boolean().optional(),
   limitation: z.object({ kind: z.string(), message: z.string() }).optional(),
   url: z.string(),

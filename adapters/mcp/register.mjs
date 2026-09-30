@@ -128,6 +128,7 @@ function summarizeAdaptive(result) {
       const summary = `fetch_page: ${page.url} — via ${page.via}, ${page.word_count} words, ${page.tookMs}ms${focusNote}${page.truncated ? ' [truncated]' : ''}${page.limitation ? `; WARNING ${page.limitation.kind}: ${page.limitation.message}` : ''}`
       return toolOk(`${summary}${windowNote}\n\n${page.content}`, {
         url: page.url,
+        ...(page.requestedUrl ? { requestedUrl: page.requestedUrl } : {}),
         via: page.via,
         word_count: page.word_count,
         tookMs: page.tookMs,
