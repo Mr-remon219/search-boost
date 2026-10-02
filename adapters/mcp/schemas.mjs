@@ -111,6 +111,18 @@ export const xSearchOutput = {
   results: z.number(),
   tookMs: z.number(),
   cacheHit: z.boolean().optional(),
+  inFlight: z.boolean().optional(),
+  // Diagnostics the core returns on every path (success, empty, failure, cache,
+  // single-flight join): advertised, not silently dropped by the host contract.
+  engineStats: z.record(z.object({
+    used: z.boolean(),
+    errors: z.number(),
+    attempts: z.number().optional(),
+    successes: z.number().optional(),
+    note: z.string().optional(),
+  })).optional(),
+  enginesUsed: z.array(z.string()).optional(),
+  warnings: z.array(z.string()).optional(),
   items: z.array(z.record(z.unknown())),
 }
 

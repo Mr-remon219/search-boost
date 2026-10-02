@@ -4,7 +4,7 @@
 
 ### SearchBoost TUI
 
-运行 `search-boost`，进入「安装与接入」，选择首次配置向导 / 安装 / 卸载（英文：Setup / Install / Uninstall）；选中 DSH 后，若发现 Desktop 且未指定 profile/surface，会进入 **Desktop / CLI / All** 选择页。
+运行 `search-boost`，在默认平铺首页选择首次配置向导 / 安装 / 卸载（文件夹模式先进入「安装与接入」）；选中 DSH 后，若发现 Desktop 且未指定 profile/surface，会进入 **Desktop / CLI / All** 选择页。
 
 - **Desktop**：`$DSH_HOME/profiles/desktop`，通过桌面安装附带的命令操作。现有持久 SearchBoost 安装使用绝对本地包路径，避免再下载一份；临时 `_npx` 缓存不能用作持久链接，改用当前精确 npm 版本。
 - **CLI**：安装默认 `web` profile，`--profile` 可指定其他 CLI profile。与 Desktop 一样优先复用当前持久包路径，包括从本地 tarball 安装到 `node_modules` 的开发包，不以同版本 npm 包替换它。卸载只处理选中的 CLI profile，或所有已登记 SearchBoost 的 CLI profiles。

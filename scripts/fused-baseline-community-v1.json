@@ -1,6 +1,6 @@
 {
   "baseline": "0a0ce082c3c287e56a72400a599736b242c829e9",
-  "note": "Captured from the pre-change worktree at the N_off base SHA above; ordinary fused community on/off replays. Never regenerate from the implementation under test.",
+  "note": "Captured from the pre-change worktree at the N_off base SHA above; ordinary fused community on/off replays. Never regenerate from the implementation under test. Two community=true cases (balanced/free and research/hybrid) carry a declared beta.6 public-output-contract migration (BUG-003): each records its original digest plus the exact public-field removals/normalizations, and every other case, every selected summary and the baseline SHA remain the original capture. The migrated digests were independently reproduced from an archive of the immutable 0a0ce08 tree by applying only the declared projection to ranked X rows, without executing the beta.6 implementation.",
   "cases": [
     {
       "args": {
@@ -81,7 +81,14 @@
         "maxResults": 6,
         "community": true
       },
-      "digest": "554ff49a7c435eb82e9397c0a703c0a4f1d34cf8061de16173027bb91f6b7371",
+      "digest": "7eaac67a26df759bd4e47879a1362ee6b2b14542c502aaac7d4727c99868be09",
+      "digestProvenance": {
+        "original": "554ff49a7c435eb82e9397c0a703c0a4f1d34cf8061de16173027bb91f6b7371",
+        "migration": "beta.6 public output contract (BUG-003): internal scoring terms and provider-only dates no longer leave the core",
+        "removedRowFields": ["created_at", "bestIndividual", "groupEvidence", "votingEngines"],
+        "normalization": "community rows now serialize in the shared public field order",
+        "unchanged": "scores, selectionScore, selected summaries, provenance observations and final order"
+      },
       "communityUsed": true,
       "selected": [
         {
@@ -225,7 +232,14 @@
         "maxResults": 6,
         "community": true
       },
-      "digest": "64bd635a77d2542713a84c540bb2f84daadff19b3d4552c3fc921b716f34684f",
+      "digest": "ef30ce99271c781976fb7816f8e714b8a128adcf5b7c789bb351e9214ed5a390",
+      "digestProvenance": {
+        "original": "64bd635a77d2542713a84c540bb2f84daadff19b3d4552c3fc921b716f34684f",
+        "migration": "beta.6 public output contract (BUG-003): internal scoring terms and provider-only dates no longer leave the core",
+        "removedRowFields": ["created_at", "bestIndividual", "groupEvidence", "votingEngines"],
+        "normalization": "community rows now serialize in the shared public field order",
+        "unchanged": "scores, selectionScore, selected summaries, provenance observations and final order"
+      },
       "communityUsed": true,
       "selected": [
         {

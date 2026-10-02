@@ -461,6 +461,24 @@ function registerXSearchTool(ctx) {
           inFlight: { type: 'boolean' },
           xResults: { type: 'number' },
           engineResults: { type: 'number' },
+          // Per-engine diagnostics the core always returns: declared so the host
+          // contract keeps them instead of rejecting the payload.
+          engineStats: {
+            type: 'object',
+            additionalProperties: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                used: { type: 'boolean' },
+                errors: { type: 'number' },
+                attempts: { type: 'number' },
+                successes: { type: 'number' },
+                note: { type: 'string' },
+              },
+            },
+          },
+          enginesUsed: { type: 'array', items: { type: 'string' } },
+          warnings: { type: 'array', items: { type: 'string' } },
           items: { type: 'array', items: { type: 'object', additionalProperties: true } },
         },
         required: ['via'],

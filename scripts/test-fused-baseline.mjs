@@ -7,6 +7,9 @@ import './isolate-tests.mjs'
 // Matching both proves the merged base behaves identically to the reference checkout for
 // ordinary fused, and that the N_off snapshot/community work never moved ordinary scores,
 // final lists, selectionScore or provenance. Expected digests are never regenerated here.
+// Two community=true cases carry a DECLARED beta.6 public-output-contract migration: their
+// digestProvenance records the original digest and the exact public-field removals, so the
+// digest still pins scores/list/selectionScore/provenance but is not pre-change row identity.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { runFused, runXSearch, invalidateSearchCaches } from '../lib/runtime.mjs'
@@ -44,12 +47,15 @@ const xSearch = (args, opts) => runXSearch(args, {
   fallbackSearch: baselineFallbackSearch,
 })
 
-for (const { args, digest, selected, communityUsed } of community.cases) {
+for (const { args, digest, selected, communityUsed, digestProvenance } of community.cases) {
   invalidateSearchCaches()
   const result = await runFused(args, { snapshot: () => state, xSearch })
-  assert.equal(fusedBaselineDigest(result), digest, `${args.ranking}/${args.enginePool} community=${args.community}: ordinary fused replay changed`)
+  const basis = digestProvenance
+    ? `[declared ${digestProvenance.migration}; scores/list/selectionScore/provenance must be identical]`
+    : '[frozen pre-change identity]'
+  assert.equal(fusedBaselineDigest(result), digest, `${args.ranking}/${args.enginePool} community=${args.community}: ordinary fused scores, list, selectionScore or public fields changed ${basis}`)
   assert.deepEqual(selectedSummary(result), selected)
   assert.equal(result.communityUsed, communityUsed)
 }
 
-console.log(`ok: ${ordinary.cases.length} frozen ordinary fused replays (${FUSED_BASELINE_SHA.slice(0, 7)}) and ${community.cases.length} frozen community on/off replays (${NOFF_BASE_SHA.slice(0, 7)}) match baseline scores, final lists, selectionScore and provenance exactly`)
+console.log(`ok: ${ordinary.cases.length} frozen ordinary fused replays (${FUSED_BASELINE_SHA.slice(0, 7)}) and ${community.cases.length} community on/off replays (${NOFF_BASE_SHA.slice(0, 7)}) match baseline scores, final lists, selectionScore and provenance; ${community.cases.filter((c) => c.digestProvenance).length} community=true cases also pin the declared beta.6 public field projection`)

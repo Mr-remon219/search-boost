@@ -5,7 +5,10 @@
 // `fused-baseline-community-v1.json` digests were captured on the N_off worktree
 // base 0a0ce082c3c287e56a72400a599736b242c829e9 BEFORE the snapshot/community
 // changes, so they freeze the ordinary path with community on and off.
-// Expected digests are never regenerated from the implementation under test.
+// Expected digests are never regenerated from the implementation under test; the
+// two community=true cases were re-frozen once for the DECLARED beta.6
+// public-output-contract migration and record their original digest plus the
+// exact removed row fields/normalization in the case's `digestProvenance`.
 import { createHash } from 'node:crypto'
 
 export const FUSED_BASELINE_SHA = '77e01146271f4d718cc6d8ce499978f94a517203'

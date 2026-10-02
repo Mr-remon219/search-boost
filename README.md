@@ -190,7 +190,7 @@ Layout and language changes apply immediately and are saved in `~/.search-boost/
 
 ### Tool switches
 
-Open **Search & tools → Tool switches**, toggle with Space, press Enter to review, then confirm. Esc or declining confirmation writes nothing; an empty selection disables all tools. Locked `adaptive_search` appears struck through in the status panel and is excluded from selectable choices until Jev is configured. Configuring Jev makes it available by default; an explicit OFF preference is preserved.
+Open **Tool switches** (folder layout: Search & tools → Tool switches), toggle with Space, press Enter to review, then confirm. Esc or declining confirmation writes nothing; an empty selection disables all tools. Locked `adaptive_search` appears struck through in the status panel and is excluded from selectable choices until Jev is configured. Configuring Jev makes it available by default; an explicit OFF preference is preserved.
 
 Preferences are shared through `~/.search-boost/config/tools.json` (or `$SEARCH_BOOST_HOME/config/tools.json`), using atomic, locked writes. No host restart or reinstall is needed once the updated adapters are loaded:
 
@@ -372,7 +372,7 @@ For Pi/DSH child-tool loading, stale `pi-search-boost` references, and the retir
 
 ### Custom search API bases
 
-Open **Search engine configuration** on the flat TUI home (folder layout: Services & credentials) (or `search-boost config keys`). Each engine shows its masked key and default/custom Base URL. Choose **Set / replace Base URL**, then keep or edit the key; **Restore default Base URL** resets only the address. Choose any individual engine without stepping through all credential slots; unrelated keys and routing selections are preserved. Status and `config keys --show` also show the effective bases.
+Open **Search engine configuration** on the flat TUI home (folder layout: Services & credentials) . Each engine shows its masked key and default/custom Base URL. Choose **Set / replace Base URL**, then keep or edit the key; **Restore default Base URL** resets only the address. Choose any individual engine without stepping through all credential slots; unrelated keys and routing selections are preserved. Status and `config keys --show` also show the effective bases. Standalone `search-boost config keys` and first setup retain the sequential guided wizard.
 
 ```bash
 search-boost config keys --base-url exa=https://gateway.example/exa

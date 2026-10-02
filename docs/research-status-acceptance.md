@@ -40,7 +40,7 @@ search-boost research export <savedResultId> --output <new-file.json>
 ## 3. 安装状态入口
 
 - CLI：`search-boost status`、`search-boost status --json`。
-- 双语 TUI：更新与状态 → 查看当前状态。
+- 双语 TUI：默认平铺首页 → 查看当前状态（文件夹模式：更新与状态 → 查看当前状态）。
 - 显示当前命令所属包、宿主登记、可定位磁盘包版本及载荷比对。版本号相同不代表字节一致；旧版/缺失/不可核验证据分别披露。
 - 只读配置、目录和磁盘载荷，不启动宿主、不调用插件安装命令、不改动禁用项、凭据或登记。配置诊断仅输出警告数量，不回显原始错误/配置内容。
 - `loadedVersion:null`，重载/重连未证实。磁盘比对不是运行中宿主握手；DSH owning-host 解析、Grok 原生插件缓存不能由 profile 文件推断。

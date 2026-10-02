@@ -42,6 +42,11 @@ try {
   assert.deepEqual(byName.fetch_page.inputSchema.required, ['url'])
   assert.equal(byName.x_search.inputSchema.properties.allowed_x_handles.maxItems, 20)
   assert.equal(byName.x_search.inputSchema.properties.excluded_x_handles.maxItems, 20)
+  // The advertised output schema carries the diagnostics the core returns on
+  // every x_search path; the payload is not silently narrowed to a summary.
+  for (const field of ['engineStats', 'enginesUsed', 'warnings']) {
+    assert.ok(field in byName.x_search.outputSchema.properties, `x_search output schema must advertise ${field}`)
+  }
   // These calls work without first reading a resource, invoking a prompt, or loading any skill.
   const layer = await client.callTool({ name: 'search_layer', arguments: { layer: 'show' } })
   assert(!layer.isError)

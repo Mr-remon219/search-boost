@@ -61,7 +61,7 @@ assert(!text.includes(secret))
 assert.deepEqual(snapshot(process.env.HOME),before,'CLI status must be read-only')
 for(const language of ['en','zh-CN']){
  saveTuiLanguage(language)
- const initial=snapshot(process.env.HOME),actions=['maintenance','status','back','exit'],notes=[]
+ const initial=snapshot(process.env.HOME),actions=['status','exit'],notes=[]
  const noop=()=>{},clack={intro:noop,outro:noop,isCancel:()=>false,select:async()=>actions.shift(),note:(text,title)=>notes.push(title+'\n'+text),log:{info:noop,warn:noop,error:msg=>{throw Error(msg)}}}
  await runTui({}, {clack})
  assert.equal(actions.length,0)

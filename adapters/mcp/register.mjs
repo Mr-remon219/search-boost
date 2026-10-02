@@ -55,6 +55,26 @@ function summarizeAdaptive(result) {
   return result
 }
 
+/**
+ * Structured x_search content (MCP CallToolResult): the core diagnostics stay in
+ * the payload so the advertised output schema and the returned data agree.
+ */
+export function xSearchStructured(out) {
+  const items = out.items ?? []
+  return {
+    via: out.cacheHit ? (out.via ?? 'cache') : out.via,
+    ...(out.note ? { note: out.note } : {}),
+    results: items.length,
+    tookMs: out.tookMs,
+    cacheHit: Boolean(out.cacheHit),
+    ...(out.inFlight ? { inFlight: true } : {}),
+    engineStats: out.engineStats ?? {},
+    enginesUsed: out.enginesUsed ?? [],
+    warnings: out.warnings ?? [],
+    items,
+  }
+}
+
 /** @param {import('@modelcontextprotocol/sdk/server/mcp.js').McpServer} server */export function registerAll(server) {
   const handles = new Map()
   const registerTool = (name, schema, execute) => {
@@ -170,14 +190,7 @@ function summarizeAdaptive(result) {
         ? `x_search (cache) — ${items.length} results`
         : `x_search via ${out.via === 'parallel' ? `parallel:${out.credential}` : out.via} — ${items.length} results`
       const text = [header, out.cacheHit ? '' : out.note ?? '', '', items.map(renderXItem).join('\n')].filter(Boolean).join('\n')
-      return toolOk(text, {
-        via: out.cacheHit ? (out.via ?? 'cache') : out.via,
-        ...(out.note ? { note: out.note } : {}),
-        results: items.length,
-        tookMs: out.tookMs,
-        cacheHit: Boolean(out.cacheHit),
-        items,
-      })
+      return toolOk(text, xSearchStructured(out))
     } catch (err) {
       return toolErr(err instanceof Error ? err.message : String(err))
     }

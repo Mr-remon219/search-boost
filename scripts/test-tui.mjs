@@ -104,25 +104,24 @@ try {
   console.log('ok: system language, persistence, validation, unknown-field preservation and context isolation')
 
   fresh()
-  let out = await scenario(['integration', 'back', 'search-tools', 'back', 'credentials', 'back', 'maintenance', 'back', 'settings', 'back', 'exit'])
-  assert.deepEqual(out.records[0].options.map((o) => o.value), ['integration', 'search-tools', 'credentials', 'maintenance', 'settings', 'exit'])
-  const expected = [
-    ['setup', 'install', 'search', 'print', 'uninstall', 'back'],
-    ['layer', 'tools', 'back'], ['keys', 'x', 'jev', 'back'], ['upgrade', 'status', 'back'], ['language', 'back'],
-  ]
-  expected.forEach((values, index) => assert.deepEqual(out.records[index * 2 + 1].options.map((o) => o.value), values))
+  let out = await scenario(['settings', 'back', 'exit'])
+  assert.deepEqual(
+    out.records[0].options.map((o) => o.value),
+    ['setup', 'install', 'upgrade', 'status', 'keys', 'layer', 'tools', 'x', 'jev', 'search', 'print', 'uninstall', 'settings', 'exit'],
+  )
+  assert.deepEqual(out.records[1].options.map((o) => o.value), ['layout', 'language', 'back'])
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'browsing menus is read-only')
 
   fresh()
-  out = await scenario(['settings', 'language', 'zh-CN', 'back', 'search-tools', 'layer', 'free', 'back', 'exit'])
+  out = await scenario(['settings', 'language', 'zh-CN', 'back', 'layer', 'free', 'exit'])
   assert.equal(out.records[3].message, 'TUI 设置', 'switch applies before the next menu')
-  assert.equal(out.records[4].options[0].label, '安装与接入')
-  assert.equal(out.records[6].message, '默认搜索层？')
-  assert(out.records[6].options[0].label.includes('无需 Key'))
+  assert.equal(out.records[4].options[0].label, '首次配置向导')
+  assert.equal(out.records[5].message, '默认搜索层？')
+  assert(out.records[5].options[0].label.includes('无需 Key'))
   assert(out.logs.some((line) => line.includes('搜索层已设为 free')))
   assert.equal(readTuiLanguage(), 'zh-CN')
   out = await scenario(['settings', 'language', 'en', 'back', 'exit'])
-  assert.equal(out.records[0].options[4].label, 'TUI 设置', 'restart follows saved language')
+  assert.equal(out.records[0].options.find((o) => o.value === 'settings').label, 'TUI 设置', 'restart follows saved language')
   assert.equal(out.records[3].message, 'TUI settings')
   assert.equal(readTuiLanguage(), 'en')
   console.log('ok: every existing action is grouped exactly once; language changes immediately and survives restart')
@@ -135,31 +134,35 @@ try {
   console.log('ok: English and Chinese tool-switch help describe the single snapshot and no automatic page reads')
 
   fresh()
-  out = await scenario(['search-tools', 'layer', cancel, 'back', 'credentials', 'x', cancel, 'jev', cancel, 'keys', cancel, 'back', 'integration', 'print', cancel, 'install', reply('multiselect', cancel), 'back', 'exit'])
-  assert.equal(out.records[3].message, 'Search & tools')
-  assert.equal(out.records[7].message, 'Services & credentials')
-  assert.equal(out.records[15].message, 'Installation & integrations')
+  out = await scenario(['layer', cancel, 'x', cancel, 'jev', cancel, 'keys', cancel, 'print', cancel, 'install', reply('multiselect', cancel), 'exit'])
+  assert.equal(out.records[1].message, 'Default search layer?')
+  assert.equal(out.records[3].message, 'X credentials')
+  assert.equal(out.records[5].message, 'Jev credentials (experimental)')
+  assert.equal(out.records[7].message, 'Engine configuration')
+  assert.equal(out.records[9].message, 'Print MCP snippet for which agent?')
+  assert.equal(out.records[11].message, 'Which agents should search-boost configure?')
+  assert.equal(out.records[12].message, 'What do you want to do?', 'cancelled wizards return to the flat home')
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'cancelled wizards do not write configuration')
-  out = await scenario(['integration', cancel, 'exit'])
+  out = await scenario(['settings', cancel, 'exit'])
   assert.equal(out.records[2].message, 'What do you want to do?', 'submenu Escape returns home')
   out = await scenario([cancel])
   assert(out.logs.includes('Done.'), 'home Escape exits')
-  out = await scenario(['search-tools', 'tools', { method: 'multiselect', value: cancel, interrupt: true }])
+  out = await scenario(['tools', { method: 'multiselect', value: cancel, interrupt: true }])
   assert(out.logs.includes('Done.'), 'Ctrl+C exits even inside a wizard with its own catch')
   assert.equal(process.stdin.listenerCount('keypress'), 0, 'prompt listeners are cleaned up')
-  out = await scenario(['search-tools', { method: 'select', value: 'layer', interrupt: true }, cancel, 'back', 'exit'])
-  assert.equal(out.records[3].message, 'Search & tools', 'a stray Ctrl+C in a resolved prompt cannot poison a later Escape')
-  out = await scenario(['integration', 'install', reply('multiselect', ['codex']), reply('confirm', cancel), 'back', 'exit'])
+  out = await scenario([{ method: 'select', value: 'layer', interrupt: true }, cancel, 'exit'])
+  assert.equal(out.records[2].message, 'What do you want to do?', 'a stray Ctrl+C in a resolved prompt cannot poison a later Escape')
+  out = await scenario(['install', reply('multiselect', ['codex']), reply('confirm', cancel), 'exit'])
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'cancelling later install-only choices cannot initialize a layer')
   await withTuiContext(() => assert.throws(() => handleCancel(cancel, { isCancel: (v) => v === cancel }), TuiCancelled), { language: 'en', navigation: true })
   console.log('ok: nested Escape returns to its submenu, submenu Escape returns home, Ctrl+C exits and listeners are cleaned up')
 
   fresh()
-  out = await scenario(['settings', 'language', 'zh-CN', 'back', 'search-tools', 'layer', 'api', 'tools', reply('multiselect', []), reply('confirm', true, (options) => {
+  out = await scenario(['settings', 'language', 'zh-CN', 'back', 'layer', 'api', 'tools', reply('multiselect', []), reply('confirm', true, (options) => {
     assert.equal(options.active, '是'); assert.equal(options.inactive, '否')
-  }), 'back', 'integration', 'setup', 'free', reply('multiselect', []), 'install', reply('multiselect', []), 'uninstall', reply('multiselect', []), 'search', reply('multiselect', []), 'back', 'credentials', 'x', 'set-key', reply('password', 'xai-dry-run-sentinel', (options) => {
+  }), 'setup', 'free', reply('multiselect', []), 'install', reply('multiselect', []), 'uninstall', reply('multiselect', []), 'search', reply('multiselect', []), 'x', 'set-key', reply('password', 'xai-dry-run-sentinel', (options) => {
     assert.equal(options.validate('bad'), '必须以 xai- 开头（可在 console.x.ai 获取）。')
-  }), 'jev', 'set', reply('text', 'https://api.typesafe.ai/v1'), reply('password', 'jev-dry-run-sentinel'), 'back', 'exit'], { dryRun: true })
+  }), 'jev', 'set', reply('text', 'https://api.typesafe.ai/v1'), reply('password', 'jev-dry-run-sentinel'), 'exit'], { dryRun: true })
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'dry-run remains entirely read-only, including language preference')
   assert(out.logs.some((line) => line.includes('仅预览显示语言')))
   assert(out.logs.some((line) => line.includes('Jev（实验性）')))
@@ -169,8 +172,10 @@ try {
 
   fresh()
   saveTuiLanguage('zh-CN')
-  const keepKeys = CONFIG_KEY_NAMES.map(() => 'keep')
-  out = await scenario(['credentials', 'keys', ...keepKeys, 'x', 'keep', 'jev', 'keep', 'back', 'maintenance', 'status', 'back', 'exit'])
+  out = await scenario(['keys', 'back', 'x', 'keep', 'jev', 'keep', 'status', 'exit'])
+  const engineMenu = out.records.find((record) => record.message === '搜索引擎配置')
+  assert.deepEqual(engineMenu.options.map((o) => o.value), [...CONFIG_KEY_NAMES, 'routing', 'back'], 'the engine entry lists every credential slot in Chinese too')
+  assert(!engineMenu.options.some((o) => /tvly|brave|exa|anysearch/i.test(o.hint ?? '') && /[A-Za-z0-9]{12}/.test(o.hint)), 'engine hints stay masked')
   assert(out.logs.some((line) => line.includes('API 引擎池') || line.includes('API Keys')))
   assert(out.logs.some((line) => line.includes('X 凭据（x_search）')))
   assert(out.logs.some((line) => line.includes('搜索层：')))

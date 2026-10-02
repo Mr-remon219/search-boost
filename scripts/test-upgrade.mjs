@@ -97,17 +97,24 @@ async function run(command, args, options) {
   throw new Error(`Unexpected command in hermetic test: ${command} ${args[0]}`)
 }
 try {
-  // Missing real projects still block completion: never hide all discovery
-  // warnings to compensate for historical test receipts in a user's store.
+  // Stale historical receipts are disclosed and skipped without deleting user
+  // state or blocking usable integrations; an explicit workspace stays fatal.
   const projectsFile = join(process.env.SEARCH_BOOST_HOME, 'state', 'upgrade-projects.json')
   const missingProject = join(temp, 'unavailable-user-project')
   write(projectsFile, { projects: [missingProject] })
   const missing = await runUpgrade({ dryRun: true, syncOnly: true, run, log })
-  assert.equal(missing.ok, false)
-  assert(missing.warnings.includes(`Recorded project unavailable: ${missingProject}`))
+  assert.equal(missing.ok, true, 'a stale historical receipt must not block the whole update')
+  assert.deepEqual(missing.warnings, [])
+  assert.deepEqual(missing.skippedRecords, [`Recorded project unavailable: ${missingProject}`])
+  assert(logs.some((line) => line.startsWith('[skipped]') && line.includes(missingProject)))
+  assert(logs.some((line) => line.includes('nothing was deleted') && line.includes(projectsFile)), 'skipped records must be reviewable in their state file')
   assert.deepEqual(json(projectsFile), { projects: [missingProject] }, 'discovery must not prune user records')
+  const explicitWorkspace = await runUpgrade({ dryRun: true, syncOnly: true, run, log, workspace: missingProject })
+  assert.equal(explicitWorkspace.ok, false, 'an explicitly requested missing workspace is an actionable failure')
+  assert(explicitWorkspace.warnings.some((warning) => warning.startsWith('Workspace unavailable: ') && warning.includes(missingProject)))
+  assert.deepEqual(json(projectsFile), { projects: [missingProject] })
   rmSync(projectsFile)
-  console.log('ok: unavailable real project remains recorded and blocks completion')
+  console.log('ok: stale recorded projects are skipped and disclosed; a missing explicit workspace still blocks')
 
   assert(compareVersions('1.10.0', '1.9.9') > 0)
   assert(compareVersions('1.0.0', '1.0.0-beta.9') > 0)

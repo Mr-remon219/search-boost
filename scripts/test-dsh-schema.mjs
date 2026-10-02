@@ -101,6 +101,25 @@ const result = { query: 'fixture', effectiveWeights: { bing: 1 }, results: [{ ti
 assert.deepEqual(validateJsonSchemaValue(fused.output.schema, result), [])
 result.results[0].published = '2026-01-01'
 assert.deepEqual(validateJsonSchemaValue(fused.output.schema, result), [])
+// BUG-003: x_search always returns per-engine diagnostics; they must be part of
+// the host contract instead of failing `additionalProperties: false`.
+const xOut = tools.get('x_search').output.schema
+assert.equal(xOut.additionalProperties, false)
+for (const field of ['engineStats', 'enginesUsed', 'warnings']) assert.ok(field in xOut.properties, `x_search output must declare ${field}`)
+// BUG-003: a community (X) fused row keeps the public scoring/date/provenance
+// fields and never the internal scoring terms that select them.
+const communityRow = {
+  title: 'Author: alpha beta', url: 'https://x.com/alice/status/1', domain: 'x.com', snippet: 'alpha beta',
+  score: 0.9, scoreVersion: 'consensus-v2.1', rankScore: 0.9, evidenceScore: 0.8, consensusBoost: 0.1,
+  metadataDelta: 0.05, engineRanks: { 'x-official': 1 }, contributions: { 'x-official': 1 },
+  provenance: [{ engine: 'x-official', rank: 1, url: 'https://x.com/alice/status/1', title: 'Author: alpha beta', snippet: 'alpha beta', published: null }],
+  dateStatus: 'unknown', engines: ['x-official'], kind: 'x', id: '1', username: 'alice',
+}
+assert.deepEqual(validateJsonSchemaValue(fused.output.schema, { query: 'fixture', results: [communityRow] }), [])
+for (const internal of ['created_at', 'bestIndividual', 'groupEvidence', 'votingEngines']) {
+  assert.notEqual(validateJsonSchemaValue(fused.output.schema, { query: 'fixture', results: [{ ...communityRow, [internal]: 1 }] }).length, 0, `${internal} must not be a public fused field`)
+}
+console.log('ok: x_search diagnostics are declared; community rows are public and still closed')
 console.log('ok: nullable dates/cursors, engine maps, v5 and historical adaptive outputs all pass the real DSH validator')
 
 // The single-question contract must compile for DSH without weakening the

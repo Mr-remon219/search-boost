@@ -190,7 +190,7 @@ search-boost
 
 ### 工具开关
 
-进入 **搜索与工具 → 工具开关**，空格勾选，回车查看变更并确认保存。Esc 或取消确认不写入配置；允许全部关闭。未配置 Jev 时，`adaptive_search` 在状态面板中显示删除线和锁定原因，不进入可选列表。配置 Jev 后默认可用，但此前明确关闭的偏好不会被覆盖。
+进入 **工具开关**（文件夹模式：搜索与工具 → 工具开关），空格勾选，回车查看变更并确认保存。Esc 或取消确认不写入配置；允许全部关闭。未配置 Jev 时，`adaptive_search` 在状态面板中显示删除线和锁定原因，不进入可选列表。配置 Jev 后默认可用，但此前明确关闭的偏好不会被覆盖。
 
 开关统一保存于 `~/.search-boost/config/tools.json`（或 `$SEARCH_BOOST_HOME/config/tools.json`），采用文件锁和原子写入。加载新版适配器后无需重启、重装宿主：
 
@@ -372,7 +372,7 @@ Pi/DSH 子代理工具加载、旧 `pi-search-boost` 路径与已移除的 `deep
 
 ### 自定义搜索 API 地址
 
-TUI 默认首页进入 **搜索引擎配置**（文件夹模式：服务与凭据）（或执行 `search-boost config keys`），每个引擎同时显示密钥掩码、当前 Base URL 和 default/custom 标记。选择 **Set / replace Base URL** 修改地址后，可继续保留或修改密钥；**Restore default Base URL** 只恢复地址。可任选单个引擎，无须依次经过所有凭据项；保留其他引擎的密钥与路由选择。状态页和 `config keys --show` 也会显示生效地址。
+TUI 默认首页进入 **搜索引擎配置**（文件夹模式：服务与凭据），每个引擎同时显示密钥掩码、当前 Base URL 和 default/custom 标记。选择 **Set / replace Base URL** 修改地址后，可继续保留或修改密钥；**Restore default Base URL** 只恢复地址。可任选单个引擎，无须依次经过所有凭据项；保留其他引擎的密钥与路由选择。状态页和 `config keys --show` 也会显示生效地址。独立 CLI `search-boost config keys` 和首次配置仍保留逐项引导。
 
 ```bash
 search-boost config keys --base-url exa=https://gateway.example/exa
