@@ -71,7 +71,7 @@
     "jev:probe": "node scripts/jev-probe.mjs",
     "test:cli": "node scripts/test-cli-surface.mjs",
     "test:tui": "node scripts/test-tui.mjs && node scripts/test-update-tui.mjs",
-    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:isolation",
+    "prepublishOnly": "npm run check && npm run check:ci && npm run audit:dependencies && npm run test:isolation",
     "test:search": "node scripts/test-search-routing.mjs",
     "test:keys-authority": "node scripts/test-keys-authority.mjs",
     "test:dry-run": "node scripts/test-dry-run.mjs",
@@ -85,7 +85,9 @@
     "test:retrieval": "node scripts/test-retrieval-score.mjs && node scripts/test-retrieval.mjs && node scripts/test-retrieval-interface.mjs",
     "test:keywords": "node scripts/test-keywords.mjs",
     "test:facts": "node scripts/test-fact-score.mjs",
-    "test:funnel": "node scripts/test-funnel.mjs"
+    "test:funnel": "node scripts/test-funnel.mjs",
+    "check:ci": "node scripts/check-ci-policy.mjs",
+    "audit:dependencies": "node scripts/audit-dependencies.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "4.0.87",
@@ -97,7 +99,7 @@
     "zod": "^3.25.76"
   },
   "optionalDependencies": {
-    "pdfjs-dist": "^5.4.624"
+    "pdfjs-dist": "6.2.108"
   },
   "engines": {
     "node": ">=22.13"
@@ -131,6 +133,7 @@
   },
   "homepage": "https://github.com/Mr-remon219/search-boost#readme",
   "devDependencies": {
-    "@deepseek-ai/dsh-tools": "0.1.5-rc.3"
+    "@deepseek-ai/dsh-tools": "0.1.5-rc.3",
+    "yaml": "2.9.1"
   }
 }

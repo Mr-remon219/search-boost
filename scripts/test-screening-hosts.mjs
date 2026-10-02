@@ -65,6 +65,7 @@ let communityAnswer = 'disable'
 let expectedQuestion = INPUT.questions[0]
 let expectedIntent = INPUT.intent
 let failAllEngines = false
+let failFreeEngines = false
 let usageOnWire = true
 const ALLOWED_HOSTS = new Set(['api.search.brave.com', 'api.typesafe.ai', 'publish.x.com', 'www.bing.com', 'html.duckduckgo.com', 'search.yahoo.com', 'mcp.exa.ai'])
 const node = (d) => ({ title: d.title, url: d.url, description: d.description })
@@ -81,7 +82,7 @@ globalThis.fetch = async (raw, init) => {
     unexpectedHosts.push(url.href)
     throw new TypeError('fetch failed', { cause: Object.assign(new Error('fixture'), { code: 'ENOTFOUND' }) })
   }
-  if (failAllEngines && url.hostname !== 'api.typesafe.ai') {
+  if (url.hostname !== 'api.typesafe.ai' && (failAllEngines || (failFreeEngines && url.hostname !== 'api.search.brave.com'))) {
     throw new TypeError('fetch failed', { cause: Object.assign(new Error('fixture'), { code: 'ENOTFOUND' }) })
   }
   if (url.hostname === 'api.search.brave.com') {
@@ -130,7 +131,8 @@ const client = new Client({ name: 'fixture', version: '1.0.0' })
 const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
 const ctx = new Context()
 ctx.provide('systemPrompt'); ctx.set('systemPrompt', { tools() {}, section() {} })
-ctx.provide('web'); ctx.set('web', { registerSearchProvider() {}, registerFetchProvider() {} })
+let nativeSearchProvider
+ctx.provide('web'); ctx.set('web', { registerSearchProvider(provider) { nativeSearchProvider = provider }, registerFetchProvider() {} })
 ctx.provide('commands'); ctx.set('commands', { register() {} })
 const dshTools = new ToolRuntime(ctx); dshApply(ctx)
 const piTools = new Map(), piHandlers = new Map()
@@ -346,19 +348,67 @@ try {
   usageOnWire = false
   failAllEngines = true
   clearAllCaches()
-  const failed = (await call('mcp', { ...INPUT, community: false })).structuredContent
-  assert.equal(validOutput(failed), true)
-  assert.equal(failed.results.length, 0, 'no engine answered, so nothing can be selected')
-  assert.equal(failed.diagnostics.snapshotCandidates, 0)
-  assert.equal(failed.diagnostics.collected, 0)
-  assert.equal(failed.stopReason, 'candidate_pool_exhausted')
-  assert.equal(failed.selection.targetMet, false)
-  assert.equal(failed.selection.incomplete, false, 'nothing was declared, so nothing stayed unreviewed: the empty pool is disclosed by stopReason and warnings')
-  assert.match(failed.warnings.join(' '), /unavailable|failed|error/i)
-  assert.equal(failed.usage.jevInputTokens, null, 'unreported provider tokens stay unknown, never a fabricated zero')
-  assert.equal(failed.usage.jevCalls >= 1, true)
+  for (const host of ['mcp', 'pi', 'dsh']) {
+    clearAllCaches()
+    const response = await call(host, { ...INPUT, community: false })
+    const failed = structured(host, response)
+    assert.equal(validOutput(failed), true, JSON.stringify(validOutput.errors))
+    assert.equal(failed.results.length, 0)
+    assert.equal(failed.diagnostics.snapshotCandidates, 0)
+    assert.equal(failed.diagnostics.collected, 0)
+    assert.equal(failed.stopReason, 'all_engines_failed', host)
+    assert.equal(failed.run.halted, 'all_engines_failed')
+    assert.equal(failed.error, 'all_engines_failed')
+    assert.equal(failed.selection.targetMet, false)
+    assert.equal(failed.selection.incomplete, true)
+    assert.equal(failed.usage.jevCalls, 1, 'only strategy runs; an unavailable pool is not screened')
+    assert.equal(failed.usage.jevInputTokens, null, 'unreported tokens stay unknown')
+    assert.equal(Object.values(failed.run.engineStats).every(stat => stat.successes === 0 && stat.errors > 0), true)
+    if (host === 'mcp') assert.equal(response.isError, true, 'MCP must expose the failure in its outer envelope')
+    assert.match(bodyText(host, response), /all_engines_failed/)
+  }
+  clearAllCaches()
+  await assert.rejects(nativeSearchProvider.search({ query: INPUT.questions[0], maxResults: 6 }), /no engine could answer/)
   failAllEngines = false
   usageOnWire = true
+
+  // A successful empty result (domain filtering) and a mixed failure with one
+  // successful empty response are BOTH ordinary zero-hit searches, not outages.
+  expectedQuestion = 'fixture empty search site:nomatch.example'
+  for (const partial of [false, true]) {
+    failFreeEngines = partial
+    for (const host of ['mcp', 'pi', 'dsh']) {
+      clearAllCaches()
+      const response = await call(host, { ...INPUT, questions: [expectedQuestion], community: false })
+      const empty = structured(host, response)
+      assert.equal(validOutput(empty), true, JSON.stringify(validOutput.errors))
+      assert.equal(empty.results.length, 0)
+      assert.equal(empty.stopReason, 'candidate_pool_exhausted')
+      assert.equal(empty.selection.incomplete, false)
+      assert.equal(empty.run.halted, null)
+      assert.equal(empty.error, undefined)
+      assert.equal(Object.values(empty.run.engineStats).some(stat => stat.successes > 0), true)
+      assert.equal(Object.values(empty.run.engineStats).some(stat => stat.errors > 0), partial)
+      if (host === 'mcp') assert.notEqual(response.isError, true)
+    }
+    clearAllCaches()
+    const direct = await dshTools.get('fused_search').execute({ query: expectedQuestion, community: false }, {})
+    assert.deepEqual(direct.results, [])
+    assert.equal(Object.values(direct.engineStats).filter(stat => stat.successes > 0).length, partial ? 1 : 5)
+    clearAllCaches()
+    const native = await nativeSearchProvider.search({ query: expectedQuestion, maxResults: 6 })
+    assert.deepEqual(native.sources, [])
+    assert.match(native.content, /0 sources/)
+  }
+  // Partial failure also retains usable successful results.
+  expectedQuestion = INPUT.questions[0]
+  clearAllCaches()
+  const partial = structured('pi', await call('pi', { ...INPUT, community: false }))
+  assert.equal(partial.results.length > 0, true)
+  assert.equal(partial.run.halted, null)
+  assert.equal(partial.error, undefined)
+  failFreeEngines = false
+  console.log('ok: all-failed, successful-empty and partial-success states agree across hosts and DSH native provider')
   assert.deepEqual(unexpectedHosts, [], 'no host outside the fixture set was contacted')
   console.log('ok: locked/disabled entries and real engine failures stay honest at the host boundary')
 } finally {

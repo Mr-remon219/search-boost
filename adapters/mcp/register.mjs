@@ -248,7 +248,7 @@ function summarizeAdaptive(result) {
         audit: extra?.audit,
       }))
       const initial = args.cursor === undefined && args.saved_result_id === undefined
-      const isError = initial && (result.stopReason === 'not_configured' || result.stopReason === 'no_engines')
+      const isError = initial && Boolean(result.error)
       const suffix = initial && result.stopReason === 'not_configured'
         ? '\n\nJev is not configured: run `search-boost config jev`, or use fused_search / fetch_page / x_search directly.'
         : ''

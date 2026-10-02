@@ -28,6 +28,7 @@ import {
 } from '../../lib/search/screening/describe.js'
 import {
   ENGINE_ORDER,
+  allAttemptedEnginesFailed,
   LAYER_LABELS,
   X_MODES,
   cacheSizes,
@@ -114,7 +115,8 @@ function registerSearchProvider(ctx) {
       // resolves the configured seam (this provider after the patch) and
       // would recurse into itself.
       const result = await runFused({ query: request.query, maxResults: count, complexity: 'medium', signal })
-      if (result.results.length === 0) {
+      const attempted = Object.values(result.engineStats ?? {}).some(stat => stat?.used)
+      if (result.results.length === 0 && (!attempted || allAttemptedEnginesFailed(result.engineStats))) {
         const errs = Object.entries(result.engineStats ?? {})
           .filter(([, v]) => v.errors > 0)
           .map(([k, v]) => `${k}: ${v.note ?? 'error'}`)

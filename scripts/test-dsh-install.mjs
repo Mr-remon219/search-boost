@@ -1,13 +1,27 @@
 #!/usr/bin/env node
 import './isolate-tests.mjs'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, cpSync, symlinkSync, realpathSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, cpSync, symlinkSync, realpathSync, existsSync, lstatSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, delimiter } from 'node:path'
+import { join, delimiter, win32, posix } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { dshLaunchCommand } from '../lib/agents/host-runtime.mjs'
+import { PKG_ROOT } from '../lib/pkg.mjs'
+import { PATHS } from '../lib/paths.mjs'
+import { dshLaunchCommand, dshOperationProfiles, uninstallDshBundle, prunedPnpmSearchBoostTarget } from '../lib/agents/host-runtime.mjs'
 import { writeDshHostFixture, writeDesktopProbeFixture } from './dsh-host-fixture.mjs'
+
+// Exercise the production ownership predicate with real Windows path semantics
+// even on Linux; the filesystem/junction cases below remain platform-native.
+for (const [pathApi, profile] of [[win32, 'C:/Users/tester/.dsh/profiles/web'], [posix, '/home/tester/.dsh/profiles/web']]) {
+  const canonical = pathApi.join(profile, 'node_modules', '.pnpm', 'search-boost@0.2.4-beta.5', 'node_modules', 'search-boost')
+  assert.equal(prunedPnpmSearchBoostTarget(profile, canonical, pathApi), true, 'canonical pnpm dangling link is owned on both path platforms')
+  assert.equal(prunedPnpmSearchBoostTarget(profile, pathApi.join(profile, 'user-content', 'search-boost'), pathApi), false)
+  assert.equal(prunedPnpmSearchBoostTarget(profile, pathApi.join(profile, 'node_modules', '.pnpm', 'foreign@1.0.0', 'node_modules', 'search-boost'), pathApi), false)
+  assert.equal(prunedPnpmSearchBoostTarget(profile, pathApi.join(profile, '..', 'other', 'node_modules', '.pnpm', 'search-boost@0.2.4-beta.5', 'node_modules', 'search-boost'), pathApi), false)
+}
+assert.equal(prunedPnpmSearchBoostTarget('C:/profile', 'D:/node_modules/.pnpm/search-boost@1.0.0/node_modules/search-boost', win32), false, 'a different drive cannot belong to this profile')
+console.log('ok: pnpm ownership checks cover win32/posix separators, foreign packages, outside profiles and cross-drive targets')
 
 const args = ['plugin', '--profile', 'profile with spaces', 'add', 'search-boost']
 assert.deepEqual(dshLaunchCommand(args, { dshAvailable: true, pnpmAvailable: true, npmAvailable: false }), { command: 'dsh', args })
@@ -198,6 +212,164 @@ if (args.includes('remove')) {
     assert.equal(run(`await host.installDshBundle({ dryRun: true, enableDshBundle: true });`).status, 0)
     assert.throws(() => readFileSync(capture), /ENOENT/)
     console.log(`ok: ${mode} launcher preserves spaced paths/arguments, remove, failure, and dry-run (${process.platform})`)
+  }
+
+  // P2-04: a native DSH unregister removes the dependency and bundle but can
+  // leave the profile's node_modules/search-boost link behind. Only a link this
+  // package owns may be removed, and a repeated uninstall must still clean it.
+  {
+    const bin = join(temp, 'residue', 'bin')
+    mkdirSync(bin, { recursive: true })
+    const entry = join(bin, 'host.mjs')
+    writeFileSync(entry, `
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+const args = process.argv.slice(2);
+const profile = args[args.indexOf('--profile') + 1];
+const file = join(process.env.DSH_HOME, 'profiles', profile, 'package.json');
+if (args.includes('remove')) {
+  const pkg = JSON.parse(readFileSync(file, 'utf8'));
+  delete pkg.dependencies?.['search-boost'];
+  pkg.dsh.profile.bundles = (pkg.dsh.profile.bundles ?? []).filter(name => name !== 'search-boost');
+  writeFileSync(file, JSON.stringify(pkg));
+}
+`)
+    for (const command of ['dsh', 'pnpm']) {
+      const file = join(bin, command + (process.platform === 'win32' ? '.cmd' : ''))
+      writeFileSync(file, process.platform === 'win32'
+        ? `@"${process.execPath}" "${entry}" %*\r\n`
+        : `#!/bin/sh\nexec "${process.execPath}" "${entry}" "$@"\n`)
+      chmodSync(file, 0o755)
+    }
+    if (process.platform !== 'win32') {
+      writeFileSync(join(bin, 'which'), '#!/bin/sh\ncommand -v "$1"\n')
+      chmodSync(join(bin, 'which'), 0o755)
+    }
+    const savedPath = process.env.PATH
+    const savedDshHome = process.env.DSH_HOME
+    process.env.PATH = [bin, savedPath].join(delimiter)
+    // The fixture host and the spawned CLI resolve $DSH_HOME, while PATHS bound it
+    // from HOME at import; both must name the same profiles directory.
+    process.env.DSH_HOME = PATHS.dsh.home
+    const profileDir = (name) => join(PATHS.dsh.profiles, name)
+    const linkOf = (name) => join(profileDir(name), 'node_modules', 'search-boost')
+    const linkPresent = (name) => { try { lstatSync(linkOf(name)); return true } catch { return false } }
+    const writeManifest = (name, registered) => {
+      mkdirSync(profileDir(name), { recursive: true })
+      writeFileSync(join(profileDir(name), 'package.json'), JSON.stringify({
+        name: `dsh-profile-${name}`, private: true,
+        dependencies: { 'user-plugin': '1.0.0', ...(registered ? { 'search-boost': `link:${PKG_ROOT}` } : {}) },
+        dsh: { profile: { custom: 'retain', bundles: ['user-plugin', ...(registered ? ['search-boost'] : [])] } },
+      }))
+    }
+    const linkTo = (name, target) => {
+      mkdirSync(join(profileDir(name), 'node_modules'), { recursive: true })
+      symlinkSync(target, linkOf(name), process.platform === 'win32' ? 'junction' : 'dir')
+    }
+    try {
+      // The native runner deletes both registrations and leaves an active link.
+      writeManifest('residue-native', true)
+      linkTo('residue-native', PKG_ROOT)
+      await uninstallDshBundle({ profile: 'residue-native' })
+      assert.equal(linkPresent('residue-native'), false, 'leftover dependency link must be removed')
+      assert.ok(existsSync(join(PKG_ROOT, 'package.json')), 'the link target is never deleted')
+      assert.ok(!readFileSync(join(profileDir('residue-native'), 'package.json'), 'utf8').includes('search-boost'))
+
+      // Repeated uninstall with both the dependency and the bundle already absent.
+      writeManifest('residue-repeat', false)
+      linkTo('residue-repeat', PKG_ROOT)
+      for (const official of ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']) {
+        mkdirSync(join(profileDir('residue-repeat'), 'node_modules', ...official.split('/')), { recursive: true })
+        writeFileSync(join(profileDir('residue-repeat'), 'node_modules', ...official.split('/'), 'package.json'), JSON.stringify({ name: official }))
+      }
+      await uninstallDshBundle({ profile: 'residue-repeat' })
+      assert.equal(linkPresent('residue-repeat'), false, 'repeat uninstall must clean the active link')
+      for (const official of ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']) {
+        assert.ok(existsSync(join(profileDir('residue-repeat'), 'node_modules', ...official.split('/'), 'package.json')), `${official} must be preserved`)
+      }
+      await uninstallDshBundle({ profile: 'residue-repeat' })
+      assert.equal(linkPresent('residue-repeat'), false)
+
+      // Owned dangling link: a pruned search-boost entry inside the same profile.
+      writeManifest('residue-dangling', false)
+      linkTo('residue-dangling', join(profileDir('residue-dangling'), 'node_modules', '.pnpm', 'search-boost@0.0.0', 'node_modules', 'search-boost'))
+      await uninstallDshBundle({ profile: 'residue-dangling' })
+      assert.equal(linkPresent('residue-dangling'), false, 'owned dangling link must be removed')
+
+      // A foreign target is reported, never deleted.
+      const foreign = join(temp, 'residue', 'foreign-package')
+      mkdirSync(foreign, { recursive: true })
+      writeFileSync(join(foreign, 'package.json'), JSON.stringify({ name: 'not-search-boost', version: '1.0.0' }))
+      writeManifest('residue-foreign', false)
+      linkTo('residue-foreign', foreign)
+      const warnings = []
+      const warn = console.warn
+      console.warn = (message) => warnings.push(String(message))
+      try { await uninstallDshBundle({ profile: 'residue-foreign' }) } finally { console.warn = warn }
+      assert.equal(linkPresent('residue-foreign'), true, 'a foreign link must stay in place')
+      assert.ok(existsSync(join(foreign, 'package.json')), 'a foreign link target must stay intact')
+      assert.ok(warnings.some((message) => message.includes('left in place')), `foreign link must be reported: ${warnings.join(' | ')}`)
+
+      // A registration name alone must not authorize deleting an unrelated
+      // dangling target after native unregister removes the manifest entries.
+      writeManifest('residue-foreign-dangling', true)
+      linkTo('residue-foreign-dangling', join(temp, 'missing-foreign-target'))
+      await uninstallDshBundle({ profile: 'residue-foreign-dangling' })
+      assert.equal(linkPresent('residue-foreign-dangling'), true, 'registration does not prove a foreign dangling link belongs to us')
+      // A user path inside the profile with the right basename is not a pnpm
+      // managed SearchBoost package; do not infer ownership from the name.
+      writeManifest('residue-named-dangling', false)
+      linkTo('residue-named-dangling', join(profileDir('residue-named-dangling'), 'user-content', 'search-boost'))
+      await uninstallDshBundle({ profile: 'residue-named-dangling' })
+      assert.equal(linkPresent('residue-named-dangling'), true, 'a matching basename does not prove ownership')
+      // A same-name/version package without the bundle identity is ambiguous.
+      const ambiguous = join(temp, 'residue', 'ambiguous-package')
+      mkdirSync(ambiguous, { recursive: true })
+      writeFileSync(join(ambiguous, 'package.json'), JSON.stringify({ name: 'search-boost', version: JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf8')).version }))
+      writeManifest('residue-ambiguous', false)
+      linkTo('residue-ambiguous', ambiguous)
+      await uninstallDshBundle({ profile: 'residue-ambiguous' })
+      assert.equal(linkPresent('residue-ambiguous'), true, 'version equality is not an ownership receipt')
+
+      // An ordinary user directory at the package path is not ours to delete.
+      writeManifest('residue-user-dir', false)
+      const userDir = linkOf('residue-user-dir')
+      mkdirSync(userDir, { recursive: true })
+      writeFileSync(join(userDir, 'notes.txt'), 'user content')
+      await uninstallDshBundle({ profile: 'residue-user-dir' })
+      assert.equal(readFileSync(join(userDir, 'notes.txt'), 'utf8'), 'user content')
+      assert.ok(lstatSync(userDir).isDirectory() && !lstatSync(userDir).isSymbolicLink())
+
+      // Dry-run reports the plan and touches nothing.
+      writeManifest('residue-dry-run', false)
+      linkTo('residue-dry-run', PKG_ROOT)
+      const stdout = []
+      const log = console.log
+      console.log = (message) => stdout.push(String(message))
+      try { await uninstallDshBundle({ profile: 'residue-dry-run', dryRun: true }) } finally { console.log = log }
+      assert.equal(linkPresent('residue-dry-run'), true, 'dry-run must not remove the link')
+      assert.ok(stdout.some((line) => line.includes('(dry-run)') && line.includes('search-boost')), `dry-run must report the cleanup: ${stdout.join(' | ')}`)
+
+      // An unrestricted sweep reaches residue-only profiles, and the real CLI
+      // uninstall path (the reported repro) removes the link end to end.
+      assert.ok(dshOperationProfiles({ uninstall: true }).includes('residue-dry-run'))
+      assert.ok(dshOperationProfiles({ uninstall: true }).includes('residue-foreign'))
+      const cli = fileURLToPath(new URL('../cli.mjs', import.meta.url))
+      const endToEnd = spawnSync(process.execPath, [cli, 'uninstall', '-t', 'dsh', '-y'], {
+        env: { ...process.env, DSH_HOME: PATHS.dsh.home }, encoding: 'utf8', timeout: 60000,
+      })
+      assert.equal(endToEnd.status, 0, endToEnd.stderr)
+      assert.equal(linkPresent('residue-dry-run'), false, 'the CLI uninstall must clean the leftover link')
+      assert.ok(existsSync(join(PKG_ROOT, 'package.json')))
+      assert.equal(linkPresent('residue-foreign'), true, 'the CLI sweep must keep the foreign link')
+      assert.equal(readFileSync(join(linkOf('residue-user-dir'), 'notes.txt'), 'utf8'), 'user content')
+      console.log(`ok: DSH uninstall cleans owned active/dangling links, keeps foreign entries, and repeats safely (${process.platform})`)
+    } finally {
+      process.env.PATH = savedPath
+      if (savedDshHome === undefined) delete process.env.DSH_HOME
+      else process.env.DSH_HOME = savedDshHome
+      rmSync(join(temp, 'residue', 'foreign-package'), { recursive: true, force: true })
+    }
   }
 } finally {
   rmSync(temp, { recursive: true, force: true })
