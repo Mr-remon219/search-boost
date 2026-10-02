@@ -69,6 +69,8 @@
 
 beta.6 保留原先默认目标 10 / 容量 32 的筛选余量比例；12 条目标对应 39，50 条目标对应 160。该容量在一次检索前确定，并贯穿 engine 请求、共享快照截取、缓存键及 `run.limits.candidateLimit`。内部显式容量覆盖仍有权威性并校验整数 1–500；覆盖小于目标时仍披露 `targetExceedsReviewCap`。不追加检索，不因已够数量提前停止，也不保证上游能供足或筛选后必然足量。扩大目标会增加判断量；标准四条批次下，160 个实到候选需约 1 次策略 + 40 批 Jev 判断（长文本尺寸拆批、重试另计），默认 10 条目标仍为原容量。
 
+网页与 X/community 共用全局快照上限，不表示两条支路各自都能供满该容量：既有 X 支路最多返回 30 个候选，beta.6 扩大全局容量不改变它。若 160 条容量被填满，其余至少 130 条须来自网页；实际供应和筛选后数量仍不保证。
+
 用量计量（`screening-metering-v3-no-cumulative-cap`）只记录发生过的调用与估算，并在 `usage` 中披露：`fusedCalls`、`engineRequests`（null=未知）、`jevCalls`、`jevHttpAttempts`、`jevRetries`、`jevInputTokensEstimated`、`jevTokensEstimatedReserved`、`jevInputTokens`/`jevOutputTokens`（未上报即 null）、`serverUsageCalls`、`unknownUsageCalls`，以及本层 `fetch*` 的真实 0。达到任何旧上限都不会拒绝后续请求，也不会中止已有效结果。
 
 真实单请求超时、有限重试、认证/限流/网络错误、SSRF/重定向与内容安全、显式取消继续生效；取消后不派发新请求，批次失败保留已有效材料。MCP/DSH 的 `adaptive_search`、`fused_search`、`x_search` 均不设置整次搜索总时限；SDK/宿主/提供商自身的外部硬限制仍可能存在，不能将它们描述为无限运行。`fetch_page` 的读取保护及研究子任务显式时限不因本补充取消。
