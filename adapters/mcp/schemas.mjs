@@ -3,7 +3,12 @@
  */
 import * as z from 'zod'
 import { ENGINE_ORDER } from '../../lib/runtime.mjs'
-import { ADAPTIVE_INPUT_SCHEMA, CONSTRAINTS_DESCRIPTION } from '../../lib/search/adaptive/input.js'
+import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/screening/input.js'
+import {
+  ADAPTIVE_OUTPUT_SCHEMA,
+  ADAPTIVE_V5_OUTPUT_SCHEMA,
+} from '../../lib/search/screening/schema.js'
+import { jsonSchemaToZod, projectObjectUnion } from '../../lib/search/screening/zod-schema.js'
 
 const engineEnum = z.enum(ENGINE_ORDER)
 
@@ -131,23 +136,28 @@ export const searchStatsOutput = {
   recent: z.array(z.record(z.unknown())),
 }
 
-export const adaptiveSearchInput = {
-  save_results: z.boolean().optional().describe(ADAPTIVE_INPUT_SCHEMA.properties.save_results.description),
-  saved_result_id: z.string().regex(new RegExp(ADAPTIVE_INPUT_SCHEMA.properties.saved_result_id.pattern)).optional().describe(ADAPTIVE_INPUT_SCHEMA.properties.saved_result_id.description),
-  questions: z.array(z.string().min(1).max(400)).length(1).optional()
-    .describe('Exactly ONE coherent research question; comparisons may have related aspects. Supply questions or cursor. Independent questions require separate calls.'),
-  intent: z.string().min(1).max(2000).optional()
-    .describe(ADAPTIVE_INPUT_SCHEMA.properties.intent.description),
-  keywords: z.array(z.string().min(1).max(100)).min(1).max(8).optional()
-    .describe(ADAPTIVE_INPUT_SCHEMA.properties.keywords.description),
-  constraints: z.array(z.string().min(1).max(300)).max(8).optional().describe(CONSTRAINTS_DESCRIPTION),
-  cursor: z.string().min(1).max(100).optional()
-    .describe('Read a saved result page. Do not combine with questions/intent/keywords/constraints. No network or Jev calls; temporary and server-local.'),
-  page_size: z.number().int().min(1).max(50).optional()
-    .describe('Results per page: default 20, max 50. Total approved results have no fixed count cap; pages also have a byte limit.'),
+/**
+ * MCP translates the SAME host-neutral contracts the core uses. Both are strict
+ * Zod objects (not SDK silencers): a retired or unknown field such as `keywords`
+ * is refused before the handler runs instead of being stripped and executed.
+ */
+export const adaptiveSearchInput = jsonSchemaToZod(ADAPTIVE_INPUT_SCHEMA)
+/** v5 run and read-only historical restore: the shared exact-one union projected
+ * to one strict object so the SDK can validate either branch. */
+export const adaptiveSearchOutput = jsonSchemaToZod(projectObjectUnion(ADAPTIVE_OUTPUT_SCHEMA))
+// The SDK requires an object-shaped discovery schema. Validate the complete
+// disjoint union separately before returning a response; projection alone would
+// otherwise allow missing branch-specific required fields or a hybrid record.
+const adaptiveOutputContract = jsonSchemaToZod(ADAPTIVE_OUTPUT_SCHEMA)
+export function validateAdaptiveSearchOutput(value) {
+  if (!adaptiveOutputContract.safeParse(value).success) {
+    throw new TypeError('adaptive_search: invalid response contract')
+  }
+  return value
 }
-
-export { adaptiveSearchOutput } from '../../lib/search/adaptive/output.js'
+/** The v5 branch alone, for callers that need the strict new-run contract. */
+export const adaptiveSearchV5Output = jsonSchemaToZod(ADAPTIVE_V5_OUTPUT_SCHEMA)
+export { ADAPTIVE_INPUT_SCHEMA }
 
 /** MCP tool annotations (hints for clients) */export const ANNOTATIONS = {
   search: { readOnlyHint: true, openWorldHint: true, destructiveHint: false },

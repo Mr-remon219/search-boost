@@ -12,6 +12,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { assertObjectJsonSchema, assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
+import Ajv from 'ajv'
 
 // ---- isolate every state path before importing anything that reads env ----
 const TMP = mkdtempSync(join(tmpdir(), 'sb-adapters-'))
@@ -441,11 +442,12 @@ function mockDshCtx() {
   assert('dsh presentationMeta maps sources', meta.sources[0].publishedAt === '2026-01-01' && fused.presentResult({}, { meta }).card === 'web')
   await rejects('dsh x_search requires subject', () => m.tools.get('x_search').execute({}, {}), /provide query/)
   const adaptive = m.tools.get('adaptive_search')
-  assert('dsh adaptive_search exposes single question, intent, points, restrictions and pagination', ['questions', 'intent', 'keywords', 'constraints', 'cursor', 'page_size'].every((key) => key in adaptive.parameters.properties) && adaptive.parameters.properties.questions.description.includes('maxItems: 1'))
-  await rejects('dsh adaptive_search is locked without Jev', () => adaptive.execute({ questions: ['fixture question'] }, {}), /Jev not configured/)
-  const adaptiveUnconfigured = await runtime.runAdaptiveSearch({ questions: ['fixture question'] })
-  assert('dsh adaptive_search output schema declares every emitted top-level field', Object.keys(adaptiveUnconfigured).every((key) => key in adaptive.output.schema.properties))
-  assert('dsh adaptive_search renders reviewed material, not only URLs', /adaptive_search:/.test(adaptive.output.render({}, adaptiveUnconfigured)[0].text))
+  assert('dsh adaptive_search exposes one question, required intent, community, save/pagination fields', ['questions', 'intent', 'preferences', 'community', 'constraints', 'save_results', 'max_results', 'cursor', 'saved_result_id', 'page_size'].every((key) => key in adaptive.parameters.properties) && adaptive.parameters.properties.questions.description.includes('maxItems: 1'))
+  await rejects('dsh adaptive_search is locked without Jev', () => adaptive.execute({ questions: ['fixture question'], intent: 'fixture direction' }, {}), /Jev not configured/)
+  const adaptiveUnconfigured = await runtime.runAdaptiveSearch({ questions: ['fixture question'], intent: 'fixture direction' }, {}, { toolState: () => ({ requested: true, enabled: true }), readConfig: () => ({}) })
+  const dshUnion = new Ajv({ strict: true, allowUnionTypes: true }).compile(adaptive.output.schema)
+  assert('dsh adaptive_search validates the shared schema-v5 branch', dshUnion(adaptiveUnconfigured), JSON.stringify(dshUnion.errors))
+  assert('dsh adaptive_search renders the screening summary, not only URLs', /adaptive_search:/.test(adaptive.output.render({}, adaptiveUnconfigured)[0].text))
   await rejects('dsh research_parallel needs subagents service', () => m.tools.get('research_parallel').execute({ query: 'q' }, {}), /subagents service unavailable/)
 }
 {
@@ -458,15 +460,24 @@ function mockDshCtx() {
 // cursor must reach text-only clients, without credentials or network calls.
 {
   const { registerAll } = await import('../adapters/mcp/register.mjs')
-  const { resultPages } = await import('../lib/search/adaptive/pages.js')
+  const { resultPages } = await import('../lib/search/screening/pages.js')
   const handlers = new Map()
   const stop = registerAll({ registerTool: (name, _schema, handler) => handlers.set(name, handler), registerResource() {}, registerPrompt() {} })
   const { saveJevConfig, clearJevConfig } = await import('../lib/jev-config.mjs')
   saveJevConfig({ apiKey: 'fixture-jev' })
-  const first = resultPages.save(Array.from({ length: 3 }, (_, i) => ({ url: `https://example.com/mcp-${i}`, title: `Approved ${i}`, description: `Reviewed fact ${i}` })), { coverageComplete: true, stopReason: 'all_covered', warnings: [] }, 1)
+  // The actual MCP handler now validates the complete output union. Populate
+  // the page store from a real offline v5 run, not an incomplete hand-built
+  // metadata/result object that merely worked before runtime validation.
+  const { makeHarness, fixtureRows } = await import('./screening-run-fixture.mjs')
+  const rows = fixtureRows(3).map((row, i) => ({ ...row, url: `https://example.com/mcp-${i}`, title: `Selected ${i}`, snippet: `Reviewed fact ${i}: ${row.snippet}` }))
+  const { deps } = makeHarness({ rows })
+  const initial = await runtime.runAdaptiveSearch({ questions: ['Fixture question?'], intent: 'Fixture evidence direction', community: false, max_results: 3 }, {}, deps)
+  const { results, totalResults, nextCursor, expiresAt, ...metadata } = initial
+  assert('offline MCP fixture contains all three reviewed rows', results.length === 3)
+  const first = resultPages.save(results, metadata, 1)
   const result = await handlers.get('adaptive_search')({ cursor: first.nextCursor, page_size: 1 }, { signal: new AbortController().signal })
   const text = result.content.map((part) => part.text).join('\n')
-  assert('mcp adaptive approved URL/title/description reach text-only clients', ['https://example.com/mcp-1', 'Approved 1', 'Reviewed fact 1'].every((value) => text.includes(value)))
+  assert('mcp adaptive selected URL/title/description reach text-only clients', ['https://example.com/mcp-1', 'Selected 1', 'Reviewed fact 1'].every((value) => text.includes(value)))
   assert('mcp adaptive next cursor reaches text-only clients', Boolean(result.structuredContent.nextCursor) && text.includes(result.structuredContent.nextCursor))
   assert('mcp adaptive paging works with configured Jev and no network', !result.isError && result.structuredContent.results.length === 1)
   stop()
@@ -491,21 +502,21 @@ function mockDshCtx() {
   assert('pi fused_search keeps pi-only params', ['site', 'min_score', 'depth'].every((k) => k in tools.get('fused_search').parameters.properties) && tools.get('fused_search').parameters.properties.max_results.maximum === 20)
   assert('pi x_search requires type', tools.get('x_search').parameters.required.includes('type'))
   const piAdaptive = tools.get('adaptive_search')
-  assert('pi adaptive_search exposes single question, intent, points, restrictions and pagination', ['questions', 'intent', 'keywords', 'constraints', 'cursor', 'page_size'].every((key) => key in piAdaptive.parameters.properties) && piAdaptive.parameters.properties.questions.items.maxLength === 400)
-  await rejects('pi adaptive_search is locked without Jev', () => piAdaptive.execute('id', { questions: ['fixture question'] }), /Jev not configured/)
+  assert('pi adaptive_search exposes one question, required intent, community and pagination', ['questions', 'intent', 'preferences', 'community', 'constraints', 'save_results', 'max_results', 'cursor', 'saved_result_id', 'page_size'].every((key) => key in piAdaptive.parameters.properties) && piAdaptive.parameters.properties.questions.items.maxLength === 400)
+  await rejects('pi adaptive_search is locked without Jev', () => piAdaptive.execute('id', { questions: ['fixture question'], intent: 'fixture direction' }), /Jev not configured/)
   const { saveJevConfig, clearJevConfig } = await import('../lib/jev-config.mjs')
   saveJevConfig({ apiKey: 'fixture-jev' })
-  const { resultPages } = await import('../lib/search/adaptive/pages.js')
-  const initialPage = resultPages.save([{ url: 'https://example.com/1', title: 'One', description: 'Fact one' }, { url: 'https://example.com/2', title: 'Two', description: 'Fact two' }], { coverageComplete: false, stopReason: 'budget_rounds', warnings: [] }, 1)
+  const { resultPages } = await import('../lib/search/screening/pages.js')
+  const initialPage = resultPages.save([{ id: '1', rank: 1, url: 'https://example.com/1', title: 'One', description: 'Fact one' }, { id: '2', rank: 2, url: 'https://example.com/2', title: 'Two', description: 'Fact two' }], { schemaVersion: 5, stopReason: 'target_met', warnings: [] }, 1)
   const continued = await piAdaptive.execute('page', { cursor: initialPage.nextCursor, page_size: 1 })
-  assert('pi cursor reads approved results without network', continued.details.results[0].url === 'https://example.com/2' && continued.details.nextCursor === null)
+  assert('pi cursor reads selected results without network', continued.details.results[0].url === 'https://example.com/2' && continued.details.nextCursor === null)
   assert('pi adaptive_search exposes the complete result in text', JSON.stringify(JSON.parse(continued.content.at(-1).text)) === JSON.stringify(continued.details))
   clearJevConfig()
   const emptySearch = await tools.get('fused_search').execute('fixture', { query: 'fixture-pi', engine_pool: 'api', ranking: 'fresh', engine_weights: { exa: 0 }, community: false })
   assert('pi passes routing and returns all actual diagnostics', emptySearch.details.enginePool === 'api' && emptySearch.details.ranking === 'fresh' && emptySearch.details.enginesUsed.length === 0 && emptySearch.details.communityUsed === false && emptySearch.details.warnings.length > 0)
   const injected = await handlers.get('before_agent_start')({ systemPrompt: 'BASE' })
   const reinjected = await handlers.get('before_agent_start')({ systemPrompt: injected.systemPrompt })
-  assert('pi refreshes rather than accumulates budget notes', (reinjected.systemPrompt.match(/\[search budget\]/g) ?? []).length <= 1)
+  assert('pi injects a usage observation, never a self-set stop instruction', (reinjected.systemPrompt.match(/\[search usage\]/g) ?? []).length <= 1 && !/\[search budget\]/.test(reinjected.systemPrompt))
   assert('pi injects policy once and refreshes capability even with existing policy', injected.systemPrompt.startsWith('BASE\n<search_balance>') && (reinjected.systemPrompt.match(/<search_balance>/g) ?? []).length === 1 && (reinjected.systemPrompt.match(/<search_capabilities>/g) ?? []).length === 1)
   runtime.switchLayer('api')
   const changed = await handlers.get('before_agent_start')({ systemPrompt: reinjected.systemPrompt })

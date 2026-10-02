@@ -108,16 +108,20 @@ try {
     assert.ok(!('bing' in custom.effectiveWeights))
     assert.deepEqual(calls.map((c) => c.name), ENGINE_POOLS.api)
   })
-  await test('adaptive engine lanes preserve candidate opportunities and use a separate final-selection cache', async () => {
+  await test('the screening snapshot keeps a bounded declared pool in its own cache lane', async () => {
     const args = { engineList: ['bing', 'exa-free'], engineWeights: { bing: 5, 'exa-free': 0.1 }, maxResults: 2 }
     const ranked = await fused(args)
     assert.ok(ranked.results.every((row) => row.engines.includes('bing')))
-    const lanes = await fused({ ...args, candidateSelection: 'per_engine' })
+    assert.ok(!('contributionWeights' in ranked) && !('communityExecution' in ranked), 'ordinary fused keeps its public shape')
+    const lanes = await fused({ ...args, candidateSelection: 'snapshot', community: false })
     assert.equal(lanes.cacheHit, false)
-    assert.ok(lanes.results.some((row) => row.engines.includes('exa-free')))
+    assert.ok(lanes.results.length >= ranked.results.length, 'the snapshot is the declared pool, not the final diversity selection')
     assert.ok(lanes.results.every((row) => Number.isFinite(row.engineRanks[row.engines[0]])))
     assert.deepEqual(lanes.effectiveWeights, ranked.effectiveWeights)
-    assert.equal((await fused({ ...args, candidateSelection: 'per_engine' })).cacheHit, true)
+    assert.ok(Object.values(lanes.contributionWeights).every((weight) => weight > 0))
+    assert.equal(lanes.communityExecution.outcome, 'not_requested')
+    assert.equal((await fused({ ...args, candidateSelection: 'snapshot', community: false })).cacheHit, true)
+    assert.equal((await fused(args)).cacheHit, true, 'ordinary fused caching is untouched by the snapshot lane')
   })
   await test('explicit engine override crosses pools but cannot enable missing/disabled engines', async () => {
     const out = await fused({ enginePool: 'free', engineList: ['exa','exa'], ranking: 'research' })

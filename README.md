@@ -54,7 +54,7 @@
 - **X / Twitter Community Intelligence (`x_search`)**  
   Retrieves public posts, user timelines, and discussion threads via official xAI API or an anonymous fallback channel. Recovers accurate UTC timestamps from Snowflake post IDs and enforces local author/date filtering without hallucination.
 - **Jev Intent-Guided Search (`adaptive_search` · Experimental)**
-  Supply one question, research intent, search points and explicit restrictions. Jev selects a query then its engines, checks explicit constraints before quality, retains useful supporting material, and stops by the disclosed score/progress rule (no whole-material final review). Global 500-URL round capacity, bounded page recovery and cursor pagination; no claim of verified or complete answers.
+  Supply one full question and a required research intent. One pre-search Jev strategy request selects the fixed ranking preset and (when community is omitted) whether to add the already-wired community branch; one bounded fused snapshot of at most 32 candidates is then screened with fixed safety, prototype value 3/4/5 and source-discount options. No keyword planning, no constraints gate, no language check, no automatic page read, and no self-set cumulative budget stop; cursor and saved-result pagination only replay stored results. No claim of verified or complete answers.
 - **Native Multi-Agent Parallel Research**  
   Bundles `search-boost` and `search-boost-parallel-research` skills. In hosts supporting subagents (Cursor, Claude Code, Pi, DSH), tasks can be dispatched to parallel Searchers (gathering evidence) and Summarizers (pure synthesis without tools), supporting both Fast and Complex waves.
 - **Unified Core Across All Host Ecosystems**  
@@ -211,7 +211,7 @@ When integrated, agents automatically receive standard tool definitions and auto
 | `fused_search` | Parallel multi-engine querying, deduplication, and diversity re-ranking | A single search step; follow-up decisions remain with the parent agent |
 | `fetch_page` | Reading clean content from public URLs with optional keyword focus | Not a browser with login state; cannot access internal/private networks |
 | `x_search` | Retrieving public X posts, author timelines, or discussion threads | Does not guarantee exhaustive comment threads or total sentiment sampling |
-| `adaptive_search` | **Experimental**: intent-guided search selection and keyword continuation | Worth-reading URLs and extractive descriptions; not verified answers |
+| `adaptive_search` | **Experimental**: one bounded fused snapshot + fixed-option Jev screening for one question and a required intent | Selected URLs with reviewed extracts and value labels; targetMet is quantity only, not verified answers |
 | `search_stats` | Reading engine status, memory cache hits, and recent diagnostic stats | Read-only; configuration readiness does not guarantee active external network reachability |
 | `search_layer` | Viewing or switching compatibility search layer in MCP | `show` is read-only; changing layers mutates persistent configuration on disk |
 
@@ -283,24 +283,26 @@ Designed for real-time technical tracking and first-party developer updates. Sup
 
 **Vercel support**: in TUI → Services & credentials → Jev credentials, enter `https://ai-gateway.vercel.sh/v1` and a Vercel AI Gateway key. SearchBoost selects the official SDK evaluation model `typesafe-ai/jev`, not chat completions. The default TypeSafe `/systemone` path remains supported. Both paths use only the canonical user Jev credential, not environment keys, and respect server rate-limit delays.
 
-Supply **one question** (`questions` has exactly one item), optional research `intent`, flat `keywords` and explicit hard document `constraints`. Each search chooses a query using current gaps/materials/search feedback, then assesses engines for that exact query. A **separate Boolean prefilter** checks ALL explicit constraints; empty constraints skip it. Quality retains useful focused and supporting material; direction controls focus ordering and keyword matches attribute contributions, not document retention. Code recomputes capped progress from current deduplicated keyword scores: stop when the equally weighted total reaches 80/100 AND every keyword reaches 0.60 (keyword target score 1). These are initial heuristics, not calibrated probabilities. Weak points guide further retrieval. No whole-material final review is sent to Jev, and no minimum 64-material review window is required; pending assessments remain disclosed. The agent owns analysis and fact verification.
+Supply **one question** (`questions` has exactly one item) plus a **required research `intent`** and optional soft `preferences`. Write them in English as a caller instruction: the server never language-checks, rejects or translates them, and any language is searched exactly as written. The original question is the only query — there is no keyword planning and no query expansion. One pre-search Jev strategy request selects the fixed `balanced`/`research`/`fresh` ranking and, when `community` is omitted, `enable`/`disable`/`unknown` for the already-wired community (X) branch; an explicit `community` true/false overrides that choice and is never asked back. That single fused call collects a **bounded snapshot of at most 32 candidates** (web and community rows share it), and every declared candidate is screened with fixed options: safety `clear`/`violation`/`unavailable`, prototype value levels 0-5, source discounts from real positive-contribution engines, and one match per preference. Only safe material with an established value 3/4/5 is delivered, ranked by the versioned screening formula; confidence is audit-only. There is no early stop at the first K acceptable links, no automatic page read, and no self-imposed cumulative cost, token, request-count or whole-run time budget — real single-request timeouts, limited retries, authentication/rate-limit failures, safety refusals and explicit cancellation still apply.
 
 ```json
 {
   "questions": ["What are the migration risks from ExampleDB 4.1 to 4.2?"],
-  "intent": "Find migration steps and concrete incompatibilities; include counterexamples.",
-  "keywords": ["migration steps", "breaking changes", "failure cases"],
-  "constraints": ["Only official sources"],
-  "page_size": 20
+  "intent": "Find migration steps and concrete incompatibilities, including counterexamples.",
+  "preferences": ["Official migration guides"],
+  "max_results": 8,
+  "page_size": 3
 }
 ```
 
-- `constraints` contains complete, checkable hard conditions such as applicable version, event/publication date, platform or ONLY official sources. **Do not put research direction, soft preferences, keywords or desired conclusions here**; omit or use `[]` when none. Restrictions are ANDed; put every mandatory document condition here, not only in the question. Useful supporting material need not match a listed search point.
-- Multi-question lists, `tasks/targets/facts/time_range` and nested keyword arrays are no longer public inputs. Independent questions require separate calls.
-- Results contain approved URLs, titles, reviewed extracts, valueScore, directionMatch, kind and focus/supporting tier, not generated answers. Unadmitted candidates are excluded; missing optional direction/match judgments remain disclosed.
-- Inspect `reviewSummary`, `scopeSummary`, `convergence`, `keywordProgress`, `pendingAssessments` and warnings. `retrievalSufficient` means the score-based retrieval stopping rule is met, not semantic review, proof of truth or complete answer coverage. Deprecated `finalReview` reports `not_run` with no verdict. Deprecated `coverageComplete` stays false in schemaVersion 3.
-- Read saved pages with `{"cursor":"<nextCursor>"}` only (optional `page_size`): no new search/Jev calls. Default20/max50 per page with a byte budget; no fixed cumulative result-count cap. Cursors last up to30 minutes/32 recent sets in the current process; pagination is not exhaustive search.
-- With explicit `save_results:true`, persist the selected materials and typed response metadata privately, and receive `savedResultId`. After a restart, read `{"saved_result_id":"<savedResultId>"}` (optional `page_size`) without another search/Jev call. Do not combine a saved ID or cursor with new research input or `save_results`. Public tool switches and the Jev configuration lock still apply; `search-boost research list` / `research export <id> --output <new-file.json>` work offline without Jev. See [integration and acceptance boundaries](docs/research-status-acceptance.md).
+- `intent` is required (it is no longer filled in from the question) and `preferences` are independent soft ranking bonuses, deduplicated exactly.
+- `constraints` is retired as a per-material hard gate: omit it or pass `[]` (a `deprecated_constraints_empty` warning); a non-empty array is refused with `adaptive_constraints_removed` before any network call. Keep every direction and condition in the question/intent; for hard domain limits use `site:`/`-site:` or fused_search `include_domains`/`exclude_domains`, and verify required document properties by reading.
+- Multi-question lists, `tasks/targets/facts/time_range`, `keywords` and nested keyword arrays are refused as legacy inputs; independent questions require separate calls.
+- `max_results` caps the selected and saved set (default 10, max 50); `page_size` only changes the page (default 20, max 50) and never re-orders or re-filters.
+- Results contain selected URLs, titles, reviewed extracts, `valueLevel`/`valueLabel`, rank, real provenance and score components — never generated answers. `selection.targetMet` means quantity only, never research completion or verification; `selection.incomplete`, `diagnostics`, `stopReason`, `outsideReview` and `unreviewed` disclose what was not finished rather than treating it as low value.
+- `run.community` reports the finite community decision and the actual execution status (`not_requested`/`domain_excluded`/`unavailable`/`blocked`/`succeeded`/`empty`/`failed`/`partial`/`not_run`), never model reasoning. A failed or partial community branch keeps valid web results and marks the run incomplete.
+- Read saved pages with `{"cursor":"<s5:…>"}` (optional `page_size`) only: no new search, strategy, Jev, community or value call. Default 20/max 50 per page with a byte budget. Cursors last up to 30 minutes/32 recent sets in the current process and are not exhaustive search.
+- With explicit `save_results:true`, the complete final selected set plus typed metadata is stored privately under the SearchBoost home (`search-boost-research-v2`, schema version 5) and you receive a `savedResultId`. After a restart or cache clear, read `{"saved_result_id":"<savedResultId>"}` (optional `page_size`) without another search or Jev call. Older `search-boost-research-v1` files stay readable in a marked read-only `h1:` historical branch (`restoration.historical: true`, original schema version preserved, no invented v5 fields). Public tool switches and the Jev configuration lock still apply to reads; `search-boost research list` / `research export <id> --output <new-file.json>` work offline without Jev. See [integration and acceptance boundaries](docs/research-status-acceptance.md).
 - Thresholds remain uncalibrated engineering starting points. See the [contract, budgets and migration notes](docs/jev-adaptive-search.md).
 
 ---
@@ -493,7 +495,7 @@ After changing adapter or agent assets, re-run the same install command for that
 | `npm run test:network` | Proxy retries, curl fallback, request bounds and compatibility regressions |
 | `npm run test:adapters` | MCP, Pi and DSH adapter protocol suites plus Pi subagent settings migration/diagnosis |
 | `npm run test:parallel` | Searcher/summarizer contracts, DSH dispatch preflight, cancellation and tool isolation |
-| `npm run test:adaptive` | Jev adaptive evidence loop |
+| `npm run test:adaptive` | N_off screening flow + real MCP/Pi/DSH host fixtures |
 | `npm run smoke` | MCP JSON-RPC protocol smoke test |
 
 These suites run against loopback fixtures and process doubles, so no engine keys are needed; a green `npm run prepublishOnly` is the bar for a PR.

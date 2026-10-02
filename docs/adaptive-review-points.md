@@ -1,3 +1,5 @@
+> **历史文档（v3 评审要点）**：其中被 N_off 单流程替代的部分（关键词续搜、scope/info 硬门槛、补读、语言门控）不再生效；数值公式、来源与安全部分仍由 `docs/jev-adaptive-search.md` 承接。
+
 # Adaptive 后续审查点
 
 > 历史记录：其中全量/代表材料终审及首轮64份审查窗口已被用户批准的“总分＋关键词保底”方案取代。当前实现及返回语义见 [jev-adaptive-search.md](jev-adaptive-search.md)；不再发送 `retrieval_final` 请求。本文旧要求和验证记录不是当前终审契约。

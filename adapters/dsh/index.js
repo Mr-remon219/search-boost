@@ -1,6 +1,7 @@
 import { assertToolEnabled, guardedTool, toolState } from '../../lib/tool-config.mjs'
 import { registerDshTool } from './schema.js'
-import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/adaptive/input.js'
+import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/screening/input.js'
+import { ADAPTIVE_OUTPUT_SCHEMA } from '../../lib/search/screening/schema.js'
 import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
 // DSH host adapter — DeepSeek Harness (Cordis) bundle plugin.
@@ -24,7 +25,7 @@ import {
   ADAPTIVE_DESCRIPTION,
   ADAPTIVE_TOOL_NAME,
   adaptiveTextContent,
-} from '../../lib/search/adaptive/describe.js'
+} from '../../lib/search/screening/describe.js'
 import {
   ENGINE_ORDER,
   LAYER_LABELS,
@@ -67,7 +68,9 @@ export function loadPolicySection() {
 }
 
 function registerGuardedTool(ctx, definition) {
-  return registerDshTool(ctx, guardedTool(definition))
+  // Adaptive's facade owns parser → public gate; keep that order instead of
+  // reading configuration in the generic guard before semantic validation.
+  return registerDshTool(ctx, definition.name === ADAPTIVE_TOOL_NAME ? definition : guardedTool(definition))
 }
 
 export function apply(ctx, config = {}) {
@@ -265,7 +268,7 @@ function registerFusedSearchTool(ctx) {
         truncated: Boolean(meta.truncated),
       }
     },
-    timeoutMs: 90000,
+    // Per-provider requests keep their own timeouts; no whole-search quota.
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       // DSH validates executed values as lossless JSON — strip stray undefined
@@ -380,39 +383,14 @@ function registerAdaptiveSearchTool(ctx) {
     parameters: ADAPTIVE_INPUT_SCHEMA,
     presentCall: (args) => ({
       card: 'generic',
-      title: args?.cursor ? 'adaptive_search: result page' : 'adaptive_search: target search',
+      title: args?.saved_result_id ? 'adaptive_search: saved results' : args?.cursor ? 'adaptive_search: result page' : 'adaptive_search: question screening',
       kind: 'search',
       rawInput: (args?.questions ?? []).join(' | ').slice(0, 60),
     }),
     output: {
-      schema: {
-        type: 'object',
-        properties: {
-          results: { type: 'array', items: { type: 'object', properties: { url: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, tier:{type:'string',enum:['focus','supporting']}, valueScore:{type:'number'}, directionMatch:{type:['number','null']}, kind:{type:'string'}, matches:{type:'array',items:{type:'object',properties:{taskId:{type:['string','null']},targetId:{type:['string','null']},canonicalId:{type:['string','null']},valueScore:{type:'number'},directionMatch:{type:['number','null']},kind:{type:'string'}},required:['taskId','targetId','canonicalId','valueScore','directionMatch','kind']}} }, required: ['url', 'title', 'description'] } },
-          totalResults: { type: 'number' }, nextCursor: { type: ['string', 'null'] }, expiresAt: { type: 'string' },
-          savedResultId: {type:'string'},
-          inputSummary: {type:'object',properties:{question:{type:'string'},intent:{type:'string'},keywords:{type:'array',items:{type:'string'}},constraints:{type:'array',items:{type:'string'}},constraintPolicy:{type:'string',enum:['explicit_per_material']}},required:['question','intent','keywords','constraints','constraintPolicy']},
-          schemaVersion: {type:'number'}, retrievalSufficient: {type:'boolean'},
-          scopeSummary: {type:'object',properties:{eligible:{type:'number'},rejected:{type:'number'},unknown:{type:'number'}},required:['eligible','rejected','unknown']},
-          convergence: {type:'object',properties:{method:{type:'string',enum:['score_threshold_v1']},status:{type:'string',enum:['satisfied','insufficient']},
-            score:{type:'number',minimum:0,maximum:100},totalThreshold:{type:'number'},keywordTarget:{type:'number'},keywordFloor:{type:'number'},minimumProgress:{type:'number'},keywordCount:{type:'number'},
-            points:{type:'array',items:{type:'object',properties:{keyword:{type:'string'},progress:{type:'number',minimum:0,maximum:1},minimumMet:{type:'boolean'}},required:['keyword','progress','minimumMet']}}},
-            required:['method','status','score','totalThreshold','keywordTarget','keywordFloor','minimumProgress','keywordCount','points']},
-          finalReview: {type:'object',properties:{status:{type:'string',enum:['not_run','not_ready','finish','continue','pending','stale']},checks:{type:'number'},verdict:{type:['string','null'],description:'pass, not_passed, or null when no established verdict'},researchKeyword:{type:['string','null']},inputMaterials:{type:'number'},allMaterialsIncluded:{type:'boolean'}},required:['status','checks']},
-          reviewSummary: {type:'object',properties:Object.fromEntries(['collectedRows','collected','withText','scopeAssessed','scopeSkipped','constraintsNotPassed','qualityAssessed','qualityNotPassed','admitted','focus','supporting','assessmentUnavailable','unreviewed','awaitingAdmission'].map(key=>[key,{type:'number'}]))},
-          coverageComplete: { type: 'boolean', description:'Deprecated: always false for schemaVersion 3; answer completeness is not assessed.' }, stopReason: { type: 'string' }, warnings: { type: 'array', items: { type: 'string' } },
-          keywordProgress: { type: 'array', items: { type: 'object', properties: {
-            targetId: {type:'string'}, taskId:{type:['string','null']}, canonicalId:{type:'string'}, keyword: {type:'string'}, score: {type:'number'}, ready: {type:'boolean'},
-            distinctEvidence: {type:'number'}, admitted: {type:'number',description:'Current creditable content/source groups matching this keyword, not the number of admitted documents.'}, finalStatus: {type:'string'},
-            status:{type:'string',enum:['continue','satisfied','exhausted','pending']}, reason:{type:'string'},
-            progress: {type:'number',minimum:0,maximum:1}, A: {type:'number'}, F: {type:'number'}, R: {type:'number'},
-            missingFacts: {type:'array',items:{type:'string'}},
-            factProgress: {type:'array',items:{type:'object',properties:{id:{type:'string'},support:{type:'number'},covered:{type:'boolean'},conflicting:{type:'boolean'}},required:['id','support','covered','conflicting']}},
-          }, required: ['targetId','keyword','score','distinctEvidence','finalStatus'] } },
-          pendingAssessments: { type: 'number' },
-        },
-        required: ['results', 'totalResults', 'nextCursor', 'expiresAt', 'coverageComplete', 'stopReason', 'warnings'],
-      },
+      // The shared exact-one union (schema-v5 run | read-only historical restore):
+      // DSH translates and Ajv-validates this definition instead of a private copy.
+      schema: ADAPTIVE_OUTPUT_SCHEMA,
       render: (_args, value) => adaptiveTextContent(value),
       presentationMeta: (_args, value) => ({
         truncated: Boolean(value.nextCursor), total: value.totalResults,
@@ -425,14 +403,15 @@ function registerAdaptiveSearchTool(ctx) {
       return {
         card: 'web',
         kind: 'search',
-        title: `adaptive_search: ${meta.total} approved results`,
+        title: `adaptive_search: ${meta.total} selected results`,
         sources: meta.sources ?? [],
         truncated: Boolean(meta.truncated),
       }
     },
-    timeoutMs: 180000,
     isConcurrencySafe: () => false,
     async execute(args, exec) {
+      // No self-imposed whole-call timeout: only the host/client signal cancels
+      // this tool (2026-10-02 budget supplement).
       return cleanJsonValue(await runAdaptiveSearch(args, { signal: exec?.signal, host: 'dsh' }))
     },
   })
@@ -514,7 +493,7 @@ function registerXSearchTool(ctx) {
         truncated: Boolean(meta.truncated),
       }
     },
-    timeoutMs: 180000,
+    // X official/fallback requests retain single-request protection only.
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       const kind = X_MODES.includes(args?.type) ? args.type : 'keyword'

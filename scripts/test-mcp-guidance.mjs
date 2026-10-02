@@ -9,8 +9,8 @@ import { fileURLToPath } from 'node:url'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import * as z from 'zod'
-import { fusedSearchInput, fetchPageInput, xSearchInput } from '../adapters/mcp/schemas.mjs'
-import { ADAPTIVE_INPUT_SCHEMA } from '../lib/search/adaptive/input.js'
+import { adaptiveSearchInput, fusedSearchInput, fetchPageInput, xSearchInput } from '../adapters/mcp/schemas.mjs'
+import { ADAPTIVE_INPUT_SCHEMA } from '../lib/search/screening/input.js'
 
 const home = mkdtempSync(join(tmpdir(), 'sb mcp guidance '))
 const client = new Client({ name: 'guidance-test', version: '1.0.0' })
@@ -83,14 +83,28 @@ try {
   for (const [field, schema] of Object.entries(byName.adaptive_search.inputSchema.properties)) {
     assert(schema.description, `adaptive_search.${field}: missing direct-call guidance`)
   }
-  assert.ok(['questions', 'intent', 'keywords', 'constraints', 'cursor', 'page_size'].every((key) => key in byName.adaptive_search.inputSchema.properties))
-  for (const field of ['intent', 'keywords']) {
-    assert.equal(byName.adaptive_search.inputSchema.properties[field].description,
-      ADAPTIVE_INPUT_SCHEMA.properties[field].description, `${field}: MCP must preserve supporting-material admission guidance`)
+  assert.deepEqual(Object.keys(byName.adaptive_search.inputSchema.properties).sort(), Object.keys(ADAPTIVE_INPUT_SCHEMA.properties).sort())
+  assert.equal('keywords' in byName.adaptive_search.inputSchema.properties, false, 'retired keywords is not offered as an input field')
+  for (const [field, schema] of Object.entries(byName.adaptive_search.inputSchema.properties)) {
+    assert.equal(schema.description, ADAPTIVE_INPUT_SCHEMA.properties[field].description, `${field}: MCP must translate the shared description verbatim`)
   }
+  assert.equal(byName.adaptive_search.inputSchema.additionalProperties, false, 'strict MCP input refuses unknown/legacy fields instead of stripping them')
+  assert.equal(byName.adaptive_search.inputSchema.properties.community.default, undefined, 'community omission must stay distinguishable from an explicit false')
   assert.equal(byName.adaptive_search.inputSchema.properties.questions.minItems, 1)
   assert.equal(byName.adaptive_search.inputSchema.properties.questions.maxItems, 1)
   assert.equal(byName.adaptive_search.inputSchema.properties.questions.items.maxLength, 400)
+  assert.equal(byName.adaptive_search.inputSchema.properties.saved_result_id.maxLength, 36)
+  const output = byName.adaptive_search.outputSchema
+  assert.equal(output.type, 'object')
+  assert.equal(output.additionalProperties, false, 'the response contract is a strict object, not an arbitrary object')
+  for (const field of ['selection', 'diagnostics', 'usage', 'run', 'inputSummary', 'savedResultId', 'restoration', 'results', 'stopReason']) {
+    assert.ok(field in output.properties, `adaptive_search output schema must type ${field}`)
+  }
+  // v5-only fields are optional here because the same contract also carries a
+  // read-only historical restore; unknown fields are still refused.
+  assert.ok(!(output.required ?? []).includes('selection'), 'the union also accepts the historical branch, which has no selection')
+  assert.ok((output.required ?? []).includes('results') && (output.required ?? []).includes('stopReason'))
+  assert.equal(output.properties.restoration.additionalProperties, false, 'restoration is a typed, closed historical marker')
   const mixedCall = await client.callTool({ name: 'adaptive_search', arguments: { questions: ['x'], cursor: 'invalid' } })
   assert.equal(mixedCall.isError, true)
   writeFileSync(join(home, 'config', 'tools.json'), JSON.stringify({ tools: { search_stats: false, adaptive_search: false } }))
@@ -110,11 +124,22 @@ try {
   const text = resource.contents[0].text
   const examples = [...text.matchAll(/```json\s*([\s\S]*?)```/g)]
   assert(examples.length >= 5)
+  let adaptiveExamples = 0
   for (const [, json] of examples) {
     const value = JSON.parse(json)
+    if ('questions' in value || 'saved_result_id' in value || 'cursor' in value) {
+      adaptiveExamples++
+      // The documented adaptive example must satisfy the SAME shared input contract
+      // the tool advertises (no retired keywords/constraints shapes).
+      const parsed = z.object(adaptiveSearchInput.shape).strict().parse(value)
+      assert.equal('keywords' in parsed, false)
+      assert.equal(parsed.community, undefined, 'the documented example lets the strategy request choose community')
+      continue
+    }
     const schema = 'url' in value ? fetchPageInput : 'type' in value ? xSearchInput : fusedSearchInput
     z.object(schema).strict().parse(value)
   }
+  assert.ok(adaptiveExamples >= 1, 'the optional resource documents one adaptive_search example')
   const prompt = await client.getPrompt({ name: 'search_routing', arguments: { task: 'Compare two API versions' } })
   assert(prompt.messages[0].content.text.includes('Compare two API versions'))
   assert(prompt.messages[0].content.text.includes('Do not change search layers'))

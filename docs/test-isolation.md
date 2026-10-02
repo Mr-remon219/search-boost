@@ -78,5 +78,5 @@ CI 的 Linux / Windows / macOS 矩阵运行完整门禁；`prepublishOnly` 在�
 - 这是**测试环境隔离与回归门禁，不是操作系统安全沙箱**。不防恶意测试代码显式访问绝对路径、第三方工具自行读取系统数据库，或 Node 在首条 import 之前执行的外部预加载代码。源码快照不包括依赖目录和 Git 内部文件。
 - `SIGKILL`、系统崩溃或强制终止可能留下临时目录；这些目录内部的记录不会进入真实用户存储。不要使用宽泛的 `/tmp` 清理命令。
 - 测试默认不继承用户的代理、CA、registry 或认证设置。DSH 打包 smoke 下载公开 npm 依赖，需要可用的公开 registry 网络；迁移测试使用本地 fixture registry。网络受限时应报告失败，不自动恢复真实凭据或偷偷绕过网络限制。
-- `jev-probe.mjs`、`eval-adaptive-search.mjs` 是明确 opt-in 的真实联网操作，刻意不纳入自动测试，不能加入 CI／发布测试门禁。构建／发布资产脚本也不是隔离测试，不应混入 fixture。
+- `jev-probe.mjs` 是明确 opt-in 的真实联网操作，刻意不纳入自动测试，不能加入 CI／发布测试门禁。构建／发布资产脚本也不是隔离测试，不应混入 fixture。
 - 本地通过不能替代 Windows/macOS CI 结果，也不能证明真实宿主已重启并加载新包。

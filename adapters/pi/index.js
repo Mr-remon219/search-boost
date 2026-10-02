@@ -1,5 +1,5 @@
 import { guardedTool, watchToolStates } from '../../lib/tool-config.mjs'
-import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/adaptive/input.js'
+import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/screening/input.js'
 import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
 // pi host adapter — pi coding agent extension.
@@ -48,7 +48,7 @@ import {
   ADAPTIVE_PROMPT_GUIDELINES,
   ADAPTIVE_TOOL_NAME,
   adaptiveTextContent,
-} from '../../lib/search/adaptive/describe.js'
+} from '../../lib/search/screening/describe.js'
 
 const RECENCY_ENUM = ['day', 'week', 'month', 'year', 'any']
 
@@ -69,7 +69,9 @@ const text = (t) => ({ type: 'text', text: t })
 
 /** @param {import('@earendil-works/pi-coding-agent').ExtensionAPI} pi */
 export default function searchBoostExtension(pi) {
-  const registerTool = (definition) => pi.registerTool(guardedTool(definition))
+  // Adaptive validates structure before reading the public gate in its facade.
+  // Other tools keep the generic gate; no entry bypasses its enabled check.
+  const registerTool = (definition) => pi.registerTool(definition.name === ADAPTIVE_TOOL_NAME ? definition : guardedTool(definition))
   let stopWatching
   let removedBySwitch = new Set()
   const owned = ['fused_search', 'fetch_page', 'adaptive_search', 'search-parallel-subagent', 'x_search']
@@ -100,11 +102,10 @@ export default function searchBoostExtension(pi) {
   pi.on('before_agent_start', async (event) => {
     const base = event.systemPrompt
       .replace(/\n?<search_capabilities>[\s\S]*?<\/search_capabilities>/g, '')
-      .replace(/\n?\[search budget\][^\n]*/g, '')
+      .replace(/\n?\[(?:search usage|search budget)\][^\n]*/g, '')
     const policy = rules && !base.includes('<search_balance>') ? `\n${rules}` : ''
-    // budget state (not just a slogan): count today's searches so the model
-    // can calibrate effort — research tasks may spend more, simple lookups
-    // should not push the day's total into the hundreds
+    // Usage observation only, never a stop order: count today's direct searches
+    // so the model can calibrate effort and reuse evidence it already has.
     let todayCount = 0
     try {
       const today = new Date().toISOString().slice(0, 10)
@@ -114,10 +115,10 @@ export default function searchBoostExtension(pi) {
     } catch {
       /* audit must never break agent start */
     }
-    const budgetNote = todayCount > 0
-      ? `\n[search budget] Recent audit sample: ${todayCount} direct searches dated today (UTC), from at most 400 events; not an account quota or complete usage count. Reuse sufficient evidence and follow the task budget.`
+    const usageNote = todayCount > 0
+      ? `\n[search usage] ${todayCount} direct searches recorded today (UTC) in this audit sample (at most 400 events). This is an observation, not a quota: no self-set search/cost/time budget stops a call.`
       : ''
-    return { systemPrompt: `${base}${policy}${budgetNote}\n${formatRuntimeCapabilities()}` }
+    return { systemPrompt: `${base}${policy}${usageNote}\n${formatRuntimeCapabilities()}` }
   })
 
   const onProgress = (onUpdate) => (msg) => {
@@ -297,14 +298,14 @@ export default function searchBoostExtension(pi) {
     name: ADAPTIVE_TOOL_NAME,
     label: 'Adaptive Search (Jev)',
     description: ADAPTIVE_DESCRIPTION,
-    promptSnippet: 'Search keyword-guided targets with Jev; page through approved URLs and descriptions',
+    promptSnippet: 'Screen one full question with Jev: one bounded fused snapshot, fixed ranking/community strategy and paged reviewed results',
     promptGuidelines: ADAPTIVE_PROMPT_GUIDELINES,
     parameters: ADAPTIVE_INPUT_SCHEMA,
     async execute(_toolCallId, params, signal, onUpdate) {
       const progress = onProgress(onUpdate)
       const started = Date.now()
-      const questions = Array.isArray(params?.questions) ? params.questions : []
-      progress(params.cursor || params.saved_result_id ? 'adaptive_search: reading saved results…' : 'adaptive_search: planning target searches…')
+      const reading = Boolean(params?.cursor || params?.saved_result_id)
+      progress(reading ? 'adaptive_search: reading saved results…' : 'adaptive_search: selecting the fixed ranking and community strategy…')
       const res = await runAdaptiveSearch(params, {
         signal,
         host: 'pi',
@@ -316,17 +317,18 @@ export default function searchBoostExtension(pi) {
       audit.write({
         type: 'research',
         ts: new Date().toISOString(),
-        query: `[${questions.length} adaptive question(s); text omitted]`,
+        query: '[adaptive_search question; text omitted]',
         mode: ADAPTIVE_TOOL_NAME,
-        rounds: res.rounds,
         stopReason: res.stopReason,
         sources: res.totalResults,
         domains: domains.size,
         schemaVersion: res.schemaVersion,
-        retrievalSufficient: res.retrievalSufficient,
-        coverageComplete: res.coverageComplete,
+        readOnly: reading,
+        historical: res.restoration?.historical === true,
+        community: res.run?.community?.outcome ?? null,
+        selected: res.selection?.returned ?? null,
+        incomplete: res.selection?.incomplete ?? null,
         tookMs: Date.now() - started,
-        subtasks: params.tasks?.reduce((n, task) => n + task.targets.length, 0) ?? questions.length,
         pageResults: res.results.length,
       })
       return {
