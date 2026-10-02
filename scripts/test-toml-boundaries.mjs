@@ -149,6 +149,26 @@ assert.equal(removed.mcp_servers['search-boost'],undefined)
 assert.equal(removed.mcp_servers['search-boost-other'].command,'keep')
 console.log('ok: strings/comments, literal dotted names, other servers and profile-local keys do not trigger refusal; supported env/custom inline values remain intact')
 
+// A nested array element can look exactly like a quoted table header when its
+// comma is on the next line. It is a value, not a new section (tomllib oracle).
+for (const element of ['["--mode"]', "['--mode']", '[["--mode"]]']) {
+  const text = `[mcp_servers.search-boost]\ncommand="old"\nargs=[]\n[mcp_servers.other]\ncommand="user-server"\ncustom=[\n  ${element}\n  ,\n  "value"\n]\n[mcp_servers.other.env]\nBRACKETS="[not.a.header]"\n`
+  const original = parse(text)
+  const updated = parse(upsertTomlSection(text, 'search-boost', 'command="new"\nargs=[]'))
+  const removed = parse(removeTomlSection(text, 'search-boost'))
+  assert.equal(updated.mcp_servers['search-boost'].command, 'new')
+  assert.deepEqual(updated.mcp_servers.other, original.mcp_servers.other)
+  assert.deepEqual(removed.mcp_servers.other, original.mcp_servers.other)
+  assert.equal(removed.mcp_servers['search-boost'], undefined)
+  write(PATHS.codex.config, text)
+  for (const verb of ['install', 'uninstall']) {
+    const result = run(verb, '-t', 'codex', '-y', '--keep-native')
+    assert.equal(result.status, 0, result.stderr + result.stdout)
+    assert.deepEqual(parse(readFileSync(PATHS.codex.config, 'utf8')).mcp_servers.other, original.mcp_servers.other)
+  }
+}
+console.log('ok: nested multiline array values never become table headers; real CLI install/uninstall preserves unrelated valid TOML')
+
 for(const q of ['"',"'"]) for(const count of [3,4,5]) {
   const quotes=q.repeat(count)
   const text=`note=${q.repeat(3)}root value${quotes} # ${q.repeat(3)}\n[mcp_servers.search-boost]\ncommand="node"\nargs=[]\n[mcp_servers.other]\ncommand="npx"\nargs=[]\nenv.PROMPT=${q.repeat(3)}sibling value${quotes}\n`

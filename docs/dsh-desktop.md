@@ -59,6 +59,8 @@ SearchBoost 只读取 profile/安装路径，不为检测启动 Desktop，也不
 
 ## 安装验证与禁用状态
 
+SearchBoost 管理的事务安装要求**所选宿主自身**提供 `@deepseek-ai/dsh-plugin-manager/operations`、`dsh-atomic-write` 和官方 bundle resolver；已按 DSH `0.2.0-rc.2` 的接口验证。旧 `0.1.5-rc.3` 缺少事务 API，不能继续使用此前的非事务安装路径。缺少 API 时会在包管理/备份前明确拒绝，请自行升级对应 CLI 或 Desktop 宿主；SearchBoost 不自动升级宿主、不切换到另一个宿主，也不回退到无回滚安装。版本号本身不能代替 API 检查。
+
 安装检查、profile/升级发现、显式启用与卸载验证共同识别 `dependencies`、`devDependencies` 和 `optionalDependencies`。即使可选依赖处于禁用状态，也不会漏扫或把仍保留的依赖误报已删除；旧名称的可选依赖同样参与升级迁移。
 
 退出码为 0、profile 中有新包，都不足以证明宿主会加载新代码。官方 bundle 解析器先查 DSH 安装目录，再查 profile；安装目录旁的旧 SearchBoost 可能遮蔽 profile 的新版。

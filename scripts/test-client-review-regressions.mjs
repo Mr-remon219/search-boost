@@ -80,6 +80,22 @@ try {
     assert.equal(preferredAntigravityMcpPath(), PATHS.antigravity.mcp)
     assert.equal(json(PATHS.antigravity.legacyMcp).mcpServers['search-boost'], undefined)
   })
+  await test('modern Antigravity field precedence is independent of the selected destination', async () => {
+    for (const mode of ['modern', 'legacy']) {
+      write(PATHS.antigravity.mcp, { custom: 'modern', mcpServers: { 'search-boost': { command: 'modern-node', disabled: false, timeout: 99, env: { SHARED: 'modern', MODERN: 'keep' } }, other: { command: 'modern-other' } } })
+      write(PATHS.antigravity.legacyMcp, { custom: 'legacy', mcpServers: { 'search-boost': { command: 'legacy-node', disabled: true, timeout: 1, legacyOnly: true, env: { SHARED: 'legacy', LEGACY: 'keep' } }, other: { command: 'legacy-other' } } })
+      await refreshAntigravityMcp({ command: 'current-node', args: [] }, { mode })
+      const selected = mode === 'modern' ? PATHS.antigravity.mcp : PATHS.antigravity.legacyMcp
+      const other = mode === 'modern' ? PATHS.antigravity.legacyMcp : PATHS.antigravity.mcp
+      const saved = json(selected).mcpServers['search-boost']
+      assert.equal(saved.command, 'current-node')
+      assert.equal(saved.disabled, false); assert.equal(saved.timeout, 99); assert.equal(saved.legacyOnly, true)
+      assert.deepEqual(saved.env, { SHARED: 'modern', LEGACY: 'keep', MODERN: 'keep' })
+      assert.equal(json(other).mcpServers['search-boost'], undefined)
+      assert.equal(json(PATHS.antigravity.mcp).mcpServers.other.command, 'modern-other')
+      assert.equal(json(PATHS.antigravity.legacyMcp).mcpServers.other.command, 'legacy-other')
+    }
+  })
   await test('failed second Antigravity migration write restores both exact configuration bytes', async () => {
     write(PATHS.antigravity.legacyMcp, { preference: 'keep', mcpServers: { other: { command: 'other' }, 'search-boost': { command: 'old-node' } } })
     const beforeModern = readFileSync(PATHS.antigravity.mcp), beforeLegacy = readFileSync(PATHS.antigravity.legacyMcp)

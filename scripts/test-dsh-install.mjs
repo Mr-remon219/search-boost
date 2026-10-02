@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import './isolate-tests.mjs'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, cpSync, symlinkSync, realpathSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, cpSync, symlinkSync, realpathSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, delimiter } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -34,6 +34,13 @@ try {
 import { writeFileSync, mkdirSync, cpSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 const args = process.argv.slice(2);
+if (process.env.DSH_TEST_ASSERT_ENV) {
+  for (const key of ['TAVILY_API_KEY', 'AWS_SECRET_ACCESS_KEY', 'DSH_INTERNAL_IDENTITY', 'NODE_OPTIONS']) {
+    if (process.env[key] !== undefined) throw Error('service child received forbidden environment name: ' + key);
+  }
+  if (Object.keys(process.env).some(key => key.startsWith('SEARCH_BOOST_DSH_PROBE_'))) throw Error('service child received probe markers');
+  if (process.env.DSH_TEST_EXPECT_DESKTOP && process.env.ELECTRON_RUN_AS_NODE !== '1') throw Error('Desktop runtime requirements were lost');
+}
 writeFileSync(process.env.DSH_TEST_CAPTURE, JSON.stringify(args));
 if (process.env.DSH_TEST_EXIT !== '0') process.exit(Number(process.env.DSH_TEST_EXIT));
 if (args.includes('add') && !process.env.DSH_TEST_NO_REGISTER) {
@@ -79,7 +86,12 @@ if (args.includes('remove')) {
       npm_execpath: entry, DSH_TEST_CAPTURE: capture, DSH_HOME: join(temp, mode, 'home'), DSH_TEST_EXIT: '0', DSH_TEST_ROOT: fileURLToPath(new URL('..', import.meta.url)) }
     if (process.platform === 'win32') for (const key of Object.keys(env)) if (key.toLowerCase() === 'path' && key !== 'PATH') delete env[key]
     const run = (body, extra = {}) => spawnSync(process.execPath, ['--input-type=module', '-e', `const host = await import(${JSON.stringify(moduleUrl)}); ${body}`], { env: { ...env, ...extra }, encoding: 'utf8', timeout: 20000 })
-    const result = run(`await host.installDshBundle({ profile: 'profile with spaces' });`)
+    const result = run(`await host.installDshBundle({ profile: 'profile with spaces' });`, {
+      TAVILY_API_KEY: 'fixture-provider-key', AWS_SECRET_ACCESS_KEY: 'fixture-cloud-key',
+      DSH_INTERNAL_IDENTITY: 'fixture-parent-identity', NODE_OPTIONS: '--no-warnings',
+      SEARCH_BOOST_DSH_PROBE_EXTRA: 'fixture-marker', DSH_TEST_ASSERT_ENV: '1',
+      ...(mode === 'desktop-path' ? { DSH_TEST_EXPECT_DESKTOP: '1' } : {}),
+    })
     assert.equal(result.status, 0, result.stderr)
     const actual = JSON.parse(readFileSync(capture, 'utf8'))
     const prefix = ['global', 'desktop-path'].includes(mode) ? [] : ['exec', '--yes', ...(mode === 'npx' ? ['--package', '@deepseek-ai/dsh'] : []), '--package', 'pnpm', '--', 'dsh']
@@ -168,6 +180,19 @@ if (args.includes('remove')) {
     assert.notEqual(badResolver.status, 0)
     assert.ok(!(badResolver.stdout + badResolver.stderr).includes('fixture-secret-do-not-log'))
     writeFileSync(bootFile, boot)
+    const operationsFile = join(bin, 'node_modules/@deepseek-ai/dsh-plugin-manager/index.mjs')
+    const operations = readFileSync(operationsFile, 'utf8')
+    rmSync(operationsFile)
+    const beforeProfile = readFileSync(profileFile), beforeCapture = readFileSync(capture)
+    const oldHost = run(statusBody())
+    assert.notEqual(oldHost.status, 0)
+    assert.match(oldHost.stderr, /requires the owning host.*dsh-plugin-manager\/operations/)
+    assert.match(oldHost.stderr, /no package operation was started/)
+    assert.ok(beforeProfile.equals(readFileSync(profileFile)))
+    assert.ok(beforeCapture.equals(readFileSync(capture)))
+    assert.equal(existsSync(join(dir, '.search-boost-install-pending.json')), false)
+    writeFileSync(operationsFile, operations)
+    console.log(`ok: ${mode} service environment scrub and explicit unsupported-host diagnostic before mutation`)
     console.log(`ok: ${mode} actual host source, old/same-version shadow, disabled/explicit enable, locks, unavailable resolver and safe diagnostics`)
     rmSync(capture)
     assert.equal(run(`await host.installDshBundle({ dryRun: true, enableDshBundle: true });`).status, 0)

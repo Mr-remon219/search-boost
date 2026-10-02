@@ -60,7 +60,7 @@ export async function writeFileAtomic(file, value, options) {
   module('dsh-plugin-manager', `
 import { existsSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 export async function saveManifest(dir, value) { writeFileSync(join(dir, 'package.json'), JSON.stringify(value, null, 2) + '\\n'); }
 // Invoke the fixture's synthetic package-manager body, not a real DSH main.
 // The outer probe owns the actual write lock for this entire callback.
@@ -69,8 +69,12 @@ export async function runProfilePnpm(context, args, options) {
   const prefix = process.argv.slice(2);
   if (prefix.at(-1) === '--version') prefix.pop();
   if (${JSON.stringify(ownerArgument)} && !prefix.length) prefix.push(context.profile === 'desktop' ? 'desktop' : 'cli');
+  // Mirror the service-mode environment contract: explicit options.env is
+  // merged AFTER the host scrub. Preserve only synthetic fixture controls.
+  const scrubbed = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/KEY|PASSWORD|SECRET|TOKEN/i.test(key) && !key.startsWith('DSH_')));
+  const controls = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith('DSH_TEST_')));
   const result = spawnSync(process.execPath, [${JSON.stringify(entry)}, ...prefix, 'plugin', '--profile', context.profile, ...args], {
-    env: { ...process.env, SEARCH_BOOST_DSH_PROBE_NONCE: '' }, encoding: 'utf8', timeout: 10000,
+    env: { ...scrubbed, ...controls, DSH_HOME: dirname(dirname(context.dir)), ...options.env }, encoding: 'utf8', timeout: 10000,
   });
   return { exitCode: result.status ?? 1 };
 }
