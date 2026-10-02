@@ -54,7 +54,7 @@
 - **X / Twitter 社区情报检索 (`x_search`)**  
   支持通过官方 xAI API 或免登录回退通道获取推文、作者动态与讨论串。基于 Snowflake ID 逆向还原精准发布时间戳，本地执行作者与日期范围过滤，杜绝幻觉。
 - **Jev 意图导向搜索 (`adaptive_search` · 实验功能)**
-  输入一个问题、研究倾向、搜索点和明确限制。Jev 先判限制再评质量，方向不符拒绝，各点就绪后整体终检。保留每轮500候选容量、有界页面补查与分页；不宣称答案已核实或完整。
+  输入一个问题、研究倾向、搜索点和明确限制。Jev 先判显式限制再评质量，保留有用补充材料，按披露的分数和各点最低进度停止，不发送全量终审。保留每轮500候选容量、有界页面补查与分页；不宣称答案已核实或完整。
 - **原生多智能体并行研究工作流**  
   随包提供 `search-boost` 与 `search-boost-parallel-research` Skills。在支持子代理的宿主（如 Cursor、Claude Code、Pi、DSH）中，可将复杂调研拆分为多路 Searcher（抓取证据）与 Summarizer（无工具综合），提供 Fast 与 Complex 两种研究波次。
 - **统一架构，全宿主覆盖**  
@@ -196,7 +196,7 @@ search-boost
 - **Pi**：约 300ms 内更新活跃工具，保留其他插件工具和原本被宿主排除的工具；会话结束时清理监听。
 - **DSH**：保留注册但立即拒绝关闭工具的新调用；原生搜索/抓取 provider 也遵守对应开关。
 
-每次调用都会重新检查开关，旧工具句柄也不能绕过；正在执行的请求正常完成。移除 Jev 凭据会锁定 adaptive 调用（包括分页），恢复凭据不覆盖明确关闭的偏好。这里开关的是**工具入口**，不是底层引擎权限：已开启的 adaptive 仍可在内部搜索和抓取，融合搜索的 community 模式仍可内部检索 X。Slash 命令保留用于恢复配置。正在运行旧适配器代码的进程需先更新/重载一次；各宿主需使用同一 SearchBoost 配置目录。
+每次调用都会重新检查开关，旧工具句柄也不能绕过；正在执行的请求正常完成。移除 Jev 凭据会锁定 adaptive 调用（包括分页和保存结果恢复），恢复凭据不覆盖明确关闭的偏好。这里开关的是**工具入口**，不是底层引擎权限：已开启的 adaptive 仍可在内部搜索和抓取，融合搜索的 community 模式仍可内部检索 X。Pi/DSH 的 searcher 波次还要求共享 fused_search、fetch_page 入口及 DSH 范围内工具可用：初始依赖关闭时零派发，每个子进程启动前再次检查；已启动子任务正常完成，无工具 summarizer 不受这两个依赖限制。检查不自动启用工具、不扩大权限。Slash 命令保留用于恢复配置。正在运行旧适配器代码的进程需先更新/重载一次；各宿主需使用同一 SearchBoost 配置目录。
 
 ---
 
@@ -300,6 +300,7 @@ search-boost
 - 返回认可的 URL、标题、审查摘录及 valueScore/directionMatch/kind及focus/supporting分层，不生成答案，不混入尚未完成准入的候选；可选方向或关键词判断缺失仍单独披露。
 - 查看 `reviewSummary`、`scopeSummary`、`convergence`、`keywordProgress`、`pendingAssessments` 和警告。`retrievalSufficient` 表示达到评分检索停止标准，不是语义终审、事实核实或答案全集覆盖；废弃的 `finalReview` 固定为 `not_run`、无判定；`coverageComplete` 在 schemaVersion 3 中仍恒为 false。
 - 用 `{"cursor":"<nextCursor>"}` 读取后续页，可选 page_size，不重搜或重问 Jev。默认20、最多50条/页并有字节预算，累计认可结果无固定条数帽；结果暂存本进程最多30分钟/32次，分页完毕不是全网穷尽。
+- 显式传入 `save_results:true` 才会私有保存选中材料和类型化元数据，返回 `savedResultId`。重启后用 `{"saved_result_id":"<savedResultId>"}` 恢复（可选 `page_size`），不重搜、不重问 Jev；不能与新研究输入或 `save_results` 混用。公开工具仍遵循用户开关及 Jev 配置锁；`search-boost research list` / `research export <id> --output <new-file.json>` 无需 Jev、可离线使用。参见[接入与验收边界](docs/research-status-acceptance.md)。
 - 阈值仍是未标定工程起点。完整契约、预算和迁移说明见 [Jev 单问题研究检索](docs/jev-adaptive-search.md)。
 
 ---
@@ -401,7 +402,10 @@ API Key 存放在由 SearchBoost 自己管理的凭据文件中，不写入提�
 ```bash
 # ----------------- 启动与基础 -----------------
 search-boost                                # 打开交互式控制面板 (TUI)
-search-boost status                         # 打印当前配置与集成状态摘要
+search-boost status                         # 只读磁盘/配置证据；运行中宿主版本仍未知
+search-boost status --json                  # 结构化安装证据
+search-boost research list                  # 列出显式保存的私有研究结果
+search-boost research export <id> --output <new-file.json> # 显式导出，不覆盖
 search-boost --help                         # 查看完整命令行帮助文档
 
 # ----------------- 非交互式安装 -----------------

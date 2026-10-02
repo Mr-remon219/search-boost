@@ -54,7 +54,7 @@
 - **X / Twitter Community Intelligence (`x_search`)**  
   Retrieves public posts, user timelines, and discussion threads via official xAI API or an anonymous fallback channel. Recovers accurate UTC timestamps from Snowflake post IDs and enforces local author/date filtering without hallucination.
 - **Jev Intent-Guided Search (`adaptive_search` · Experimental)**
-  Supply one question, research intent, search points and explicit restrictions. Jev selects a query then its engines, checks explicit constraints before quality, retains useful supporting material, and reviews ALL admitted material before stopping. Global 500-URL round capacity, bounded page recovery and cursor pagination; no claim of verified or complete answers.
+  Supply one question, research intent, search points and explicit restrictions. Jev selects a query then its engines, checks explicit constraints before quality, retains useful supporting material, and stops by the disclosed score/progress rule (no whole-material final review). Global 500-URL round capacity, bounded page recovery and cursor pagination; no claim of verified or complete answers.
 - **Native Multi-Agent Parallel Research**  
   Bundles `search-boost` and `search-boost-parallel-research` skills. In hosts supporting subagents (Cursor, Claude Code, Pi, DSH), tasks can be dispatched to parallel Searchers (gathering evidence) and Summarizers (pure synthesis without tools), supporting both Fast and Complex waves.
 - **Unified Core Across All Host Ecosystems**  
@@ -196,7 +196,7 @@ Preferences are shared through `~/.search-boost/config/tools.json` (or `$SEARCH_
 - **Pi:** active tools refresh within approximately 300ms; unrelated and initially excluded tools are preserved. Watchers stop on session shutdown.
 - **DSH:** registrations remain present but disabled calls fail immediately; the native search/fetch provider paths obey the same switches.
 
-Every new invocation checks the current preference, including stale tool handles. Existing requests finish normally. Removing Jev credentials locks adaptive calls (including pagination); restoring credentials does not override explicit OFF. These are **tool-entry switches**, not engine permissions: enabled adaptive research may still use internal search/fetch, and fused community search may still use internal X retrieval. Slash commands remain available for recovery. Existing processes running older adapter code require one reload/update first. Hosts sharing these settings must use the same SearchBoost home.
+Every new invocation checks the current preference, including stale tool handles. Existing requests finish normally. Removing Jev credentials locks adaptive calls (including pagination and saved-result recovery); restoring credentials does not override explicit OFF. These are **tool-entry switches**, not engine permissions: enabled adaptive research may still use internal search/fetch, and fused community search may still use internal X retrieval. Searcher waves in Pi/DSH also require the shared fused_search and fetch_page entries and DSH scoped tools: disabled dependencies prevent initial dispatch, and are checked again before each child starts. Started children finish normally; tool-free summarizers do not require these entries. Checks never enable tools or expand permissions. Slash commands remain available for recovery. Existing processes running older adapter code require one reload/update first. Hosts sharing these settings must use the same SearchBoost home.
 
 ---
 
@@ -300,6 +300,7 @@ Supply **one question** (`questions` has exactly one item), optional research `i
 - Results contain approved URLs, titles, reviewed extracts, valueScore, directionMatch, kind and focus/supporting tier, not generated answers. Unadmitted candidates are excluded; missing optional direction/match judgments remain disclosed.
 - Inspect `reviewSummary`, `scopeSummary`, `convergence`, `keywordProgress`, `pendingAssessments` and warnings. `retrievalSufficient` means the score-based retrieval stopping rule is met, not semantic review, proof of truth or complete answer coverage. Deprecated `finalReview` reports `not_run` with no verdict. Deprecated `coverageComplete` stays false in schemaVersion 3.
 - Read saved pages with `{"cursor":"<nextCursor>"}` only (optional `page_size`): no new search/Jev calls. Default20/max50 per page with a byte budget; no fixed cumulative result-count cap. Cursors last up to30 minutes/32 recent sets in the current process; pagination is not exhaustive search.
+- With explicit `save_results:true`, persist the selected materials and typed response metadata privately, and receive `savedResultId`. After a restart, read `{"saved_result_id":"<savedResultId>"}` (optional `page_size`) without another search/Jev call. Do not combine a saved ID or cursor with new research input or `save_results`. Public tool switches and the Jev configuration lock still apply; `search-boost research list` / `research export <id> --output <new-file.json>` work offline without Jev. See [integration and acceptance boundaries](docs/research-status-acceptance.md).
 - Thresholds remain uncalibrated engineering starting points. See the [contract, budgets and migration notes](docs/jev-adaptive-search.md).
 
 ---
@@ -401,7 +402,10 @@ In addition to the interactive TUI, SearchBoost provides a comprehensive CLI for
 ```bash
 # ----------------- Core & Interactive -----------------
 search-boost                                # Launch interactive dashboard (TUI)
-search-boost status                         # Print active configuration and host summary
+search-boost status                         # Disk/configuration evidence; running host version remains unknown
+search-boost status --json                  # Structured read-only installation evidence
+search-boost research list                  # List opt-in private result snapshots
+search-boost research export <id> --output <new-file.json> # Explicit export; never overwrite
 search-boost --help                         # Display full CLI documentation
 
 # ----------------- Headless Installation -----------------

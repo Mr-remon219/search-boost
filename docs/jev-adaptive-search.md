@@ -23,7 +23,7 @@
 - **所有强制文档条件必须放入 constraints。** 原问题只为条件提供解释上下文，不另行提取主体或隐含条件门控。空条件跳过前筛。
 - 不要把方向、软偏好、研究点或想要的结论填成硬条件。“优先官方”不是“仅限官方”；时间条件须区分事件发生时间与发布时间。
 - 公开入口不再支持 `tasks/targets/facts/time_range`、多问题或二维关键词；不静默截断或转换。历史 V2/V3 仅作为内部离线对照，宿主输入不能启用。
-- 翻页只传 `cursor` 和可选 `page_size`，不能混入研究输入。
+- 翻页只传 `cursor` 和可选 `page_size`，不能混入研究输入。显式 `save_results:true` 可保存本轮完整的选中结果集；用 `saved_result_id` 和可选 `page_size` 重新开启本地分页，不能与 cursor、新研究输入或 save_results 混用。
 
 ## 2. 总流程与反馈规划
 
@@ -135,7 +135,7 @@ G   = 100 × Σp_k / K        K = 研究点数量，默认等权
 - `coverageComplete`：废弃兼容字段，恒为false。
 - 另有stopReason、warnings、totalResults、nextCursor和expiresAt。
 
-默认20条、最多50条/页，另有软字节预算；累计准入结果没有固定数量帽。cursor只读进程内存，不重新搜索或问Jev；保留至多30分钟/32次结果。重启/淘汰使其失效。收束分数针对当前有效材料，与分页无关，首屏不保证出现所有点或反证；按nextCursor继续读。
+默认20条、最多50条/页，另有软字节预算；累计准入结果没有固定数量帽。cursor只读进程内存，不重新搜索或问Jev；保留至多30分钟/32次结果。重启/淘汰使其失效。可选 save_results 的 UUID 快照不存活游标，重启后用 saved_result_id 读取同一 SearchBoost home 的私有快照，并生成新游标，不发搜索/Jev请求；公开工具依然遵循开关及 Jev 配置锁，CLI research list/export 不需要 Jev。快照最多64MiB，缺失/损坏明确报错而不转为新搜索；保存失败保留当前结果并披露警告。详见[接入与验收](research-status-acceptance.md)。收束分数针对当前有效材料，与分页无关，首屏不保证出现所有点或反证；按nextCursor继续读。
 
 ## 8. 验证边界
 

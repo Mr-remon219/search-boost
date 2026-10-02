@@ -233,7 +233,7 @@ function summarizeAdaptive(result) {
     description: ADAPTIVE_DESCRIPTION,
     inputSchema: adaptiveSearchInput,
     outputSchema: adaptiveSearchOutput,
-    annotations: { ...ANNOTATIONS.search, title: 'Intent-guided search result selection (Jev)' },
+    annotations: { ...ANNOTATIONS.search, readOnlyHint: false, title: 'Intent-guided search result selection (Jev; optional local save)' },
   }, async (args, extra) => {
     try {
       const result = await runAdaptiveSearch(args, {
@@ -241,8 +241,9 @@ function summarizeAdaptive(result) {
         host: 'mcp',
         audit: extra?.audit,
       })
-      const isError = result.stopReason === 'invalid_input' || result.stopReason === 'not_configured' || result.stopReason === 'no_engines'
-      const suffix = result.stopReason === 'not_configured'
+      const initial = args.cursor === undefined && args.saved_result_id === undefined
+      const isError = initial && (result.stopReason === 'invalid_input' || result.stopReason === 'not_configured' || result.stopReason === 'no_engines')
+      const suffix = initial && result.stopReason === 'not_configured'
         ? `\n\nJev is not configured: run \`${result.configurationHint ?? 'search-boost config jev'}\`, or use fused_search / fetch_page / x_search directly.`
         : ''
       const text = `${renderAdaptiveSummary(result)}${suffix}\n\n${JSON.stringify(result)}`

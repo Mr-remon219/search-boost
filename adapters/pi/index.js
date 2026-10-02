@@ -304,7 +304,7 @@ export default function searchBoostExtension(pi) {
       const progress = onProgress(onUpdate)
       const started = Date.now()
       const questions = Array.isArray(params?.questions) ? params.questions : []
-      progress(params.cursor ? 'adaptive_search: reading result page…' : 'adaptive_search: planning target searches…')
+      progress(params.cursor || params.saved_result_id ? 'adaptive_search: reading saved results…' : 'adaptive_search: planning target searches…')
       const res = await runAdaptiveSearch(params, {
         signal,
         host: 'pi',
