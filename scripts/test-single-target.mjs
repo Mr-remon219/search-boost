@@ -182,6 +182,61 @@ test('independent thin-snippet recovery must establish constraints anew before q
   assert.equal(r.retrievalSufficient, true)
 })
 
+test('redirected recovery material is reviewed and cited under its actual domain', async () => {
+  const requested = 'https://official.example/article'
+  const final = 'https://third-party.example/article'
+  const h = harness({ limits: { maxRounds: 2 }, search: () => [hit('official')],
+    judge: ({ phase, state, id }) => phase === 'scope_judge'
+      ? (sourceFor(state, id).url === final ? .1 : .7) : undefined,
+    fetch: () => ({ url: final, requestedUrl: requested, content: hit().snippet, word_count: 30 }) })
+  const r = await h.run()
+  const fetched = h.calls.jev.filter(c => c.phase === 'scope_judge').flatMap(c => c.state.sources)
+    .filter(s => s.fragments.some(f => f.text_basis === 'fetched_page'))
+  assert.ok(fetched.length)
+  assert.ok(fetched.every(s => s.url === final && s.domain === 'third-party.example'))
+  assert.ok(h.calls.evidence.every(e => e.url === final && e.domain === 'third-party.example'))
+  assert.equal(approvedResults(h.calls.evidence).length, 0)
+  assert.equal(r.retrievalSufficient, false)
+})
+
+test('redirect identity changes invalidate same-text verdicts and all shared associations', () => {
+  const pool = createEvidencePool({ questions: [{ id: 'q1', text: 'Alpha', constraints: ['Only official'] }, { id: 'q2', text: 'Alpha', constraints: ['Only official'] }] })
+  const original = hit('official', { title: 'Official Alpha', published: '2025-01-01' })
+  pool.ingestSearch({ questionId: 'q1', round: 1, results: [original] })
+  pool.ingestSearch({ questionId: 'q2', round: 1, results: [original] })
+  const [a] = pool.associationsFor('q1'), [b] = pool.associationsFor('q2')
+  const key = a.sourceKey
+  const page = { url: original.url, content: original.snippet, word_count: 30 }
+  pool.ingestFetch({ questionId: 'q1', sourceKey: key, page, round: 1 })
+  const oldVersion = a.textVersion
+  for (const assoc of [a, b]) { assoc.judgment = { relevant: .99 }; assoc.judgmentVersion = assoc.textVersion; assoc.scope = { route: 'eligible' }; assoc.coverage = { versionSignature: 'old' } }
+  pool.ingestFetch({ questionId: 'q1', sourceKey: key, page: { ...page, url: 'https://third-party.example/article' }, round: 2 })
+  assert.equal(pool.source(a.sourceKey).domain, 'third-party.example')
+  assert.equal(pool.source(a.sourceKey).title, '')
+  assert.equal(pool.source(a.sourceKey).published, null)
+  assert.equal(a.judgment, null); assert.equal(b.judgment, null)
+  assert.equal(a.scope, null); assert.equal(b.scope, null)
+  assert.equal(a.coverage, null); assert.equal(b.coverage, null)
+  assert.notEqual(a.textVersion, oldVersion)
+  assert.equal(pool.applySourceJudgments([{ assocId: a.assocKey, textVersion: oldVersion, scores: { relevant: .99 } }]).stale, 1)
+  pool.ingestSearch({ questionId: 'q1', round: 3, results: [original] })
+  assert.equal(pool.source(a.sourceKey).url, 'https://third-party.example/article')
+  assert.equal(pool.source(a.sourceKey).title, '')
+  assert.equal(a.basis, 'fetched_page')
+})
+
+test('an empty redirect invalidates original material rather than certifying it under a new owner', () => {
+  const pool = createEvidencePool({ questions: [{ id: 'q1', text: 'Alpha', constraints: ['Only official'] }] })
+  pool.ingestSearch({ questionId: 'q1', round: 1, results: [hit('official')] })
+  const [a] = pool.associationsFor('q1')
+  a.judgment = { relevant: .99 }; a.judgmentVersion = a.textVersion
+  a.scope = { route: 'eligible' }
+  pool.ingestFetch({ questionId: 'q1', sourceKey: a.sourceKey, page: { url: 'https://third-party.example/article', content: '' }, round: 2 })
+  assert.equal(a.text, ''); assert.equal(a.judgment, null); assert.equal(a.scope, null)
+  assert.equal(pool.pendingSourceJudge().length, 0)
+  assert.equal(pool.source(a.sourceKey).url, 'https://third-party.example/article')
+})
+
 test('normal non-pass cannot be promoted by an empty recovery fetch', async () => {
   const h = harness({ judge: ({ phase }) => phase === 'scope_judge' ? .7 : undefined })
   const r = await h.run()

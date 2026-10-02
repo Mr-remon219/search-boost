@@ -816,7 +816,7 @@ assert('dsh bundle install rejects a no-op launcher (a .cmd shim on Windows)', r
   const { installDshBundle } = await import('${pathToFileURL(join(repoRoot, 'lib/agents/host-runtime.mjs')).href}')
   await installDshBundle({ dryRun: false }).then(
     () => { throw new Error('no-op launcher was accepted') },
-    (err) => { if (!/installation was not verified/.test(err.message)) throw err },
+    (err) => { if (!/installation was not verified/i.test(err.message)) throw err },
   )
 `))
 assert('grok uninstall project config', !existsSync(join(grokDir, '.grok', 'config.toml')))

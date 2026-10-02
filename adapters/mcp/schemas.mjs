@@ -73,6 +73,7 @@ export const fetchPageInput = {
 }
 
 export const fetchPageOutput = {
+  requestedUrl: z.string().optional(),
   focusMiss: z.boolean().optional(),
   limitation: z.object({ kind: z.string(), message: z.string() }).optional(),
   url: z.string(),
@@ -131,6 +132,8 @@ export const searchStatsOutput = {
 }
 
 export const adaptiveSearchInput = {
+  save_results: z.boolean().optional().describe(ADAPTIVE_INPUT_SCHEMA.properties.save_results.description),
+  saved_result_id: z.string().regex(new RegExp(ADAPTIVE_INPUT_SCHEMA.properties.saved_result_id.pattern)).optional().describe(ADAPTIVE_INPUT_SCHEMA.properties.saved_result_id.description),
   questions: z.array(z.string().min(1).max(400)).length(1).optional()
     .describe('Exactly ONE coherent research question; comparisons may have related aspects. Supply questions or cursor. Independent questions require separate calls.'),
   intent: z.string().min(1).max(2000).optional()
@@ -144,38 +147,7 @@ export const adaptiveSearchInput = {
     .describe('Results per page: default 20, max 50. Total approved results have no fixed count cap; pages also have a byte limit.'),
 }
 
-export const adaptiveSearchOutput = {
-  results: z.array(z.object({ url: z.string(), title: z.string(), description: z.string(), tier: z.enum(['focus', 'supporting']).optional(), valueScore: z.number().optional(), directionMatch: z.number().nullable().optional(), kind: z.string().optional(), matches: z.array(z.object({taskId:z.string().nullable(),targetId:z.string().nullable(),canonicalId:z.string().nullable(),valueScore:z.number(),directionMatch:z.number().nullable(),kind:z.string()})).optional() })),
-  totalResults: z.number(),
-  nextCursor: z.string().nullable(),
-  expiresAt: z.string(),
-  schemaVersion: z.number().optional(),
-  retrievalSufficient: z.boolean().optional().describe('Current deduplicated scores meet the total threshold AND every keyword floor. A retrieval stopping rule, not semantic review, answer completeness or verification.'),
-  scopeSummary: z.object({ eligible: z.number(), rejected: z.number(), unknown: z.number() }).optional(),
-  convergence: z.object({ method: z.literal('score_threshold_v1'), status: z.enum(['satisfied', 'insufficient']),
-    score: z.number().min(0).max(100), totalThreshold: z.number(), keywordTarget: z.number(), keywordFloor: z.number(),
-    minimumProgress: z.number(), keywordCount: z.number(),
-    points: z.array(z.object({ keyword: z.string(), progress: z.number().min(0).max(1), minimumMet: z.boolean() })),
-  }).optional().describe('Deterministic heuristic stopping diagnostic; thresholds are not calibrated probabilities.'),
-  finalReview: z.object({ status: z.enum(['not_run', 'not_ready', 'finish', 'continue', 'pending', 'stale']), checks: z.number(),
-    verdict: z.enum(['pass', 'not_passed']).nullable().optional(), researchKeyword: z.string().nullable().optional(),
-    inputMaterials: z.number().optional(), allMaterialsIncluded: z.boolean().optional() }).optional(),
-  reviewSummary: z.object({ collectedRows: z.number(), assessmentUnavailable: z.number(), unreviewed: z.number(), collected: z.number(), withText: z.number(), scopeAssessed: z.number(), scopeSkipped: z.number(),
-    constraintsNotPassed: z.number(), qualityAssessed: z.number(), qualityNotPassed: z.number(), admitted: z.number(),
-    focus: z.number(), supporting: z.number(), awaitingAdmission: z.number() }).optional(),
-  coverageComplete: z.boolean().describe('Deprecated: always false in schemaVersion 3 because answer completeness is not assessed.'),
-  keywordProgress: z.array(z.object({
-    targetId: z.string(), taskId:z.string().nullable().optional(), canonicalId:z.string().optional(), keyword: z.string(), score: z.number(), ready: z.boolean().optional(),
-    status: z.enum(['continue', 'satisfied', 'exhausted', 'pending']).optional(), reason: z.string().optional(),
-    distinctEvidence: z.number(), admitted: z.number().optional().describe('Current creditable content/source groups matching this keyword, not the number of admitted documents; may be zero while useful supporting results are retained.'), finalStatus: z.string(),
-    progress: z.number().min(0).max(1).optional(), A: z.number().optional(), F: z.number().optional(), R: z.number().optional(),
-    missingFacts: z.array(z.string()).optional(),
-    factProgress: z.array(z.object({id:z.string(),support:z.number(),covered:z.boolean(),conflicting:z.boolean()})).optional(),
-  })).optional(),
-  pendingAssessments: z.number().optional(),
-  stopReason: z.string(),
-  warnings: z.array(z.string()),
-}
+export { adaptiveSearchOutput } from '../../lib/search/adaptive/output.js'
 
 /** MCP tool annotations (hints for clients) */export const ANNOTATIONS = {
   search: { readOnlyHint: true, openWorldHint: true, destructiveHint: false },

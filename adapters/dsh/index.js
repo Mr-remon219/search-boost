@@ -331,7 +331,7 @@ function registerFetchPageTool(ctx) {
         type: 'object',
         additionalProperties: false,
         properties: {
-          url: { type: 'string' }, via: { type: 'string' }, fetched_at: { type: 'string' },
+          url: { type: 'string' }, requestedUrl: { type: 'string' }, via: { type: 'string' }, fetched_at: { type: ['string', 'null'] },
           word_count: { type: 'number' }, content: { type: 'string' }, truncated: { type: 'boolean' },
           totalChars: { type: 'number' }, offset: { type: 'number' }, nextOffset: { type: 'number' },
           windowNote: { type: 'string' },
@@ -390,6 +390,8 @@ function registerAdaptiveSearchTool(ctx) {
         properties: {
           results: { type: 'array', items: { type: 'object', properties: { url: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, tier:{type:'string',enum:['focus','supporting']}, valueScore:{type:'number'}, directionMatch:{type:['number','null']}, kind:{type:'string'}, matches:{type:'array',items:{type:'object',properties:{taskId:{type:['string','null']},targetId:{type:['string','null']},canonicalId:{type:['string','null']},valueScore:{type:'number'},directionMatch:{type:['number','null']},kind:{type:'string'}},required:['taskId','targetId','canonicalId','valueScore','directionMatch','kind']}} }, required: ['url', 'title', 'description'] } },
           totalResults: { type: 'number' }, nextCursor: { type: ['string', 'null'] }, expiresAt: { type: 'string' },
+          savedResultId: {type:'string'},
+          inputSummary: {type:'object',properties:{question:{type:'string'},intent:{type:'string'},keywords:{type:'array',items:{type:'string'}},constraints:{type:'array',items:{type:'string'}},constraintPolicy:{type:'string',enum:['explicit_per_material']}},required:['question','intent','keywords','constraints','constraintPolicy']},
           schemaVersion: {type:'number'}, retrievalSufficient: {type:'boolean'},
           scopeSummary: {type:'object',properties:{eligible:{type:'number'},rejected:{type:'number'},unknown:{type:'number'}},required:['eligible','rejected','unknown']},
           convergence: {type:'object',properties:{method:{type:'string',enum:['score_threshold_v1']},status:{type:'string',enum:['satisfied','insufficient']},

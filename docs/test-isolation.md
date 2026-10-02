@@ -3,8 +3,8 @@
 ## 入口与门禁
 
 ```bash
-npm run test:isolation  # 全部自动测试 + smoke + fixture（当前 46 个入口）
-npm run test:install    # 同一门禁，只运行四个安装相关测试
+npm run test:isolation  # 全部自动测试 + smoke + fixture；入口数由门禁动态统计
+npm run test:install    # 同一门禁，运行安装/删除/更新 Desktop 等安装子集
 npm run check          # 语法检查
 ```
 
@@ -34,6 +34,7 @@ CI 的 Linux / Windows / macOS 矩阵运行完整门禁；`prepublishOnly` 在�
 | Git 全局／系统配置 | 空的测试全局配置，禁用系统配置 |
 | TMPDIR、TMP、TEMP | 指向本次测试的子目录，连失败用例遗留的临时文件一起回收 |
 | Grok、DSH、Pi 等宿主 CLI | PATH 前置拒绝执行的保护脚本，误调用返回 97 |
+| Desktop 的绝对 bundled command | 权威命令覆盖指向测试目录中的缺失路径，阻止扫描/执行真实 `/Applications` 或 Windows 安装；测试启动命令必须显式替换为 fixture |
 
 测试可以在这个外层边界内创建多个 HOME、切换配置或注入假凭据，以验证生产逻辑的覆盖优先级。原有局部 fixture 隔离仍可保留，但不再承担保护真实用户环境的责任。
 
@@ -47,7 +48,8 @@ CI 的 Linux / Windows / macOS 矩阵运行完整门禁；`prepublishOnly` 在�
 
 - 已有升级项目记录、Cursor 安装记录、Pi 设置和 DSH profile；
 - 重定位存储、规范／旧式配置、项目级密钥、Grok 登录文件；
-- 假 provider 凭据、npm token、代理及 npm / XDG / 宿主路径覆盖。
+- 假 provider 凭据、npm token、代理及 npm / XDG / 宿主路径覆盖；
+- Desktop profile 与调用者绝对命令覆盖，证明它们不绕过测试 bootstrap。
 
 然后逐个执行测试，并检查：
 

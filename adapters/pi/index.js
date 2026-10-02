@@ -277,7 +277,7 @@ export default function searchBoostExtension(pi) {
       return {
         content: [text([
           `URL: ${page.url}`,
-          `via: ${page.via} — fetched: ${page.fetched_at} — words: ${page.word_count}${page.truncated ? ' — [truncated]' : ''}`,
+          `via: ${page.via} — fetched: ${page.fetched_at ?? 'unknown (legacy cache)'} — words: ${page.word_count}${page.truncated ? ' — [truncated]' : ''}`,
           params.focus ? (page.focusMiss
             ? '[dynamic filtering: focus matched nothing — retry without focus to read the whole page]'
             : `[dynamic filtering: kept ${page.word_count} words relevant to focus]`) : '',
@@ -304,7 +304,7 @@ export default function searchBoostExtension(pi) {
       const progress = onProgress(onUpdate)
       const started = Date.now()
       const questions = Array.isArray(params?.questions) ? params.questions : []
-      progress(params.cursor ? 'adaptive_search: reading result page…' : 'adaptive_search: planning target searches…')
+      progress(params.cursor || params.saved_result_id ? 'adaptive_search: reading saved results…' : 'adaptive_search: planning target searches…')
       const res = await runAdaptiveSearch(params, {
         signal,
         host: 'pi',

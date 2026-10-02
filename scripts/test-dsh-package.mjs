@@ -52,12 +52,12 @@ try {
   const npxPackage = readdirSync(npxRoot).map((entry) => join(npxRoot, entry, 'node_modules', 'search-boost')).find((dir) => existsSync(join(dir, 'package.json')))
   assert(npxPackage, 'npm exec must materialize a real cached package')
   await run(process.execPath, [join(root, 'scripts/test-dsh-schema.mjs'), join(npxPackage, 'adapters/dsh/index.js')])
-  // Published installs must give DSH a registry spec, never a cache path that
-  // disappears after npx cleanup. The installer then persists it in the profile.
+  // Durable installed tarballs reuse their exact source, not same-version npm
+  // code. Only transient npx roots use a registry spec, with payload verification.
   for (const dir of [installed, npxPackage]) {
     const body = `const host = await import(${JSON.stringify(pathToFileURL(join(dir, 'lib/agents/host-runtime.mjs')).href)}); console.log(JSON.stringify(host.dshPluginArgs('add', 'web')))`
     const output = await run(process.execPath, ['--input-type=module', '-e', body])
-    assert.deepEqual(JSON.parse(output), ['plugin', '--profile', 'web', 'add', `search-boost@${packed.version}`])
+    assert.deepEqual(JSON.parse(output), ['plugin', '--profile', 'web', 'add', dir === installed ? installed : `search-boost@${packed.version}`])
     assert.equal(JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).version, packed.version)
   }
   console.log(`ok: npx packed artifact loads all DSH tools; both install modes use durable profile specs (${process.platform})`)

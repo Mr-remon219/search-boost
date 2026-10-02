@@ -10,6 +10,8 @@ import { tmpdir } from 'node:os'
 import { join, dirname, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { execFileSync } from 'node:child_process'
+import { writeDshHostFixture } from './dsh-host-fixture.mjs'
+import { runCommand } from '../lib/upgrade/process.mjs'
 
 // Release roots below are expected to be canonical package identities. macOS
 // tmpdir may use /var while package discovery resolves the same tree via /private/var.
@@ -59,7 +61,11 @@ function loadedVersion(entry) {
 }
 const calls = []
 let noOp = false, staleLink = false, failRemove = false
-async function run(command, args) {
+const probeEntry = join(temp, 'fake-host', 'host.mjs')
+writeDshHostFixture(probeEntry)
+write(probeEntry, 'throw Error("runtime probe must exit before host main")')
+async function run(command, args, options) {
+  if (options?.env?.SEARCH_BOOST_DSH_PROBE_NONCE) return runCommand(process.execPath, [probeEntry, '--version'], options)
   // Exercise the shared launcher on machines with or without global DSH/pnpm.
   if (command === 'npm' && args[0] === 'exec') {
     const separator = args.indexOf('--')

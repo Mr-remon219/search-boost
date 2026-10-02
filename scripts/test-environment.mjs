@@ -14,7 +14,7 @@ const scripts = fileURLToPath(new URL('.', import.meta.url))
 const repo = resolve(scripts, '..')
 const tests = readdirSync(scripts).filter(name => /^test-.*\.mjs$/.test(name) && name !== 'test-environment.mjs')
   .concat(['smoke.mjs', 'ci-doctor-smoke.mjs', 'cursor-roundtrip-fixture.mjs']).sort()
-const installTests = ['test-dsh-install.mjs', 'test-install.mjs', 'test-startup-hooks.mjs', 'test-skill-bundles.mjs']
+const installTests = ['test-dsh-install.mjs', 'test-dsh-desktop.mjs', 'test-client-review-regressions.mjs', 'test-install.mjs', 'test-startup-hooks.mjs', 'test-skill-bundles.mjs']
 const firstImport = /^import ['"]\.\/isolate-tests\.mjs['"]\s*$/
 for (const name of tests) {
   const first = readFileSync(join(scripts, name), 'utf8').replace(/^#![^\n]*\n/, '').split('\n')[0]
@@ -63,6 +63,7 @@ try {
     PI_SEARCH_TAVILY_KEY: secret, NPM_TOKEN: secret, GITHUB_TOKEN: secret,
     SEARCH_BOOST_LAYER: 'api', SEARCH_BOOST_UPGRADE_CWD: project, SEARCH_BOOST_UPGRADE_HANDOFF: 'sentinel-lock',
     SEARCH_BOOST_FUTURE_SETTING: 'sentinel', PI_SESSION_FILE: join(user, 'session.jsonl'),
+    SEARCH_BOOST_DSH_DESKTOP_COMMAND: join(user, 'desktop-command'),
     HTTPS_PROXY: 'http://user:sentinel@127.0.0.1:1', https_proxy: 'http://user:sentinel@127.0.0.1:1',
   }
   for (const [kind, data] of Object.entries({ KEYS: { tavily: 'sentinel', jev: { apiKey: 'sentinel', baseUrl: 'https://jev.invalid/v1' } }, LAYER: { layer: 'api' }, XAUTH: { kind: 'api-key', key: 'xai-sentinel' }, XGUEST: { token: 'sentinel' }, WORKSPACES: { workspaces: [project] } })) {
@@ -74,6 +75,8 @@ try {
   for (const root of [store, join(user, '.search-boost')]) write(join(root, 'state/upgrade-projects.json'), { projects: [project] })
   write(join(env.PI_CODING_AGENT_DIR, 'settings.json'), { packages: ['npm:foreign'] })
   write(join(env.DSH_HOME, 'profiles/web/package.json'), { dependencies: { 'search-boost': 'sentinel-version' } })
+  write(join(env.DSH_HOME, 'profiles/desktop/package.json'), { dependencies: { 'search-boost': 'sentinel-version' } })
+  write(env.SEARCH_BOOST_DSH_DESKTOP_COMMAND, 'caller Desktop command must never execute')
   write(join(user, '.grok/auth.json'), { accessToken: 'sentinel' })
   write(join(project, '.search-boost-keys.json'), { tavily: 'sentinel-project-key' })
   for (const path of [env.npm_config_userconfig, env.NPM_CONFIG_GLOBALCONFIG]) write(path, '//registry.npmjs.org/:_authToken=sentinel\n')
@@ -113,7 +116,8 @@ for (const command of ['grok','dsh','pi','claude','codex','cursor','antigravity'
   assert.equal(blocked.status, 97, command + ': real host must be blocked');
 }
 assert.deepEqual(Object.keys(process.env).filter(key => key.toLowerCase() === 'path'), ['PATH']);
-console.log(JSON.stringify({ testRoot, home: process.env.HOME, cwd: process.cwd(), pi: PATHS.pi.agentDir, dsh: PATHS.dsh.home, npmCache: process.env.npm_config_cache, npmPrefix: process.env.npm_config_prefix }));
+assert.ok(process.env.SEARCH_BOOST_DSH_DESKTOP_COMMAND.startsWith(testRoot));
+console.log(JSON.stringify({ testRoot, desktopCommand: process.env.SEARCH_BOOST_DSH_DESKTOP_COMMAND, home: process.env.HOME, cwd: process.cwd(), pi: PATHS.pi.agentDir, dsh: PATHS.dsh.home, npmCache: process.env.npm_config_cache, npmPrefix: process.env.npm_config_prefix }));
 `)
   const checked = spawnSync(process.execPath, [probe], { env, cwd: project, encoding: 'utf8', timeout: 20_000 })
   assert.equal(checked.status, 0, checked.stderr)

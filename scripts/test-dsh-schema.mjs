@@ -48,6 +48,13 @@ for (const name of names) {
 assert.equal(tools.schemas().length, names.length)
 assert.equal(tools.sdkSchemas().length, names.length)
 console.log('ok: all six tools register in real DSH and compile for native/TypeScript/Python presentation')
+const cacheRuntime = process.argv[2] ? await import(new URL('../../lib/runtime.mjs', pathToFileURL(process.argv[2])).href) : await import('../lib/runtime.mjs')
+cacheRuntime.PAGE_CACHE.set('page:https://example.test/legacy-cache', 'Historical cached document text. '.repeat(8))
+const legacyPage = await tools.get('fetch_page').execute({ url: 'https://example.test/legacy-cache' }, {})
+assert.equal(legacyPage.fetched_at, null)
+assert.equal(legacyPage.cacheHit, true)
+assert.deepEqual(validateJsonSchemaValue(tools.get('fetch_page').output.schema, legacyPage), [])
+console.log('ok: legacy cache time is nullable in the actual DSH output validator; no fake fetch time or network request')
 
 const stats = await tools.get('search_stats').execute({}, {})
 assert.deepEqual(validateJsonSchemaValue(tools.get('search_stats').output.schema, stats), [])
