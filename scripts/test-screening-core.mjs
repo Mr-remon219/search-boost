@@ -9,7 +9,7 @@ import {
   ADAPTIVE_INPUT_SCHEMA, normalizeAdaptiveInput, AdaptiveInputError, CONSTRAINTS_MIGRATION_MESSAGE,
 } from '../lib/search/screening/input.js'
 import { ADAPTIVE_OUTPUT_SCHEMA, ADAPTIVE_V5_OUTPUT_SCHEMA, ADAPTIVE_V5_SCHEMA_VERSION } from '../lib/search/screening/schema.js'
-import { createResultPages, resultPages, MAX_PAGE_RUNS, PAGE_TTL_MS } from '../lib/search/screening/pages.js'
+import { createResultPages, resultPages, MAX_PAGE_RUNS, PAGE_TTL_MS, MAX_PAGE_BYTES } from '../lib/search/screening/pages.js'
 import { ADAPTIVE_DESCRIPTION, ADAPTIVE_PROMPT_GUIDELINES, renderAdaptiveSummary, adaptiveTextContent, ADAPTIVE_TOOL_NAME } from '../lib/search/screening/describe.js'
 import { SCREENING_LIMITS, SCREENING_BUDGET_VERSION, SCREENING_METERING_VERSION, createScreeningBudget } from '../lib/search/screening/limits.js'
 import { toDshSchema } from '../adapters/dsh/schema.js'
@@ -144,7 +144,7 @@ assert.deepEqual(Object.keys(ADAPTIVE_V5_OUTPUT_SCHEMA.properties.run.properties
 {
   // An oversized single row is returned intact with a warning instead of vanishing.
   const pages = createResultPages()
-  const result = pages.save([{ id: 'r1', description: 'y'.repeat(60_000) }], { schemaVersion: 5, warnings: [] }, 1)
+  const result = pages.save([{ id: 'r1', description: 'y'.repeat(MAX_PAGE_BYTES + 1000) }], { schemaVersion: 5, warnings: [] }, 1)
   assert.equal(result.results.length, 1)
   assert.equal(result.warnings.some((warning) => /exceeds the soft page byte budget/.test(warning)), true)
   // Oversized v5 metadata is trimmed with disclosure; if it still cannot fit, it fails loudly.

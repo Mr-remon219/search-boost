@@ -78,7 +78,7 @@ await test('the ranked snapshot is process-local, stable across page sizes and n
 
 await test('a request above the review cap is disclosed instead of promised', async () => {
   const h = makeHarness({ rows: fixtureRows(32), searchResult: { funnel: { fusionRows: 50 } } })
-  const result = await runAdaptiveScreening({ ...INPUT, max_results: 50 }, {}, h.deps)
+  const result = await runAdaptiveScreening({ ...INPUT, max_results: 50 }, { limits: { candidateLimit: 32 } }, h.deps)
   assert.equal(result.run.targetExceedsReviewCap, true)
   assert.equal(result.diagnostics.outsideReview, 18, 'rows beyond the declared snapshot are disclosed, not silently dropped')
   assert.equal(result.diagnostics.unreviewed, 18)

@@ -5,7 +5,7 @@ import './isolate-tests.mjs'
 // here. The pdfjs-dist path is optional, exactly like the dependency itself.
 import assert from 'node:assert/strict'
 import { fetchPage, makePageCache, PAGE_WINDOW_CHARS, windowPageResult, toFetchPageResult } from '../lib/search/fetch.js'
-import { assemblePdfPageText, extractPdfText, isPlausibleText, looksBinary, looksBinaryType, looksLikePdf, loadPdfParser, pdfAssetPrefix, PDF_MAX_PAGES, __setPdfParserForTests } from '../lib/search/pdf.js'
+import { assemblePdfPageText, extractPdfText, isPlausibleText, binaryBodyReason, looksBinary, looksBinaryType, looksLikePdf, loadPdfParser, pdfAssetPrefix, PDF_MAX_PAGES, __setPdfParserForTests } from '../lib/search/pdf.js'
 import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
 import { NET_ERROR_KINDS } from '../lib/search/net-policy.mjs'
 
@@ -98,6 +98,9 @@ await test('detection distinguishes PDF, text and binary bodies', async () => {
   assert.equal(looksLikePdf(Buffer.from('<p>a page that discusses %PDF-1.7 headers</p>')), false)
   assert.equal(looksLikePdf(new Uint8Array(fixturePdf)), true)
   assert.equal(looksBinary(Buffer.alloc(400, 7)), true)
+  assert.equal(binaryBodyReason(Buffer.alloc(400, 7)), 'control_byte_density')
+  assert.equal(binaryBodyReason(Buffer.from('<html>\u0000</html>')), 'nul_byte')
+  assert.equal(binaryBodyReason(Buffer.from('<html>正常 HTML</html>')), null)
   assert.equal(looksBinary(Buffer.concat([Buffer.alloc(5000, 65), Buffer.from([0])])), true)
   assert.equal(looksBinaryType('application/octet-stream'), true)
   assert.equal(looksBinaryType('image/png'), true)
@@ -350,6 +353,27 @@ await test('a rejected asset prefix does not cost the whole extraction, a real p
 // ---------------------------------------------------------------------------
 // Binary bodies
 // ---------------------------------------------------------------------------
+await test('HTML byte refusal identifies its safety trigger separately from reader 403', async () => {
+  const url = 'https://example.test/diagnostics'
+  const html = `<html><body>${prose}</body></html>`
+  const clean = stubNetwork(() => new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } }))
+  assert.equal((await fetchPage(url, undefined, makePageCache())).via, 'local')
+  assert.equal(clean.length, 1, 'HTML MIME alone must not trigger the reader')
+  for (const [body, reason] of [[Buffer.from(`${html}\u0000PRIVATE-BODY`), 'nul_byte'], [Buffer.alloc(800, 7), 'control_byte_density']]) {
+    const seen = stubNetwork(target => target.startsWith('https://r.jina.ai/')
+      ? new Response('Forbidden', { status: 403 })
+      : new Response(body, { headers: { 'content-type': 'text/html; charset=UTF-8' } }))
+    await assert.rejects(fetchPage(url, undefined, makePageCache()), error => {
+      assert.match(error.message, /content-type=text\/html/)
+      assert.ok(error.message.includes(`reason=${reason}`))
+      assert.match(error.message, /reader failed: jina http 403/)
+      assert.ok(!error.message.includes('PRIVATE-BODY'))
+      return true
+    })
+    assert.equal(seen.length, 2, 'no workaround requests follow a reader 403')
+  }
+})
+
 await test('a declared binary body is refused or read by the reader, never returned', async () => {
   const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(4096, 7)])
   const binary = () => new Response(png, { headers: { 'content-type': 'image/png' } })

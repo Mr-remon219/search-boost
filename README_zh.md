@@ -54,7 +54,7 @@
 - **X / Twitter 社区情报检索 (`x_search`)**  
   支持通过官方 xAI API 或免登录回退通道获取推文、作者动态与讨论串。基于 Snowflake ID 逆向还原精准发布时间戳，本地执行作者与日期范围过滤，杜绝幻觉。
 - **Jev 意图导向搜索 (`adaptive_search` · 实验功能)**
-  提供一个完整问题与必填研究方向。检索前一次 Jev 策略请求选择固定排序预设，并在省略 community 时决定是否追加既有社区支路；随后对至多 32 条有界 fused 快照做固定选项筛选（安全、原型价值 3/4/5、来源折扣）。没有关键词规划、没有逐材料 constraints 门槛、没有语言校验、没有自动补读，也没有自设的累计预算停止；cursor 与 saved_result_id 只重放已保存结果。不宣称答案已核实或完整。
+  提供一个完整问题与必填研究方向。检索前一次 Jev 策略请求选择固定排序预设，并在省略 community 时决定是否追加既有社区支路；随后对有界 fused 快照（目标≤10 时最多 32 条，更大目标按原余量比例扩至最高 160 条）做固定选项筛选（安全、原型价值 3/4/5、来源折扣）。没有关键词规划、没有逐材料 constraints 门槛、没有语言校验、没有自动补读，也没有自设的累计预算停止；cursor 与 saved_result_id 只重放已保存结果。不宣称答案已核实或完整。
 - **原生多智能体并行研究工作流**  
   随包提供 `search-boost` 与 `search-boost-parallel-research` Skills。在支持子代理的宿主（如 Cursor、Claude Code、Pi、DSH）中，可将复杂调研拆分为多路 Searcher（抓取证据）与 Summarizer（无工具综合），提供 Fast 与 Complex 两种研究波次。
 - **统一架构，全宿主覆盖**  
@@ -128,7 +128,7 @@ search-boost
 > **零 Key 即可起步**：SearchBoost 默认提供免费引擎池（Bing、DuckDuckGo、Yahoo、Exa-free、AnySearch）。即便不填写任何 API Key，也能立刻享受高质量多引擎聚合搜索！
 
 ### 2. 三步完成配置
-1. 在 TUI 中选择 **安装与接入 → 首次配置向导**（英文：Installation & integrations → Setup），跟随向导配置搜索引擎（可选填 API Key，或直接跳过使用免费池）。
+1. 在默认平铺 TUI 首页选择 **首次配置向导**（文件夹模式：安装与接入 → 首次配置向导），跟随向导配置搜索引擎（可选填 API Key，或直接跳过使用免费池）。
 2. 勾选需要接入的 Agent（如 Cursor、Claude Code、Pi 等），确认是否自动设置免审批权限与替换原生搜索。
 3. 重启或重新载入对应的 Agent，即可在对话中直接让模型进行网络检索！
 
@@ -138,12 +138,12 @@ search-boost
 
 ### 1. 日常更新：直接在 TUI 中一键升级
 
-无论你是使用标准的 `search-boost`，还是此前安装过旧版的 `pi-search-boost`、`dsh-search-boost`，**只需启动 TUI 并选择「更新与状态 → 更新 search-boost 与已安装接入」即可完成全部升级**：
+无论你是使用标准的 `search-boost`，还是此前安装过旧版的 `pi-search-boost`、`dsh-search-boost`，**启动 TUI，在默认首页选择「更新 SearchBoost」（文件夹模式：更新与状态 → 更新），核对范围后确认「开始更新」**：
 
 ```bash
 # 方式一：进入交互式菜单一键更新
 search-boost
-# -> 选择「更新与状态 → 更新 search-boost 与已安装接入」
+# -> 选择「更新 SearchBoost」，核对范围并确认「开始更新」
 
 # 方式二：命令行静默更新（推荐脚本或快捷操作使用）
 search-boost upgrade -y
@@ -164,7 +164,7 @@ npx --yes --package=search-boost@latest -- search-boost migrate -y
 
 # 迁移完成后，后续日常更新只需执行：
 search-boost
-# -> 选择「更新与状态 → 更新」（或 search-boost upgrade -y）
+# -> 选择「更新 SearchBoost」并确认（或 search-boost upgrade -y）
 ```
 
 ---
@@ -173,18 +173,20 @@ search-boost
 
 直接在终端执行 `search-boost` 即可进入基于 Clack 的交互式控制面板。日常所有安装、维护与凭证管理均可在此完成：
 
-| 一级菜单 | 二级功能 |
+默认**平铺首页**按以下顺序直接提供全部入口：
+
+| 首页入口 | 行为 |
 | :--- | :--- |
-| **安装与接入** | 首次配置向导；安装 / 刷新 Agent 接入；原生搜索替换；输出 MCP 配置片段；卸载 Agent 接入 |
-| **搜索与工具** | 默认搜索层（`free` / `api`）；工具开关（MCP / Pi / DSH 共享） |
-| **服务与凭据** | 搜索引擎 API Keys 与 Base URLs（含 API 引擎池选择）；X 凭据；Jev 配置（实验性） |
-| **更新与状态** | 更新 search-boost 与已安装接入；查看当前状态 |
-| **TUI 设置** | 显示语言：简体中文 / English |
-| **退出** | 关闭控制台 |
+| 首次配置向导；安装 / 刷新 Agent 接入 | 连续首次配置；直接刷新接入，不重新询问凭据 |
+| 更新 SearchBoost；查看当前状态 | 核对范围后明确开始 / 返回；只读状态 |
+| 搜索引擎配置；默认搜索层；工具开关 | 任选引擎；`free` / `api`；MCP / Pi / DSH 共用开关 |
+| X 凭据；Jev 配置（实验性） | 脱敏凭据管理 |
+| 原生搜索替换；输出 MCP 配置片段；卸载 Agent 接入 | 保留范围/权限选择；只读片段；卸载默认取消 |
+| TUI 设置；退出 | 菜单布局位于显示语言之前；关闭控制台 |
 
-操作完成后返回所属二级菜单。向导中按 Esc 取消当前操作并返回所属菜单，二级菜单中按 Esc 返回主菜单；Ctrl+C 退出整个控制台。首次配置保留原有引导流程，安装 / 刷新只配置宿主接入；更新则升级 SearchBoost 和所有已安装接入，保留凭据与权限选择。更新替换运行模块后，旧控制台会结束。
+「TUI 设置 → 菜单布局」可选平铺 / 文件夹。文件夹模式保留安装与接入、搜索与工具、服务与凭据、更新与状态分类。操作完成后，平铺模式返回首页原选中项，文件夹模式返回所属分类；Esc 取消 / 返回，Ctrl+C 退出。切换布局立即返回新首页。更新保留凭据与权限选择，替换运行模块后旧控制台结束。
 
-显示语言切换立即生效，保存于 `~/.search-boost/config/tui.json`（或 `$SEARCH_BOOST_HOME/config/tui.json`）。未保存偏好时，中文系统环境使用简体中文，其他环境使用 English。偏好同样适用于独立启动的交互式 setup/config 向导，不影响非交互 CLI 输出、搜索结果或 Agent 回复。工具名、命令、路径、MCP 配置片段与底层原始错误保持原样。dry-run 中仅预览语言，不保存设置。详见 [TUI 导航与语言设置](docs/tui.md)。
+布局和显示语言切换立即生效，保存于 `~/.search-boost/config/tui.json`（或 `$SEARCH_BOOST_HOME/config/tui.json`）。未保存布局（包括仅有语言的旧设置）默认平铺；未保存语言时，中文系统环境使用简体中文，其他环境使用 English。偏好同样适用于独立启动的交互式 setup/config 向导，不影响非交互 CLI 输出、搜索结果或 Agent 回复。工具名、命令、路径、MCP 配置片段与底层原始错误保持原样。dry-run 只预览布局 / 语言，不保存；设置损坏时告警且不覆盖。详见 [TUI 导航与语言设置](docs/tui.md)。
 
 ### 工具开关
 
@@ -281,9 +283,9 @@ search-boost
 
 ### 4. `adaptive_search` Jev 意图导向搜索（实验功能）
 
-**Vercel 接入**：在 TUI → 服务与凭据 → Jev 配置（实验性）填写 `https://ai-gateway.vercel.sh/v1` 和 Vercel AI Gateway Key。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级配置中的 Jev Key，不读取环境变量；服务端限流等待不会被缩短。
+**Vercel 接入**：在 TUI → Jev 配置（文件夹模式：服务与凭据 → Jev 配置）填写 `https://ai-gateway.vercel.sh/v1` 和 Vercel AI Gateway Key。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级配置中的 Jev Key，不读取环境变量；服务端限流等待不会被缩短。
 
-调用方提供**一个问题**（`questions` 恰好一项）、**必填的研究方向 `intent`** 以及 0-8 条可选软偏好 `preferences`。工具描述要求用英文书写，但这是给调用方的提示，服务端不做语言校验、拒绝或翻译，任何语言都按原文检索。原文问题就是唯一查询：不再规划关键词、不做查询扩展。检索前的一次 Jev 策略请求选择固定 `balanced`/`research`/`fresh` 排序，并在省略 `community` 时决定是否启用既有社区（X）支路；显式 `community` true/false 覆盖该选择，且不重复提问。随后这次 fused 调用收集**至多 32 条候选的有界快照**（网页与社区行共用），每条声明候选都以固定选项判断：安全 clear/violation/unavailable、原型价值 0-5、来自真实正贡献引擎的来源折扣，以及每条偏好一次匹配。只有安全且价值已建立为 3/4/5 的材料会被交付，并按版本化筛选公式排序；置信度仅用于审计。不会在凑够前若干条可接受链接后提前停止，没有自动补读，也没有自设的累计成本、token、请求次数或整次时限停止——真实单请求超时、有限重试、认证/限流失败、安全拒绝与显式取消照常生效。
+调用方提供**一个问题**（`questions` 恰好一项）、**必填的研究方向 `intent`** 以及 0-8 条可选软偏好 `preferences`。工具描述要求用英文书写，但这是给调用方的提示，服务端不做语言校验、拒绝或翻译，任何语言都按原文检索。原文问题就是唯一查询：不再规划关键词、不做查询扩展。检索前的一次 Jev 策略请求选择固定 `balanced`/`research`/`fresh` 排序，并在省略 `community` 时决定是否启用既有社区（X）支路；显式 `community` true/false 覆盖该选择，且不重复提问。随后这次 fused 调用收集**有界快照：目标≤10 时最多 32 条，更大目标为 ceil(max_results×32/10)，最高 160 条**（网页与社区行共用），每条声明候选都以固定选项判断：安全 clear/violation/unavailable、原型价值 0-5、来自真实正贡献引擎的来源折扣，以及每条偏好一次匹配。只有安全且价值已建立为 3/4/5 的材料会被交付，并按版本化筛选公式排序；置信度仅用于审计。不会在凑够前若干条可接受链接后提前停止，没有自动补读，也没有自设的累计成本、token、请求次数或整次时限停止——真实单请求超时、有限重试、认证/限流失败、安全拒绝与显式取消照常生效。
 
 ```json
 {
@@ -370,7 +372,7 @@ Pi/DSH 子代理工具加载、旧 `pi-search-boost` 路径与已移除的 `deep
 
 ### 自定义搜索 API 地址
 
-TUI 进入 **服务与凭据 → 搜索引擎 API Keys 与 Base URLs**（或执行 `search-boost config keys`），每个引擎同时显示密钥掩码、当前 Base URL 和 default/custom 标记。选择 **Set / replace Base URL** 修改地址后，可继续保留或修改密钥；**Restore default Base URL** 只恢复地址。向导完成后统一保存。状态页和 `config keys --show` 也会显示生效地址。
+TUI 默认首页进入 **搜索引擎配置**（文件夹模式：服务与凭据）（或执行 `search-boost config keys`），每个引擎同时显示密钥掩码、当前 Base URL 和 default/custom 标记。选择 **Set / replace Base URL** 修改地址后，可继续保留或修改密钥；**Restore default Base URL** 只恢复地址。可任选单个引擎，无须依次经过所有凭据项；保留其他引擎的密钥与路由选择。状态页和 `config keys --show` 也会显示生效地址。
 
 ```bash
 search-boost config keys --base-url exa=https://gateway.example/exa

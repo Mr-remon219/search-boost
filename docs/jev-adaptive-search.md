@@ -37,7 +37,7 @@
 → 一次固定策略请求：选 ranking；community 省略时同一次选 enable/disable/unknown
 → 代码解析显式覆盖 / 模型选择 / unknown 与缺失回退，落实能力与域名限制
 → 调用共享 runFused：query=原问题，medium，candidateSelection=snapshot，community=解析后的布尔值
-→ 有界快照（最多 32 条，网页与社区行共用）按原融合分与稳定 key 全局排序后截取
+→ 有界快照（目标 ≤10 时最多 32 条；更大目标为 ceil(max_results × 32 / 10)，最高 160；网页与社区行共用）按原融合分与稳定 key 全局排序后截取
 → prepareMaterial 校验/哈希并标记 pending → 分批固定选项 safety/value/source discount/preferences
 → 代码排除安全失败、基础分无效、不可判断、value 未建立与 value<3
 → 原型 screeningScore + 稳定 tie-break + max_results 截断 → schema v5 结果
@@ -59,13 +59,15 @@
 ## 4. 判断、价值与来源
 
 - safety 固定选项 `clear`/`violation`/`unavailable`，与语义相关性独立，missing 不作为 clear；结构有效只是 pending。
-- value 固定 0-5 与 `unestablished`；只交付已建立且 ≥3 的等级，低价值、未建立与服务不可用分开披露。`qualityAssessed` 是原型口径：通过准入并获得 value 的候选数，不等于拿到 value 答案的候选数。
+- value 固定 0-5 与 `unestablished`；只交付已建立且 ≥3 的等级，低价值、未建立与服务不可用分开披露。`qualityAssessed` 是原型口径：通过准入并获得 value≥3 的候选数，不等于拿到 value 答案的候选数。beta.6 新增 `diagnostics.valueJudged`，单独统计得到有效 value 等级或显式 unestablished 答案的候选（包括低价值和安全拒绝行），不可用答案不算；它与准入数不能混用。
 - 来源折扣只对真实正贡献引擎的固定选项生效；缺失来源中性且披露；confidence 只做审计，不参与评分、阈值或准入。
 - 偏好精确去重后取平均；反例可以有高 value 或匹配偏好；`valueGroups` 是最终结果标签索引，不改变排序。默认仅 URL 去重、`mu=0`、`dedupe=false`。
 
 ## 5. 资源边界与用量观测
 
-容量/协议上限（不是累计预算）：`candidateLimit=32`、`batchSize=4`、每次最多 1 次重试、Jev 响应最大 24000 字节、state/request 上限 48000/60000 字符、初始材料最多 8000 字符、单请求 20 秒、回退最多 4 秒、`rescueReads=0`。
+容量/协议上限（不是累计预算）：`candidateLimit=max(32, ceil(max_results × 32 / 10))`（公开目标最高 50，对应容量最高 160）、`batchSize=4`、每次最多 1 次重试、Jev 响应最大 24000 字节、state/request 上限 48000/60000 字符、初始材料最多 8000 字符、单请求 20 秒、回退最多 4 秒、`rescueReads=0`。
+
+beta.6 保留原先默认目标 10 / 容量 32 的筛选余量比例；12 条目标对应 39，50 条目标对应 160。该容量在一次检索前确定，并贯穿 engine 请求、共享快照截取、缓存键及 `run.limits.candidateLimit`。内部显式容量覆盖仍有权威性并校验整数 1–500；覆盖小于目标时仍披露 `targetExceedsReviewCap`。不追加检索，不因已够数量提前停止，也不保证上游能供足或筛选后必然足量。扩大目标会增加判断量；标准四条批次下，160 个实到候选需约 1 次策略 + 40 批 Jev 判断（长文本尺寸拆批、重试另计），默认 10 条目标仍为原容量。
 
 用量计量（`screening-metering-v3-no-cumulative-cap`）只记录发生过的调用与估算，并在 `usage` 中披露：`fusedCalls`、`engineRequests`（null=未知）、`jevCalls`、`jevHttpAttempts`、`jevRetries`、`jevInputTokensEstimated`、`jevTokensEstimatedReserved`、`jevInputTokens`/`jevOutputTokens`（未上报即 null）、`serverUsageCalls`、`unknownUsageCalls`，以及本层 `fetch*` 的真实 0。达到任何旧上限都不会拒绝后续请求，也不会中止已有效结果。
 
@@ -77,6 +79,7 @@
 - 结果行含 ID/rank、URL/标题/准确摘录、basis/日期/文本与分数版本、真实来源、`valueLevel`/`valueLabel`、分数组件、来源折扣与偏好匹配、有意义的 value/discount confidence。
 - `selection` 给出 `requested`/`returned`/`targetMet`/`stopReason`/`incomplete`；`diagnostics` 给出计数守恒与排除原因；`outsideReview`/`unreviewed` 明确未被审阅的候选，绝不当作低价值或不存在。`targetMet` 只表示数量。
 - 新响应不返回 `keywordProgress`、`retrievalSufficient`、`coverageComplete`、`scopeSummary`、`convergence`、`finalReview`、`tier`/`valueScore` 等旧字段，也不填假零/假 true。
+- 页面软容量为 96,000 UTF-8 字节（原先 45,000），元数据仍保留 16,000 字节预算；按三条 8,000 字符中文摘录（约 72,000 字节）及字段开销协调容量，避免常规长中文结果被迫每页一条。page_size 仍是条数上限，不保证装满；超软限单条仍完整交付并告警，绝不截改已审摘录。读取/完整保存集合的语义不变。
 - 分页：进程内共享 30 分钟 / 32 份页面池，`s5:` 对应 v5 运行、`h1:` 对应历史只读恢复；拒绝裸 UUID.offset、`s4:`、过期/驱逐/越界 cursor，且零网络。`clearAllCaches` 只清内存/检索缓存，不删除持久快照。
 - 持久化：新写入 `search-boost-research-v2` + `metadata.schemaVersion=5`；读取按 `format` 分派，v2 校验失败绝不降级 v1。旧 v1 文件只读恢复，返回 `restoration={historical:true, originalFormat, originalSchemaVersion}` 与 `h1:` cursor，保留原结果与元数据、不伪造 v5 字段、不就地升级、不刷新 `savedAt`。存储保留 64MiB 上限、UUID 文件名单硬链接与 NOFOLLOW 校验、0700/0600 私有原子写入、递归白名单清洗、取消不返回成功 ID、CLI 离线 `research list`/`research export` 与 `wx` 不覆盖。
 
@@ -86,4 +89,4 @@
 
 ## 8. 验证边界
 
-仓库内的离线 fixture 只证明机制、契约与失败语义，不证明线上策略质量、语义准确率或研究完成度。发布前按 `docs/test-isolation.md` 运行隔离门禁；`scripts/test-screening*.mjs`、`scripts/test-adaptive-search.mjs`、`scripts/test-screening-hosts.mjs`、`scripts/test-fused-baseline.mjs`、`scripts/test-noff-community-snapshot.mjs` 与 `scripts/test-research-persistence.mjs` 是本文契约的自动化证据。迁移说明与退役清单见 `docs/adaptive-screening-migration.md`。
+仓库内的离线 fixture 只证明机制、契约与失败语义，不证明线上策略质量、语义准确率或研究完成度。发布前按 `docs/test-isolation.md` 运行隔离门禁；`scripts/test-adaptive-capacity.mjs`、`scripts/test-screening*.mjs`、`scripts/test-adaptive-search.mjs`、`scripts/test-screening-hosts.mjs`、`scripts/test-fused-baseline.mjs`、`scripts/test-noff-community-snapshot.mjs` 与 `scripts/test-research-persistence.mjs` 是本文契约的自动化证据。迁移说明与退役清单见 `docs/adaptive-screening-migration.md`。

@@ -19,7 +19,7 @@
 ## 2. 新增的契约
 
 - 搜索前一次固定策略请求：`strategy.ranking`（`balanced`/`research`/`fresh`）与（省略 `community` 时）`strategy.community`（`enable`/`disable`/`unknown`）。显式 boolean 覆盖且不提问；unknown/缺失回退 false 并披露。普通 `fused_search` 的 `community` 默认仍为 false，且不会调用 Jev。
-- 唯一检索形态：一次 `runFused`（`complexity=medium`，`candidateSelection=snapshot`，query 为原问题），至多 32 条候选（网页与社区行共用），按原融合分与稳定 key 全局截断。
+- 唯一检索形态：一次 `runFused`（`complexity=medium`，`candidateSelection=snapshot`，query 为原问题），目标≤10 时至多 32 条候选，beta.6 对更大目标按 ceil(max_results×32/10) 扩至最高 160（网页与社区行共用；详见当前契约），按原融合分与稳定 key 全局截断。
 - 输出 `run.community` 结构化执行状态，以及 `usage` 观测计数；没有自设的累计成本/token/请求次数/整次时限停止。MCP/DSH 的 fused 与 X 搜索入口也不另加整次搜索计时器；真实单请求保护和外部宿主硬限制保留。
 - MCP SDK 要求发现阶段的 output schema 是单个 object，因而 tools/list 使用两种输出分支的字段投影；这并不替代完整 union 校验。handler 返回正文/structuredContent 前独立校验严格 v5 或历史分支，拒绝缺失分支必填字段和混合记录；DSH 与持久存储同样校验共享契约。
 - 新运行 `schemaVersion=5`、`s5:` 分页；`save_results:true` 写入 `search-boost-research-v2`；旧 v1 文件以只读 `h1:` 历史分支恢复。

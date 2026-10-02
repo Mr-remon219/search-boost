@@ -507,7 +507,7 @@ await test('the public entry gate blocks new calls and reads alike', async () =>
 
 await test('the declared snapshot is reviewed whole, and outsideReview is disclosed not hidden', async () => {
   const h = makeHarness({ rows: fixtureRows(32), searchResult: { funnel: { fusionRows: 50 } } })
-  const result = await runAdaptiveScreening({ ...NEW_INPUT, max_results: 40 }, {}, h.deps)
+  const result = await runAdaptiveScreening({ ...NEW_INPUT, max_results: 40 }, { limits: { candidateLimit: 32 } }, h.deps)
   assert.equal(h.calls.jev.length, 1 + Math.ceil(32 / 4), 'every declared candidate batch is dispatched')
   assert.equal(result.diagnostics.snapshotCandidates, 32)
   assert.equal(result.diagnostics.collected, 32)
@@ -521,7 +521,7 @@ await test('the declared snapshot is reviewed whole, and outsideReview is disclo
   assert.equal(result.warnings.some((warning) => /exceeds the declared review cap/.test(warning)), true)
   assert.equal(validateOutput(result), null)
   const capped = makeHarness()
-  const over = await runAdaptiveScreening({ ...NEW_INPUT, max_results: 50 }, {}, capped.deps)
+  const over = await runAdaptiveScreening({ ...NEW_INPUT, max_results: 50 }, { limits: { candidateLimit: 32 } }, capped.deps)
   assert.equal(over.run.targetExceedsReviewCap, true)
   assert.equal(over.selection.targetMet, false)
   assert.equal(over.stopReason, 'candidate_pool_exhausted')
