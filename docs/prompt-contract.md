@@ -4,7 +4,7 @@ SearchBoost uses progressive disclosure, not several copies of one system prompt
 
 | Surface | Owns | Does not own |
 | --- | --- | --- |
-| Tool description | Purpose, appropriate call, output meaning and important limitations. Shared contracts live in `lib/search/tool-descriptions.js`, `routing.js` and `adaptive/describe.js`. | Repeating a multi-wave workflow or installing/configuring tools. |
+| Tool description | Purpose, appropriate call, output meaning and important limitations. Shared contracts live in `lib/search/tool-descriptions.js`, `routing.js` and `lib/search/screening/describe.js`. | Repeating a multi-wave workflow or installing/configuring tools. |
 | Parameter schema | Field semantics, types, enums and bounds supported by that host. | General research policy or authorization to mutate configuration. |
 | Startup / inject policy | When external verification is needed, when it is unnecessary, source handling, stopping and permission boundaries. | Full schemas, provider implementation details or promised latency. |
 | Dynamic capabilities | Configured/enabled engines, current compatibility defaults and optional feature readiness. | Credentials, proof of connectivity or permission to enable a feature. |
@@ -20,11 +20,11 @@ Pi's `before_agent_start` adds the verification policy and refreshes capabilitie
 
 DSH's policy section supplies the verification/authorization boundary and includes `agents/shared/research/workflow.md` once. Native `research_parallel` describes its invocation and reports execution outcomes; it does not silently fall back to Pi. Searcher and summarizer roles reuse the shared role texts.
 
-The parent's search rounds, parallel searcher waves and Jev's internal adaptive iterations are different counters. A skill cannot raise a code limit, and a code ceiling is not an instruction to consume the whole budget. Prefer stopping as soon as sufficient evidence is available.
+The parent's search rounds, parallel searcher waves and Jev's single screening pass are different counters. A skill cannot raise a code limit, and a code limit is not an instruction to consume it. Prefer stopping as soon as sufficient evidence is available.
 
 ## Evidence and failure language
 
-`fused_search` is one search operation; `fetch_page` reads a known URL; `x_search` retrieves available X material; `adaptive_search` performs bounded automated retrieval for one research question, with feedback-guided query-then-engine selection, explicit-only Boolean prefiltering (empty skips), broad useful-material admission and an all-admitted-material final verdict; it is not an answer generator or delegation tool. The parent still owns the answer.
+`fused_search` is one search operation; `fetch_page` reads a known URL; `x_search` retrieves available X material; `adaptive_search` performs ONE bounded pass for one research question with a required intent: a single fixed-option strategy request picks the ranking preset (and the community branch when the caller omits it), one bounded fused snapshot of at most 32 candidates is screened with fixed safety/value/discount/preference options, and only safe value 3/4/5 material is returned. There is no keyword-continuation loop, no per-material constraints gate, no language check, no automatic page read and no self-set cumulative budget stop; it is not an answer generator or delegation tool. The parent still owns the answer.
 
 Do not claim complete threads, guaranteed real-time results, a fixed latency, identical results at different reasoning settings, or a fixed token-saving percentage. A `focus` miss is not evidence of absence. `retrievalSufficient` is a model judgment of keyword search satisfaction, never answer completeness or independently established truth. Domain count alone is not corroboration; an authoritative single source is not automatically invalid.
 
@@ -36,6 +36,6 @@ Privacy language must distinguish the in-memory core from host session/audit ret
 
 ## Editing and validation
 
-Edit authored assets in `agents/`; run `npm run plugin:sync-grok` for generated Grok assets. The install/skill/adapter tests exercise template expansion, ownership and injection. `test:network` includes release regressions for security and result language; the adapter suite verifies that Pi's full adaptive result remains model-visible.
+Edit authored assets in `agents/`; run `npm run plugin:sync-grok` for generated Grok assets. The install/skill/adapter tests exercise template expansion, ownership and injection. ``test:network` includes release regressions for security; `test:screening`, `test:adaptive` (with the real MCP/Pi/DSH host fixtures) and the persistence suite verify the shared v5/historical contract and that every host's full adaptive result stays model-visible.
 
 When adding a feature, put each rule on the narrowest applicable surface. Brief routing/boundary reminders may recur where needed; copied schemas and duplicated workflow paragraphs should not.

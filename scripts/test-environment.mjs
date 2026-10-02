@@ -9,6 +9,7 @@ import { join, dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
+import { parseWorkflow, validateWorkflow, checkRepositoryWorkflows } from './check-ci-policy.mjs'
 
 const scripts = fileURLToPath(new URL('.', import.meta.url))
 const repo = resolve(scripts, '..')
@@ -30,10 +31,22 @@ for (const [name, command] of Object.entries(pkg.scripts)) {
 }
 const ci = readFileSync(join(repo, '.github/workflows/ci.yml'), 'utf8')
 for (const [, file] of ci.matchAll(/node scripts\/([^\s;&]+)/g)) {
-  assert(tests.includes(file) || file === 'test-environment.mjs', `CI: unknown unaudited entrypoint ${file}`)
+  assert(tests.includes(file) || ['test-environment.mjs', 'check-ci-policy.mjs', 'audit-dependencies.mjs'].includes(file), `CI: unknown unaudited entrypoint ${file}`)
 }
 assert(ci.includes('npm run test:isolation'), 'CI must run the full isolation gate')
 assert(pkg.scripts.prepublishOnly.includes('npm run test:isolation'), 'publishing must run the full isolation gate')
+checkRepositoryWorkflows()
+for (const mutate of [
+  workflow => { workflow.permissions.contents = 'write' },
+  workflow => { workflow.jobs.test.steps[0].uses = 'actions/checkout@v4' },
+  workflow => { workflow.jobs.test.steps.push({ run: 'npm run test:cli' }) },
+  workflow => { workflow.on.pull_request_target = {} },
+]) {
+  const changed = parseWorkflow(ci)
+  mutate(changed)
+  assert.throws(() => validateWorkflow(changed), 'CI policy must reject an actual unsafe/redundant workflow')
+}
+assert.throws(() => parseWorkflow('name: CI\nname: duplicate\n'), 'duplicate YAML keys must fail')
 console.log(`ok: ${tests.length} automated entrypoints bootstrap before application imports; live probes excluded`)
 
 const temp = mkdtempSync(join(tmpdir(), 'poisoned-caller-'))
@@ -52,6 +65,7 @@ try {
   const env = { ...process.env, HOME: user, USERPROFILE: user, SEARCH_BOOST_HOME: store,
     TMPDIR: join(user, 'tmp'), TMP: join(user, 'tmp'), TEMP: join(user, 'tmp'),
     PI_CODING_AGENT_DIR: join(user, 'pi-agent'), DSH_HOME: join(user, 'dsh'),
+    CODEX_HOME: join(user, 'codex-relocated'), CLAUDE_CONFIG_DIR: join(user, 'claude-relocated'),
     XDG_CONFIG_HOME: join(user, 'xdg-config'), XDG_CACHE_HOME: join(user, 'xdg-cache'), XDG_DATA_HOME: join(user, 'xdg-data'), XDG_STATE_HOME: join(user, 'xdg-state'),
     APPDATA: join(user, 'appdata'), LOCALAPPDATA: join(user, 'local-appdata'), CURL_HOME: join(user, 'curl'),
     npm_config_userconfig: join(user, 'user.npmrc'), NPM_CONFIG_GLOBALCONFIG: join(user, 'global.npmrc'),
@@ -73,6 +87,9 @@ try {
   env.SEARCH_BOOST_CURSOR_INSTALL_STATE = join(store, 'cursor-install.json')
   write(env.SEARCH_BOOST_CURSOR_INSTALL_STATE, { sentinel: true })
   for (const root of [store, join(user, '.search-boost')]) write(join(root, 'state/upgrade-projects.json'), { projects: [project] })
+  write(join(env.CODEX_HOME, 'config.toml'), '# caller-owned Codex config\n')
+  write(join(env.CLAUDE_CONFIG_DIR, '.claude.json'), { sentinel: true })
+  write(join(env.CLAUDE_CONFIG_DIR, 'settings.json'), { sentinel: true })
   write(join(env.PI_CODING_AGENT_DIR, 'settings.json'), { packages: ['npm:foreign'] })
   write(join(env.DSH_HOME, 'profiles/web/package.json'), { dependencies: { 'search-boost': 'sentinel-version' } })
   write(join(env.DSH_HOME, 'profiles/desktop/package.json'), { dependencies: { 'search-boost': 'sentinel-version' } })
@@ -108,7 +125,7 @@ import { readKeysFile } from ${JSON.stringify(new URL('../lib/keys.mjs', import.
 import { readJevConfig } from ${JSON.stringify(new URL('../lib/jev-config.mjs', import.meta.url).href)};
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-for (const key of ['SEARCH_BOOST_HOME','SEARCH_BOOST_KEYS_FILE','SEARCH_BOOST_FUTURE_SETTING','PI_CODING_AGENT_DIR','DSH_HOME','TAVILY_API_KEY','XAI_API_KEY','TYPESAFE_API_KEY','AI_GATEWAY_API_KEY','DEEPSEEK_API_KEY','NPM_TOKEN','GITHUB_TOKEN','HTTPS_PROXY','https_proxy']) assert.equal(process.env[key], undefined, key);
+for (const key of ['SEARCH_BOOST_HOME','SEARCH_BOOST_KEYS_FILE','SEARCH_BOOST_FUTURE_SETTING','PI_CODING_AGENT_DIR','DSH_HOME','CODEX_HOME','CLAUDE_CONFIG_DIR','TAVILY_API_KEY','XAI_API_KEY','TYPESAFE_API_KEY','AI_GATEWAY_API_KEY','DEEPSEEK_API_KEY','NPM_TOKEN','GITHUB_TOKEN','HTTPS_PROXY','https_proxy']) assert.equal(process.env[key], undefined, key);
 assert.equal(readKeysFile().tavily, undefined);
 assert.ok(!readJevConfig().apiKey);
 for (const command of ['grok','dsh','pi','claude','codex','cursor','antigravity']) {
@@ -139,6 +156,7 @@ console.log(JSON.stringify({ testRoot, desktopCommand: process.env.SEARCH_BOOST_
   const failures = []
   for (const name of selected) {
     const args = name === 'test-codex-uninstall-integration.mjs' ? ['round-trip'] : []
+    const started = Date.now()
     const result = spawnSync(process.execPath, [join(scripts, name), ...args], { env, cwd: project, encoding: 'utf8', timeout: 600_000, maxBuffer: 16 * 1024 * 1024 })
     try { assert.deepEqual(snapshot(user), before) } catch { failures.push(`${name}: modified simulated user files`); console.error(`FAIL: ${name} modified simulated user files`) }
     if ((result.stdout ?? '').includes(secret) || (result.stderr ?? '').includes(secret)) {
@@ -151,7 +169,7 @@ console.log(JSON.stringify({ testRoot, desktopCommand: process.env.SEARCH_BOOST_
       failures.push(`${name}: ${result.error?.message ?? `exit ${result.status}, signal ${result.signal}`}`)
       console.error(`FAIL: ${name}\n${(result.stdout ?? '').slice(-4000)}\n${(result.stderr ?? '').slice(-4000)}`)
     } else {
-      console.log(`ok: ${name} passed without changing simulated user files`)
+      console.log(`ok: ${name} passed without changing simulated user files (${Date.now() - started} ms)`)
       for (const line of (result.stdout ?? '').split('\n').filter(line => /^skip(?:ped)?:/i.test(line))) console.log(`  ${name}: ${line}`)
     }
   }

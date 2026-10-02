@@ -61,28 +61,33 @@
     "plugin:sync-grok": "node scripts/sync-grok-plugin.mjs",
     "build:plugin": "node scripts/build-plugin.mjs",
     "check": "node scripts/check-syntax.mjs",
-    "test:fusion": "node scripts/test-fusion-errors.mjs && node scripts/test-fusion-scoring.mjs",
+    "test:fusion": "node scripts/test-fused-baseline.mjs && node scripts/test-noff-community-snapshot.mjs && node scripts/test-fusion-errors.mjs && node scripts/test-fusion-scoring.mjs",
     "test:x": "node scripts/test-x-pipeline.mjs",
     "test:engines": "node scripts/test-engine-requests.mjs && node scripts/test-engine-base-urls.mjs",
     "test:xauth": "node scripts/test-xauth.mjs",
     "test:jev": "node scripts/test-jev.mjs",
     "test:jev-client": "node scripts/test-jev-client.mjs",
-    "test:adaptive": "node scripts/test-adaptive-search.mjs",
-    "test:funnel": "node scripts/test-funnel.mjs",
-    "test:keywords": "node scripts/test-keywords.mjs",
+    "test:adaptive": "node scripts/test-adaptive-search.mjs && node scripts/test-screening-hosts.mjs",
     "jev:probe": "node scripts/jev-probe.mjs",
-    "eval:adaptive": "node scripts/eval-adaptive-search.mjs",
     "test:cli": "node scripts/test-cli-surface.mjs",
     "test:tui": "node scripts/test-tui.mjs && node scripts/test-update-tui.mjs",
-    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:isolation",
+    "prepublishOnly": "npm run check && npm run check:ci && npm run audit:dependencies && npm run test:isolation",
     "test:search": "node scripts/test-search-routing.mjs",
     "test:keys-authority": "node scripts/test-keys-authority.mjs",
     "test:dry-run": "node scripts/test-dry-run.mjs",
     "test:network": "node scripts/test-network-safety.mjs && node scripts/test-audit-regressions.mjs && node scripts/test-fetch-fallback.mjs && node scripts/test-fetch-pdf.mjs",
     "test:v021": "node scripts/test-v021.mjs && node scripts/test-review-regressions.mjs",
+    "test:screening": "node scripts/test-screening.mjs && node scripts/test-screening-core.mjs && node scripts/test-screening-frozen.mjs && node scripts/test-screening-ablation.mjs",
+    "test:persistence": "node scripts/test-research-persistence.mjs",
+    "test:status": "node scripts/test-installation-status.mjs",
+    "test:toml": "node scripts/test-toml-boundaries.mjs",
+    "test:clients": "node scripts/test-client-review-regressions.mjs && node scripts/test-release-review-clients.mjs",
+    "test:retrieval": "node scripts/test-retrieval-score.mjs && node scripts/test-retrieval.mjs && node scripts/test-retrieval-interface.mjs",
+    "test:keywords": "node scripts/test-keywords.mjs",
     "test:facts": "node scripts/test-fact-score.mjs",
-    "test:retrieval": "node scripts/test-retrieval-score.mjs && node scripts/test-retrieval.mjs && node scripts/test-retrieval-interface.mjs && npm run test:single-target",
-    "test:single-target": "node --test scripts/test-single-target.mjs"
+    "test:funnel": "node scripts/test-funnel.mjs",
+    "check:ci": "node scripts/check-ci-policy.mjs",
+    "audit:dependencies": "node scripts/audit-dependencies.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "4.0.87",
@@ -94,7 +99,7 @@
     "zod": "^3.25.76"
   },
   "optionalDependencies": {
-    "pdfjs-dist": "^5.4.624"
+    "pdfjs-dist": "6.2.108"
   },
   "engines": {
     "node": ">=22.13"
@@ -128,6 +133,7 @@
   },
   "homepage": "https://github.com/Mr-remon219/search-boost#readme",
   "devDependencies": {
-    "@deepseek-ai/dsh-tools": "0.1.5-rc.3"
+    "@deepseek-ai/dsh-tools": "0.1.5-rc.3",
+    "yaml": "2.9.1"
   }
 }

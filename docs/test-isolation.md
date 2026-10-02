@@ -18,7 +18,7 @@ import './isolate-tests.mjs'
 
 这是静态 import 顺序要求，不是在函数体里临时设置 HOME。`lib/paths.mjs`、Grok 模型信息等会在模块求值时缓存路径，晚改 HOME 不能修复已经绑定的真实路径。新增入口必须遵循此规则，门禁同时核对 package.json 和 CI 中的直接 Node 测试入口。需要命令行参数的新 fixture 必须在门禁中显式配置。
 
-CI 的 Linux / Windows / macOS 矩阵运行完整门禁；`prepublishOnly` 在同步发布资产、语法检查后执行同一门禁。各个 `test:*` 命令仍可单独运行，其入口也自行隔离，不能依赖调用者提前设置 HOME。
+CI 的 Linux / Windows / macOS 与 Linux Node 24 cell 各运行一次完整门禁；`prepublishOnly` 在语法、CI 策略与依赖审计后执行同一门禁，不再先改写生成资产。生成资产在临时副本重建并核对字节；工程标准见 [ci-cd-standard.md](ci-cd-standard.md)。各个 `test:*` 命令仍可单独运行，其入口也自行隔离，不能依赖调用者提前设置 HOME。
 
 ## 统一隔离边界
 
@@ -28,7 +28,7 @@ CI 的 Linux / Windows / macOS 矩阵运行完整门禁；`prepublishOnly` 在�
 | --- | --- |
 | HOME、USERPROFILE、Windows 用户路径 | 指向独立测试 home |
 | 当前项目 cwd | 指向空的测试 workspace，避免读取项目级凭据或写入当前仓库 |
-| SEARCH_BOOST / Pi / DSH 配置覆盖与凭据 | 不继承；只保留 OS、工具链定位、语言与终端等少量环境变量 |
+| SEARCH_BOOST / Pi / DSH / CODEX_HOME / CLAUDE_CONFIG_DIR 配置覆盖与凭据 | 不继承；只保留 OS、工具链定位、语言与终端等少量环境变量 |
 | XDG、APPDATA、CURL_HOME、pnpm/Corepack 路径 | 指向测试目录 |
 | npm 用户／全局配置、缓存、全局安装 prefix | 使用私有空配置和测试目录，不继承 registry token |
 | Git 全局／系统配置 | 空的测试全局配置，禁用系统配置 |
@@ -78,5 +78,5 @@ CI 的 Linux / Windows / macOS 矩阵运行完整门禁；`prepublishOnly` 在�
 - 这是**测试环境隔离与回归门禁，不是操作系统安全沙箱**。不防恶意测试代码显式访问绝对路径、第三方工具自行读取系统数据库，或 Node 在首条 import 之前执行的外部预加载代码。源码快照不包括依赖目录和 Git 内部文件。
 - `SIGKILL`、系统崩溃或强制终止可能留下临时目录；这些目录内部的记录不会进入真实用户存储。不要使用宽泛的 `/tmp` 清理命令。
 - 测试默认不继承用户的代理、CA、registry 或认证设置。DSH 打包 smoke 下载公开 npm 依赖，需要可用的公开 registry 网络；迁移测试使用本地 fixture registry。网络受限时应报告失败，不自动恢复真实凭据或偷偷绕过网络限制。
-- `jev-probe.mjs`、`eval-adaptive-search.mjs` 是明确 opt-in 的真实联网操作，刻意不纳入自动测试，不能加入 CI／发布测试门禁。构建／发布资产脚本也不是隔离测试，不应混入 fixture。
+- `jev-probe.mjs` 是明确 opt-in 的真实联网操作，刻意不纳入自动测试，不能加入 CI／发布测试门禁。构建／发布资产脚本也不是隔离测试，不应混入 fixture。
 - 本地通过不能替代 Windows/macOS CI 结果，也不能证明真实宿主已重启并加载新包。

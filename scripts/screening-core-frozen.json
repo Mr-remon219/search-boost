@@ -1,0 +1,1913 @@
+{
+  "note": "Frozen prototype numeric/order contract captured from the 0a0ce082 screening controller before the N_off migration. Regenerate only by an explicit, reviewed decision.",
+  "baseCommit": "0a0ce082c3c287e56a72400a599736b242c829e9",
+  "capturedWith": "scripts/screening-core-fixture.mjs projection functions",
+  "prototypeParams": {
+    "tau": 1,
+    "lambda": 0.5,
+    "utilities": {
+      "3": 0.25,
+      "4": 0.6,
+      "5": 1
+    },
+    "discountFactors": {
+      "none": 1,
+      "mild": 0.9,
+      "strong": 0.75,
+      "unknown": 1
+    },
+    "preferenceMatchValues": {
+      "match": 1,
+      "partial": 0.5,
+      "no_match": 0,
+      "unknown": 0
+    },
+    "epsilon": 0.1,
+    "mu": 0
+  },
+  "scoring": [
+    {
+      "input": {
+        "baseScore": 1,
+        "valueLevel": 3,
+        "discount": "none",
+        "preferenceMatches": []
+      },
+      "output": {
+        "policyVersion": "fused-screening-mix-v2-prototype",
+        "baseNormalized": 0.5,
+        "valueUtility": 0.25,
+        "sourceDiscountFactor": 1,
+        "baseContribution": 0.25,
+        "valueContribution": 0.125,
+        "coreScore": 0.375,
+        "sourcePenalty": 0,
+        "preferenceValue": 0,
+        "preferenceBonus": 0,
+        "finalScore": 0.375,
+        "selectionScore": 0.375
+      }
+    },
+    {
+      "input": {
+        "baseScore": 0.5,
+        "valueLevel": 5,
+        "discount": "none",
+        "preferenceMatches": []
+      },
+      "output": {
+        "policyVersion": "fused-screening-mix-v2-prototype",
+        "baseNormalized": 0.3333333333333333,
+        "valueUtility": 1,
+        "sourceDiscountFactor": 1,
+        "baseContribution": 0.16666666666666666,
+        "valueContribution": 0.5,
+        "coreScore": 0.6666666666666666,
+        "sourcePenalty": 0,
+        "preferenceValue": 0,
+        "preferenceBonus": 0,
+        "finalScore": 0.6666666666666666,
+        "selectionScore": 0.6666666666666666
+      }
+    },
+    {
+      "input": {
+        "baseScore": 0.1,
+        "valueLevel": 5,
+        "discount": "none",
+        "preferenceMatches": []
+      },
+      "output": {
+        "policyVersion": "fused-screening-mix-v2-prototype",
+        "baseNormalized": 0.09090909090909091,
+        "valueUtility": 1,
+        "sourceDiscountFactor": 1,
+        "baseContribution": 0.045454545454545456,
+        "valueContribution": 0.5,
+        "coreScore": 0.5454545454545454,
+        "sourcePenalty": 0,
+        "preferenceValue": 0,
+        "preferenceBonus": 0,
+        "finalScore": 0.5454545454545454,
+        "selectionScore": 0.5454545454545454
+      }
+    },
+    {
+      "input": {
+        "baseScore": 1,
+        "valueLevel": 5,
+        "discount": "strong",
+        "preferenceMatches": []
+      },
+      "output": {
+        "policyVersion": "fused-screening-mix-v2-prototype",
+        "baseNormalized": 0.5,
+        "valueUtility": 1,
+        "sourceDiscountFactor": 0.75,
+        "baseContribution": 0.25,
+        "valueContribution": 0.5,
+        "coreScore": 0.75,
+        "sourcePenalty": 0.1875,
+        "preferenceValue": 0,
+        "preferenceBonus": 0,
+        "finalScore": 0.5625,
+        "selectionScore": 0.5625
+      }
+    },
+    {
+      "input": {
+        "baseScore": 1,
+        "valueLevel": 4,
+        "discount": "none",
+        "preferenceMatches": [
+          "match",
+          "match"
+        ]
+      },
+      "output": {
+        "policyVersion": "fused-screening-mix-v2-prototype",
+        "baseNormalized": 0.5,
+        "valueUtility": 0.6,
+        "sourceDiscountFactor": 1,
+        "baseContribution": 0.25,
+        "valueContribution": 0.3,
+        "coreScore": 0.55,
+        "sourcePenalty": 0,
+        "preferenceValue": 1,
+        "preferenceBonus": 0.1,
+        "finalScore": 0.65,
+        "selectionScore": 0.65
+      }
+    },
+    {
+      "input": {
+        "baseScore": 0.7,
+        "valueLevel": 4,
+        "discount": "mild",
+        "preferenceMatches": [
+          "match",
+          "partial"
+        ]
+      },
+      "output": {
+        "policyVersion": "fused-screening-mix-v2-prototype",
+        "baseNormalized": 0.4117647058823529,
+        "valueUtility": 0.6,
+        "sourceDiscountFactor": 0.9,
+        "baseContribution": 0.20588235294117646,
+        "valueContribution": 0.3,
+        "coreScore": 0.5058823529411764,
+        "sourcePenalty": 0.050588235294117635,
+        "preferenceValue": 0.75,
+        "preferenceBonus": 0.07500000000000001,
+        "finalScore": 0.5302941176470588,
+        "selectionScore": 0.5302941176470588
+      }
+    },
+    {
+      "input": {
+        "baseScore": 2.1822855040571345,
+        "valueLevel": 5,
+        "discount": "unknown",
+        "preferenceMatches": [
+          "match",
+          "unknown",
+          "no_match"
+        ]
+      },
+      "output": {
+        "policyVersion": "fused-screening-mix-v2-prototype",
+        "baseNormalized": 0.6857604389282207,
+        "valueUtility": 1,
+        "sourceDiscountFactor": 1,
+        "baseContribution": 0.34288021946411035,
+        "valueContribution": 0.5,
+        "coreScore": 0.8428802194641103,
+        "sourcePenalty": 0,
+        "preferenceValue": 0.3333333333333333,
+        "preferenceBonus": 0.03333333333333333,
+        "finalScore": 0.8762135527974436,
+        "selectionScore": 0.8762135527974436
+      }
+    },
+    {
+      "input": {
+        "baseScore": 100,
+        "valueLevel": 3,
+        "discount": "none",
+        "preferenceMatches": []
+      },
+      "output": {
+        "policyVersion": "fused-screening-mix-v2-prototype",
+        "baseNormalized": 0.9900990099009901,
+        "valueUtility": 0.25,
+        "sourceDiscountFactor": 1,
+        "baseContribution": 0.49504950495049505,
+        "valueContribution": 0.125,
+        "coreScore": 0.620049504950495,
+        "sourcePenalty": 0,
+        "preferenceValue": 0,
+        "preferenceBonus": 0,
+        "finalScore": 0.620049504950495,
+        "selectionScore": 0.620049504950495
+      }
+    },
+    {
+      "input": {
+        "baseScore": 0.01,
+        "valueLevel": 5,
+        "discount": "none",
+        "preferenceMatches": []
+      },
+      "output": {
+        "policyVersion": "fused-screening-mix-v2-prototype",
+        "baseNormalized": 0.009900990099009901,
+        "valueUtility": 1,
+        "sourceDiscountFactor": 1,
+        "baseContribution": 0.0049504950495049506,
+        "valueContribution": 0.5,
+        "coreScore": 0.504950495049505,
+        "sourcePenalty": 0,
+        "preferenceValue": 0,
+        "preferenceBonus": 0,
+        "finalScore": 0.504950495049505,
+        "selectionScore": 0.504950495049505
+      }
+    }
+  ],
+  "snapshot": [
+    {
+      "name": "duplicate-observation-worst-safety",
+      "rows": [
+        {
+          "url": "https://dup.example/page",
+          "title": "Duplicate page",
+          "score": 1,
+          "snippet": "short snippet",
+          "safetyState": "clear",
+          "textVersion": "v1",
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        },
+        {
+          "url": "https://dup.example/page",
+          "title": "Duplicate page",
+          "score": 0.5,
+          "content": "a much longer page body from the same URL",
+          "safetyState": "violation",
+          "textVersion": "v2",
+          "engineRanks": {
+            "exa": 1
+          },
+          "provenance": [
+            {
+              "engine": "exa",
+              "rank": 1
+            }
+          ]
+        }
+      ],
+      "engineWeights": null,
+      "output": [
+        {
+          "evidenceId": "m1",
+          "assocId": "a1",
+          "questionId": "q1",
+          "key": "https://dup.example/page",
+          "url": "https://dup.example/page",
+          "title": "Duplicate page",
+          "domain": null,
+          "published": null,
+          "text": "a much longer page body from the same URL",
+          "basis": "page_content",
+          "textVersion": "v2",
+          "scoreVersion": null,
+          "baseScore": 1,
+          "engines": [
+            "bing",
+            "exa"
+          ],
+          "engineRanks": {
+            "bing": 1,
+            "exa": 1
+          },
+          "provenance": [
+            {
+              "engine": "exa",
+              "rank": 1
+            }
+          ],
+          "provenanceBasis": "observed_ranks",
+          "safetyState": "violation"
+        }
+      ]
+    },
+    {
+      "name": "zero-weight-engine-provenance",
+      "rows": [
+        {
+          "url": "https://weights.example/a",
+          "title": "Weights",
+          "score": 1.1,
+          "snippet": "weighted snippet",
+          "engineRanks": {
+            "bing": 1,
+            "exa": 1
+          },
+          "provenance": [
+            {
+              "engine": "bing",
+              "rank": 1
+            },
+            {
+              "engine": "exa",
+              "rank": 1
+            }
+          ]
+        }
+      ],
+      "engineWeights": {
+        "bing": 1,
+        "exa": 0
+      },
+      "output": [
+        {
+          "evidenceId": "m1",
+          "assocId": "a1",
+          "questionId": "q1",
+          "key": "https://weights.example/a",
+          "url": "https://weights.example/a",
+          "title": "Weights",
+          "domain": null,
+          "published": null,
+          "text": "weighted snippet",
+          "basis": "engine_snippet",
+          "textVersion": null,
+          "scoreVersion": null,
+          "baseScore": 1.1,
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": [
+            {
+              "engine": "bing",
+              "rank": 1
+            }
+          ],
+          "provenanceBasis": "positive_weight_contributors",
+          "safetyState": "unavailable"
+        }
+      ]
+    },
+    {
+      "name": "score-tie-key-order",
+      "rows": [
+        {
+          "url": "https://tie.example/b",
+          "title": "B",
+          "score": 1.5,
+          "snippet": "text b",
+          "engineRanks": {
+            "bing": 2
+          },
+          "provenance": []
+        },
+        {
+          "url": "https://tie.example/a",
+          "title": "A",
+          "score": 1.5,
+          "snippet": "text a",
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        },
+        {
+          "url": "https://tie.example/c",
+          "title": "C",
+          "score": 0.4,
+          "snippet": "text c",
+          "engineRanks": {
+            "bing": 3
+          },
+          "provenance": []
+        }
+      ],
+      "engineWeights": null,
+      "output": [
+        {
+          "evidenceId": "m1",
+          "assocId": "a1",
+          "questionId": "q1",
+          "key": "https://tie.example/a",
+          "url": "https://tie.example/a",
+          "title": "A",
+          "domain": null,
+          "published": null,
+          "text": "text a",
+          "basis": "engine_snippet",
+          "textVersion": null,
+          "scoreVersion": null,
+          "baseScore": 1.5,
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": [],
+          "provenanceBasis": "observed_ranks",
+          "safetyState": "unavailable"
+        },
+        {
+          "evidenceId": "m2",
+          "assocId": "a2",
+          "questionId": "q1",
+          "key": "https://tie.example/b",
+          "url": "https://tie.example/b",
+          "title": "B",
+          "domain": null,
+          "published": null,
+          "text": "text b",
+          "basis": "engine_snippet",
+          "textVersion": null,
+          "scoreVersion": null,
+          "baseScore": 1.5,
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 2
+          },
+          "provenance": [],
+          "provenanceBasis": "observed_ranks",
+          "safetyState": "unavailable"
+        },
+        {
+          "evidenceId": "m3",
+          "assocId": "a3",
+          "questionId": "q1",
+          "key": "https://tie.example/c",
+          "url": "https://tie.example/c",
+          "title": "C",
+          "domain": null,
+          "published": null,
+          "text": "text c",
+          "basis": "engine_snippet",
+          "textVersion": null,
+          "scoreVersion": null,
+          "baseScore": 0.4,
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 3
+          },
+          "provenance": [],
+          "provenanceBasis": "observed_ranks",
+          "safetyState": "unavailable"
+        }
+      ]
+    }
+  ],
+  "rankings": [
+    {
+      "name": "plain-ranking-with-discounts-preferences-and-ties",
+      "candidates": [
+        {
+          "evidenceId": "m1",
+          "key": "key-m1",
+          "url": "https://m1.example/doc",
+          "title": "Document m1",
+          "text": "Reading material body for m1 with enough words to compare",
+          "baseScore": 1,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        },
+        {
+          "evidenceId": "m2",
+          "key": "key-m2",
+          "url": "https://m2.example/doc",
+          "title": "Document m2",
+          "text": "Reading material body for m2 with enough words to compare",
+          "baseScore": 0.5,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        },
+        {
+          "evidenceId": "m3",
+          "key": "key-m3",
+          "url": "https://m3.example/doc",
+          "title": "Document m3",
+          "text": "Reading material body for m3 with enough words to compare",
+          "baseScore": 0.5,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        },
+        {
+          "evidenceId": "m4",
+          "key": "key-m4",
+          "url": "https://m4.example/doc",
+          "title": "Document m4",
+          "text": "Reading material body for m4 with enough words to compare",
+          "baseScore": 0.9,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        },
+        {
+          "evidenceId": "m5",
+          "key": "key-m5",
+          "url": "https://m5.example/doc",
+          "title": "Document m5",
+          "text": "Reading material body for m5 with enough words to compare",
+          "baseScore": 0.2,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        }
+      ],
+      "judgements": [
+        [
+          "m1",
+          {
+            "scope": {
+              "state": "skipped"
+            },
+            "info": null,
+            "value": {
+              "state": "level",
+              "level": 5
+            },
+            "valueConfidence": 0.8,
+            "discount": {
+              "state": "selected",
+              "option": "none",
+              "selectedBy": "code"
+            },
+            "discountConfidence": 0.5,
+            "preferences": [
+              "match",
+              "partial"
+            ],
+            "preferenceConfidences": []
+          }
+        ],
+        [
+          "m2",
+          {
+            "scope": {
+              "state": "skipped"
+            },
+            "info": null,
+            "value": {
+              "state": "level",
+              "level": 4
+            },
+            "valueConfidence": 0.8,
+            "discount": {
+              "state": "selected",
+              "option": "mild",
+              "selectedBy": "model"
+            },
+            "discountConfidence": 0.5,
+            "preferences": [
+              "partial",
+              "no_match"
+            ],
+            "preferenceConfidences": []
+          }
+        ],
+        [
+          "m3",
+          {
+            "scope": {
+              "state": "skipped"
+            },
+            "info": null,
+            "value": {
+              "state": "level",
+              "level": 4
+            },
+            "valueConfidence": 0.8,
+            "discount": {
+              "state": "selected",
+              "option": "strong",
+              "selectedBy": "code"
+            },
+            "discountConfidence": 0.5,
+            "preferences": [
+              "unknown",
+              "match"
+            ],
+            "preferenceConfidences": []
+          }
+        ],
+        [
+          "m4",
+          {
+            "scope": {
+              "state": "skipped"
+            },
+            "info": null,
+            "value": {
+              "state": "level",
+              "level": 3
+            },
+            "valueConfidence": 0.8,
+            "discount": {
+              "state": "selected",
+              "option": "unknown",
+              "selectedBy": "code"
+            },
+            "discountConfidence": 0.5,
+            "preferences": [],
+            "preferenceConfidences": []
+          }
+        ],
+        [
+          "m5",
+          {
+            "scope": {
+              "state": "skipped"
+            },
+            "info": null,
+            "value": {
+              "state": "level",
+              "level": 5
+            },
+            "valueConfidence": 0.8,
+            "discount": {
+              "state": "selected",
+              "option": "none",
+              "selectedBy": "code"
+            },
+            "discountConfidence": 0.5,
+            "preferences": [],
+            "preferenceConfidences": []
+          }
+        ]
+      ],
+      "preferences": [
+        "Prefer implementation details",
+        "Prefer traceable references"
+      ],
+      "maxResults": 10,
+      "mu": null,
+      "dedupe": false,
+      "unassessable": {},
+      "output": {
+        "results": [
+          {
+            "id": "r1",
+            "evidenceId": "m1",
+            "url": "https://m1.example/doc",
+            "title": "Document m1",
+            "description": "Reading material body for m1 with enough words to compare",
+            "basis": null,
+            "published": null,
+            "textVersion": null,
+            "scoreVersion": null,
+            "safetyState": "clear",
+            "engineRanks": {
+              "bing": 1
+            },
+            "engines": [
+              "bing"
+            ],
+            "valueLevel": 5,
+            "valueLabel": "high",
+            "fusionScore": 1,
+            "baseNormalized": 0.5,
+            "valueUtility": 1,
+            "baseContribution": 0.25,
+            "valueContribution": 0.5,
+            "sourceDiscount": "none",
+            "sourceDiscountFactor": 1,
+            "sourcePenalty": 0,
+            "sourceDiscountSelectedBy": "code",
+            "preferenceMatches": [
+              "match",
+              "partial"
+            ],
+            "preferenceBonus": 0.07500000000000001,
+            "finalScore": 0.825,
+            "redundancy": 0,
+            "selectionScore": 0.825,
+            "signals": {
+              "valueConfidence": 0.8,
+              "discountConfidence": 0.5
+            }
+          },
+          {
+            "id": "r2",
+            "evidenceId": "m5",
+            "url": "https://m5.example/doc",
+            "title": "Document m5",
+            "description": "Reading material body for m5 with enough words to compare",
+            "basis": null,
+            "published": null,
+            "textVersion": null,
+            "scoreVersion": null,
+            "safetyState": "clear",
+            "engineRanks": {
+              "bing": 1
+            },
+            "engines": [
+              "bing"
+            ],
+            "valueLevel": 5,
+            "valueLabel": "high",
+            "fusionScore": 0.2,
+            "baseNormalized": 0.16666666666666669,
+            "valueUtility": 1,
+            "baseContribution": 0.08333333333333334,
+            "valueContribution": 0.5,
+            "sourceDiscount": "none",
+            "sourceDiscountFactor": 1,
+            "sourcePenalty": 0,
+            "sourceDiscountSelectedBy": "code",
+            "preferenceMatches": [
+              "unknown",
+              "unknown"
+            ],
+            "preferenceBonus": 0,
+            "finalScore": 0.5833333333333334,
+            "redundancy": 0,
+            "selectionScore": 0.5833333333333334,
+            "signals": {
+              "valueConfidence": 0.8,
+              "discountConfidence": 0.5
+            }
+          },
+          {
+            "id": "r3",
+            "evidenceId": "m2",
+            "url": "https://m2.example/doc",
+            "title": "Document m2",
+            "description": "Reading material body for m2 with enough words to compare",
+            "basis": null,
+            "published": null,
+            "textVersion": null,
+            "scoreVersion": null,
+            "safetyState": "clear",
+            "engineRanks": {
+              "bing": 1
+            },
+            "engines": [
+              "bing"
+            ],
+            "valueLevel": 4,
+            "valueLabel": "medium_high",
+            "fusionScore": 0.5,
+            "baseNormalized": 0.3333333333333333,
+            "valueUtility": 0.6,
+            "baseContribution": 0.16666666666666666,
+            "valueContribution": 0.3,
+            "sourceDiscount": "mild",
+            "sourceDiscountFactor": 0.9,
+            "sourcePenalty": 0.046666666666666655,
+            "sourceDiscountSelectedBy": "model",
+            "preferenceMatches": [
+              "partial",
+              "no_match"
+            ],
+            "preferenceBonus": 0.025,
+            "finalScore": 0.44500000000000006,
+            "redundancy": 0,
+            "selectionScore": 0.44500000000000006,
+            "signals": {
+              "valueConfidence": 0.8,
+              "discountConfidence": 0.5
+            }
+          },
+          {
+            "id": "r4",
+            "evidenceId": "m3",
+            "url": "https://m3.example/doc",
+            "title": "Document m3",
+            "description": "Reading material body for m3 with enough words to compare",
+            "basis": null,
+            "published": null,
+            "textVersion": null,
+            "scoreVersion": null,
+            "safetyState": "clear",
+            "engineRanks": {
+              "bing": 1
+            },
+            "engines": [
+              "bing"
+            ],
+            "valueLevel": 4,
+            "valueLabel": "medium_high",
+            "fusionScore": 0.5,
+            "baseNormalized": 0.3333333333333333,
+            "valueUtility": 0.6,
+            "baseContribution": 0.16666666666666666,
+            "valueContribution": 0.3,
+            "sourceDiscount": "strong",
+            "sourceDiscountFactor": 0.75,
+            "sourcePenalty": 0.11666666666666667,
+            "sourceDiscountSelectedBy": "code",
+            "preferenceMatches": [
+              "unknown",
+              "match"
+            ],
+            "preferenceBonus": 0.05,
+            "finalScore": 0.39999999999999997,
+            "redundancy": 0,
+            "selectionScore": 0.39999999999999997,
+            "signals": {
+              "valueConfidence": 0.8,
+              "discountConfidence": 0.5
+            }
+          },
+          {
+            "id": "r5",
+            "evidenceId": "m4",
+            "url": "https://m4.example/doc",
+            "title": "Document m4",
+            "description": "Reading material body for m4 with enough words to compare",
+            "basis": null,
+            "published": null,
+            "textVersion": null,
+            "scoreVersion": null,
+            "safetyState": "clear",
+            "engineRanks": {
+              "bing": 1
+            },
+            "engines": [
+              "bing"
+            ],
+            "valueLevel": 3,
+            "valueLabel": "medium",
+            "fusionScore": 0.9,
+            "baseNormalized": 0.4736842105263158,
+            "valueUtility": 0.25,
+            "baseContribution": 0.2368421052631579,
+            "valueContribution": 0.125,
+            "sourceDiscount": "unknown",
+            "sourceDiscountFactor": 1,
+            "sourcePenalty": 0,
+            "sourceDiscountSelectedBy": "code",
+            "preferenceMatches": [
+              "unknown",
+              "unknown"
+            ],
+            "preferenceBonus": 0,
+            "finalScore": 0.3618421052631579,
+            "redundancy": 0,
+            "selectionScore": 0.3618421052631579,
+            "signals": {
+              "valueConfidence": 0.8,
+              "discountConfidence": 0.5
+            }
+          }
+        ],
+        "valueGroups": {
+          "3": [
+            "r5"
+          ],
+          "4": [
+            "r3",
+            "r4"
+          ],
+          "5": [
+            "r1",
+            "r2"
+          ]
+        },
+        "selection": {
+          "requested": 10,
+          "returned": 5,
+          "targetMet": false,
+          "stopReason": "candidate_pool_exhausted",
+          "incomplete": false
+        },
+        "diagnostics": {
+          "collected": 5,
+          "pending": 0,
+          "safetyRejected": 0,
+          "safetyUnavailable": 0,
+          "qualityAssessed": 5,
+          "valueFiltered": 0,
+          "valueUnestablished": 0,
+          "assessmentUnavailable": 0,
+          "baseScoreMissing": 0,
+          "requestTooLarge": 0,
+          "judgementUnavailable": 0,
+          "selected": 5,
+          "valueCounts": {
+            "3": 1,
+            "4": 2,
+            "5": 2
+          },
+          "duplicatesFolded": 0
+        },
+        "params": {
+          "tau": 1,
+          "lambda": 0.5,
+          "utilities": {
+            "3": 0.25,
+            "4": 0.6,
+            "5": 1
+          },
+          "discountFactors": {
+            "none": 1,
+            "mild": 0.9,
+            "strong": 0.75,
+            "unknown": 1
+          },
+          "preferenceMatchValues": {
+            "match": 1,
+            "partial": 0.5,
+            "no_match": 0,
+            "unknown": 0
+          },
+          "epsilon": 0.1,
+          "mu": 0
+        },
+        "policyVersion": "fused-screening-mix-v2-prototype",
+        "sourceBiasPolicyVersion": "neutral-v1"
+      }
+    },
+    {
+      "name": "truncation-keeps-ranking-order",
+      "candidates": [
+        {
+          "evidenceId": "m1",
+          "key": "key-m1",
+          "url": "https://m1.example/doc",
+          "title": "Document m1",
+          "text": "Reading material body for m1 with enough words to compare",
+          "baseScore": 1,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        },
+        {
+          "evidenceId": "m2",
+          "key": "key-m2",
+          "url": "https://m2.example/doc",
+          "title": "Document m2",
+          "text": "Reading material body for m2 with enough words to compare",
+          "baseScore": 0.5,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        },
+        {
+          "evidenceId": "m3",
+          "key": "key-m3",
+          "url": "https://m3.example/doc",
+          "title": "Document m3",
+          "text": "Reading material body for m3 with enough words to compare",
+          "baseScore": 0.9,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        },
+        {
+          "evidenceId": "m4",
+          "key": "key-m4",
+          "url": "https://m4.example/doc",
+          "title": "Document m4",
+          "text": "Reading material body for m4 with enough words to compare",
+          "baseScore": 0.2,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        }
+      ],
+      "judgements": [
+        [
+          "m1",
+          {
+            "scope": {
+              "state": "skipped"
+            },
+            "info": null,
+            "value": {
+              "state": "level",
+              "level": 3
+            },
+            "valueConfidence": 0.8,
+            "discount": {
+              "state": "selected",
+              "option": "none",
+              "selectedBy": "code"
+            },
+            "discountConfidence": 0.5,
+            "preferences": [],
+            "preferenceConfidences": []
+          }
+        ],
+        [
+          "m2",
+          {
+            "scope": {
+              "state": "skipped"
+            },
+            "info": null,
+            "value": {
+              "state": "level",
+              "level": 5
+            },
+            "valueConfidence": 0.8,
+            "discount": {
+              "state": "selected",
+              "option": "none",
+              "selectedBy": "code"
+            },
+            "discountConfidence": 0.5,
+            "preferences": [],
+            "preferenceConfidences": []
+          }
+        ],
+        [
+          "m3",
+          {
+            "scope": {
+              "state": "skipped"
+            },
+            "info": null,
+            "value": {
+              "state": "level",
+              "level": 4
+            },
+            "valueConfidence": 0.8,
+            "discount": {
+              "state": "selected",
+              "option": "none",
+              "selectedBy": "code"
+            },
+            "discountConfidence": 0.5,
+            "preferences": [],
+            "preferenceConfidences": []
+          }
+        ],
+        [
+          "m4",
+          {
+            "scope": {
+              "state": "skipped"
+            },
+            "info": null,
+            "value": {
+              "state": "level",
+              "level": 5
+            },
+            "valueConfidence": 0.8,
+            "discount": {
+              "state": "selected",
+              "option": "none",
+              "selectedBy": "code"
+            },
+            "discountConfidence": 0.5,
+            "preferences": [],
+            "preferenceConfidences": []
+          }
+        ]
+      ],
+      "preferences": [],
+      "maxResults": 2,
+      "mu": null,
+      "dedupe": false,
+      "unassessable": {},
+      "output": {
+        "results": [
+          {
+            "id": "r1",
+            "evidenceId": "m2",
+            "url": "https://m2.example/doc",
+            "title": "Document m2",
+            "description": "Reading material body for m2 with enough words to compare",
+            "basis": null,
+            "published": null,
+            "textVersion": null,
+            "scoreVersion": null,
+            "safetyState": "clear",
+            "engineRanks": {
+              "bing": 1
+            },
+            "engines": [
+              "bing"
+            ],
+            "valueLevel": 5,
+            "valueLabel": "high",
+            "fusionScore": 0.5,
+            "baseNormalized": 0.3333333333333333,
+            "valueUtility": 1,
+            "baseContribution": 0.16666666666666666,
+            "valueContribution": 0.5,
+            "sourceDiscount": "none",
+            "sourceDiscountFactor": 1,
+            "sourcePenalty": 0,
+            "sourceDiscountSelectedBy": "code",
+            "preferenceMatches": [],
+            "preferenceBonus": 0,
+            "finalScore": 0.6666666666666666,
+            "redundancy": 0,
+            "selectionScore": 0.6666666666666666,
+            "signals": {
+              "valueConfidence": 0.8,
+              "discountConfidence": 0.5
+            }
+          },
+          {
+            "id": "r2",
+            "evidenceId": "m4",
+            "url": "https://m4.example/doc",
+            "title": "Document m4",
+            "description": "Reading material body for m4 with enough words to compare",
+            "basis": null,
+            "published": null,
+            "textVersion": null,
+            "scoreVersion": null,
+            "safetyState": "clear",
+            "engineRanks": {
+              "bing": 1
+            },
+            "engines": [
+              "bing"
+            ],
+            "valueLevel": 5,
+            "valueLabel": "high",
+            "fusionScore": 0.2,
+            "baseNormalized": 0.16666666666666669,
+            "valueUtility": 1,
+            "baseContribution": 0.08333333333333334,
+            "valueContribution": 0.5,
+            "sourceDiscount": "none",
+            "sourceDiscountFactor": 1,
+            "sourcePenalty": 0,
+            "sourceDiscountSelectedBy": "code",
+            "preferenceMatches": [],
+            "preferenceBonus": 0,
+            "finalScore": 0.5833333333333334,
+            "redundancy": 0,
+            "selectionScore": 0.5833333333333334,
+            "signals": {
+              "valueConfidence": 0.8,
+              "discountConfidence": 0.5
+            }
+          }
+        ],
+        "valueGroups": {
+          "3": [],
+          "4": [],
+          "5": [
+            "r1",
+            "r2"
+          ]
+        },
+        "selection": {
+          "requested": 2,
+          "returned": 2,
+          "targetMet": true,
+          "stopReason": "target_met",
+          "incomplete": false
+        },
+        "diagnostics": {
+          "collected": 4,
+          "pending": 0,
+          "safetyRejected": 0,
+          "safetyUnavailable": 0,
+          "qualityAssessed": 4,
+          "valueFiltered": 0,
+          "valueUnestablished": 0,
+          "assessmentUnavailable": 0,
+          "baseScoreMissing": 0,
+          "requestTooLarge": 0,
+          "judgementUnavailable": 0,
+          "selected": 2,
+          "valueCounts": {
+            "3": 0,
+            "4": 0,
+            "5": 2
+          },
+          "duplicatesFolded": 0
+        },
+        "params": {
+          "tau": 1,
+          "lambda": 0.5,
+          "utilities": {
+            "3": 0.25,
+            "4": 0.6,
+            "5": 1
+          },
+          "discountFactors": {
+            "none": 1,
+            "mild": 0.9,
+            "strong": 0.75,
+            "unknown": 1
+          },
+          "preferenceMatchValues": {
+            "match": 1,
+            "partial": 0.5,
+            "no_match": 0,
+            "unknown": 0
+          },
+          "epsilon": 0.1,
+          "mu": 0
+        },
+        "policyVersion": "fused-screening-mix-v2-prototype",
+        "sourceBiasPolicyVersion": "neutral-v1"
+      }
+    },
+    {
+      "name": "soft-redundancy-mu-keeps-finalScore-immutable",
+      "candidates": [
+        {
+          "evidenceId": "m1",
+          "key": "key-m1",
+          "url": "https://m1.example/doc",
+          "title": "SQLite concurrent writers",
+          "text": "Concurrent writes to one SQLite database file from two processes require a busy timeout and careful transaction scope to avoid lock errors",
+          "baseScore": 1,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        },
+        {
+          "evidenceId": "m2",
+          "key": "key-m2",
+          "url": "https://m2.example/doc",
+          "title": "SQLite concurrent writers mirror",
+          "text": "Concurrent writes to one SQLite database file from two processes require a busy timeout and careful transaction scope to avoid lock errors",
+          "baseScore": 0.9,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        },
+        {
+          "evidenceId": "m3",
+          "key": "key-m3",
+          "url": "https://m3.example/doc",
+          "title": "Git sparse-checkout cone mode",
+          "text": "The cone mode of git sparse-checkout restricts the working tree to a directory and its parents which is faster than pattern matching",
+          "baseScore": 0.8,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        }
+      ],
+      "judgements": [
+        [
+          "m1",
+          {
+            "scope": {
+              "state": "skipped"
+            },
+            "info": null,
+            "value": {
+              "state": "level",
+              "level": 5
+            },
+            "valueConfidence": 0.8,
+            "discount": {
+              "state": "selected",
+              "option": "none",
+              "selectedBy": "code"
+            },
+            "discountConfidence": 0.5,
+            "preferences": [],
+            "preferenceConfidences": []
+          }
+        ],
+        [
+          "m2",
+          {
+            "scope": {
+              "state": "skipped"
+            },
+            "info": null,
+            "value": {
+              "state": "level",
+              "level": 5
+            },
+            "valueConfidence": 0.8,
+            "discount": {
+              "state": "selected",
+              "option": "none",
+              "selectedBy": "code"
+            },
+            "discountConfidence": 0.5,
+            "preferences": [],
+            "preferenceConfidences": []
+          }
+        ],
+        [
+          "m3",
+          {
+            "scope": {
+              "state": "skipped"
+            },
+            "info": null,
+            "value": {
+              "state": "level",
+              "level": 5
+            },
+            "valueConfidence": 0.8,
+            "discount": {
+              "state": "selected",
+              "option": "none",
+              "selectedBy": "code"
+            },
+            "discountConfidence": 0.5,
+            "preferences": [],
+            "preferenceConfidences": []
+          }
+        ]
+      ],
+      "preferences": [],
+      "maxResults": 3,
+      "mu": 0.8,
+      "dedupe": false,
+      "unassessable": {},
+      "output": {
+        "results": [
+          {
+            "id": "r1",
+            "evidenceId": "m1",
+            "url": "https://m1.example/doc",
+            "title": "SQLite concurrent writers",
+            "description": "Concurrent writes to one SQLite database file from two processes require a busy timeout and careful transaction scope to avoid lock errors",
+            "basis": null,
+            "published": null,
+            "textVersion": null,
+            "scoreVersion": null,
+            "safetyState": "clear",
+            "engineRanks": {
+              "bing": 1
+            },
+            "engines": [
+              "bing"
+            ],
+            "valueLevel": 5,
+            "valueLabel": "high",
+            "fusionScore": 1,
+            "baseNormalized": 0.5,
+            "valueUtility": 1,
+            "baseContribution": 0.25,
+            "valueContribution": 0.5,
+            "sourceDiscount": "none",
+            "sourceDiscountFactor": 1,
+            "sourcePenalty": 0,
+            "sourceDiscountSelectedBy": "code",
+            "preferenceMatches": [],
+            "preferenceBonus": 0,
+            "finalScore": 0.75,
+            "redundancy": 0,
+            "selectionScore": 0.75,
+            "signals": {
+              "valueConfidence": 0.8,
+              "discountConfidence": 0.5
+            }
+          },
+          {
+            "id": "r2",
+            "evidenceId": "m3",
+            "url": "https://m3.example/doc",
+            "title": "Git sparse-checkout cone mode",
+            "description": "The cone mode of git sparse-checkout restricts the working tree to a directory and its parents which is faster than pattern matching",
+            "basis": null,
+            "published": null,
+            "textVersion": null,
+            "scoreVersion": null,
+            "safetyState": "clear",
+            "engineRanks": {
+              "bing": 1
+            },
+            "engines": [
+              "bing"
+            ],
+            "valueLevel": 5,
+            "valueLabel": "high",
+            "fusionScore": 0.8,
+            "baseNormalized": 0.4444444444444445,
+            "valueUtility": 1,
+            "baseContribution": 0.22222222222222224,
+            "valueContribution": 0.5,
+            "sourceDiscount": "none",
+            "sourceDiscountFactor": 1,
+            "sourcePenalty": 0,
+            "sourceDiscountSelectedBy": "code",
+            "preferenceMatches": [],
+            "preferenceBonus": 0,
+            "finalScore": 0.7222222222222222,
+            "redundancy": 0,
+            "selectionScore": 0.7222222222222222,
+            "signals": {
+              "valueConfidence": 0.8,
+              "discountConfidence": 0.5
+            }
+          },
+          {
+            "id": "r3",
+            "evidenceId": "m2",
+            "url": "https://m2.example/doc",
+            "title": "SQLite concurrent writers mirror",
+            "description": "Concurrent writes to one SQLite database file from two processes require a busy timeout and careful transaction scope to avoid lock errors",
+            "basis": null,
+            "published": null,
+            "textVersion": null,
+            "scoreVersion": null,
+            "safetyState": "clear",
+            "engineRanks": {
+              "bing": 1
+            },
+            "engines": [
+              "bing"
+            ],
+            "valueLevel": 5,
+            "valueLabel": "high",
+            "fusionScore": 0.9,
+            "baseNormalized": 0.4736842105263158,
+            "valueUtility": 1,
+            "baseContribution": 0.2368421052631579,
+            "valueContribution": 0.5,
+            "sourceDiscount": "none",
+            "sourceDiscountFactor": 1,
+            "sourcePenalty": 0,
+            "sourceDiscountSelectedBy": "code",
+            "preferenceMatches": [],
+            "preferenceBonus": 0,
+            "finalScore": 0.736842105263158,
+            "redundancy": 0.8076923076923077,
+            "selectionScore": 0.09068825910931178,
+            "signals": {
+              "valueConfidence": 0.8,
+              "discountConfidence": 0.5
+            }
+          }
+        ],
+        "valueGroups": {
+          "3": [],
+          "4": [],
+          "5": [
+            "r1",
+            "r2",
+            "r3"
+          ]
+        },
+        "selection": {
+          "requested": 3,
+          "returned": 3,
+          "targetMet": true,
+          "stopReason": "target_met",
+          "incomplete": false
+        },
+        "diagnostics": {
+          "collected": 3,
+          "pending": 0,
+          "safetyRejected": 0,
+          "safetyUnavailable": 0,
+          "qualityAssessed": 3,
+          "valueFiltered": 0,
+          "valueUnestablished": 0,
+          "assessmentUnavailable": 0,
+          "baseScoreMissing": 0,
+          "requestTooLarge": 0,
+          "judgementUnavailable": 0,
+          "selected": 3,
+          "valueCounts": {
+            "3": 0,
+            "4": 0,
+            "5": 3
+          },
+          "duplicatesFolded": 0
+        },
+        "params": {
+          "tau": 1,
+          "lambda": 0.5,
+          "utilities": {
+            "3": 0.25,
+            "4": 0.6,
+            "5": 1
+          },
+          "discountFactors": {
+            "none": 1,
+            "mild": 0.9,
+            "strong": 0.75,
+            "unknown": 1
+          },
+          "preferenceMatchValues": {
+            "match": 1,
+            "partial": 0.5,
+            "no_match": 0,
+            "unknown": 0
+          },
+          "epsilon": 0.1,
+          "mu": 0.8
+        },
+        "policyVersion": "fused-screening-mix-v2-prototype",
+        "sourceBiasPolicyVersion": "neutral-v1"
+      }
+    },
+    {
+      "name": "pending-candidate-is-not-admitted",
+      "candidates": [
+        {
+          "evidenceId": "m1",
+          "key": "key-m1",
+          "url": "https://m1.example/doc",
+          "title": "Document m1",
+          "text": "Reading material body for m1 with enough words to compare",
+          "baseScore": 1,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        },
+        {
+          "evidenceId": "m2",
+          "key": "key-m2",
+          "url": "https://m2.example/doc",
+          "title": "Document m2",
+          "text": "Reading material body for m2 with enough words to compare",
+          "baseScore": 0.9,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        }
+      ],
+      "judgements": [
+        [
+          "m1",
+          {
+            "scope": {
+              "state": "skipped"
+            },
+            "info": null,
+            "value": {
+              "state": "level",
+              "level": 4
+            },
+            "valueConfidence": 0.8,
+            "discount": {
+              "state": "selected",
+              "option": "none",
+              "selectedBy": "code"
+            },
+            "discountConfidence": 0.5,
+            "preferences": [],
+            "preferenceConfidences": []
+          }
+        ]
+      ],
+      "preferences": [],
+      "maxResults": 8,
+      "mu": null,
+      "dedupe": false,
+      "unassessable": {},
+      "output": {
+        "results": [
+          {
+            "id": "r1",
+            "evidenceId": "m1",
+            "url": "https://m1.example/doc",
+            "title": "Document m1",
+            "description": "Reading material body for m1 with enough words to compare",
+            "basis": null,
+            "published": null,
+            "textVersion": null,
+            "scoreVersion": null,
+            "safetyState": "clear",
+            "engineRanks": {
+              "bing": 1
+            },
+            "engines": [
+              "bing"
+            ],
+            "valueLevel": 4,
+            "valueLabel": "medium_high",
+            "fusionScore": 1,
+            "baseNormalized": 0.5,
+            "valueUtility": 0.6,
+            "baseContribution": 0.25,
+            "valueContribution": 0.3,
+            "sourceDiscount": "none",
+            "sourceDiscountFactor": 1,
+            "sourcePenalty": 0,
+            "sourceDiscountSelectedBy": "code",
+            "preferenceMatches": [],
+            "preferenceBonus": 0,
+            "finalScore": 0.55,
+            "redundancy": 0,
+            "selectionScore": 0.55,
+            "signals": {
+              "valueConfidence": 0.8,
+              "discountConfidence": 0.5
+            }
+          }
+        ],
+        "valueGroups": {
+          "3": [],
+          "4": [
+            "r1"
+          ],
+          "5": []
+        },
+        "selection": {
+          "requested": 8,
+          "returned": 1,
+          "targetMet": false,
+          "stopReason": "pending_candidates",
+          "incomplete": true
+        },
+        "diagnostics": {
+          "collected": 2,
+          "pending": 1,
+          "safetyRejected": 0,
+          "safetyUnavailable": 0,
+          "qualityAssessed": 1,
+          "valueFiltered": 0,
+          "valueUnestablished": 0,
+          "assessmentUnavailable": 0,
+          "baseScoreMissing": 0,
+          "requestTooLarge": 0,
+          "judgementUnavailable": 0,
+          "selected": 1,
+          "valueCounts": {
+            "3": 0,
+            "4": 1,
+            "5": 0
+          },
+          "duplicatesFolded": 0
+        },
+        "params": {
+          "tau": 1,
+          "lambda": 0.5,
+          "utilities": {
+            "3": 0.25,
+            "4": 0.6,
+            "5": 1
+          },
+          "discountFactors": {
+            "none": 1,
+            "mild": 0.9,
+            "strong": 0.75,
+            "unknown": 1
+          },
+          "preferenceMatchValues": {
+            "match": 1,
+            "partial": 0.5,
+            "no_match": 0,
+            "unknown": 0
+          },
+          "epsilon": 0.1,
+          "mu": 0
+        },
+        "policyVersion": "fused-screening-mix-v2-prototype",
+        "sourceBiasPolicyVersion": "neutral-v1"
+      }
+    },
+    {
+      "name": "unassessable-candidate-keeps-disclosed-reason",
+      "candidates": [
+        {
+          "evidenceId": "m1",
+          "key": "key-m1",
+          "url": "https://m1.example/doc",
+          "title": "Document m1",
+          "text": "Reading material body for m1 with enough words to compare",
+          "baseScore": 1,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        },
+        {
+          "evidenceId": "m2",
+          "key": "key-m2",
+          "url": "https://m2.example/doc",
+          "title": "Document m2",
+          "text": "Reading material body for m2 with enough words to compare",
+          "baseScore": 0.9,
+          "safetyState": "clear",
+          "engines": [
+            "bing"
+          ],
+          "engineRanks": {
+            "bing": 1
+          },
+          "provenance": []
+        }
+      ],
+      "judgements": [
+        [
+          "m1",
+          {
+            "scope": {
+              "state": "skipped"
+            },
+            "info": null,
+            "value": {
+              "state": "level",
+              "level": 5
+            },
+            "valueConfidence": 0.8,
+            "discount": {
+              "state": "selected",
+              "option": "none",
+              "selectedBy": "code"
+            },
+            "discountConfidence": 0.5,
+            "preferences": [],
+            "preferenceConfidences": []
+          }
+        ]
+      ],
+      "preferences": [],
+      "maxResults": 8,
+      "mu": null,
+      "dedupe": false,
+      "unassessable": {
+        "m2": "request_too_large"
+      },
+      "output": {
+        "results": [
+          {
+            "id": "r1",
+            "evidenceId": "m1",
+            "url": "https://m1.example/doc",
+            "title": "Document m1",
+            "description": "Reading material body for m1 with enough words to compare",
+            "basis": null,
+            "published": null,
+            "textVersion": null,
+            "scoreVersion": null,
+            "safetyState": "clear",
+            "engineRanks": {
+              "bing": 1
+            },
+            "engines": [
+              "bing"
+            ],
+            "valueLevel": 5,
+            "valueLabel": "high",
+            "fusionScore": 1,
+            "baseNormalized": 0.5,
+            "valueUtility": 1,
+            "baseContribution": 0.25,
+            "valueContribution": 0.5,
+            "sourceDiscount": "none",
+            "sourceDiscountFactor": 1,
+            "sourcePenalty": 0,
+            "sourceDiscountSelectedBy": "code",
+            "preferenceMatches": [],
+            "preferenceBonus": 0,
+            "finalScore": 0.75,
+            "redundancy": 0,
+            "selectionScore": 0.75,
+            "signals": {
+              "valueConfidence": 0.8,
+              "discountConfidence": 0.5
+            }
+          }
+        ],
+        "valueGroups": {
+          "3": [],
+          "4": [],
+          "5": [
+            "r1"
+          ]
+        },
+        "selection": {
+          "requested": 8,
+          "returned": 1,
+          "targetMet": false,
+          "stopReason": "unassessable_material",
+          "incomplete": true
+        },
+        "diagnostics": {
+          "collected": 2,
+          "pending": 0,
+          "safetyRejected": 0,
+          "safetyUnavailable": 0,
+          "qualityAssessed": 1,
+          "valueFiltered": 0,
+          "valueUnestablished": 0,
+          "assessmentUnavailable": 0,
+          "baseScoreMissing": 0,
+          "requestTooLarge": 1,
+          "judgementUnavailable": 0,
+          "selected": 1,
+          "valueCounts": {
+            "3": 0,
+            "4": 0,
+            "5": 1
+          },
+          "duplicatesFolded": 0
+        },
+        "params": {
+          "tau": 1,
+          "lambda": 0.5,
+          "utilities": {
+            "3": 0.25,
+            "4": 0.6,
+            "5": 1
+          },
+          "discountFactors": {
+            "none": 1,
+            "mild": 0.9,
+            "strong": 0.75,
+            "unknown": 1
+          },
+          "preferenceMatchValues": {
+            "match": 1,
+            "partial": 0.5,
+            "no_match": 0,
+            "unknown": 0
+          },
+          "epsilon": 0.1,
+          "mu": 0
+        },
+        "policyVersion": "fused-screening-mix-v2-prototype",
+        "sourceBiasPolicyVersion": "neutral-v1"
+      }
+    }
+  ]
+}

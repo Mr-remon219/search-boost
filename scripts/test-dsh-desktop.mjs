@@ -2,7 +2,7 @@
 import './isolate-tests.mjs'
 // Hermetic Desktop lifecycle: real subprocesses, fake app/CLI, no user hosts/network.
 import assert from 'node:assert/strict'
-import { mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync, symlinkSync, readdirSync, linkSync, renameSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync, symlinkSync, readdirSync, linkSync, renameSync, lstatSync } from 'node:fs'
 import { join, dirname, delimiter } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { PATHS, agentDetected, dshProfilesWithSearchBoost } from '../lib/paths.mjs'
@@ -76,7 +76,7 @@ if (verb === 'add') {
 } else if (verb === 'remove') {
   delete pkg.dependencies[source]; delete pkg.devDependencies?.[source];
   pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter(name => name !== source);
-  rmSync(join(dir, 'node_modules', source), { recursive: true, force: true });
+  if (!process.env.DSH_TEST_LEAVE_LINK) rmSync(join(dir, 'node_modules', source), { recursive: true, force: true });
 } else throw Error('unexpected operation');
 writeFileSync(file, process.env.DSH_TEST_CORRUPT_REMOVE && verb === 'remove' ? '{invalid' : JSON.stringify(pkg));
 `)
@@ -295,3 +295,87 @@ assert.ok(!dshProfilesWithSearchBoost().includes('desktop'))
 console.log('ok: linked Desktop profiles remain discoverable and removable via their Desktop owner')
 assert.equal(json(join(PKG_ROOT, 'package.json')).version, getVersion(), 'fixtures never modify package source')
 console.log('ok: success/failure host output is not echoed into test/TUI logs; all artifacts are sandbox-owned')
+
+// P2-04: Desktop's native unregister can delete both registrations while the
+// profile keeps an active node_modules/search-boost link. Cleanup must remove
+// that owned link (and nothing else), also on a repeated uninstall.
+const desktopLink = () => join(profileDir('desktop'), 'node_modules', 'search-boost')
+const desktopLinkPresent = () => { try { lstatSync(desktopLink()); return true } catch { return false } }
+resetProfile('desktop', { installed: true })
+process.env.DSH_TEST_LEAVE_LINK = '1'
+clearCalls()
+const linkResidue = await executeAgentOps(['dsh'], { dshSurface: 'desktop', uninstall: true }, clack)
+assert.deepEqual(linkResidue.map(({ profile, ok }) => [profile, ok]), [['desktop', true]])
+assert.equal(commands().at(-1).owner, 'desktop')
+assert.equal(desktopLinkPresent(), false, 'Desktop leftover link must be removed')
+assert.ok(existsSync(join(PKG_ROOT, 'package.json')), 'the link target is never deleted')
+assert.ok(!dshProfilesWithSearchBoost().includes('desktop'))
+delete process.env.DSH_TEST_LEAVE_LINK
+// Repeated uninstall: both registrations are already gone, only the link remains.
+resetProfile('desktop')
+mkdirSync(join(profileDir('desktop'), 'node_modules'), { recursive: true })
+symlinkSync(PKG_ROOT, desktopLink(), process.platform === 'win32' ? 'junction' : 'dir')
+clearCalls()
+assert.equal((await executeAgentOps(['dsh'], { dshSurface: 'desktop', uninstall: true }, clack))[0].ok, true)
+assert.equal(commands().length, 0, 'a residue-only profile needs no host invocation')
+assert.equal(desktopLinkPresent(), false, 'repeat uninstall must clean the Desktop link')
+// A running Desktop still owns its profile: the lock blocks the removal.
+resetProfile('desktop')
+mkdirSync(join(profileDir('desktop'), 'node_modules'), { recursive: true })
+symlinkSync(PKG_ROOT, desktopLink(), process.platform === 'win32' ? 'junction' : 'dir')
+write(join(profileDir('desktop'), 'lock'), 'fixture desktop running')
+clearCalls()
+assert.equal((await executeAgentOps(['dsh'], { dshSurface: 'desktop', uninstall: true }, clack))[0].ok, false, 'a running Desktop must block the residue cleanup')
+assert.equal(desktopLinkPresent(), true, 'the blocked link stays for a later uninstall')
+rmSync(join(profileDir('desktop'), 'lock'))
+assert.equal((await executeAgentOps(['dsh'], { dshSurface: 'desktop', uninstall: true }, clack))[0].ok, true)
+assert.equal(desktopLinkPresent(), false)
+console.log('ok: Desktop uninstall cleans owned active links, repeats, and honors the application lock')
+
+// Aliases can share only a manifest or node_modules, not the profile directory.
+// The running application's lock is in the canonical Desktop directory, not
+// necessarily next to the alias manifest. Never unlink its plugin via an alias.
+for (const mode of ['manifest-hardlink', 'shared-node-modules', 'both']) {
+  resetProfile('desktop')
+  mkdirSync(join(profileDir('desktop'), 'node_modules'), { recursive: true })
+  symlinkSync(PKG_ROOT, desktopLink(), process.platform === 'win32' ? 'junction' : 'dir')
+  const name = `residue-alias-${mode}`, dir = profileDir(name)
+  mkdirSync(dir, { recursive: true })
+  if (mode === 'shared-node-modules') {
+    write(join(dir, 'package.json'), json(join(profileDir('desktop'), 'package.json')))
+  } else {
+    linkSync(join(profileDir('desktop'), 'package.json'), join(dir, 'package.json'))
+  }
+  if (mode === 'manifest-hardlink') {
+    mkdirSync(join(dir, 'node_modules'), { recursive: true })
+    symlinkSync(PKG_ROOT, join(dir, 'node_modules', 'search-boost'), process.platform === 'win32' ? 'junction' : 'dir')
+  } else {
+    symlinkSync(join(profileDir('desktop'), 'node_modules'), join(dir, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir')
+  }
+  write(join(profileDir('desktop'), 'lock'), 'canonical desktop running')
+  const before = readFileSync(join(profileDir('desktop'), 'package.json'), 'utf8')
+  clearCalls()
+  assert.equal(existsSync(join(dir, 'lock')), false, 'the alias deliberately has no local lock')
+  const result = await executeAgentOps(['dsh'], { profile: name, uninstall: true }, clack)
+  assert.equal(result[0].ok, false, `${mode}: canonical Desktop lock must block alias cleanup`)
+  assert.equal(lstatSync(join(dir, 'node_modules', 'search-boost')).isSymbolicLink(), true, `${mode}: alias link must remain`)
+  assert.equal(desktopLinkPresent(), true, `${mode}: Desktop plugin must remain`)
+  assert.equal(readFileSync(join(profileDir('desktop'), 'lock'), 'utf8'), 'canonical desktop running')
+  assert.equal(readFileSync(join(profileDir('desktop'), 'package.json'), 'utf8'), before)
+  assert.equal(commands().length, 0, 'locked residue cleanup must not invoke a host')
+  assert.equal((await executeAgentOps(['dsh'], { profile: name, uninstall: true, dryRun: true }, clack))[0].ok, true)
+  assert.equal(desktopLinkPresent(), true, 'dry-run must preserve shared entries')
+  rmSync(join(profileDir('desktop'), 'lock'))
+  assert.equal((await executeAgentOps(['dsh'], { profile: name, uninstall: true }, clack))[0].ok, true)
+  assert.equal(existsSync(join(dir, 'node_modules', 'search-boost')), false, 'cleanup can proceed after Desktop quits')
+  if (mode !== 'manifest-hardlink') rmSync(join(dir, 'node_modules'))
+  rmSync(dir, { recursive: true })
+}
+// Separate profile links may point to the same package without sharing entries.
+resetProfile('web')
+mkdirSync(join(profileDir('web'), 'node_modules'), { recursive: true })
+symlinkSync(PKG_ROOT, join(profileDir('web'), 'node_modules', 'search-boost'), process.platform === 'win32' ? 'junction' : 'dir')
+write(join(profileDir('desktop'), 'lock'), 'desktop running independently')
+assert.equal((await executeAgentOps(['dsh'], { profile: 'web', uninstall: true }, clack))[0].ok, true, 'independent CLI cleanup is not blocked by Desktop')
+rmSync(join(profileDir('desktop'), 'lock'))
+console.log('ok: canonical Desktop lock protects manifest and plugin-directory aliases without blocking independent CLI profiles')

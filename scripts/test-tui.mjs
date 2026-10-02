@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { runTui } from '../lib/installer/tui.mjs'
+import { runToolsWizard } from '../lib/installer/tools-wizard.mjs'
 import { runDshSurfaceStep } from '../lib/installer/index.mjs'
 import { CONFIG_KEY_NAMES } from '../lib/keys.mjs'
 import {
@@ -125,6 +126,13 @@ try {
   assert.equal(out.records[3].message, 'TUI settings')
   assert.equal(readTuiLanguage(), 'en')
   console.log('ok: every existing action is grouped exactly once; language changes immediately and survives restart')
+  for (const language of ['en', 'zh-CN']) {
+    const notes = []
+    await withTuiContext(() => runToolsWizard({ note: (text) => notes.push(text), multiselect: async () => cancel, isCancel: value => value === cancel }), { language })
+    assert(notes.some(text => language === 'en' ? /does not read pages automatically/.test(text) : /不会自动读取网页/.test(text)))
+    assert(!notes.some(text => /read internally|仍可内部读取/.test(text)), 'tool-switch help must not promise retired adaptive page reads')
+  }
+  console.log('ok: English and Chinese tool-switch help describe the single snapshot and no automatic page reads')
 
   fresh()
   out = await scenario(['search-tools', 'layer', cancel, 'back', 'credentials', 'x', cancel, 'jev', cancel, 'keys', cancel, 'back', 'integration', 'print', cancel, 'install', reply('multiselect', cancel), 'back', 'exit'])

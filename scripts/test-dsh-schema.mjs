@@ -8,9 +8,10 @@ import {
   ToolRuntime, assertObjectJsonSchema, assertSupportedJsonSchema,
   jsonSchemaToTs, jsonSchemaToPy, validateJsonSchemaValue,
 } from '@deepseek-ai/dsh-tools'
-import { ADAPTIVE_INPUT_SCHEMA } from '../lib/search/adaptive/input.js'
+import { ADAPTIVE_INPUT_SCHEMA } from '../lib/search/screening/input.js'
+import { ADAPTIVE_OUTPUT_SCHEMA } from '../lib/search/screening/schema.js'
 import { runAdaptiveSearch } from '../lib/runtime.mjs'
-import { retrievalConvergence } from '../lib/search/adaptive/convergence.js'
+import { resultPages } from '../lib/search/screening/pages.js'
 import { saveJevConfig, clearJevConfig } from '../lib/jev-config.mjs'
 import { saveToolPreferences } from '../lib/tool-config.mjs'
 import { registerDshTool, toDshSchema } from '../adapters/dsh/schema.js'
@@ -61,45 +62,74 @@ assert.deepEqual(validateJsonSchemaValue(tools.get('search_stats').output.schema
 assert.equal(typeof stats.xOfficial, 'boolean')
 assert.equal(typeof stats.xSource, 'string')
 const adaptive = tools.get('adaptive_search')
-await assert.rejects(() => adaptive.execute({ questions: ['test'] }, {}), /Jev not configured/)
-const empty = await runAdaptiveSearch({ questions: ['test'] })
+// The registered output contract is the shared v5 ∪ historical union, translated.
+assert.ok(ADAPTIVE_OUTPUT_SCHEMA.oneOf.length === 2, 'shared union keeps two explicit branches')
+assert.notEqual(tools.get('adaptive_search').output.schema, undefined)
+await assert.rejects(() => adaptive.execute({ questions: ['test'], intent: 'find references' }, {}), /Jev not configured/)
+// Injected deps keep this a pure contract check: the entry gate is open, no Jev
+// credential exists, so the core returns its structured not_configured result.
+const empty = await runAdaptiveSearch({ questions: ['test'], intent: 'find references' }, {}, {
+  toolState: () => ({ requested: true, enabled: true }),
+  readConfig: () => ({}),
+})
 assert.equal(empty.stopReason, 'not_configured')
 assert.equal(empty.nextCursor, null)
 assert.deepEqual(validateJsonSchemaValue(adaptive.output.schema, empty), [])
 assert.deepEqual(validateJsonSchemaValue(adaptive.output.schema, { ...empty, nextCursor: 'next-page' }), [])
 assert.notEqual(validateJsonSchemaValue(adaptive.output.schema, { ...empty, nextCursor: 42 }).length, 0)
-const scored = { ...empty, retrievalSufficient:true,
-  convergence:retrievalConvergence([{keyword:'test',score:.9,distinct:1}]),
-  finalReview:{status:'not_run',checks:0,verdict:null,researchKeyword:null,inputMaterials:0,allMaterialsIncluded:false},
-  keywordProgress:[{targetId:'q1',keyword:'test',score:.9,progress:.9,ready:true,distinctEvidence:1,finalStatus:'satisfied'}],
-}
-assert.deepEqual(validateJsonSchemaValue(adaptive.output.schema, scored), [])
-assert.notEqual(validateJsonSchemaValue(adaptive.output.schema, { ...scored, convergence:{...scored.convergence,status:'pass'} }).length, 0)
+assert.notEqual(validateJsonSchemaValue(adaptive.output.schema, { ...empty, schemaVersion: 4 }).length, 0, 'a v5 run must declare schemaVersion 5')
+assert.notEqual(validateJsonSchemaValue(adaptive.output.schema, { ...empty, unknownField: 1 }).length, 0, 'unknown fields are refused, not ignored')
+
+// A read-only historical restore must validate through the same translated union
+// and must never be forced to invent v5 fields.
+const historical = resultPages.saveHistorical({
+  results: [{ url: 'https://legacy.example/a', title: 'Legacy A', description: 'Stored v1 passage' }],
+  metadata: {
+    coverageComplete: false, stopReason: 'keyword_queue_empty', warnings: [],
+    inputSummary: { question: 'Legacy question', intent: 'legacy intent', keywords: ['k'], constraints: [], constraintPolicy: 'explicit_per_material' },
+  },
+  originalFormat: 'search-boost-research-v1',
+  originalSchemaVersion: 3,
+  savedAt: '2026-10-01T00:00:00.000Z',
+}, 2)
+assert.equal(historical.restoration.historical, true)
+assert.deepEqual(validateJsonSchemaValue(adaptive.output.schema, historical), [], JSON.stringify(validateJsonSchemaValue(adaptive.output.schema, historical)))
+assert.notEqual(validateJsonSchemaValue(adaptive.output.schema, { ...historical, selection: { returned: 1 } }).length, 0, 'the historical branch cannot carry v5 execution fields')
+assert.notEqual(validateJsonSchemaValue(adaptive.output.schema, { ...historical, restoration: undefined }).length, 0)
 const fused = tools.get('fused_search')
 const result = { query: 'fixture', effectiveWeights: { bing: 1 }, results: [{ title: 'Title', url: 'https://example.com', domain: 'example.com', published: null, engineRanks: { bing: 1 }, contributions: { bing: 0.5 } }] }
 assert.deepEqual(validateJsonSchemaValue(fused.output.schema, result), [])
 result.results[0].published = '2026-01-01'
 assert.deepEqual(validateJsonSchemaValue(fused.output.schema, result), [])
-console.log('ok: nullable dates/cursors, engine maps, and real stats/adaptive outputs pass DSH validation')
+console.log('ok: nullable dates/cursors, engine maps, v5 and historical adaptive outputs all pass the real DSH validator')
 
 // The single-question contract must compile for DSH without weakening the
 // shared MCP/Pi schema, and the switch gate must survive schema translation.
-for (const keywords of [['alpha'], ['alpha', 'beta']]) {
-  const input = { questions: ['a?'], keywords, intent: 'Find useful pointers', constraints: ['Only official sources'] }
+for (const intent of ['Find useful pointers']) {
+  const input = { questions: ['a?'], intent, preferences: ['Implementation details'], community: false }
   assert.deepEqual(validateJsonSchemaValue(adaptive.parameters, input), [])
   await assert.rejects(() => adaptive.execute(input, {}), /Jev not configured/)
 }
-for (const keywords of [[], ['alpha', ['beta']], [1], [[]], [['alpha'], ['beta']]]) {
-  await assert.rejects(() => adaptive.execute({ questions: ['a?'], keywords }, {}), /invalid arguments/)
+for (const input of [
+  { questions: [], intent: 'x' }, { questions: ['a?', 'b?'], intent: 'x' }, { questions: ['a?'], page_size: 51 },
+  { questions: ['a?'], keywords: ['alpha'], intent: 'x' }, { questions: ['a?'], tasks: [], intent: 'x' },
+  { questions: ['a?'], community: 'auto', intent: 'x' }, { saved_result_id: 'x'.repeat(36) },
+]) {
+  await assert.rejects(() => adaptive.execute(input, {}), /invalid arguments/)
 }
 saveJevConfig({ apiKey: 'fixture-no-network' })
 try {
-  await assert.rejects(() => adaptive.execute({ questions: ['a?', 'b?'], keywords: ['ambiguous'] }, {}), /invalid arguments/)
+  // With the entry unlocked, structural migration errors surface before any network:
+  // retired non-empty constraints, missing intent and unknown fields.
+  await assert.rejects(() => adaptive.execute({ questions: ['a?'], intent: 'x', constraints: ['Only official sources'] }, {}), /adaptive_constraints_removed/)
+  await assert.rejects(() => adaptive.execute({ questions: ['a?'] }, {}), /intent is required/)
+  const emptyConstraints = await adaptive.execute({ questions: ['a?'], intent: 'x', constraints: [] }, {})
+  assert(emptyConstraints.warnings.some((warning) => warning.startsWith('deprecated_constraints_empty')))
   saveToolPreferences({ adaptive_search: false })
-  await assert.rejects(() => adaptive.execute({ questions: ['a?'] }, {}), /Disabled by user/)
+  await assert.rejects(() => adaptive.execute({ questions: ['a?'], intent: 'x' }, {}), /Disabled by user/)
   saveToolPreferences({ adaptive_search: true })
 } finally { clearJevConfig() }
-console.log('ok: Jev single-question restrictions, v3 output, credential lock and live switches survive real DSH registration')
+console.log('ok: single-question contract, retired-field refusal, intent requirement and live switches survive real DSH registration')
 
 // Conversion must not mutate contracts shared with MCP/Pi. Property names that
 // resemble keywords must remain property names, not be stripped recursively.
@@ -119,7 +149,7 @@ for (const args of [{ query: 'x', engines: [] }, { query: 'x', engine_weights: {
   await assert.rejects(() => fused.execute(args, {}), /invalid arguments/)
 }
 for (const args of [
-  { questions: Array(7).fill('q') }, { questions: ['q'], page_size: 51 },
+  { questions: Array(7).fill('q'), intent: 'x' }, { questions: ['q'], intent: 'x', page_size: 51 },
   { tasks: [{ context: 'test', targets: [{ id: 'bad id', keywords: ['test'], question: 'q' }] }] },
 ]) await assert.rejects(() => adaptive.execute(args, {}), /invalid arguments/)
 for (const args of [{ agent: 'searcher', task: '' }, { tasks: [] }, { max_seconds: 301 }, { max_sources: 0 }]) {

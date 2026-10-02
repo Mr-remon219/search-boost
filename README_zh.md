@@ -54,7 +54,7 @@
 - **X / Twitter 社区情报检索 (`x_search`)**  
   支持通过官方 xAI API 或免登录回退通道获取推文、作者动态与讨论串。基于 Snowflake ID 逆向还原精准发布时间戳，本地执行作者与日期范围过滤，杜绝幻觉。
 - **Jev 意图导向搜索 (`adaptive_search` · 实验功能)**
-  输入一个问题、研究倾向、搜索点和明确限制。Jev 先判显式限制再评质量，保留有用补充材料，按披露的分数和各点最低进度停止，不发送全量终审。保留每轮500候选容量、有界页面补查与分页；不宣称答案已核实或完整。
+  提供一个完整问题与必填研究方向。检索前一次 Jev 策略请求选择固定排序预设，并在省略 community 时决定是否追加既有社区支路；随后对至多 32 条有界 fused 快照做固定选项筛选（安全、原型价值 3/4/5、来源折扣）。没有关键词规划、没有逐材料 constraints 门槛、没有语言校验、没有自动补读，也没有自设的累计预算停止；cursor 与 saved_result_id 只重放已保存结果。不宣称答案已核实或完整。
 - **原生多智能体并行研究工作流**  
   随包提供 `search-boost` 与 `search-boost-parallel-research` Skills。在支持子代理的宿主（如 Cursor、Claude Code、Pi、DSH）中，可将复杂调研拆分为多路 Searcher（抓取证据）与 Summarizer（无工具综合），提供 Fast 与 Complex 两种研究波次。
 - **统一架构，全宿主覆盖**  
@@ -196,7 +196,7 @@ search-boost
 - **Pi**：约 300ms 内更新活跃工具，保留其他插件工具和原本被宿主排除的工具；会话结束时清理监听。
 - **DSH**：保留注册但立即拒绝关闭工具的新调用；原生搜索/抓取 provider 也遵守对应开关。
 
-每次调用都会重新检查开关，旧工具句柄也不能绕过；正在执行的请求正常完成。移除 Jev 凭据会锁定 adaptive 调用（包括分页和保存结果恢复），恢复凭据不覆盖明确关闭的偏好。这里开关的是**工具入口**，不是底层引擎权限：已开启的 adaptive 仍可在内部搜索和抓取，融合搜索的 community 模式仍可内部检索 X。Pi/DSH 的 searcher 波次还要求共享 fused_search、fetch_page 入口及 DSH 范围内工具可用：初始依赖关闭时零派发，每个子进程启动前再次检查；已启动子任务正常完成，无工具 summarizer 不受这两个依赖限制。检查不自动启用工具、不扩大权限。Slash 命令保留用于恢复配置。正在运行旧适配器代码的进程需先更新/重载一次；各宿主需使用同一 SearchBoost 配置目录。
+每次调用都会重新检查开关，旧工具句柄也不能绕过；正在执行的请求正常完成。移除 Jev 凭据会锁定 adaptive 调用（包括分页和保存结果恢复），恢复凭据不覆盖明确关闭的偏好。这里开关的是**工具入口**，不是底层引擎权限：已开启的 adaptive 只筛选一次内部融合快照，不自动抓取页面，融合搜索的 community 模式仍可内部检索 X。Pi/DSH 的 searcher 波次还要求共享 fused_search、fetch_page 入口及 DSH 范围内工具可用：初始依赖关闭时零派发，每个子进程启动前再次检查；已启动子任务正常完成，无工具 summarizer 不受这两个依赖限制。检查不自动启用工具、不扩大权限。Slash 命令保留用于恢复配置。正在运行旧适配器代码的进程需先更新/重载一次；各宿主需使用同一 SearchBoost 配置目录。
 
 ---
 
@@ -283,24 +283,26 @@ search-boost
 
 **Vercel 接入**：在 TUI → 服务与凭据 → Jev 配置（实验性）填写 `https://ai-gateway.vercel.sh/v1` 和 Vercel AI Gateway Key。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级配置中的 Jev Key，不读取环境变量；服务端限流等待不会被缩短。
 
-调用方提供**一个问题**（`questions` 恰好一项）、研究目的 `intent`、研究点 `keywords` 和明确硬条件 `constraints`。每次实际搜索先依据缺口、材料与历史反馈选择查询，再针对选定查询选择引擎。候选入池后，**一个独立 Boolean 前筛判断全部显式条件**；条件为空则跳过。质量判断保留重点及有用补充材料，方向用于重点排序、关键词用于贡献归属，不再共同否决整篇材料。代码按当前有效去重材料计算关键词封顶进度：等权总分达到80/100且每个关键词进度达到0.60后停止（关键词目标分为1）。参数为未校准工程起点，弱点优先续搜。不再发送全量终审，也不再强制64份首轮审查窗口；未完成判断仍如实披露。主 Agent 仍负责分析和事实核实。
+调用方提供**一个问题**（`questions` 恰好一项）、**必填的研究方向 `intent`** 以及 0-8 条可选软偏好 `preferences`。工具描述要求用英文书写，但这是给调用方的提示，服务端不做语言校验、拒绝或翻译，任何语言都按原文检索。原文问题就是唯一查询：不再规划关键词、不做查询扩展。检索前的一次 Jev 策略请求选择固定 `balanced`/`research`/`fresh` 排序，并在省略 `community` 时决定是否启用既有社区（X）支路；显式 `community` true/false 覆盖该选择，且不重复提问。随后这次 fused 调用收集**至多 32 条候选的有界快照**（网页与社区行共用），每条声明候选都以固定选项判断：安全 clear/violation/unavailable、原型价值 0-5、来自真实正贡献引擎的来源折扣，以及每条偏好一次匹配。只有安全且价值已建立为 3/4/5 的材料会被交付，并按版本化筛选公式排序；置信度仅用于审计。不会在凑够前若干条可接受链接后提前停止，没有自动补读，也没有自设的累计成本、token、请求次数或整次时限停止——真实单请求超时、有限重试、认证/限流失败、安全拒绝与显式取消照常生效。
 
 ```json
 {
   "questions": ["ExampleDB 从 4.1 升级到 4.2 有哪些兼容风险？"],
   "intent": "寻找实际迁移步骤、具体不兼容案例及反证，不需要营销介绍。",
-  "keywords": ["迁移步骤", "不兼容变更", "失败案例"],
-  "constraints": ["仅使用官方资料"],
-  "page_size": 20
+  "preferences": ["官方迁移指南"],
+  "max_results": 8,
+  "page_size": 3
 }
 ```
 
-- `constraints` 仅填明确可核验的完整硬条件，如适用版本、事件/发布日期范围、平台或仅限官方来源。**不要填研究方向、软偏好、关键词或期望结论**；没有明确限制则省略或传 `[]`。所有条件按AND判断；每项强制文档条件均须显式放入该字段，不暗中从问题补猜。有用补充材料不必命中列出的研究点。
-- 多问题列表、`tasks/targets/facts/time_range` 和二维关键词不再是公开入口；独立问题请分次调用。
-- 返回认可的 URL、标题、审查摘录及 valueScore/directionMatch/kind及focus/supporting分层，不生成答案，不混入尚未完成准入的候选；可选方向或关键词判断缺失仍单独披露。
-- 查看 `reviewSummary`、`scopeSummary`、`convergence`、`keywordProgress`、`pendingAssessments` 和警告。`retrievalSufficient` 表示达到评分检索停止标准，不是语义终审、事实核实或答案全集覆盖；废弃的 `finalReview` 固定为 `not_run`、无判定；`coverageComplete` 在 schemaVersion 3 中仍恒为 false。
-- 用 `{"cursor":"<nextCursor>"}` 读取后续页，可选 page_size，不重搜或重问 Jev。默认20、最多50条/页并有字节预算，累计认可结果无固定条数帽；结果暂存本进程最多30分钟/32次，分页完毕不是全网穷尽。
-- 显式传入 `save_results:true` 才会私有保存选中材料和类型化元数据，返回 `savedResultId`。重启后用 `{"saved_result_id":"<savedResultId>"}` 恢复（可选 `page_size`），不重搜、不重问 Jev；不能与新研究输入或 `save_results` 混用。公开工具仍遵循用户开关及 Jev 配置锁；`search-boost research list` / `research export <id> --output <new-file.json>` 无需 Jev、可离线使用。参见[接入与验收边界](docs/research-status-acceptance.md)。
+- `intent` 为必填（不再由问题自动填补），`preferences` 是独立软加分并按键精确去重后取平均。
+- `constraints` 已退役为逐材料硬门槛：省略或传 `[]`（返回 `deprecated_constraints_empty` 告警）；非空数组在任何网络调用前以 `adaptive_constraints_removed` 拒绝。请把完整研究方向与条件写进 questions/intent；硬域名限制用 `site:`/`-site:` 或 fused_search 的 `include_domains`/`exclude_domains`，必须满足的文档属性由主 Agent 阅读核验。
+- 多问题列表、`tasks/targets/facts/time_range`、`keywords` 与二维关键词都按旧字段拒绝；独立问题请分次调用。
+- `max_results` 限制本次选中并保存的数量（默认 10，最大 50）；`page_size` 只影响每页（默认 20，最大 50），不重排、不重新筛选。
+- 返回选中材料的 URL、标题、审查摘录、`valueLevel`/`valueLabel`、rank、真实来源与分数组件，不生成答案。`selection.targetMet` 只表示数量，绝不代表研究完成或已核实；`selection.incomplete`、`diagnostics`、`stopReason`、`outsideReview`、`unreviewed` 如实披露未完成部分，而不是当作低价值。
+- `run.community` 返回有限的社区决策与实际执行状态（`not_requested`/`domain_excluded`/`unavailable`/`blocked`/`succeeded`/`empty`/`failed`/`partial`/`not_run`），不输出模型推理；社区支路失败或部分失败时仍交付有效网页结果，并把本次标记为 incomplete。
+- 用 `{"cursor":"<s5:…>"}`（可附 `page_size`）读取已保存页：不发起新的检索、策略、Jev、社区或价值判断。每页默认 20、最大 50，并有字节预算；cursor 在当前进程内最多保留 30 分钟/32 份结果，翻页结束不等于穷尽检索。
+- 显式 `save_results:true` 时，完整的最终选中集与类型化元数据会私有保存到 SearchBoost home（`search-boost-research-v2`，schema version 5），并返回 `savedResultId`。重启或清缓存后用 `{"saved_result_id":"<savedResultId>"}`（可附 `page_size`）读取，不再重新检索或询问 Jev。旧的 `search-boost-research-v1` 文件继续可读，进入带标记的只读 `h1:` 历史分支（`restoration.historical: true`，保留原 schema 版本，不伪造 v5 字段）。公开工具开关与 Jev 配置锁同样作用于读取；`search-boost research list` / `research export <id> --output <new-file.json>` 无需 Jev、可离线使用。参见[接入与验收边界](docs/research-status-acceptance.md)。
 - 阈值仍是未标定工程起点。完整契约、预算和迁移说明见 [Jev 单问题研究检索](docs/jev-adaptive-search.md)。
 
 ---

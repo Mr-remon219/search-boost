@@ -31,13 +31,15 @@ import {
 } from '../../lib/runtime.mjs'
 import {
   ADAPTIVE_DESCRIPTION,
+  ADAPTIVE_PROMPT_GUIDELINES,
   ADAPTIVE_TOOL_NAME,
   renderAdaptiveSummary,
-} from '../../lib/search/adaptive/describe.js'
+} from '../../lib/search/screening/describe.js'
 import {
   ANNOTATIONS,
   adaptiveSearchInput,
   adaptiveSearchOutput,
+  validateAdaptiveSearchOutput,
   fetchPageInput,
   fetchPageOutput,
   fusedSearchInput,
@@ -57,7 +59,9 @@ function summarizeAdaptive(result) {
   const handles = new Map()
   const registerTool = (name, schema, execute) => {
     const handle = server.registerTool(name, schema, async (...args) => {
-      try { assertToolEnabled(name) } catch (error) { return toolErr(error.message) }
+      // Adaptive owns parser → public gate in the shared facade. Gating it
+      // here first would read configuration before semantic input validation.
+      try { if (name !== ADAPTIVE_TOOL_NAME) assertToolEnabled(name) } catch (error) { return toolErr(error.message) }
       return execute(...args)
     })
     handles.set(name, handle)
@@ -73,7 +77,7 @@ function summarizeAdaptive(result) {
   }, async (args, extra) => {
     try {
       if (!String(args.query ?? '').trim()) return toolErr('fused_search: query is required')
-      const signal = abortSignal(extra, 90_000)
+      const signal = extra?.signal
       const result = await runFused({
         query: args.query,
         queries: args.queries,
@@ -157,7 +161,7 @@ function summarizeAdaptive(result) {
       const kind = X_MODES.includes(args.type) ? args.type : 'keyword'
       const subj = args.query ?? args.username ?? args.post_id ?? ''
       if (!subj) return toolErr('x_search: provide query, username, or post_id')
-      const out = await runXSearch({ ...args, type: kind }, { signal: abortSignal(extra, 180_000) })
+      const out = await runXSearch({ ...args, type: kind }, { signal: extra?.signal })
       if (out.via === 'error') {
         return toolErr(`x_search: no results (${out.error ?? 'primary and fallback failed'})`)
       }
@@ -230,21 +234,23 @@ function summarizeAdaptive(result) {
 
   registerTool(ADAPTIVE_TOOL_NAME, {
     title: 'Adaptive Search (Jev)',
-    description: ADAPTIVE_DESCRIPTION,
+    description: `${ADAPTIVE_DESCRIPTION}\n\n${ADAPTIVE_PROMPT_GUIDELINES.map((line) => `- ${line}`).join('\n')}`,
     inputSchema: adaptiveSearchInput,
     outputSchema: adaptiveSearchOutput,
     annotations: { ...ANNOTATIONS.search, readOnlyHint: false, title: 'Intent-guided search result selection (Jev; optional local save)' },
   }, async (args, extra) => {
     try {
-      const result = await runAdaptiveSearch(args, {
-        signal: abortSignal(extra, 150_000),
+      // No self-imposed whole-call deadline: only the host/client signal can
+      // cancel this call (2026-10-02 budget supplement).
+      const result = validateAdaptiveSearchOutput(await runAdaptiveSearch(args, {
+        signal: extra?.signal,
         host: 'mcp',
         audit: extra?.audit,
-      })
+      }))
       const initial = args.cursor === undefined && args.saved_result_id === undefined
-      const isError = initial && (result.stopReason === 'invalid_input' || result.stopReason === 'not_configured' || result.stopReason === 'no_engines')
+      const isError = initial && Boolean(result.error)
       const suffix = initial && result.stopReason === 'not_configured'
-        ? `\n\nJev is not configured: run \`${result.configurationHint ?? 'search-boost config jev'}\`, or use fused_search / fetch_page / x_search directly.`
+        ? '\n\nJev is not configured: run `search-boost config jev`, or use fused_search / fetch_page / x_search directly.'
         : ''
       const text = `${renderAdaptiveSummary(result)}${suffix}\n\n${JSON.stringify(result)}`
       return isError ? toolErr(text, summarizeAdaptive(result)) : toolOk(text, summarizeAdaptive(result))

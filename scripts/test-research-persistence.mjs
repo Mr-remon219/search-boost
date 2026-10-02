@@ -1,103 +1,284 @@
 import './isolate-tests.mjs'
+// Private research snapshots: v2/schema-v5 writes, frozen v1 read-only restores,
+// pagination, CLI export, storage hardening and host boundaries. Offline only:
+// the shared fused/Jev core is injected, the private store is the real one.
 import assert from 'node:assert/strict'
-import { mkdirSync,writeFileSync,readFileSync,readdirSync,statSync,rmSync,truncateSync,symlinkSync,linkSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, statSync, rmSync, truncateSync, symlinkSync, linkSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { z } from 'zod'
 import { PKG_ROOT } from '../lib/pkg.mjs'
-import { runAdaptiveSearch,clearAllCaches } from '../lib/runtime.mjs'
-import { approvedResults,validatePageInput } from '../lib/search/adaptive/pages.js'
-import { saveResearchResults,loadResearchResults,listResearchResults,exportResearchResults,researchResultsDir,MAX_RESEARCH_BYTES } from '../lib/research-results.mjs'
-import { adaptiveSearchInput,adaptiveSearchOutput } from '../adapters/mcp/schemas.mjs'
+import { runAdaptiveSearch, clearAllCaches } from '../lib/runtime.mjs'
+import {
+  saveResearchResultsV2, loadResearchResults, listResearchResults, exportResearchResults,
+  researchResultsDir, MAX_RESEARCH_BYTES, RESEARCH_FORMAT_V1, RESEARCH_FORMAT_V2,
+} from '../lib/research-results.mjs'
+import { normalizeAdaptiveInput } from '../lib/search/screening/input.js'
+import { resultPages } from '../lib/search/screening/pages.js'
 import { registerAll } from '../adapters/mcp/register.mjs'
 import piExtension from '../adapters/pi/index.js'
+import { Context } from '@deepseek-ai/cordis'
 import { apply } from '../adapters/dsh/index.js'
-import { saveJevConfig,clearJevConfig } from '../lib/jev-config.mjs'
+import { saveJevConfig, clearJevConfig } from '../lib/jev-config.mjs'
 import { saveToolPreferences } from '../lib/tool-config.mjs'
-const secret='fixture-credential-not-to-persist'
-const metadata={schemaVersion:3,retrievalSufficient:false,coverageComplete:false,stopReason:'keyword_queue_empty',warnings:[],inputSummary:{question:'Fixture question',intent:'fixture inspection',keywords:['scope'],constraints:['Only official sources'],constraintPolicy:'explicit_per_material',internalSecret:secret},privateLog:secret}
-const evidence=(id,extra={})=>({url:`https://example.com/${id}`,title:`Official ${id}`,reviewedText:'Public approved passage '+id,status:'useful_result',assessed:true,admissionPolicy:'explicit-constraints-v2',admitted:true,scope:{route:'eligible'},valueScore:.8,judgment:{direction_match:1},kind:'lead',...extra})
-const rows=approvedResults([evidence('a'),evidence('b'),evidence('a'),evidence('rejected',{admitted:false}),evidence('pending',{assessed:false})])
-assert.equal(rows.length,2)
-const id=saveResearchResults(rows.map(row=>({...row,privateLog:secret})),metadata)
-const file=join(researchResultsDir(),id+'.json')
-assert(!readFileSync(file,'utf8').includes(secret),'recursive public-schema stripping excludes unknown credential/model-log fields')
-if(process.platform!=='win32'){assert.equal(statSync(file).mode&0o777,0o600);assert.equal(statSync(researchResultsDir()).mode&0o777,0o700)}
-const restored=await runAdaptiveSearch({saved_result_id:id,page_size:1})
-assert.equal(restored.results.length,1);assert.equal(restored.totalResults,2);assert.equal(restored.savedResultId,id)
-assert.deepEqual(restored.inputSummary.constraints,['Only official sources'])
-assert.equal(z.object(adaptiveSearchOutput).strict().parse(restored).savedResultId,id)
-clearAllCaches()
-const again=await runAdaptiveSearch({saved_result_id:id,page_size:1})
-const next=await runAdaptiveSearch({cursor:again.nextCursor})
-assert.equal(next.results[0].url,rows[1].url)
-assert.equal(next.savedResultId,id)
-const child=spawnSync(process.execPath,['--input-type=module','-e',`const {runAdaptiveSearch}=await import(${JSON.stringify(pathToFileURL(join(PKG_ROOT,'lib/runtime.mjs')).href)});globalThis.fetch=()=>{throw Error('NO NETWORK')};console.log(JSON.stringify(await runAdaptiveSearch({saved_result_id:${JSON.stringify(id)}})));`],{env:process.env,encoding:'utf8',timeout:30000})
-assert.equal(child.status,0,child.stderr);assert.equal(JSON.parse(child.stdout).totalResults,2)
-const cli=(...args)=>spawnSync(process.execPath,[join(PKG_ROOT,'cli.mjs'),'research',...args],{env:process.env,encoding:'utf8',timeout:30000})
-assert.equal(JSON.parse(cli('list').stdout)[0].id,id)
-const output=join(process.env.HOME,'export.json')
-assert.equal(cli('export',id,'--output',output).status,0)
-assert.deepEqual(JSON.parse(readFileSync(output)),loadResearchResults(id))
-assert.equal(cli('export',id,'--output',output).status,1)
-assert(!readFileSync(output,'utf8').includes(secret))
-assert.throws(()=>validatePageInput({saved_result_id:'../'+id}),/Invalid/)
-for(const input of [{saved_result_id:id,questions:['x']},{cursor:'c',saved_result_id:id},{saved_result_id:id,save_results:false},{cursor:'c',save_results:true}])assert.throws(()=>validatePageInput(input),/cannot be combined/)
-assert.throws(()=>z.object(adaptiveSearchInput).parse({saved_result_id:'x'.repeat(36)}))
-const originalFetch=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('unexpected request')}
-try{
- saveJevConfig({apiKey:secret}) // host credential lock remains; restoration sends no request
- const handlers=new Map(),definitions=new Map()
- const stop=registerAll({registerTool:(name,def,handler)=>{handlers.set(name,handler);definitions.set(name,def)},registerResource(){},registerPrompt(){}})
- assert.equal(definitions.get('adaptive_search').annotations.readOnlyHint,false,'optional save must not claim a read-only MCP tool')
- const mcp=await handlers.get('adaptive_search')({saved_result_id:id,page_size:1},{signal:new AbortController().signal})
- assert(!mcp.isError);assert.equal(mcp.structuredContent.savedResultId,id);assert.equal(mcp.structuredContent.results.length,1)
- assert(mcp.content[0].text.includes(id));stop()
- const piTools=new Map();piExtension({registerTool:t=>piTools.set(t.name,t),registerCommand(){},on(){}})
- const pi=await piTools.get('adaptive_search').execute('id',{saved_result_id:id},new AbortController().signal)
- assert.equal(pi.details.totalResults,2);assert(pi.content[0].text.includes(id))
- const dshTools=new Map();apply({get:n=>n==='commands'?{register(){}}:undefined,tools:{register:t=>dshTools.set(t.name,t)},web:{registerSearchProvider(){},registerFetchProvider(){}},systemPrompt:{section(){}}})
- const dsh=await dshTools.get('adaptive_search').execute({saved_result_id:id},{})
- assert.equal(dsh.savedResultId,id);assert.equal(dsh.totalResults,2)
- saveToolPreferences({adaptive_search:false})
- await assert.rejects(()=>piTools.get('adaptive_search').execute('id',{saved_result_id:id}),/Disabled by user/)
- await assert.rejects(()=>dshTools.get('adaptive_search').execute({saved_result_id:id},{}),/Disabled by user/)
- assert.equal(calls,0)
- saveToolPreferences({adaptive_search:true});clearJevConfig()
-}finally{globalThis.fetch=originalFetch}
-console.log('ok: selected-only snapshots, restart/cache-clear pagination, public MCP/Pi/DSH restore, typed fields, secret/log stripping, host switches and explicit no-overwrite export')
+import { makeHarness } from './screening-run-fixture.mjs'
 
-const raw=JSON.parse(readFileSync(file,'utf8'))
-raw.privateLog=secret;raw.results[0].privateLog=secret;raw.metadata.inputSummary.privateLog=secret
-writeFileSync(file,JSON.stringify(raw))
-assert(!JSON.stringify(loadResearchResults(id)).includes(secret),'tampered unknown fields cannot be exported')
-raw.metadata.inputSummary.constraints=42;writeFileSync(file,JSON.stringify(raw))
-await assert.rejects(()=>runAdaptiveSearch({saved_result_id:id}),/invalid; no search/)
-assert.equal(listResearchResults()[0].unreadable,true)
-writeFileSync(file,'');truncateSync(file,MAX_RESEARCH_BYTES+1)
-assert.throws(()=>loadResearchResults(id),/invalid; no search/)
-rmSync(file)
-await assert.rejects(()=>runAdaptiveSearch({saved_result_id:id}),/not found.*no search/)
-assert.throws(()=>saveResearchResults([{url:'u',title:'t',description:'x'.repeat(MAX_RESEARCH_BYTES)}],metadata),/64 MiB/)
-assert.equal(readdirSync(researchResultsDir()).length,0,'failed save cannot leave partial snapshots')
-const target=join(process.env.HOME,'outside.json');writeFileSync(target,JSON.stringify({...raw,metadata}))
-let links=true;try{symlinkSync(target,file)}catch(err){if(process.platform!=='win32'||!['EPERM','EACCES','ENOSYS'].includes(err.code))throw err;links=false;console.log('skip: Windows symlink privilege unavailable')}
-if(links){assert.throws(()=>loadResearchResults(id),/invalid/);rmSync(file)}
-linkSync(target,file);assert.throws(()=>loadResearchResults(id),/invalid/);rmSync(file)
-if(links){
- const store=researchResultsDir();rmSync(store,{recursive:true});symlinkSync(process.env.HOME,store,process.platform==='win32'?'junction':'dir')
- assert.throws(()=>saveResearchResults(rows,metadata),/regular private directories/);rmSync(store)
+const secret='fixture-credential-not-to-persist'
+// The public adaptive entry stays behind the tool switch and the Jev configuration
+// lock, including cursor and saved_result_id reads. A fixture credential opens the
+// gate without any network call; locking behaviour is asserted at the end.
+saveJevConfig({apiKey:secret})
+const store=researchResultsDir()
+const LEGACY_ID='22222222-2222-4222-8222-222222222222'
+const legacyRow=(id)=>({url:`https://legacy.example/${id}`,title:`Legacy ${id}`,description:`Stored v1 passage ${id}`,tier:'focus',valueScore:.8,directionMatch:1,kind:'lead'})
+const legacyDoc=(id=LEGACY_ID)=>({
+  format:RESEARCH_FORMAT_V1,id,savedAt:'2026-10-01T00:00:00.000Z',
+  results:[legacyRow('a'),legacyRow('b')],
+  metadata:{
+    schemaVersion:3,retrievalSufficient:false,coverageComplete:false,stopReason:'keyword_queue_empty',
+    warnings:['stored v1 warning'],inputSummary:{question:'Legacy fixture question',intent:'legacy intent',keywords:['scope'],constraints:['Only official sources'],constraintPolicy:'explicit_per_material'},
+    scopeSummary:{eligible:1,rejected:1,unknown:0},
+    keywordProgress:[{targetId:'q1',keyword:'scope',score:.9,distinctEvidence:1,finalStatus:'satisfied'}],
+    privateLog:secret,inputSummaryExtra:secret,
+  },
+})
+function writeLegacy(doc=legacyDoc()){
+  mkdirSync(store,{recursive:true})
+  const file=join(store,doc.id+'.json')
+  writeFileSync(file,JSON.stringify(doc,null,2)+'\n')
+  return file
 }
-const fresh=await runAdaptiveSearch({questions:['Original request'],constraints:['Only official sources'],save_results:false})
-assert(!fresh.savedResultId)
-const saved=await runAdaptiveSearch({questions:['Original request'],constraints:['Only official sources'],save_results:true})
-assert(saved.savedResultId);assert.equal(saved.inputSummary.constraintPolicy,'explicit_per_material')
-assert(saved.warnings.some(w=>w.includes('snapshot is empty')))
-assert(loadResearchResults(saved.savedResultId).metadata.warnings.some(w=>w.includes('snapshot is empty')))
-const store=researchResultsDir();rmSync(store,{recursive:true});writeFileSync(store,'unwritable directory fixture')
-const failed=await runAdaptiveSearch({questions:['Original request'],save_results:true})
-assert(!failed.savedResultId);assert(Array.isArray(failed.results));assert(failed.warnings.some(w=>w.includes('NOT saved')))
-const abort=new AbortController();abort.abort()
-await assert.rejects(()=>runAdaptiveSearch({questions:['q'],save_results:true},{signal:abort.signal}),/abort/i)
-console.log('ok: malformed/missing/oversize snapshots and file/directory aliases fail closed; opt-in/failed save/cancel never trigger another search or destroy returned pages')
+
+// ---------------------------------------------------------------- v1 legacy ---
+{
+  const file=writeLegacy()
+  const before=readFileSync(file,'utf8')
+  const loaded=loadResearchResults(LEGACY_ID)
+  assert.equal(loaded.format,RESEARCH_FORMAT_V1)
+  assert.equal(loaded.metadata.schemaVersion,3)
+  assert.equal(loaded.results.length,2)
+  assert.deepEqual(loaded.metadata.inputSummary.constraints,['Only official sources'])
+  assert(!JSON.stringify(loaded).includes(secret),'recursive legacy whitelist drops unknown credential/log fields')
+  const originalFetch=globalThis.fetch
+  let calls=0
+  globalThis.fetch=async()=>{calls++;throw Error('unexpected request')}
+  try{
+    const restored=await runAdaptiveSearch({saved_result_id:LEGACY_ID,page_size:1})
+    assert.deepEqual(restored.restoration,{historical:true,originalFormat:RESEARCH_FORMAT_V1,originalSchemaVersion:3})
+    assert.equal(restored.schemaVersion,3,'a historical restore keeps the original schema version')
+    assert.equal('selection' in restored,false)
+    assert.equal('run' in restored,false)
+    assert.equal('valueGroups' in restored,false)
+    assert.equal(restored.totalResults,2)
+    assert.equal(restored.results.length,1)
+    assert.match(restored.nextCursor,/^h1:/)
+    assert.match(restored.warnings.join(' '),/Historical snapshot restored read-only/)
+    // page_size never re-caps or re-orders stored historical results
+    const page2=await runAdaptiveSearch({cursor:restored.nextCursor,page_size:5})
+    assert.equal(page2.results.length,1)
+    assert.equal(page2.results[0].url,legacyRow('b').url)
+    assert.deepEqual(page2.selection,undefined)
+    assert.equal(readFileSync(file,'utf8'),before,'v1 files are read-only: restore never rewrites or upgrades them')
+    clearAllCaches()
+    const afterClear=await runAdaptiveSearch({saved_result_id:LEGACY_ID,page_size:2})
+    assert.equal(afterClear.totalResults,2,'restore works after cache clear/restart')
+    await assert.rejects(()=>runAdaptiveSearch({cursor:restored.nextCursor}),/expired or were evicted/)
+  }finally{globalThis.fetch=originalFetch}
+  assert.equal(calls,0,'historical restore performs zero network calls')
+  // Missing original version stays missing: never guessed as v3 or v5.
+  const noVersion=legacyDoc()
+  delete noVersion.metadata.schemaVersion
+  noVersion.id='33333333-3333-4333-8333-333333333333'
+  writeLegacy(noVersion)
+  const restoredNull=await runAdaptiveSearch({saved_result_id:noVersion.id})
+  assert.equal(restoredNull.restoration.originalSchemaVersion,null)
+  assert.equal('schemaVersion' in restoredNull,false)
+  // The frozen v1 contract accepted a number, not only an integer. Preserve any
+  // validated original value rather than quietly relabelling it as missing.
+  const numbered=legacyDoc('66666666-6666-4666-8666-666666666666')
+  numbered.metadata.schemaVersion=2.5
+  const numberedFile=join(researchResultsDir(),`${numbered.id}.json`)
+  writeFileSync(numberedFile,JSON.stringify(numbered))
+  const numberedBefore=readFileSync(numberedFile,'utf8')
+  const restoredNumber=await runAdaptiveSearch({saved_result_id:numbered.id})
+  assert.equal(restoredNumber.schemaVersion,2.5)
+  assert.equal(restoredNumber.restoration.originalSchemaVersion,2.5)
+  assert.equal(readFileSync(numberedFile,'utf8'),numberedBefore)
+}
+console.log('ok: v1 snapshots restore read-only through h1 pages with original fields, zero network and no in-place upgrade')
+
+// ------------------------------------------------------------- v2 write path ---
+const v5Input={questions:['How does Node.js fetch support cancellation?'],intent:'Find traceable implementation references'}
+let savedId
+{
+  const harness=makeHarness()
+  const deps={...harness.deps,loadResults:loadResearchResults,saveResults:saveResearchResultsV2}
+  const result=await runAdaptiveSearch({...v5Input,preferences:['Implementation details'],max_results:2,save_results:true,page_size:1},{},deps)
+  savedId=result.savedResultId
+  assert.equal(typeof savedId,'string')
+  assert.equal(result.schemaVersion,5)
+  const stored=JSON.parse(readFileSync(join(store,savedId+'.json'),'utf8'))
+  assert.equal(stored.format,RESEARCH_FORMAT_V2)
+  assert.equal(stored.metadata.schemaVersion,5)
+  assert.equal(stored.results.length,2,'the complete selected set is stored, not only the first page')
+  assert.equal(stored.metadata.run.community.outcome,'not_requested')
+  assert.equal(stored.metadata.inputSummary.question,v5Input.questions[0])
+  assert.equal('keywords' in stored.metadata.inputSummary,false)
+  assert(!readFileSync(join(store,savedId+'.json'),'utf8').includes(secret),'no credential or private reasoning is persisted')
+  // restore: same decision, no strategy/Jev/search/community/value call
+  const restoreHarness=makeHarness()
+  const reads={jev:0,search:0}
+  const restoreDeps={...restoreHarness.deps,loadResults:loadResearchResults,saveResults:saveResearchResultsV2,
+    createClient:()=>{reads.jev++;throw Error('no Jev client during restore')},search:()=>{reads.search++;throw Error('no search during restore')}}
+  const restored=await runAdaptiveSearch({saved_result_id:savedId,page_size:1},{},restoreDeps)
+  assert.equal(restored.schemaVersion,5)
+  assert.equal(restored.policyVersion,'fused-screening-mix-v2-prototype')
+  assert.equal(restored.run.community.outcome,'not_requested')
+  assert.equal(restored.savedResultId,savedId)
+  assert.equal(restored.totalResults,2)
+  assert.equal(restored.results.length,1)
+  assert.equal(restored.selection.targetMet,true)
+  assert.match(restored.nextCursor,/^s5:/)
+  assert.equal('restoration' in restored,false)
+  assert.equal(reads.jev+reads.search,0)
+  // CLI list/export stay offline and never overwrite
+  const cli=(...args)=>spawnSync(process.execPath,[join(PKG_ROOT,'cli.mjs'),'research',...args],{env:process.env,encoding:'utf8',timeout:30000})
+  const listed=JSON.parse(cli('list').stdout)
+  assert(listed.some((entry)=>entry.id===savedId&&entry.totalResults===2))
+  assert(listed.some((entry)=>entry.id===LEGACY_ID&&entry.totalResults===2&&!entry.unreadable),'CLI lists both formats')
+  const output=join(process.env.HOME,'export.json')
+  assert.equal(cli('export',savedId,'--output',output).status,0)
+  assert.deepEqual(JSON.parse(readFileSync(output)),loadResearchResults(savedId))
+  assert.equal(cli('export',savedId,'--output',output).status,1,'export refuses to overwrite')
+  assert.equal(exportResearchResults(LEGACY_ID,join(process.env.HOME,'legacy-export.json')),join(process.env.HOME,'legacy-export.json'))
+  assert.equal(JSON.parse(readFileSync(join(process.env.HOME,'legacy-export.json'))).format,RESEARCH_FORMAT_V1)
+}
+console.log('ok: explicit save writes search-boost-research-v2/schema-5 with the full selected set; restore and CLI list/export are offline')
+
+// ------------------------------------------------------- format dispatch -----
+{
+  const file=join(store,savedId+'.json')
+  const good=readFileSync(file,'utf8')
+  const broken=JSON.parse(good)
+  broken.metadata.schemaVersion=4
+  writeFileSync(file,JSON.stringify(broken))
+  await assert.rejects(()=>runAdaptiveSearch({saved_result_id:savedId}),/invalid; no search/,'a bad v2 file is never downgraded to v1')
+  broken.format='search-boost-research-v9'
+  writeFileSync(file,JSON.stringify(broken))
+  await assert.rejects(()=>runAdaptiveSearch({saved_result_id:savedId}),/invalid; no search/)
+  writeFileSync(file,good)
+  const raw=JSON.parse(good)
+  raw.privateLog=secret
+  raw.results[0].privateLog=secret
+  raw.metadata.privateLog=secret
+  raw.metadata.run.privateLog=secret
+  writeFileSync(file,JSON.stringify(raw))
+  assert(!JSON.stringify(loadResearchResults(savedId)).includes(secret),'tampered v2 fields are stripped recursively')
+  const tampered=readFileSync(file,'utf8')
+  writeFileSync(file,'')
+  truncateSync(file,MAX_RESEARCH_BYTES+1)
+  assert.throws(()=>loadResearchResults(savedId),/invalid; no search/)
+  writeFileSync(file,tampered)
+  const metadata=loadResearchResults(savedId).metadata
+  const rows=loadResearchResults(savedId).results
+  assert.throws(()=>saveResearchResultsV2([{...rows[0],description:'x'.repeat(MAX_RESEARCH_BYTES)}],metadata),/64 MiB/)
+  if(process.platform!=='win32')assert.equal(statSync(file).mode&0o777,0o600)
+  rmSync(file)
+  await assert.rejects(()=>runAdaptiveSearch({saved_result_id:savedId}),/not found.*no search/)
+  const target=join(process.env.HOME,'outside.json')
+  writeFileSync(target,JSON.stringify(loadResearchResults(LEGACY_ID)&&{format:RESEARCH_FORMAT_V2}))
+  let links=true
+  try{symlinkSync(target,file)}catch(err){if(process.platform!=='win32'||!['EPERM','EACCES','ENOSYS'].includes(err.code))throw err;links=false}
+  if(links){assert.throws(()=>loadResearchResults(savedId),/invalid/);rmSync(file)}
+  linkSync(target,file)
+  assert.throws(()=>loadResearchResults(savedId),/invalid/,'hard links are refused')
+  rmSync(file)
+  if(links){
+    const held=researchResultsDir();rmSync(held,{recursive:true});symlinkSync(process.env.HOME,held,process.platform==='win32'?'junction':'dir')
+    assert.throws(()=>saveResearchResultsV2(rows,metadata),/regular private directories/)
+    rmSync(held)
+  }
+  mkdirSync(store,{recursive:true})
+  // Restore the untampered snapshots for the host-boundary checks below.
+  writeFileSync(file,good)
+  writeLegacy()
+}
+console.log('ok: unsupported/oversize/linked/aliased snapshots fail closed and never fall back to another format')
+
+// --------------------------------------------------- input contract guards ---
+{
+  assert.throws(()=>normalizeAdaptiveInput({saved_result_id:'../'+LEGACY_ID}),/Invalid saved research result ID/)
+  for(const input of [{saved_result_id:LEGACY_ID,questions:['x']},{cursor:'s5:x.0',saved_result_id:LEGACY_ID},{saved_result_id:LEGACY_ID,save_results:false},{cursor:'s5:x.0',save_results:true},{saved_result_id:LEGACY_ID,constraints:[]},{saved_result_id:LEGACY_ID,community:false}]){
+    assert.throws(()=>normalizeAdaptiveInput(input),/cannot be combined|accepts page_size only/)
+  }
+}
+
+// --------------------------------------------------------- host boundaries ---
+{
+  const originalFetch=globalThis.fetch
+  let calls=0
+  globalThis.fetch=async()=>{calls++;throw Error('unexpected request')}
+  try{
+    const handlers=new Map(),definitions=new Map()
+    const stop=registerAll({registerTool:(name,def,handler)=>{handlers.set(name,handler);definitions.set(name,def)},registerResource(){},registerPrompt(){}})
+    assert.equal(definitions.get('adaptive_search').annotations.readOnlyHint,false,'optional save must not claim a read-only MCP tool')
+    const mcp=await handlers.get('adaptive_search')({saved_result_id:savedId,page_size:1},{signal:new AbortController().signal})
+    assert(!mcp.isError)
+    assert.equal(mcp.structuredContent.savedResultId,savedId)
+    const mcpLegacy=await handlers.get('adaptive_search')({saved_result_id:LEGACY_ID,page_size:1},{signal:new AbortController().signal})
+    assert(!mcpLegacy.isError,'reading an old snapshot that originally failed must be a successful read')
+    assert.equal(mcpLegacy.structuredContent.restoration.historical,true)
+    assert(!JSON.stringify(mcpLegacy.structuredContent).includes('Jev is not configured'))
+    stop()
+    const piTools=new Map();piExtension({registerTool:t=>piTools.set(t.name,t),registerCommand(){},on(){}})
+    const pi=await piTools.get('adaptive_search').execute('id',{saved_result_id:LEGACY_ID},new AbortController().signal)
+    assert.equal(pi.details.restoration.historical,true)
+    assert.equal(pi.details.totalResults,2)
+    assert(pi.content[0].text.includes('historical'))
+    const dshTools=new Map()
+    const dshCtx=new Context()
+    dshCtx.provide('systemPrompt');dshCtx.set('systemPrompt',{tools(){},section(){}})
+    dshCtx.provide('web');dshCtx.set('web',{registerSearchProvider(){},registerFetchProvider(){}})
+    dshCtx.provide('commands');dshCtx.set('commands',{register(){}})
+    dshCtx.provide('tools');dshCtx.set('tools',{register:t=>dshTools.set(t.name,t)})
+    apply(dshCtx)
+    const dsh=await dshTools.get('adaptive_search').execute({saved_result_id:LEGACY_ID},null)
+    assert.equal(dsh.restoration.originalSchemaVersion,3)
+    assert.equal(dsh.totalResults,2)
+    assert(dshTools.get('adaptive_search').output.render({},dsh)[0].text.includes('historical'))
+    const before=calls
+    saveToolPreferences({adaptive_search:false})
+    await assert.rejects(()=>piTools.get('adaptive_search').execute('id',{saved_result_id:LEGACY_ID}),/Disabled by user/)
+    await assert.rejects(()=>dshTools.get('adaptive_search').execute({saved_result_id:LEGACY_ID},{signal:null}),/Disabled by user/)
+    await assert.rejects(()=>runAdaptiveSearch({saved_result_id:LEGACY_ID}),/Disabled by user/,'the core entry gate also refuses reads while the tool is OFF')
+    assert.equal(calls,before)
+    saveToolPreferences({adaptive_search:true})
+    // The Jev configuration lock also closes local reads; it is not bypassed by a
+    // saved_result_id. CLI list/export stay offline in that state.
+    clearJevConfig()
+    await assert.rejects(()=>piTools.get('adaptive_search').execute('id',{saved_result_id:LEGACY_ID},new AbortController().signal),/Je[Dd]v not configured|Jev/)
+    assert.equal(JSON.parse(spawnSync(process.execPath,[join(PKG_ROOT,'cli.mjs'),'research','list'],{env:process.env,encoding:'utf8',timeout:30000}).stdout).length>0,true)
+    saveJevConfig({apiKey:secret})
+  }finally{globalThis.fetch=originalFetch}
+}
+console.log('ok: MCP/Pi/DSH restore both formats without network; historical reads are not reported as this call\'s failure; explicit OFF still blocks')
+
+// ------------------------------------------------------------- empty save ----
+{
+  const harness=makeHarness({rows:[]})
+  const deps={...harness.deps,loadResults:loadResearchResults,saveResults:saveResearchResultsV2}
+  const empty=await runAdaptiveSearch({...v5Input,max_results:1,save_results:true},{},deps)
+  assert.equal(typeof empty.savedResultId,'string','an explicitly empty reviewed set may be saved')
+  assert(empty.warnings.some((warning)=>warning.includes('snapshot is empty')))
+  assert.equal(empty.nextCursor,null)
+  assert.equal(empty.totalResults,0)
+  assert.equal(empty.pageResults,0)
+  assert.equal(empty.selection.returned,0)
+  assert.equal(loadResearchResults(empty.savedResultId).results.length,0)
+  const reread=await runAdaptiveSearch({saved_result_id:empty.savedResultId},{},deps)
+  assert.equal(reread.totalResults,0)
+  assert.equal(reread.stopReason,empty.stopReason)
+}
+console.log('ok: an explicitly empty reviewed snapshot can be saved and still warns that a saved ID is not search success')
+console.log('research persistence: v2 write, v1/v2 restore, dual-format CLI export, storage hardening and host boundaries PASS')
+clearJevConfig()

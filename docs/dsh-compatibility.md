@@ -13,8 +13,9 @@ registering. A permissive mock registry did not catch this.
 
 `adapters/dsh/schema.js` projects the shared schemas into DSH's supported subset:
 nullable scalars become `oneOf`, dictionary values are checked at execution, and
-bounds are retained in descriptions. Jev's `keywords` union (nonempty strings or
-nonempty arrays of strings) also becomes `oneOf`: these branches are disjoint.
+bounds are retained in descriptions. A top-level `oneOf` of disjoint object
+branches (the shared v5 ∪ historical `adaptive_search` response union) also
+translates, and disjoint nonempty array unions become `oneOf`.
 Arbitrary overlapping `anyOf` unions are rejected rather than silently changed.
 Ajv validates the original input and output contracts without coercion, defaults,
 or property removal. MCP/Pi schemas are
