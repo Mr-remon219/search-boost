@@ -61,55 +61,20 @@ try {
     symlinkSync(real, alias, process.platform === 'win32' ? 'junction' : 'dir')
     assert.equal(fileResource(join(real, 'new', 'asset')), fileResource(join(alias, 'new', 'asset')))
   })
-  await test('R1 failed second Antigravity refresh retains migrated config and successful shared assets', async () => {
+  await test('R1 identical Antigravity write scopes are consolidated, so no redundant second refresh can undo the first', async () => {
     const { PATHS } = await import('../lib/paths.mjs')
-    const { skillBundleFiles } = await import('../lib/agent-skills.mjs')
-    const { runUpgrade } = await import('../lib/upgrade/index.mjs')
+    const { runRefresh } = await import('../lib/upgrade/index.mjs')
     const p = PATHS.antigravity
     const original = JSON.stringify({ mcpServers: { 'search-boost': { command: 'node', args: ['old.mjs'] } } })
     for (const config of [p.mcp, p.legacyMcp]) write(config, original)
-    const shared = [...skillBundleFiles('antigravity', p.skill).map(file => file.path), p.hooks, p.hookScript, p.hookInject, p.agents, p.gemini]
-    const beforeMkdir = fs.mkdir, beforeWrite = fs.writeFile, beforeRead = fs.readFile
-    let writers = 0, secondHookReads = 0, releaseWriters, releaseSuccess, failed = false, snapshot
-    const twoWriters = new Promise(r => { releaseWriters = r })
-    const success = new Promise(r => { releaseSuccess = r })
-    async function bounded(promise, ms) {
-      let timer
-      try { await Promise.race([promise, new Promise(r => { timer = setTimeout(r, ms) })]) }
-      finally { clearTimeout(timer) }
-    }
-    // In the broken scheduler both transactions back up the absent skills before
-    // either writes. A serial scheduler simply waits out this bounded gate once.
-    fs.mkdir = async function(path, ...args) {
-      if (String(path) === dirname(p.skill)) {
-        if (++writers >= 2) releaseWriters()
-        await bounded(twoWriters, 300)
-      }
-      return beforeMkdir.call(this, path, ...args)
-    }
-    fs.readFile = async function(path, ...args) {
-      if (snapshot && String(path) === p.hooks && ++secondHookReads === 2) {
-        failed = true
-        throw Object.assign(new Error('injected second-refresh EACCES'), { code: 'EACCES' })
-      }
-      return beforeRead.call(this, path, ...args)
-    }
-    syncBuiltinESMExports()
-    try {
-      const result = await runUpgrade({ syncOnly: true,
-        run: async () => { throw new Error('Unexpected host command') },
-        log(line) { if (line === '[ok] antigravity') { snapshot = shared.map(file => [file, bytes(file)]); releaseSuccess() } },
-      })
-      assert.equal(result.ok, false)
-      assert.deepEqual(result.warnings, [])
-      assert.deepEqual(result.results.map(item => item.ok), [true, false])
-      assert(failed)
-      assert(result.results[1].error.includes('EACCES'))
-      assert(bytes(p.mcp).includes('cli.mjs'))
-      assert.equal(JSON.parse(bytes(p.legacyMcp)).mcpServers?.['search-boost'], undefined, 'first successful migration remains applied')
-      for (const [file, content] of snapshot) assert.equal(bytes(file), content, `successful asset retained: ${file}`)
-    } finally { fs.mkdir = beforeMkdir; fs.writeFile = beforeWrite; fs.readFile = beforeRead; syncBuiltinESMExports() }
+    const result = await runRefresh({ run: async () => { throw Error('Unexpected host command') }, log() {} })
+    assert.equal(result.ok, true)
+    assert.deepEqual(result.results.map(item => item.ok), [true])
+    assert(bytes(p.mcp).includes('cli.mjs'))
+    assert.equal(JSON.parse(bytes(p.legacyMcp)).mcpServers?.['search-boost'], undefined)
+    assert(existsSync(p.skill))
   })
+
   await test('R1 unresolvable asset blocks only its target, not other upgrades', () => {
     const f = fixture('blocked-asset'), cursor = join(f.home, '.cursor', 'mcp.json'), codex = join(f.home, '.codex', 'config.toml')
     write(cursor, '{"mcpServers":{"search-boost":{"command":"node","args":["old.mjs"]}}}\n')
@@ -117,7 +82,7 @@ try {
     const script = join(f.home, '.cursor', 'hooks', 'search-boost-session.mjs')
     mkdirSync(dirname(script), { recursive: true })
     if (!link(script, script)) return
-    const out = cli(['upgrade', '--sync-only', '-y'], f)
+    const out = cli(['refresh', '-y'], f)
     assert.notEqual(out.code, 0)
     assert.match(out.text, /\[failed\] cursor/)
     assert.match(out.text, /\[ok\] codex/)
@@ -133,7 +98,7 @@ try {
       const block = managed(value).replace('web_search=', `# search-boost-previous: ${receipt}\nweb_search=`)
       write(path, block + mcp)
       for (let i = 0; i < 2; i++) {
-        const out = cli(['upgrade', '--sync-only', '-y'], f)
+        const out = cli(['refresh', '-y'], f)
         assert.equal(out.code, 0, out.text)
         const after = bytes(path), parsed = toml(after)
         assert.equal(parsed.web_search, value)
@@ -147,7 +112,7 @@ try {
     await test(`R2 misplaced legacy disabled block migrates without overriding ${value ?? 'absent'} root`, () => {
       const f = fixture(`legacy-${value}`), path = join(f.home, '.codex', 'config.toml')
       write(path, (value ? `web_search=${JSON.stringify(value)}\n` : '') + mcp + managed('disabled'))
-      const out = cli(['upgrade', '--sync-only', '-y'], f)
+      const out = cli(['refresh', '-y'], f)
       assert.equal(out.code, 0, out.text)
       const parsed = toml(bytes(path))
       assert.equal(parsed.web_search, value ?? 'disabled')
@@ -161,7 +126,7 @@ try {
       const receipt = Buffer.from(JSON.stringify({ assignment })).toString('base64')
       const block = managed('disabled').replace('web_search=', `# search-boost-previous: ${receipt}\nweb_search=`)
       write(path, mcp + block)
-      const out = cli(['upgrade', '--sync-only', '-y'], f)
+      const out = cli(['refresh', '-y'], f)
       assert.equal(out.code, 0, out.text)
       const after = bytes(path), parsed = toml(after)
       assert(after.endsWith(block), 'ambiguous nonlegacy block and restoration record are preserved')

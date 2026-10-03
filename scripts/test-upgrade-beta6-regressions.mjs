@@ -29,7 +29,7 @@ process.chdir(project)
 const { PKG_ROOT, getVersion } = await import('../lib/pkg.mjs')
 const { PATHS } = await import('../lib/paths.mjs')
 const { discoverIntegrations, refreshIntegration, refreshGrokPlugin } = await import('../lib/upgrade/integrations.mjs')
-const { runUpgrade } = await import('../lib/upgrade/index.mjs')
+const { runRefresh: runUpgrade } = await import('../lib/upgrade/index.mjs')
 const { recordedProjectsPath } = await import('../lib/upgrade/state.mjs')
 const { migrateCodexNativeSearch, setCodexNativeSearch, codexRootSearchDisabled } = await import('../lib/codex-native.mjs')
 
@@ -47,10 +47,8 @@ try {
   const grokCalls = []
   const grokRun = (payload) => async (command, args) => { grokCalls.push([command, ...args]); return { code: 0, stdout: JSON.stringify(payload) } }
   const updated = await refreshGrokPlugin({ dryRun: false, run: grokRun(listing(freshCache)) })
-  assert.equal(updated.status, 'updated', 'a legacy list name with current source and refreshed cache is verified')
+  assert.equal(updated.status, 'current', 'a legacy list name with current source and refreshed cache is verified')
   assert.deepEqual(grokCalls, [
-    ['grok', 'plugin', 'list', '--json'],
-    ['grok', 'plugin', 'update', legacyPluginName],
     ['grok', 'plugin', 'list', '--json'],
   ])
   assert.ok(grokCalls.every((args) => !args.includes('--trust')), 'upgrade never grants trust')
@@ -63,7 +61,7 @@ try {
   await assert.rejects(() => refreshGrokPlugin({ dryRun: false, run: async (command, args) => {
     staleCalls.push([command, ...args])
     return { code: 0, stdout: JSON.stringify(listing(staleCache)) }
-  } }), /cache payload was not updated or cannot be verified/)
+  } }), /cache payload remains stale or cannot be verified/)
   assert.ok(staleCalls.some((args) => args[2] === 'update'), 'the native update is still attempted for the same source')
   assert.ok(staleCalls.every((args) => !args.includes('--trust') && args[2] !== 'uninstall'), 'a stale cache never triggers uninstall or trust')
 
@@ -74,7 +72,7 @@ try {
   await assert.rejects(() => refreshGrokPlugin({ dryRun: false, run: async (command, args) => {
     foreignCalls.push([command, ...args])
     return { code: 0, stdout: JSON.stringify([{ name: legacyPluginName, source: elsewhere, path: elsewhere }]) }
-  } }), /Cannot verify the updated Grok plugin source/)
+  } }), /source differs from the current package/)
   assert.ok(foreignCalls.every((args) => !args.includes('--trust') && args[2] !== 'uninstall'))
   const unrelated = join(temp, 'grok-plugin-foreign')
   write(join(unrelated, 'plugin.json'), { name: 'other' })
@@ -105,7 +103,7 @@ try {
   assert.deepEqual(plan.warnings, [], 'stale receipts are not configuration failures')
   assert.equal(plan.skippedRecords.length, 5)
   assert.ok(plan.targets.some((target) => target.id === 'claude'), 'usable integrations are still discovered')
-  const skipped = await runUpgrade({ dryRun: true, syncOnly: true, run: noHostRun, log })
+  const skipped = await runUpgrade({ dryRun: true, run: noHostRun, log })
   assert.equal(skipped.ok, true, logs.join('\n'))
   assert.equal(skipped.skippedRecords.length, 5)
   assert.equal(logs.filter((line) => line.startsWith('[skipped]')).length, 5, 'every stale record is disclosed')
@@ -115,7 +113,7 @@ try {
 
   // An explicit workspace stays an actionable failure, not a skipped receipt.
   const explicitLogs = []
-  const explicit = await runUpgrade({ dryRun: true, syncOnly: true, run: noHostRun, log: (line) => explicitLogs.push(line), workspace: join(temp, 'missing-workspace') })
+  const explicit = await runUpgrade({ dryRun: true, run: noHostRun, log: (line) => explicitLogs.push(line), workspace: join(temp, 'missing-workspace') })
   assert.equal(explicit.ok, false)
   assert.ok(explicit.warnings.some((warning) => warning.startsWith('Workspace unavailable: ')))
   assert.ok(explicitLogs.some((line) => line.startsWith('[blocked]')))
@@ -123,7 +121,7 @@ try {
 
   // Real failures still fail while stale receipts stay skipped.
   write(PATHS.claude.config, '{broken-json')
-  const mixed = await runUpgrade({ dryRun: true, syncOnly: true, run: noHostRun, log: () => {} })
+  const mixed = await runUpgrade({ dryRun: true, run: noHostRun, log: () => {} })
   assert.equal(mixed.ok, false, 'a real configuration failure must still block completion')
   assert.ok(mixed.warnings.some((warning) => warning.startsWith('claude:')))
   assert.equal(mixed.skippedRecords.length, 5)
@@ -310,14 +308,14 @@ try {
   symlinkSync(PKG_ROOT, repeatInstalled, process.platform === 'win32' && !PKG_ROOT.startsWith('\\\\') ? 'junction' : 'dir')
   const repeat = { name: 'beta6-repeat', dir: repeatDir, installed: repeatInstalled, manifest: join(repeatDir, 'package.json') }
   const upgradeLogs = [], upgradeHost = dshHost(repeat)
-  const upgrade = await runUpgrade({ syncOnly: true, run: upgradeHost.run, log: (line) => upgradeLogs.push(line) })
+  const upgrade = await runUpgrade({ run: upgradeHost.run, log: (line) => upgradeLogs.push(line) })
   assert.equal(upgrade.ok, true, upgradeLogs.join('\n'))
   assert.equal(upgradeHost.dispatches.length, 0)
   assert.ok(upgradeLogs.some((line) => line.startsWith('[timing]') && line.includes('already-synced')), 'timing/dispatch facts are reported without secrets')
   const dshResult = upgrade.results.find((result) => result.target.includes('beta6-repeat'))
   assert.equal(dshResult.facts[0].action, 'already-synced')
   assert.ok(Number.isInteger(dshResult.durationMs) && dshResult.durationMs >= 0)
-  const record = json(join(process.env.SEARCH_BOOST_HOME, 'state', 'last-upgrade.json'))
+  const record = json(join(process.env.SEARCH_BOOST_HOME, 'state', 'last-refresh.json'))
   assert.equal(record.results.find((result) => result.target.includes('beta6-repeat')).facts[0].verifications, 1)
   assert.equal(record.skippedRecords.length, 5, 'the durable record also discloses the skipped stale receipts')
   assert.ok(!JSON.stringify(record).includes('fixture-secret-must-not-leak'))

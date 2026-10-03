@@ -107,7 +107,7 @@ try {
   let out = await scenario(['settings', 'back', 'exit'])
   assert.deepEqual(
     out.records[0].options.map((o) => o.value),
-    ['setup', 'install', 'upgrade', 'status', 'keys', 'layer', 'tools', 'x', 'jev', 'search', 'print', 'uninstall', 'settings', 'exit'],
+    ['setup', 'manage', 'status', 'keys', 'layer', 'tools', 'x', 'jev', 'search', 'print', 'settings', 'exit'],
   )
   assert.deepEqual(out.records[1].options.map((o) => o.value), ['layout', 'language', 'back'])
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'browsing menus is read-only')
@@ -134,14 +134,14 @@ try {
   console.log('ok: English and Chinese tool-switch help describe the single snapshot and no automatic page reads')
 
   fresh()
-  out = await scenario(['layer', cancel, 'x', cancel, 'jev', cancel, 'keys', cancel, 'print', cancel, 'install', reply('multiselect', cancel), 'exit'])
+  out = await scenario(['layer', cancel, 'x', cancel, 'jev', cancel, 'keys', cancel, 'print', cancel, 'manage', 'install', reply('multiselect', cancel), 'back', 'exit'])
   assert.equal(out.records[1].message, 'Default search layer?')
   assert.equal(out.records[3].message, 'X credentials')
   assert.equal(out.records[5].message, 'Jev credentials (experimental)')
   assert.equal(out.records[7].message, 'Engine configuration')
   assert.equal(out.records[9].message, 'Print MCP snippet for which agent?')
-  assert.equal(out.records[11].message, 'Which agents should search-boost configure?')
-  assert.equal(out.records[12].message, 'What do you want to do?', 'cancelled wizards return to the flat home')
+  assert.equal(out.records[12].message, 'Which agents should search-boost configure?')
+  assert.equal(out.records[13].message, 'Manage agent integrations', 'cancelled wizards return to the flat home')
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'cancelled wizards do not write configuration')
   out = await scenario(['settings', cancel, 'exit'])
   assert.equal(out.records[2].message, 'What do you want to do?', 'submenu Escape returns home')
@@ -152,7 +152,7 @@ try {
   assert.equal(process.stdin.listenerCount('keypress'), 0, 'prompt listeners are cleaned up')
   out = await scenario([{ method: 'select', value: 'layer', interrupt: true }, cancel, 'exit'])
   assert.equal(out.records[2].message, 'What do you want to do?', 'a stray Ctrl+C in a resolved prompt cannot poison a later Escape')
-  out = await scenario(['install', reply('multiselect', ['codex']), reply('confirm', cancel), 'exit'])
+  out = await scenario(['manage', 'install', reply('multiselect', ['codex']), reply('confirm', cancel), 'back', 'exit'])
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'cancelling later install-only choices cannot initialize a layer')
   await withTuiContext(() => assert.throws(() => handleCancel(cancel, { isCancel: (v) => v === cancel }), TuiCancelled), { language: 'en', navigation: true })
   console.log('ok: nested Escape returns to its submenu, submenu Escape returns home, Ctrl+C exits and listeners are cleaned up')
@@ -160,7 +160,7 @@ try {
   fresh()
   out = await scenario(['settings', 'language', 'zh-CN', 'back', 'layer', 'api', 'tools', reply('multiselect', []), reply('confirm', true, (options) => {
     assert.equal(options.active, '是'); assert.equal(options.inactive, '否')
-  }), 'setup', 'free', reply('multiselect', []), 'install', reply('multiselect', []), 'uninstall', reply('multiselect', []), 'search', reply('multiselect', []), 'x', 'set-key', reply('password', 'xai-dry-run-sentinel', (options) => {
+  }), 'setup', 'free', reply('multiselect', []), 'manage', 'install', reply('multiselect', []), 'uninstall', reply('multiselect', []), 'back', 'search', reply('multiselect', []), 'x', 'set-key', reply('password', 'xai-dry-run-sentinel', (options) => {
     assert.equal(options.validate('bad'), '必须以 xai- 开头（可在 console.x.ai 获取）。')
   }), 'jev', 'set', reply('text', 'https://api.typesafe.ai/v1'), reply('password', 'jev-dry-run-sentinel'), 'exit'], { dryRun: true })
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'dry-run remains entirely read-only, including language preference')

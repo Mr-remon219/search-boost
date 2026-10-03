@@ -83,7 +83,7 @@ try {
 
   for (const layout of ['flat', 'folder']) {
     saveTuiLayout(layout)
-    const actions = layout === 'flat' ? ['uninstall', 'exit'] : ['integration', 'uninstall', 'back', 'exit']
+    const actions = layout === 'flat' ? ['manage', 'uninstall', 'back', 'exit'] : ['integration', 'manage', 'uninstall', 'back', 'back', 'exit']
     const p = prompts(false, actions)
     await runTui({}, { clack: p.clack })
     assert.equal(actions.length, 0, `${layout}: cancellation returns to its menu`)

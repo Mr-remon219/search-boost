@@ -47,9 +47,9 @@ async function main() {
       await runMigrationCli(argv.slice(1))
       break
     }
-    case 'upgrade': {
-      const { runUpgradeCli } = await import('./lib/upgrade/cli.mjs')
-      await runUpgradeCli(argv.slice(1))
+    case 'refresh': {
+      const { runRefreshCli } = await import('./lib/upgrade/cli.mjs')
+      await runRefreshCli(argv.slice(1))
       break
     }
     case 'uninstall':

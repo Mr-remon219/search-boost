@@ -89,7 +89,7 @@ for (const host of ['codex','grok']) {
   for(const text of [fixtures[0],fixtures[8]]) {
     write(PATHS[host].config,text)
     const before=readFileSync(PATHS[host].config)
-    const result=run('upgrade','--sync-only','-y')
+    const result=run('refresh','-y')
     assert.equal(result.status,1,result.stderr+result.stdout)
     assert.match(result.stdout+result.stderr,refusal)
     assert.match(result.stdout, /\[blocked\]/, 'discovery must block, not merely fail later in refresh')

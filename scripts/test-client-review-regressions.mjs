@@ -144,8 +144,8 @@ try {
       calls.push(args)
       return { code: 0, stdout: JSON.stringify([{ name: 'search-boost', repo_key: 'local-key', source: pluginDir, path: pluginDir }]) }
     } })
-    assert.equal(result.status, 'updated')
-    assert.deepEqual(calls[1], ['plugin', 'update', 'search-boost'])
+    assert.equal(result.status, 'current')
+    assert.equal(calls.length, 1, 'an already matching payload needs no native update')
     assert.ok(calls.every(args => !args.includes('--trust')))
   })
   await test('Grok successful local update cannot hide a stale same-version cache or grant trust', async () => {
@@ -157,7 +157,7 @@ try {
     const calls = []
     await assert.rejects(() => refreshGrokPlugin({ dryRun: false, run: async (_command, args) => {
       calls.push(args); return { code: 0, stdout: JSON.stringify(listing) }
-    } }), /cache payload was not updated/)
+    } }), /cache payload remains stale/)
     assert.ok(before.equals(readFileSync(join(cache, 'skills/search-boost/SKILL.md'))))
     assert.ok(calls.every(args => !args.includes('--trust') && args[1] !== 'uninstall'))
     assert.deepEqual(calls[1], ['plugin', 'update', 'search-boost'])
@@ -173,8 +173,8 @@ try {
     await assert.rejects(() => refreshGrokPlugin({ dryRun: false, run: async (_command, args) => {
       calls.push(args)
       return { code: 0, stdout: JSON.stringify([broken]) }
-    } }), /Cannot verify the updated Grok plugin source/)
-    assert.deepEqual(calls[1], ['plugin', 'install', pluginDir])
+    } }), /source differs from the current package/)
+    assert.equal(calls.length, 1, 'foreign sources are refused before native changes')
     assert.ok(calls.every(args => !args.includes('--trust')))
   })
   await test('unrelated plugins are not upgraded and malformed listings do not prove absence', async () => {
@@ -186,7 +186,7 @@ try {
     } })
     assert.equal(result.status, 'absent'); assert.equal(calls, 1)
     const malformed = await refreshGrokPlugin({ dryRun: true, run: async () => ({ code: 0, stdout: '[null]' }) })
-    assert.equal(malformed.status, 'failed')
+    assert.equal(malformed.status, 'unavailable')
   })
 
   const bin = join(base, 'bin'), host = join(bin, 'grok-host.mjs'), state = join(base, 'plugin-list.json'), capture = join(base, 'calls.jsonl')
@@ -210,11 +210,11 @@ if(!process.env.GROK_TEST_NOOP)fs.writeFileSync(process.env.GROK_TEST_STATE,JSON
     return { ...child, calls: readFileSync(capture, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse) }
   }
   await test('native install checks actual manifest-name/source registration, not only exit zero', () => {
-    const success = runPlugin([{ name: 'search-boost', repo_key: 'local-key', source: pluginDir }], {}, 'installGrokPlugin')
+    const success = runPlugin([{ name: 'search-boost', repo_key: 'local-key', source: pluginDir, path: pluginDir }], {}, 'installGrokPlugin')
     assert.equal(success.status, 0, success.stderr)
     const invalidAuthor = runPlugin([{ name: 'grok-plugin-deadbeef', repo_key: 'grok-plugin-deadbeef', source: pluginDir }], {}, 'installGrokPlugin')
     assert.notEqual(invalidAuthor.status, 0)
-    assert.match(invalidAuthor.stderr, /host did not verify/)
+    assert.match(invalidAuthor.stderr, /refresh failed|payload was not verified/)
   })
   await test('Grok native uninstall uses the listed name, never the repository key', () => {
     const foreign = { name: 'other', repo_key: 'foreign-key', source: '/foreign' }

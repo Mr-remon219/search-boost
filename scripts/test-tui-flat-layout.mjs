@@ -37,14 +37,14 @@ const cancel = Symbol('fixture cancel')
 const reply = (method, value, check) => ({ method, value, check })
 
 /** Flat home order approved for BUG-004. */
-const FLAT_VALUES = ['setup', 'install', 'upgrade', 'status', 'keys', 'layer', 'tools', 'x', 'jev', 'search', 'print', 'uninstall', 'settings', 'exit']
+const FLAT_VALUES = ['setup', 'manage', 'status', 'keys', 'layer', 'tools', 'x', 'jev', 'search', 'print', 'settings', 'exit']
 const FOLDER_HOME = ['integration', 'search-tools', 'credentials', 'maintenance', 'settings', 'exit']
 const CATEGORY_VALUES = ['integration', 'search-tools', 'credentials', 'maintenance']
 const SECTIONS = {
-  integration: ['setup', 'install', 'search', 'print', 'uninstall', 'back'],
+  integration: ['setup', 'manage', 'search', 'print', 'back'],
   'search-tools': ['layer', 'tools', 'back'],
   credentials: ['keys', 'x', 'jev', 'back'],
-  maintenance: ['upgrade', 'status', 'back'],
+  maintenance: ['status', 'back'],
   settings: ['layout', 'language', 'back'],
 }
 // Both layouts must reach exactly the same operations (the folder layout only adds categories).
@@ -168,8 +168,7 @@ try {
   fresh()
   const walk = await runScenario([
     'setup', 'free', reply('multiselect', []),
-    'install', reply('multiselect', []),
-    'upgrade', reply('select', 'back'),
+    'manage', 'install', reply('multiselect', []), 'back',
     'status',
     'keys', 'back',
     'layer', 'free',
@@ -178,7 +177,7 @@ try {
     'jev', 'keep',
     'search', reply('multiselect', []),
     'print', 'cursor', reply('confirm', false), reply('confirm', true),
-    'uninstall', reply('multiselect', []),
+    'manage', 'uninstall', reply('multiselect', []), 'back',
     'settings', 'back',
     'exit',
   ], { dryRun: true })
@@ -188,14 +187,12 @@ try {
   assert(homes[0].options.every((o) => o.label && !/^\s*$/.test(o.label)), 'no blank spacer row occupies a selection')
   assert.deepEqual(
     homes.map((h) => h.initialValue),
-    [undefined, 'setup', 'install', 'upgrade', 'status', 'keys', 'layer', 'tools', 'x', 'jev', 'search', 'print', 'uninstall', 'settings'],
+    [undefined, 'setup', 'manage', 'status', 'keys', 'layer', 'tools', 'x', 'jev', 'search', 'print', 'manage', 'settings'],
     'a completed flat operation returns to the home menu with its entry selected',
   )
   assert(walk.logs.some((l) => l.includes('dry-run: would offer API key setup')), 'Setup still offers the credential step')
   assert(walk.logs.some((l) => l.includes('Skipped API keys, layer, and X credentials (install-only)')), 'Install keeps the install-only scope')
-  assert(walk.logs.some((l) => l.includes('Update scope')), 'Update shows a scope preview')
-  assert(walk.logs.some((l) => l.includes('Update cancelled; nothing was changed')), 'Update waits for an explicit start')
-  assert.equal(walk.updates.length, 0, 'backing out of the Update preview changes nothing')
+  assert(!walk.records.some(menu => menu.options?.some(option => option.value === 'upgrade')), 'software updater is absent from every layout')
   assert(walk.logs.some((l) => l.startsWith('Status\n') && l.includes('Agents')), 'Status prints the real read-only status')
   const engineMenu = walk.records.find((r) => r.message === 'Engine configuration')
   assert.deepEqual(engineMenu.options.map((o) => o.value), [...CONFIG_KEY_NAMES, 'routing', 'back'], 'the engine entry lists every credential slot plus routing')
@@ -211,7 +208,7 @@ try {
   assert(targetPrompts[0].options.some((o) => o.value === 'cursor') && targetPrompts[0].options.some((o) => o.value === 'dsh'))
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'the whole dry-run walk stays read-only')
 
-  const uninstallRun = await runScenario(['uninstall', reply('multiselect', ['cursor']), reply('confirm', true, options => assert.equal(options.initialValue, false)), 'exit'], { dryRun: true })
+  const uninstallRun = await runScenario(['manage', 'uninstall', reply('multiselect', ['cursor']), reply('confirm', true, options => assert.equal(options.initialValue, false)), 'back', 'exit'], { dryRun: true })
   assert(uninstallRun.logs.some((l) => l.includes('uninstall…')), 'Uninstall dispatches the uninstall verb, not install')
   assert(uninstallRun.logs.some((l) => l.includes('Cursor IDE: uninstalled')))
   assert(uninstallRun.logs.some((l) => l.includes('Dry run complete')))
@@ -219,17 +216,17 @@ try {
 
   const englishHome = await runScenario(['exit'])
   assert.deepEqual(englishHome.records[0].options.map((o) => o.label), [
-    'Setup wizard', 'Install / refresh agent integrations', 'Update SearchBoost', 'Status',
+    'Setup wizard', 'Manage agent integrations', 'Status',
     'Search engine configuration', 'Default search layer', 'Tool switches', 'X credentials',
     'Jev configuration (experimental)', 'Native web search', 'Print MCP snippet',
-    'Uninstall agent integrations', 'TUI settings', 'Exit',
+    'TUI settings', 'Exit',
   ])
   saveTuiLanguage('zh-CN')
   const zhHome = await runScenario(['exit'])
   assert.deepEqual(zhHome.records[0].options.map((o) => o.label), [
-    '首次配置向导', '安装 / 刷新 Agent 接入', '更新 SearchBoost', '查看当前状态', '搜索引擎配置',
+    '首次配置向导', '管理 Agent 接入', '查看当前状态', '搜索引擎配置',
     '默认搜索层', '工具开关', 'X 凭据', 'Jev 配置', '原生搜索替换', '输出 MCP 配置片段',
-    '卸载 Agent 接入', 'TUI 设置', '退出',
+    'TUI 设置', '退出',
   ])
   assert.equal(zhHome.records[0].message, '请选择操作')
   const zhEngineBack = await runScenario(['keys', 'back', 'exit'])
@@ -271,10 +268,9 @@ try {
   assert.equal(folderOps.records[7].initialValue, 'keys')
   assert.equal(folderOps.records[8].message, 'What do you want to do?', 'Esc in a section returns home')
   assert.equal(folderOps.records[8].initialValue, 'credentials')
-  const folderUpdate = await runScenario(['maintenance', 'upgrade', reply('select', 'back'), 'back', 'exit'], { dryRun: true })
-  assert.equal(folderUpdate.records[2].options.map((o) => o.value).join(','), 'start,back')
-  assert.equal(folderUpdate.updates.length, 0)
-  assert.equal(folderUpdate.records[3].message, 'Update & status', 'cancelling Update returns to its section')
+  const folderManage = await runScenario(['integration', 'manage', 'back', 'back', 'exit'], { dryRun: true })
+  assert.deepEqual(folderManage.records[2].options.map(o => o.value), ['install', 'refresh', 'uninstall', 'back'])
+  assert.equal(folderManage.records[3].message, 'Installation & integrations', 'Back returns to the owning folder, not directly home')
 
   fresh()
   saveTuiLayout('folder')
