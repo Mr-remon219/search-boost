@@ -17,7 +17,7 @@
 | 9 | Jev configuration (experimental)（Jev 配置） | Base URL 与 API Key；标注实验性并说明发送内容 |
 | 10 | Native web search（原生搜索替换） | 选择支持配置级开关的 Agent → 替换 / 保留 → 确认 |
 | 11 | Print MCP snippet（输出 MCP 配置片段） | 选择 Agent → 自动授权 / 原生搜索选项 → 输出，不写配置 |
-| 12 | Uninstall agent integrations（卸载 Agent 接入） | 选择 Agent / DSH 目标 → 展示移除范围 → 明确确认，默认取消 |
+| 12 | Uninstall agent integrations（卸载 Agent 接入） | 选择 Agent / DSH 目标 → 展示移除范围 → 明确确认，默认取消；交互式 dry-run 也确认，但不移除内容 |
 | 13 | TUI settings（TUI 设置） | 菜单布局、显示语言 |
 | 14 | Exit（退出） | — |
 
@@ -55,7 +55,7 @@
   tavily / brave / exa / anysearch   凭据来源与启用状态（脱敏）
   其他凭据槽位                       仅保存，适配器尚未实现
   引擎启用 / 停用
-  返回主菜单
+  返回
 ```
 
 选择引擎后可：设置 / 更换 API Key、设置 / 更换 Base URL、恢复默认 Base URL、移除文件中的 Key、返回搜索引擎配置。仅保存的凭据槽位只提供设置与移除，不参与路由。
