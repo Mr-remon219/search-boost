@@ -403,7 +403,7 @@ API Key 存放在由 SearchBoost 自己管理的凭据文件中，不写入提�
 
 除交互式 TUI 外，SearchBoost 还提供了完整的命令行接口，非常适合脚本编写与 CI 自动化。
 
-**DeepSeek Harness Desktop**：TUI 选中 DSH 且检测到桌面版时，可选择 Desktop / CLI / All。桌面版需先启动一次再完全退出（包括托盘）；也可在应用的「插件 → 添加插件」输入 `search-boost` 从 npm 安装，或输入本地包绝对路径复用已有安装。安装/更新会验证宿主解析器实际选中的路径和版本，宿主旁的旧包遮蔽不能报成功。保留的禁用 bundle 报“已安装但禁用”，显式 `--enable-dsh-bundle` 才启用；PATH 实际选中 Desktop launcher 时，CLI profiles 也复用其内置 pnpm。所有权与验证限制见 [Desktop 接入说明](docs/dsh-desktop.md)。
+**DeepSeek Harness Desktop**：交互安装选中 DSH 后，可选择 Desktop / CLI / All，再为 Desktop 选择 **自动安装（默认）** 或 **本地目录接入**。自动方式通过注册表（含自定义安装目录）、默认目录及 PATH 找到桌面版内置命令；先启动一次再完全退出（包括托盘）。本地方式在其他接入（包括 Grok）结束后，最后显示当前包的完整持久目录，由用户粘贴到运行中的 Desktop「插件 → 添加插件」；TUI 等待只读检测，稳定完成后结束，Esc / Ctrl+C 或超时则报告未完成并保留其他结果。检测到保存的安装不代表运行中的插件已加载；没有内置启动器时会明确提示运行时未验证。临时 `_npx` 缓存不能作为本地链接来源。也可直接在应用输入 `search-boost` 从 npm 安装。自动安装/更新仍验证宿主解析器，遮蔽副本不能报成功；禁用状态保留，`--enable-dsh-bundle` 明确要求启用（本地方式由用户在 Desktop 启用）。所有权与验证限制见 [Desktop 接入说明](docs/dsh-desktop.md)。
 
 ```bash
 # ----------------- 启动与基础 -----------------

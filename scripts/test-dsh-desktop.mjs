@@ -29,7 +29,7 @@ const clack = { log, isCancel: () => false }
 
 assert.equal(dshDesktopStatus().command, null, 'bootstrap blocks absolute real Desktop discovery')
 assert.ok(process.env[DESKTOP_COMMAND_ENV].startsWith(home.replace(/[\\/]home$/, '')), 'guard belongs to test sandbox')
-assert.deepEqual(desktopCommandCandidates({ platform: 'win32', home, env: { LOCALAPPDATA: join(home, 'Local') } }),
+assert.deepEqual(desktopCommandCandidates({ platform: 'win32', home, env: { LOCALAPPDATA: join(home, 'Local') }, readRegistry: () => [] }),
   [join(home, 'Local', 'Programs', 'DeepSeek Harness', 'resources', 'runtime', 'cli', 'bin', 'dsh.cmd')])
 assert.deepEqual(desktopCommandCandidates({ platform: 'darwin', home, env: {} }), [
   join('/Applications', 'DeepSeek Harness.app', 'Contents', 'Resources', 'runtime', 'cli', 'bin', 'dsh'),
@@ -133,10 +133,10 @@ for (const surface of ['desktop', 'cli', 'all']) {
   await runDshSurfaceStep(ui, ['dsh'], { yes: true })
   await runDshSurfaceStep(ui, ['dsh'], { profile: 'custom' })
   await runDshSurfaceStep(ui, ['dsh'], {}, { desktopStatus: () => ({ detected: false }) })
-  assert.equal(selects, 1, 'do not prompt for unrelated, explicit or undetected hosts')
+  assert.equal(selects, 2, 'undetected Desktop still offers manual surface selection; unrelated/explicit hosts do not prompt')
 }
 // Exercise the actual installer wiring, not just the select helper.
-const tui = { ...clack, multiselect: async () => ['dsh'], select: async () => 'desktop', spinner: () => ({ start() {}, stop() {} }), note() {} }
+const tui = { ...clack, multiselect: async () => ['dsh'], select: async ({ options }) => options.some(option => option.value === 'command') ? 'command' : 'desktop', spinner: () => ({ start() {}, stop() {} }), note() {} }
 await runInstallerWithOptions({ clack: tui, skipKeys: true, skipLayer: true, skipXAuth: true, dryRun: true })
 assert.equal(commands().length, 0)
 const result = await executeAgentOps(['dsh'], { dshSurface: 'all' }, clack)
@@ -148,6 +148,33 @@ assert.deepEqual(json(join(profileDir('desktop'), 'package.json')).dsh.profile.b
 assert.equal(readFileSync(join(profileDir('desktop'), 'cordis.patch.yml'), 'utf8'), '# keep user patch\n')
 assert.ok(!messages.join('\n').includes('fixture-secret-do-not-log'))
 console.log('ok: TUI selection and Desktop + CLI install use separate owners and preserve user configuration')
+
+// A separately installed old CLI is not repaired by finding a newer Desktop.
+// All must report the CLI failure but still install through Desktop's own API.
+resetProfile('web')
+resetProfile('desktop')
+const oldCli = join(base, 'old CLI', 'host.mjs')
+writeDshHostFixture(oldCli, { ownerArgument: true })
+write(oldCli, 'throw Error("old CLI must stop before main or package operations")\n')
+rmSync(join(dirname(oldCli), 'node_modules', '@deepseek-ai', 'dsh-plugin-manager', 'index.mjs'))
+const cliLauncher = join(bin, process.platform === 'win32' ? 'dsh.cmd' : 'dsh')
+write(cliLauncher, process.platform === 'win32'
+  ? `@"${process.execPath}" "${oldCli}" "cli" %*\r\n`
+  : `#!/bin/sh\nexec "${process.execPath}" "${oldCli}" "cli" "$@"\n`)
+chmodSync(cliLauncher, 0o700)
+clearCalls()
+try {
+  const mixed = await executeAgentOps(['dsh'], { dshSurface: 'all' }, clack)
+  assert.deepEqual(mixed.map(({ profile, ok }) => [profile, ok]), [['web', false], ['desktop', true]])
+  assert.deepEqual(commands().map(({ owner }) => owner), ['desktop'], 'old CLI cannot start a package operation or borrow the Desktop host')
+  assert.ok(!existsSync(join(profileDir('web'), 'node_modules', 'search-boost')))
+  assert.ok(existsSync(join(profileDir('desktop'), 'node_modules', 'search-boost', 'package.json')))
+  assert.ok(messages.some(message => /Upgrade the selected CLI host explicitly/.test(message)))
+} finally {
+  launcher(cliLauncher, 'cli')
+}
+resetProfile('web', { installed: true })
+console.log('ok: an old independent CLI fails safely without preventing Desktop installation or changing host ownership')
 
 resetProfile('desktop', { installed: true, disabled: true })
 clearCalls()

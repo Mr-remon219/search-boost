@@ -4,13 +4,28 @@
 
 ### SearchBoost TUI
 
-运行 `search-boost`，在默认平铺首页选择首次配置向导 / 安装 / 卸载（文件夹模式先进入「安装与接入」）；选中 DSH 后，若发现 Desktop 且未指定 profile/surface，会进入 **Desktop / CLI / All** 选择页。
+运行 `search-boost`，在默认平铺首页选择首次配置向导 / 安装 / 卸载（文件夹模式先进入「安装与接入」）。交互安装选中 DSH 且未指定 profile/surface 时，会进入 **Desktop / CLI / All** 选择页；即使 Desktop 未被自动发现，也可以手动选择 Desktop。卸载仍只在发现 Desktop、未指定 profile/surface 时提供选择页。
 
 - **Desktop**：`$DSH_HOME/profiles/desktop`，通过桌面安装附带的命令操作。现有持久 SearchBoost 安装使用绝对本地包路径，避免再下载一份；临时 `_npx` 缓存不能用作持久链接，改用当前精确 npm 版本。
 - **CLI**：安装默认 `web` profile，`--profile` 可指定其他 CLI profile。与 Desktop 一样优先复用当前持久包路径，包括从本地 tarball 安装到 `node_modules` 的开发包，不以同版本 npm 包替换它。卸载只处理选中的 CLI profile，或所有已登记 SearchBoost 的 CLI profiles。
 - **All**：分别管理 Desktop 与 CLI，分别报告成功/失败；一个失败不会掩盖另一个的结果。
 
-命令行等价入口：
+选择安装 Desktop 后，还有两种方式：
+
+- **自动安装（默认）**：保留注册表 / 默认目录 / PATH 探查，调用 Desktop 自带的 launcher 和 pnpm。启动 Desktop 一次初始化后，完全退出（包括托盘）再安装。
+- **本地目录接入**：由用户在运行中的 Desktop「插件 → 添加插件」粘贴当前 SearchBoost 包目录。所有其他目标（包括 CLI、Grok 原生插件及其确认流程）执行结束后，最后单独显示完整绝对路径、步骤、等待状态和检测的 Desktop profile。不缩写成 `~`，不提供 `cli.mjs` 或 profile 目录作为安装来源。
+
+安装时 Desktop 排在最后；其他目标失败也不会跳过它。卸载顺序和已确认范围不受影响。`--yes` / 非交互命令行仍使用原自动安装接口，不启动需要用户操作的等待流程。
+
+本地方式每秒只读检查 profile 中的本地依赖来源、安装包版本 / bundle 元数据及当前发布文件内容。包写锁、包进程记录或未恢复的事务存在时不判完成；两个连续稳定结果后再确认。Desktop 的应用锁允许存在，因为应用必须运行。若能找到内置 launcher，还会通过 Desktop 自有运行时只读验证实际解析来源；失败或遮蔽副本不会降级为成功。找不到 launcher 时仅报告「保存的本地安装已核对，运行时解析/加载未验证」，不声称插件已经加载。
+
+已安装但禁用也算完成保存的安装，会明确提醒启用。若明确指定 `--enable-dsh-bundle`，此方式等待用户在 Desktop 保存启用选择，不由 SearchBoost 修改运行中的 profile。现有同源、同版本、同载荷安装可以直接通过检查；旧版本、其他来源及同版本旧代码不能通过。实际生效仍以 Desktop 显示 / 重启为准。
+
+Esc / Ctrl+C 或关闭输入仅停止本次等待；15 分钟超时也会标记 Desktop「未完成」，保留其他目标的结果，不报告整次安装成功。取消等待不会取消 Desktop 正在进行的安装。可以检查 Desktop 后再次运行接入以重新检测。dry-run 只预览步骤和目录，不等待、不执行宿主命令、不修改 Desktop profile。
+
+本地链接必须指向持久目录。通过 `_npx` 临时缓存运行时，选择本地方式会在目标安装前拒绝，要求先把当前版本安装到持久位置后重试；不把缓存路径注册到 Desktop，不以同版本注册表下载替换当前代码。
+
+命令行等价入口（自动方式）：
 
 ```sh
 search-boost install -t dsh --dsh-surface desktop -y
@@ -46,10 +61,10 @@ Desktop 独占自己的 profile 和包管理状态。先运行应用一次初始
 
 SearchBoost 只读取 profile/安装路径，不为检测启动 Desktop，也不创建 Desktop profile。原生平台发现位置包括：
 
-- Windows：用户 `LOCALAPPDATA/Programs/DeepSeek Harness/resources/runtime/cli/bin/dsh.cmd`，以及可用的 Program Files 路径。
+- Windows：先只读查询当前用户 / 整机卸载注册表（包括 `WOW6432Node`）中 DeepSeek Harness 的安装记录，使用 `InstallLocation`，缺少时从 `DisplayIcon` / `UninstallString` 提取安装目录，识别其他盘符、中文及带空格的自定义目录。仅提取路径，不执行注册表中的命令。登记目录优先于默认目录；不存在的启动器会跳过。再查用户 `LOCALAPPDATA/Programs/DeepSeek Harness/resources/runtime/cli/bin/dsh.cmd` 及可用的 Program Files 路径。注册表查询超时、被拒绝或不可用时，仍继续默认目录和 PATH 发现，不修改注册表。
 - macOS：`/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh` 和用户 `~/Applications`。
 - PATH 中指向 Desktop `resources/runtime/cli/bin` 的命令；macOS 登记的符号链接也可解析。
-- 自定义/移动安装可设置 `SEARCH_BOOST_DSH_DESKTOP_COMMAND` 为 Desktop 自带命令的绝对路径。此覆盖是权威来源；路径无效时不会改用其他安装。
+- 未登记的便携/移动安装，或注册表不可读时，可设置 `SEARCH_BOOST_DSH_DESKTOP_COMMAND` 为 Desktop 自带命令的绝对路径。此覆盖优先于所有自动发现；设置后不查询注册表，路径无效时不会改用其他安装。
 
 `desktop` 是保留 profile，不能通过 CLI surface 操作。CLI 别名目录或单独 manifest 通过符号链接、junction、硬链接指向 Desktop 时，也会在宿主执行/备份之前拒绝；链接形式的 canonical Desktop profile 仍会正常发现。路径身份使用 realpath 及可用的设备/inode，不宣称能识别所有容器/overlay 映射。
 
@@ -59,7 +74,7 @@ SearchBoost 只读取 profile/安装路径，不为检测启动 Desktop，也不
 
 ## 安装验证与禁用状态
 
-SearchBoost 管理的事务安装要求**所选宿主自身**提供 `@deepseek-ai/dsh-plugin-manager/operations`、`dsh-atomic-write` 和官方 bundle resolver；已按 DSH `0.2.0-rc.2` 的接口验证。旧 `0.1.5-rc.3` 缺少事务 API，不能继续使用此前的非事务安装路径。缺少 API 时会在包管理/备份前明确拒绝，请自行升级对应 CLI 或 Desktop 宿主；SearchBoost 不自动升级宿主、不切换到另一个宿主，也不回退到无回滚安装。版本号本身不能代替 API 检查。
+SearchBoost 管理的事务安装要求**所选宿主自身**提供 `@deepseek-ai/dsh-plugin-manager/operations`、`dsh-atomic-write` 和官方 bundle resolver；已按 DSH `0.2.0-rc.2` 的接口验证。旧 `0.1.5-rc.3` 缺少事务 API，不能继续使用此前的非事务安装路径。缺少 API 时会在包管理/备份前明确拒绝，请自行升级对应 CLI 或 Desktop 宿主；SearchBoost 不自动升级宿主、不切换到另一个宿主，也不回退到无回滚安装。版本号本身不能代替 API 检查。选择 All 时，旧 CLI 缺少 API 会单独报告 CLI 失败，新版 Desktop 仍继续使用自己的宿主完成安装；更新 Desktop 不等于更新独立 CLI。
 
 安装检查、profile/升级发现、显式启用与卸载验证共同识别 `dependencies`、`devDependencies` 和 `optionalDependencies`。即使可选依赖处于禁用状态，也不会漏扫或把仍保留的依赖误报已删除；旧名称的可选依赖同样参与升级迁移。
 
@@ -99,7 +114,9 @@ npm run test:install
 npm run test:isolation
 ```
 
-全部测试先加载 `scripts/isolate-tests.mjs`。Desktop 绝对路径发现额外使用指向测试目录的缺失命令覆盖，不能绕过 PATH 防护执行真实桌面版命令。测试覆盖双宿主安装/删除、旧版及同版本副本遮蔽、可选依赖发现/重装/卸载/旧名升级、同版本本地新包与缓存载荷校验、搜索层跨进程并发和失败写入清理、禁用成功状态与 TUI/非交互 CLI 显式启用、坏 patch 与锁拒绝启用、Desktop PATH 无系统 npm/pnpm、旧名升级、错误退出与假成功、缺失解析器/命令、dry-run、保留配置和诊断输出不泄密。模拟调用者文件及源码树由隔离门禁做内容快照。
+全部测试先加载 `scripts/isolate-tests.mjs`。Desktop 绝对路径发现额外使用指向测试目录的缺失命令覆盖，不能绕过 PATH 防护执行真实桌面版命令。测试覆盖本地接入的双语选择、Desktop 最后执行（含 Grok）、只读等待、稳定状态/来源/载荷校验、自动接口保留、取消/超时与终端恢复、dry-run 和运行时未验证说明，以及 Windows 自定义目录与注册表元数据解析、失效登记、默认目录回退、显式覆盖优先、非 Windows 不探查注册表、旧独立 CLI 失败时 Desktop 仍成功、双宿主安装/删除、旧版及同版本副本遮蔽、可选依赖发现/重装/卸载/旧名升级、同版本本地新包与缓存载荷校验、搜索层跨进程并发和失败写入清理、禁用成功状态与 TUI/非交互 CLI 显式启用、坏 patch 与锁拒绝启用、Desktop PATH 无系统 npm/pnpm、旧名升级、错误退出与假成功、缺失解析器/命令、dry-run、保留配置和诊断输出不泄密。模拟调用者文件及源码树由隔离门禁做内容快照。
+
+手动等待不使用 Clack 0.10 的 spinner：它的输入拦截会在 Escape / Ctrl+C 时直接退出整个进程。等待页用状态变化日志和独立可清理的输入监听，保证能输出未完成汇总，并恢复终端模式。
 
 Desktop 探针测试使用 Node 模拟应用二进制、目录模拟 ASAR，并测试清空 NODE_OPTIONS 后仍可验证；这些不是 Electron 真机或真实 ASAR 解析测试。这些模拟宿主回归不代表真实 Desktop 已加载新插件。Windows/macOS 命令执行需对应平台 CI / 真机确认。DSH 开发预览版接口仍可能变化。
 

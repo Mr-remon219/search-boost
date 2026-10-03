@@ -15,7 +15,7 @@ const scripts = fileURLToPath(new URL('.', import.meta.url))
 const repo = resolve(scripts, '..')
 const tests = readdirSync(scripts).filter(name => /^test-.*\.mjs$/.test(name) && name !== 'test-environment.mjs')
   .concat(['smoke.mjs', 'ci-doctor-smoke.mjs', 'cursor-roundtrip-fixture.mjs']).sort()
-const installTests = ['test-dsh-install.mjs', 'test-dsh-desktop.mjs', 'test-client-review-regressions.mjs', 'test-install.mjs', 'test-startup-hooks.mjs', 'test-skill-bundles.mjs']
+const installTests = ['test-dsh-discovery.mjs', 'test-dsh-install.mjs', 'test-dsh-desktop.mjs', 'test-dsh-desktop-local.mjs', 'test-client-review-regressions.mjs', 'test-install.mjs', 'test-startup-hooks.mjs', 'test-skill-bundles.mjs']
 const firstImport = /^import ['"]\.\/isolate-tests\.mjs['"]\s*$/
 for (const name of tests) {
   const first = readFileSync(join(scripts, name), 'utf8').replace(/^#![^\n]*\n/, '').split('\n')[0]
