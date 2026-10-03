@@ -1,4 +1,5 @@
-import './isolate-install-tests.mjs'
+import './isolate-tests.mjs'
+import { recordedProjects } from '../lib/upgrade/state.mjs'
 /**
  * Unit-style checks for install helpers (no writes to real home dir).
  */
@@ -762,7 +763,7 @@ const origCwd = process.cwd()
 const grokPrintDir = mkdtempSync(join(tmpdir(), 'sb-grok-print-'))
 process.chdir(grokPrintDir)
 const projectPrint = AGENTS.grok.printConfig({ scope: 'project' })
-const expectedProjectConfig = join(grokPrintDir, '.grok', 'config.toml').replace(/\\/g, '/')
+const expectedProjectConfig = join(process.cwd(), '.grok', 'config.toml').replace(/\\/g, '/')
 assert(
   'grok printConfig project path',
   projectPrint.replace(/\\/g, '/').includes(expectedProjectConfig),
@@ -791,8 +792,8 @@ assert('legacy pi package counts as configured and triggers the duplicate-tools 
   const home = process.env.HOME
   mkdirSync(join(home, '.pi', 'agent'), { recursive: true })
   writeFileSync(join(home, '.pi', 'agent', 'settings.json'), JSON.stringify({ packages: [{ source: 'npm:pi-search-boost@0.1.3' }] }), 'utf8')
-  const { agentConfigured, piRegistersLegacyPackage } = await import('./lib/paths.mjs')
-  const { piLegacyExtensionPresent } = await import('./lib/agents/host-runtime.mjs')
+  const { agentConfigured, piRegistersLegacyPackage } = await import('${pathToFileURL(join(repoRoot, 'lib/paths.mjs')).href}')
+  const { piLegacyExtensionPresent } = await import('${pathToFileURL(join(repoRoot, 'lib/agents/host-runtime.mjs')).href}')
   const state = { configured: agentConfigured('pi'), legacy: piRegistersLegacyPackage(), warns: piLegacyExtensionPresent() }
   if (!state.configured || !state.legacy || !state.warns) throw new Error('legacy pi not recognized: ' + JSON.stringify(state))
 `))
@@ -812,10 +813,10 @@ assert('dsh bundle install rejects a no-op launcher (a .cmd shim on Windows)', r
   }
   copyFileSync(join(tools, process.platform === 'win32' ? 'dsh.cmd' : 'dsh'), join(tools, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'))
   process.env.PATH = tools + (process.platform === 'win32' ? ';' : ':') + process.env.PATH
-  const { installDshBundle } = await import('./lib/agents/host-runtime.mjs')
+  const { installDshBundle } = await import('${pathToFileURL(join(repoRoot, 'lib/agents/host-runtime.mjs')).href}')
   await installDshBundle({ dryRun: false }).then(
     () => { throw new Error('no-op launcher was accepted') },
-    (err) => { if (!/installation was not verified/.test(err.message)) throw err },
+    (err) => { if (!/installation was not verified/i.test(err.message)) throw err },
   )
 `))
 assert('grok uninstall project config', !existsSync(join(grokDir, '.grok', 'config.toml')))
@@ -871,6 +872,7 @@ rmSync(grokNoopDir, { recursive: true, force: true })
   process.chdir(grokFreshDir)
   await AGENTS.grok.install({ skipGrokPlugin: true, scope: 'project', dryRun: false, autoAllow: true })
   assert('grok fresh install creates project config', existsSync(join(grokFreshDir, '.grok', 'config.toml')))
+  assert('grok project receipt is recorded inside the isolated test home', (await recordedProjects()).includes(process.cwd()))
   await AGENTS.grok.uninstall({ skipGrokPlugin: true, scope: 'project', dryRun: false })
   assert('grok fresh uninstall deletes project config', !existsSync(join(grokFreshDir, '.grok', 'config.toml')))
   assert('grok fresh uninstall deletes project rule', !existsSync(join(grokFreshDir, '.grok', 'rules', 'search-boost.md')))
@@ -898,7 +900,7 @@ assert('parseFlags --skip-grok-plugin', parseFlags(['--skip-grok-plugin']).skipG
   try {
     const r = await installGrokPlugin({ dryRun: true })
     assert('installGrokPlugin dry-run ok', r.ok === true && r.dryRun === true)
-    assert('installGrokPlugin dry-run logs command', logs.some((l) => l.includes('Would run:') && l.includes('grok plugin install') && l.includes('--trust')))
+    assert('installGrokPlugin dry-run distinguishes new trust from existing refresh', logs.some((l) => l.includes('Would install a new Grok plugin') && l.includes('grok plugin install') && l.includes('--trust') && l.includes('existing registration') && l.includes('separate consent')))
   } finally {
     console.log = origLog
   }
@@ -1024,9 +1026,9 @@ rmSync(cliDir, { recursive: true, force: true })
 // cursor install + uninstall round-trip (isolated temp HOME via subprocess)
 {
   const cursorHome = mkdtempSync(join(tmpdir(), `sb-cursor-home-${process.pid}-`))
-  const fixture = join(process.cwd(), 'scripts/cursor-roundtrip-fixture.mjs')
+  const fixture = join(repoRoot, 'scripts/cursor-roundtrip-fixture.mjs')
   try {
-    const raw = execFileSync(process.execPath, [fixture, cursorHome, process.execPath, process.cwd()], {
+    const raw = execFileSync(process.execPath, [fixture], {
       encoding: 'utf8',
     }).trim()
     const rt = JSON.parse(raw)
@@ -1110,7 +1112,7 @@ function runInTempHome(script) {
       process.execPath,
       ['--input-type=module', '-e', script],
       {
-        cwd: repoRoot,
+        cwd: home,
         env: {
           ...process.env,
           HOME: home,
@@ -1134,8 +1136,8 @@ function runInTempHome(script) {
 function runCodexIntegrationScenario(scenario) {
   const home = mkdtempSync(join(tmpdir(), `sb-codex-int-${process.pid}-`))
   try {
-    execFileSync(process.execPath, ['scripts/test-codex-uninstall-integration.mjs', scenario], {
-      cwd: repoRoot,
+    execFileSync(process.execPath, [join(repoRoot, 'scripts/test-codex-uninstall-integration.mjs'), scenario], {
+      cwd: home,
       env: { ...process.env, HOME: home, USERPROFILE: home },
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf8',
@@ -1154,10 +1156,10 @@ function runCodexIntegrationScenario(scenario) {
 assert('agy install+uninstall round-trip subprocess', runInTempHome(`
   import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
   import { join } from 'node:path'
-  import { AGENTS } from './lib/agents/index.mjs'
-  import { PATHS, antigravityMcpPaths, preferredAntigravityMcpPath } from './lib/paths.mjs'
-  import { antigravityPermissions } from './lib/mcp-entry.mjs'
-  import { HOOK_ENTRY_KEY } from './lib/agents/shared.mjs'
+  import { AGENTS } from '${pathToFileURL(join(repoRoot, 'lib/agents/index.mjs')).href}'
+  import { PATHS, antigravityMcpPaths, preferredAntigravityMcpPath } from '${pathToFileURL(join(repoRoot, 'lib/paths.mjs')).href}'
+  import { antigravityPermissions } from '${pathToFileURL(join(repoRoot, 'lib/mcp-entry.mjs')).href}'
+  import { HOOK_ENTRY_KEY } from '${pathToFileURL(join(repoRoot, 'lib/agents/shared.mjs')).href}'
 
   const home = process.env.HOME
   mkdirSync(join(home, '.gemini', 'config'), { recursive: true })
@@ -1243,8 +1245,8 @@ assert('agy install+uninstall round-trip subprocess', runInTempHome(`
 assert('agy uninstall no orphan AGENTS/GEMINI when never existed', runInTempHome(`
   import { mkdirSync, writeFileSync, existsSync } from 'node:fs'
   import { join } from 'node:path'
-  import { AGENTS } from './lib/agents/index.mjs'
-  import { PATHS, preferredAntigravityMcpPath } from './lib/paths.mjs'
+  import { AGENTS } from '${pathToFileURL(join(repoRoot, 'lib/agents/index.mjs')).href}'
+  import { PATHS, preferredAntigravityMcpPath } from '${pathToFileURL(join(repoRoot, 'lib/paths.mjs')).href}'
 
   const home = process.env.HOME
   mkdirSync(join(home, '.gemini', 'config'), { recursive: true })
@@ -1277,7 +1279,7 @@ for (const scenario of ['round-trip', 'keep-native', 'mcp-migration', 'foreign-s
   /** @param {string} script */
   function runClaudeHomeScript(script) {
     const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-      cwd: repoRoot,
+      cwd: claudeHome,
       env: { ...process.env, HOME: claudeHome, USERPROFILE: claudeHome },
       encoding: 'utf8',
     })
@@ -1289,7 +1291,7 @@ for (const scenario of ['round-trip', 'keep-native', 'mcp-migration', 'foreign-s
 
   try {
     runClaudeHomeScript(`
-import { AGENTS, removeClaudePermissions } from './lib/agents/index.mjs';
+import { AGENTS, removeClaudePermissions } from '${pathToFileURL(join(repoRoot, 'lib/agents/index.mjs')).href}';
 await AGENTS.claude.install({ dryRun: false, autoAllow: true, replaceNative: true });
 process.stdout.write('ok');
 `)
@@ -1300,7 +1302,7 @@ process.stdout.write('ok');
     assert('claude roundtrip owned deny', claudeOwnedWebSearchDeny(settingsAfterInstall))
 
     runClaudeHomeScript(`
-import { AGENTS } from './lib/agents/index.mjs';
+import { AGENTS } from '${pathToFileURL(join(repoRoot, 'lib/agents/index.mjs')).href}';
 await AGENTS.claude.uninstall({ dryRun: false });
 process.stdout.write('ok');
 `)
@@ -1326,7 +1328,7 @@ process.stdout.write('ok');
       'utf8',
     )
     runClaudeHomeScript(`
-import { removeClaudePermissions } from './lib/agents/index.mjs';
+import { removeClaudePermissions } from '${pathToFileURL(join(repoRoot, 'lib/agents/index.mjs')).href}';
 await removeClaudePermissions(false);
 process.stdout.write('ok');
 `)
@@ -1342,7 +1344,7 @@ process.stdout.write('ok');
       'utf8',
     )
     runClaudeHomeScript(`
-import { AGENTS } from './lib/agents/index.mjs';
+import { AGENTS } from '${pathToFileURL(join(repoRoot, 'lib/agents/index.mjs')).href}';
 await AGENTS.claude.install({ dryRun: false, autoAllow: true, replaceNative: false });
 await AGENTS.claude.install({ dryRun: false, autoAllow: true, replaceNative: true });
 await AGENTS.claude.uninstall({ dryRun: false });

@@ -1,3 +1,4 @@
+import './isolate-tests.mjs'
 /**
  * Unit-style checks for search-boost doctor (isolated temp home).
  */
@@ -5,7 +6,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { CHECK_IDS } from '../lib/doctor/registry.mjs'
 import { runDoctor } from '../lib/doctor/run.mjs'
 import { renderHuman } from '../lib/doctor/render.mjs'
@@ -68,7 +69,7 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
  */
 function runDoctorInSubprocess(home, category) {
   const script = `
-import { runDoctor } from './lib/doctor/run.mjs';
+import { runDoctor } from '${pathToFileURL(join(repoRoot, 'lib/doctor/run.mjs')).href}';
 const { report, exitCode } = await runDoctor({
   silent: true,
   category: ${JSON.stringify(category)},
@@ -83,7 +84,7 @@ const { report, exitCode } = await runDoctor({
 process.stdout.write(JSON.stringify({ report, exitCode }));
 `
   const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-    cwd: repoRoot,
+    cwd: home,
     env: { ...process.env, HOME: home, USERPROFILE: home },
     encoding: 'utf8',
   })

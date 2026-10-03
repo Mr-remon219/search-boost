@@ -19,7 +19,9 @@
 | npm run smoke | ✅ |
 | GitHub Actions CI | ✅ |
 
-## 架构（2026-09 三仓库合并后）
+## 架构（2026-09 三仓库合并时的历史记录）
+
+以下探索记录保留当时的路径、安装机制与待办，不作为当前版本契约。当前说明层职责与各宿主绑定见 [docs/prompt-contract.md](docs/prompt-contract.md)；接入管理见 [docs/agent-integration-management-note.md](docs/agent-integration-management-note.md)。
 
 ```
                     SearchBoost Core

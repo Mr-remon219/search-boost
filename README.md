@@ -3,7 +3,7 @@
 **Multi-engine web search & evidence synthesis for AI coding agents**  
 *One shared core runtime, deeply adapted for MCP, Pi, and DeepSeek Harness*
 
-[![version](https://img.shields.io/badge/version-v0.2.3-orange?style=flat-square)](#)
+[![version](https://img.shields.io/badge/version-v0.2.4-orange?style=flat-square)](#)
 [![npm version](https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm)](https://www.npmjs.com/package/search-boost)
 [![Node version](https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
@@ -19,7 +19,7 @@
 
 ---
 
-> **v0.2.3**: custom API Base URLs, intent-guided Jev retrieval, shared tool switches with MCP/Pi hot refresh, and DSH schema/npm/npx compatibility repairs. See the [release and migration notes](./docs/v0.2.3-release.md), especially the V3 `coverageComplete` / `retrievalSufficient` semantics.
+> **v0.2.4**: single-snapshot Jev screening (schema V5), private research save/recovery, bounded PDF text extraction, Desktop integration, and separate package updates / integration management. See the [release and migration notes](./docs/v0.2.4-release.md): V3 adaptive inputs/outputs and the `upgrade` command have changed. This source version does not imply npm publication; `@latest` follows the published registry.
 
 ## Table of Contents
 
@@ -54,7 +54,7 @@
 - **X / Twitter Community Intelligence (`x_search`)**  
   Retrieves public posts, user timelines, and discussion threads via official xAI API or an anonymous fallback channel. Recovers accurate UTC timestamps from Snowflake post IDs and enforces local author/date filtering without hallucination.
 - **Jev Intent-Guided Search (`adaptive_search` · Experimental)**
-  Supply questions, bound keywords and search intent. Jev selects relevant material worth reading, including credible pointers and counterevidence, and judges keyword continuation. Global 500-URL round capacity, bounded micro-batches and cursor pagination; no answer-completeness check or automatic page reading.
+  Supply one full question and a required research intent. One pre-search Jev strategy request selects the fixed ranking preset and (when community is omitted) whether to add the already-wired community branch; one bounded fused snapshot (32 candidates for targets up to 10; larger targets keep the same headroom ratio, at most 160) is then screened with fixed safety, prototype value 3/4/5 and source-discount options. No keyword planning, no constraints gate, no language check, no automatic page read, and no self-set cumulative budget stop; cursor and saved-result pagination only replay stored results. No claim of verified or complete answers.
 - **Native Multi-Agent Parallel Research**  
   Bundles `search-boost` and `search-boost-parallel-research` skills. In hosts supporting subagents (Cursor, Claude Code, Pi, DSH), tasks can be dispatched to parallel Searchers (gathering evidence) and Summarizers (pure synthesis without tools), supporting both Fast and Complex waves.
 - **Unified Core Across All Host Ecosystems**  
@@ -90,7 +90,7 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
 
 - **Core (`lib/`)**: Host-neutral algorithms, engine orchestration, Jev client protocol, and network safety policies.
 - **Adapters (`adapters/`)**: Maps core operations into host-specific protocols (MCP JSON-RPC, Pi Extension API, DSH Cordis lifecycle).
-- **Agents (`agents/`)**: Host prompt contracts, workflow templates, and native skill definitions.
+- **Agents (`agents/`)**: Host prompt contracts, workflow templates, and native skill definitions. See the [prompt responsibility contract](docs/prompt-contract.md) and [beta.8 release notes](docs/v0.2.4-beta.8-release.md) for the Agent-facing routing update.
 
 ---
 
@@ -128,7 +128,7 @@ search-boost
 > **Zero API Keys Required to Start**: SearchBoost includes a robust free engine pool (Bing, DuckDuckGo, Yahoo, Exa-free). You can begin searching immediately without signing up for any paid provider!
 
 ### 2. 3-Step Setup Wizard
-1. Select **`Setup`** in the TUI menu. Configure engine keys (or skip to use free tier) and optional X credentials.
+1. Select **Setup wizard** on the default flat TUI home (folder layout: Installation & integrations → Setup). Configure engine keys (or skip to use free tier) and optional X credentials.
 2. Check the agents you want to integrate (Cursor, Claude Code, Pi, etc.), confirming auto-approval and native search replacement.
 3. Restart or reload your chosen agents, then ask them to research anything in conversation!
 
@@ -136,20 +136,23 @@ search-boost
 
 ## Upgrade & Migration Guide
 
-### 1. Routine Updates: Upgrading via TUI
+### 1. Routine Updates: npm First, Then Refresh Integrations
 
-Whether you run unified `search-boost` or have legacy `pi-search-boost` / `dsh-search-boost` installations, **select `Update` in the TUI to upgrade everything**:
+Use npm to update the package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
 
 ```bash
-# Option 1: Open the interactive menu
+npm install -g search-boost@latest --prefer-online
 search-boost
-# -> Select "Update"
-
-# Option 2: Run headless update
-search-boost upgrade -y
+# → Manage agent integrations → Refresh existing integrations → select scopes
+# Or refresh all existing integrations:
+search-boost refresh -y
+# Preview only:
+search-boost refresh --dry-run
 ```
 
-> **Update Behavior**: Fetches the latest published release, updates SearchBoost, and refreshes prompt assets across all configured agents while preserving existing keys, layer choices, and permission settings.
+Refresh uses the current package and preserves credentials, permissions, disabled states and unrelated configuration. It does not install unconfigured hosts. Unchecking a target means no operation, not removal. The old `upgrade` command and `--sync-only` option are removed.
+
+If a Grok local cache remains stale after native update, fully quit Grok and separately approve data-retaining reconstruction and trust of the displayed source. `-y` alone is not approval; explicit CLI approval is `search-boost refresh -y --repair-grok-cache`. This requests native `uninstall --keep-data`, then `install --trust`; legacy-name data reuse is not guaranteed. Restart affected hosts afterward. See [integration refresh](docs/host-upgrades.md).
 
 ---
 
@@ -164,7 +167,7 @@ npx --yes --package=search-boost@latest -- search-boost migrate -y
 
 # Once migrated, routine updates only require:
 search-boost
-# -> Select "Update" (or search-boost upgrade -y)
+# -> Manage agent integrations → Refresh existing integrations (or search-boost refresh -y)
 ```
 
 ---
@@ -173,23 +176,23 @@ search-boost
 
 Launch `search-boost` without arguments to access the interactive dashboard built with Clack. Manage installation, updates, and credentials effortlessly:
 
-| Menu Option | Purpose |
+The default **flat** home lists these actions in order:
+
+| Home entries | Behavior |
 | :--- | :--- |
-| **Setup** | Complete initial walkthrough: configure engines, search layers, X credentials, and install agents. |
-| **Install / update agents** | Install or refresh selected host integrations, preserving existing credentials and layer settings. |
-| **Update** | **One-click upgrade**: checks npm for updates, upgrades SearchBoost, and refreshes all installed agents (including legacy Pi/DSH adapters). |
-| **API keys & Base URLs / Search layer** | Manage Tavily, Brave, Exa and optional AnySearch credentials, and change the default search layer (`free` / `api`). |
-| **X credentials** | Manage X (Twitter) authentication; supports one-click import from local Grok login. |
-| **Jev credentials (experimental)** | Configure TypeSafe Jev cognitive engine endpoint and Bearer token. |
-| **Tool switches** | Enable/disable SearchBoost tools across MCP, Pi and DSH; missing Jev locks `adaptive_search`. |
-| **Native web search** | Enable or disable host-native search for hosts supporting config switches. |
-| **Status** | Inspect current engine availability, configuration status, and active integrations. |
-| **Print MCP snippet** | Print MCP JSON configuration snippets to stdout for manual setups. |
-| **Uninstall** | Safely remove SearchBoost integrations from selected agents, keeping user configurations intact. |
+| Setup wizard; Manage agent integrations; Status | Guided setup; install / scoped refresh / confirmed uninstall; read-only status |
+| Search engine configuration; Default search layer; Tool switches | Choose individual engines; `free` / `api`; shared MCP / Pi / DSH switches |
+| X credentials; Jev configuration (experimental) | Masked credential management |
+| Native web search; Print MCP snippet | Explicit permission choices; read-only snippets |
+| TUI settings; Exit | Menu layout before display language; close the console |
+
+**TUI settings → Menu layout** offers flat / folder. Folder mode retains Installation & integrations, Search & tools, Services & credentials and Status. Completed actions return to the same flat home entry or their folder submenu. Escape cancels/navigates back; Ctrl+C exits. A layout switch immediately returns to the new home. Management returns to its own submenu; uninstall and Grok cache reconstruction default to cancel. Partial failures are reported, not styled as success.
+
+Layout and language changes apply immediately and are saved in `~/.search-boost/config/tui.json` (or `$SEARCH_BOOST_HOME/config/tui.json`). Missing layout (including legacy language-only settings) defaults to flat. Without a saved language preference, Chinese system locales select Simplified Chinese; other locales select English. The preference also applies to standalone interactive setup/config commands, not non-interactive CLI output, search results or agent replies. Tool names, commands, paths, MCP snippets and raw upstream errors remain unchanged. Dry-run previews layout/language without saving; malformed settings are warned about, not overwritten. See [TUI navigation and language settings](docs/tui.md).
 
 ### Tool switches
 
-Open **Tool switches**, toggle with Space, press Enter to review, then confirm. Esc or declining confirmation writes nothing; an empty selection disables all tools. Locked `adaptive_search` appears struck through in the status panel and is excluded from selectable choices until Jev is configured. Configuring Jev makes it available by default; an explicit OFF preference is preserved.
+Open **Tool switches** (folder layout: Search & tools → Tool switches), toggle with Space, press Enter to review, then confirm. Esc or declining confirmation writes nothing; an empty selection disables all tools. Locked `adaptive_search` appears struck through in the status panel and is excluded from selectable choices until Jev is configured. Configuring Jev makes it available by default; an explicit OFF preference is preserved.
 
 Preferences are shared through `~/.search-boost/config/tools.json` (or `$SEARCH_BOOST_HOME/config/tools.json`), using atomic, locked writes. No host restart or reinstall is needed once the updated adapters are loaded:
 
@@ -197,7 +200,7 @@ Preferences are shared through `~/.search-boost/config/tools.json` (or `$SEARCH_
 - **Pi:** active tools refresh within approximately 300ms; unrelated and initially excluded tools are preserved. Watchers stop on session shutdown.
 - **DSH:** registrations remain present but disabled calls fail immediately; the native search/fetch provider paths obey the same switches.
 
-Every new invocation checks the current preference, including stale tool handles. Existing requests finish normally. Removing Jev credentials locks adaptive calls (including pagination); restoring credentials does not override explicit OFF. These are **tool-entry switches**, not engine permissions: enabled adaptive research may still use internal search/fetch, and fused community search may still use internal X retrieval. Slash commands remain available for recovery. Existing processes running older adapter code require one reload/update first. Hosts sharing these settings must use the same SearchBoost home.
+Every new invocation checks the current preference, including stale tool handles. Existing requests finish normally. Removing Jev credentials locks adaptive calls (including pagination and saved-result recovery); restoring credentials does not override explicit OFF. These are **tool-entry switches**, not engine permissions: enabled adaptive research screens one internal fused snapshot and does not read pages automatically, and fused community search may still use internal X retrieval. Searcher waves in Pi/DSH also require the shared fused_search and fetch_page entries and DSH scoped tools: disabled dependencies prevent initial dispatch, and are checked again before each child starts. Started children finish normally; tool-free summarizers do not require these entries. Checks never enable tools or expand permissions. Slash commands remain available for recovery. Existing processes running older adapter code require one reload/update first. Hosts sharing these settings must use the same SearchBoost home.
 
 ---
 
@@ -212,7 +215,7 @@ When integrated, agents automatically receive standard tool definitions and auto
 | `fused_search` | Parallel multi-engine querying, deduplication, and diversity re-ranking | A single search step; follow-up decisions remain with the parent agent |
 | `fetch_page` | Reading clean content from public URLs with optional keyword focus | Not a browser with login state; cannot access internal/private networks |
 | `x_search` | Retrieving public X posts, author timelines, or discussion threads | Does not guarantee exhaustive comment threads or total sentiment sampling |
-| `adaptive_search` | **Experimental**: intent-guided search selection and keyword continuation | Worth-reading URLs and extractive descriptions; not verified answers |
+| `adaptive_search` | **Experimental**: one bounded fused snapshot + fixed-option Jev screening for one question and a required intent | Selected URLs with reviewed extracts and value labels; targetMet is quantity only, not verified answers |
 | `search_stats` | Reading engine status, memory cache hits, and recent diagnostic stats | Read-only; configuration readiness does not guarantee active external network reachability |
 | `search_layer` | Viewing or switching compatibility search layer in MCP | `show` is read-only; changing layers mutates persistent configuration on disk |
 
@@ -243,7 +246,7 @@ Dispatches queries across engines concurrently, normalizes URLs, strips redirect
 
 ### 2. `fetch_page` Smart Content Reader
 
-Reads webpage content from search URLs. Reads and cleans the origin first; curl handles transport compatibility when installed, and Jina Reader is the backup.
+Reads webpage content from search URLs. Reads and cleans the origin first; PDFs are extracted to text locally and only fall back to Jina Reader when that fails; curl handles transport compatibility when installed.
 
 **Tool Arguments Example**:
 ```json
@@ -256,6 +259,9 @@ Reads webpage content from search URLs. Reads and cleans the origin first; curl 
 - **`focus` (Optional)**: Filters and retains paragraphs matching the target keywords.
   > [!TIP]
   > A `focus` miss does **not** prove the information is absent from the page. If in doubt, re-fetch without `focus` to inspect the full context.
+- **`offset` (Optional)**: Long bodies are returned in bounded windows (60,000 characters by default). The result reports `totalChars` and, while more content follows, `nextOffset`; pass that back as `offset` to continue reading. Continuations are served from the 24h cache without another request.
+  > [!TIP]
+  > Binary responses (images, archives, PDFs with no extractable text) raise a clear error instead of being returned as page text.
 
 ---
 
@@ -279,33 +285,29 @@ Designed for real-time technical tracking and first-party developer updates. Sup
 
 ### 4. `adaptive_search` Jev Intent-Guided Search (Experimental)
 
-**Vercel support**: in TUI → Jev credentials, enter `https://ai-gateway.vercel.sh/v1` and a Vercel AI Gateway key. SearchBoost selects the official SDK evaluation model `typesafe-ai/jev`, not chat completions. The default TypeSafe `/systemone` path remains supported. Both paths use only the canonical user Jev credential, not environment keys, and respect server rate-limit delays.
+**Vercel support**: in TUI → Jev configuration (folder layout: Services & credentials → Jev configuration), enter `https://ai-gateway.vercel.sh/v1` and a Vercel AI Gateway key. SearchBoost selects the official SDK evaluation model `typesafe-ai/jev`, not chat completions. The default TypeSafe `/systemone` path remains supported. Both paths use only the canonical user Jev credential, not environment keys, and respect server rate-limit delays.
 
-The caller supplies questions, bound keywords and optional `intent` explaining useful search directions. Jev judges relevance, reading value and direction match (helpfulness, not agreement), then chooses continue/satisfied/exhausted per keyword; code handles unknown/pending decisions and finite budgets. Pointers and partial information can qualify. The score rewards strong results, new supplied topics and diminishing supplementary results; it is advisory, not answer completeness. Legacy `facts` are optional search topics, not mandatory acceptance conditions. See [the implementation contract](docs/jev-adaptive-search.md).
+Supply **one question** (`questions` has exactly one item) plus a **required research `intent`** and optional soft `preferences`. Write them in English as a caller instruction: the server never language-checks, rejects or translates them, and any language is searched exactly as written. The original question is the only query — there is no keyword planning and no query expansion. One pre-search Jev strategy request selects the fixed `balanced`/`research`/`fresh` ranking and, when `community` is omitted, `enable`/`disable`/`unknown` for the already-wired community (X) branch; an explicit `community` true/false overrides that choice and is never asked back. That single fused call collects a **bounded snapshot: 32 candidates for targets up to 10, ceil(max_results×32/10) for larger targets (at most 160)** (web and community rows share it), and every declared candidate is screened with fixed options: safety `clear`/`violation`/`unavailable`, prototype value levels 0-5, source discounts from real positive-contribution engines, and one match per preference. Only safe material with an established value 3/4/5 is delivered, ranked by the versioned screening formula; confidence is audit-only. There is no early stop at the first K acceptable links, no automatic page read, and no self-imposed cumulative cost, token, request-count or whole-run time budget — real single-request timeouts, limited retries, authentication/rate-limit failures, safety refusals and explicit cancellation still apply.
 
 ```json
 {
-  "intent": "Prefer migration guides and concrete incompatibilities; include counterexamples.",
-  "tasks": [{
-    "context": "ExampleDB 4.2 upgrade impact",
-    "targets": [{
-      "id": "migration",
-      "keywords": ["migration guide", "upgrade guide"],
-      "question": "What migration steps are required from 4.1 to 4.2?"
-    }]
-  }],
-  "page_size": 20
+  "questions": ["What are the migration risks from ExampleDB 4.1 to 4.2?"],
+  "intent": "Find migration steps and concrete incompatibilities, including counterexamples.",
+  "preferences": ["Official migration guides"],
+  "max_results": 8,
+  "page_size": 3
 }
 ```
 
-- Up to 6 tasks, 4 targets per task, 12 total targets; legacy `questions` input remains supported.
-- `results` contains `{url, title, description, valueScore, directionMatch, kind}`; descriptions are extractive, scores are uncalibrated heuristics, and rejected/unassessed material is excluded.
-- Read more with `{"cursor":"<nextCursor>"}`: no new search or Jev call. Pages default to 20 results (max 50) and have a byte budget, but cumulative approved results have no fixed count cap.
-- Inspect `retrievalSufficient`, `keywordProgress`, `pendingAssessments` and warnings. `coverageComplete` is deprecated and always false in schemaVersion 3: answer completeness is not assessed. Search satisfaction, end of pagination and model approval do not establish truth or exhaustiveness.
-- Results are process-local, retained for up to 30 minutes / 32 recent result sets; expiry, eviction or restart invalidates cursors.
-- Optional task `time_range` distinguishes publication dates from event dates; unknown dates cannot qualify as today's evidence.
-
-See the [adaptive-search contract and limitations](./docs/jev-adaptive-search.md).
+- `intent` is required (it is no longer filled in from the question) and `preferences` are independent soft ranking bonuses, deduplicated exactly.
+- `constraints` is retired as a per-material hard gate: omit it or pass `[]` (a `deprecated_constraints_empty` warning); a non-empty array is refused with `adaptive_constraints_removed` before any network call. Keep every direction and condition in the question/intent; for hard domain limits use `site:`/`-site:` or fused_search `include_domains`/`exclude_domains`, and verify required document properties by reading.
+- Multi-question lists, `tasks/targets/facts/time_range`, `keywords` and nested keyword arrays are refused as legacy inputs; independent questions require separate calls.
+- `max_results` caps the selected and saved set (default 10, max 50); `page_size` only changes the page (default 20, max 50) and never re-orders or re-filters.
+- Results contain selected URLs, titles, reviewed extracts, `valueLevel`/`valueLabel`, rank, real provenance and score components — never generated answers. `selection.targetMet` means quantity only, never research completion or verification; `selection.incomplete`, `diagnostics`, `stopReason`, `outsideReview` and `unreviewed` disclose what was not finished rather than treating it as low value.
+- `run.community` reports the finite community decision and the actual execution status (`not_requested`/`domain_excluded`/`unavailable`/`blocked`/`succeeded`/`empty`/`failed`/`partial`/`not_run`), never model reasoning. A failed or partial community branch keeps valid web results and marks the run incomplete.
+- Read saved pages with `{"cursor":"<s5:…>"}` (optional `page_size`) only: no new search, strategy, Jev, community or value call. Default 20/max 50 per page with a byte budget. Cursors last up to 30 minutes/32 recent sets in the current process and are not exhaustive search.
+- With explicit `save_results:true`, the complete final selected set plus typed metadata is stored privately under the SearchBoost home (`search-boost-research-v2`, schema version 5) and you receive a `savedResultId`. After a restart or cache clear, read `{"saved_result_id":"<savedResultId>"}` (optional `page_size`) without another search or Jev call. Older `search-boost-research-v1` files stay readable in a marked read-only `h1:` historical branch (`restoration.historical: true`, original schema version preserved, no invented v5 fields). Public tool switches and the Jev configuration lock still apply to reads; `search-boost research list` / `research export <id> --output <new-file.json>` work offline without Jev. See [integration and acceptance boundaries](docs/research-status-acceptance.md).
+- Thresholds remain uncalibrated engineering starting points. See the [contract, budgets and migration notes](docs/jev-adaptive-search.md).
 
 ---
 
@@ -355,11 +357,11 @@ One shared workflow with three host bindings. The parent agent splits a question
 | **DeepSeek Harness** | Native `research_parallel` tool | Children spawn on the same Cordis context through the host's subagent service. Searchers receive `toolFilter.allow = ['fused_search','fetch_page']`; summarizers receive an empty allowlist. Before a wave, `research_parallel` verifies both tools are registered and refuses to spawn otherwise. Handles are disposed on success and failure, and `maxDepth` stays at 1, so children cannot nest further research. |
 | **MCP hosts** (Cursor, Claude Code, Codex, Grok, Antigravity) | Bundled `search-boost-parallel-research` skill | The skill embeds the same roles and workflow and runs them through whatever subagent mechanism the host provides. A host without usable delegation falls back to serial research by the parent. |
 
-Installing into an MCP host also installs the companion **`search-boost`** routing skill, which picks the right tool for an open-ended question.
+Installing into an MCP host also installs the companion **`search-boost`** router skill for optional workflows. Ordinary tool selection uses the registered descriptions and schemas directly; no skill load is required.
 
 - **Fast mode**: one searcher wave, then parent synthesis — no summarizer and no second wave.
 - **Complex mode**: one to three waves with a gap review in between; another wave starts only when a material gap remains, and the run stops early when the evidence is sufficient. These wave limits are workflow instructions, not global quotas enforced across independent tool calls.
-- **Fallback**: if the host cannot delegate, the parent researches serially and says so instead of pretending a wave ran.
+- **Unavailable delegation**: the parent may research serially when browsing is allowed and parallelism is not a strict requirement, and discloses that choice. A denied or failed runtime is a blocker, not permission for a silent fallback.
 
 > [!IMPORTANT]
 > A child returning `ok` means it finished with non-empty text, **not** that its claims are verified. Failed or partial reports stay visible, but their URLs are excluded from the successful aggregate, and final judgment always belongs to the parent.
@@ -372,7 +374,7 @@ For Pi/DSH child-tool loading, stale `pi-search-boost` references, and the retir
 
 ### Custom search API bases
 
-Open **API keys & Base URLs** in the TUI (or `search-boost config keys`). Each engine shows its masked key and default/custom Base URL. Choose **Set / replace Base URL**, then keep or edit the key; **Restore default Base URL** resets only the address. Changes are saved when the wizard completes. Status and `config keys --show` also show the effective bases.
+Open **Search engine configuration** on the flat TUI home (folder layout: Services & credentials) . Each engine shows its masked key and default/custom Base URL. Choose **Set / replace Base URL**, then keep or edit the key; **Restore default Base URL** resets only the address. Choose any individual engine without stepping through all credential slots; unrelated keys and routing selections are preserved. Status and `config keys --show` also show the effective bases. Standalone `search-boost config keys` and first setup retain the sequential guided wizard.
 
 ```bash
 search-boost config keys --base-url exa=https://gateway.example/exa
@@ -399,20 +401,28 @@ API keys use a credential store this tool owns. They are not written into prompt
 
 ## CLI Command Reference (Headless & CI)
 
-In addition to the interactive TUI, SearchBoost provides a comprehensive CLI for scripting and automation:
+In addition to the interactive TUI, SearchBoost provides a comprehensive CLI for scripting and automation.
+
+**DeepSeek Harness Desktop:** interactive installation offers Desktop / CLI / All, then **Automatic (default)** or **Local directory** for Desktop. Automatic setup retains bundled-command discovery through Windows installer registry metadata (including custom destinations), default directories and PATH; launch Desktop once, then fully quit it including its tray. Local setup runs last, after all other integrations including Grok, and displays the current durable package directory to paste into the running app's Plugins → Add plugin dialog. The TUI observes saved installation read-only and finishes after stable verification; Escape / Ctrl+C or timeout marks Desktop unfinished while retaining earlier results. Saved installation is not proof of live activation; missing bundled launchers explicitly leave runtime verification unknown. Temporary `_npx` paths are refused as persistent local links. The app also accepts `search-boost` for a registry install. Automatic install/update still verifies the owning resolver and rejects shadow copies. Disabled bundles stay disabled unless explicitly requested; local setup with `--enable-dsh-bundle` waits for the user to enable it in Desktop. See [Desktop integration](docs/dsh-desktop.md) for ownership and validation limits.
 
 ```bash
 # ----------------- Core & Interactive -----------------
 search-boost                                # Launch interactive dashboard (TUI)
-search-boost status                         # Print active configuration and host summary
+search-boost status                         # Disk/configuration evidence; running host version remains unknown
+search-boost status --json                  # Structured read-only installation evidence
+search-boost research list                  # List opt-in private result snapshots
+search-boost research export <id> --output <new-file.json> # Explicit export; never overwrite
 search-boost --help                         # Display full CLI documentation
 
 # ----------------- Headless Installation -----------------
 search-boost install -t cursor -y           # Install for Cursor with auto-approval
 search-boost install -t claude,codex --keep-native  # Install while preserving host native search
 search-boost install -t antigravity --workspace /path/to/project # Target a specific workspace
+search-boost install -t antigravity -y --antigravity-config legacy # Explicit old-client compatibility; modern switches back
 search-boost install -t pi -y               # Mount Pi extension and prompt templates
-search-boost install -t dsh --profile web   # Connect to DeepSeek Harness web profile
+search-boost install -t dsh --profile web   # Connect to DeepSeek Harness CLI web profile
+search-boost install -t dsh --dsh-surface desktop -y # Desktop bundled command + local package
+search-boost install -t dsh --dsh-surface all -y     # Manage Desktop and CLI independently
 # No global search-boost / dsh / pnpm required (Windows, Linux, macOS):
 npx --yes search-boost@latest install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # Preview installation without writing files
@@ -444,6 +454,7 @@ Use this path to contribute to SearchBoost, or to test code that is not in a pub
 - **Node.js** `>= 22.13.0` (matching `package.json`)
 - **git** and **npm**
 - Optional: **`curl`**, for the same-route transport-compatibility fallback in `fetch_page`
+- Optional: **`pdfjs-dist`** (optionalDependency) to extract PDF text locally; without it, PDF reads fall back to Jina Reader
 
 ### Set up a checkout
 
@@ -484,11 +495,11 @@ After changing adapter or agent assets, re-run the same install command for that
 | Command | What it covers |
 | :--- | :--- |
 | `npm run check` | Syntax check across the CLI, core, adapters and scripts |
-| `npm run prepublishOnly` | The full offline suite: plugin sync, syntax, CLI, install, doctor, fusion, X, engines, X auth, Jev, key authority, dry-run, network, search routing, adapters, parallel research, upgrade, MCP and smoke |
+| `npm run prepublishOnly` | The full offline suite: plugin sync, syntax, CLI, install, doctor, fusion, X, engines, X auth, Jev, key authority, dry-run, network, search routing, adapters, parallel research, integration refresh / migration, MCP and smoke |
 | `npm run test:network` | Proxy retries, curl fallback, request bounds and compatibility regressions |
 | `npm run test:adapters` | MCP, Pi and DSH adapter protocol suites plus Pi subagent settings migration/diagnosis |
 | `npm run test:parallel` | Searcher/summarizer contracts, DSH dispatch preflight, cancellation and tool isolation |
-| `npm run test:adaptive` | Jev adaptive evidence loop |
+| `npm run test:adaptive` | N_off screening flow + real MCP/Pi/DSH host fixtures |
 | `npm run smoke` | MCP JSON-RPC protocol smoke test |
 
 These suites run against loopback fixtures and process doubles, so no engine keys are needed; a green `npm run prepublishOnly` is the bar for a PR.

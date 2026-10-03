@@ -1,3 +1,4 @@
+import './isolate-tests.mjs'
 /**
  * Unit checks for xauth expiry probe (xAuthAvailableSync / isAuthEntryUsable).
  */

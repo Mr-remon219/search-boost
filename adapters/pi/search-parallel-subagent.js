@@ -13,6 +13,7 @@ import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { piSubagentTemplatePaths } from '../../agents/router.mjs'
 import { PATHS } from '../../lib/paths.mjs'
+import { assertResearchDependencies } from '../../lib/tool-config.mjs'
 import { RESEARCH_ROLES, RESEARCH_TOOLS, normalizeResearchTasks, renderResearchTemplate, researchResult, researchSummary } from '../../lib/search/parallel-contract.mjs'
 export { extractSourceUrls } from '../../lib/search/parallel-contract.mjs'
 
@@ -173,6 +174,7 @@ async function runAgentAttempt(item, timeoutMs, signal, dispatch) {
   let tmpDir = null
   let tmpPrompt = null
   try {
+    if (item.agent === 'searcher') assertResearchDependencies()
     if (agent.systemPrompt) {
       const tmp = writePromptToTempFile(agent.name, agent.systemPrompt)
       tmpDir = tmp.dir
@@ -181,6 +183,7 @@ async function runAgentAttempt(item, timeoutMs, signal, dispatch) {
     const args = buildChildCliArgs(agent, item.task, tmpPrompt, dispatch)
     const invocation = getPiInvocation(args)
     if (signal?.aborted) return abortedTask(item, started)
+    if (item.agent === 'searcher') assertResearchDependencies()
 
     let turns = 0
     let stopReason = ''
@@ -291,6 +294,8 @@ async function runAgentAttempt(item, timeoutMs, signal, dispatch) {
       result: result || error || '(no output)', error: ok ? undefined : error,
       tookMs: Date.now() - started, turns,
     })
+  } catch (err) {
+    return researchResult(item, { status: 'error', error: err instanceof Error ? err.message : String(err), tookMs: Date.now() - started })
   } finally {
     if (tmpPrompt) {
       try { fs.unlinkSync(tmpPrompt) } catch { /* ignore */ }
@@ -324,6 +329,7 @@ export async function retryTransientSubtasks(results, signal, progress, attempt)
 export async function runSearchParallel(opts) {
   const started = Date.now()
   const items = opts.tasks
+  if (!opts.signal?.aborted && items.some(item => item.agent === 'searcher')) assertResearchDependencies()
   const timeoutMs = Math.min(600, Math.max(30, opts.timeoutSeconds ?? 150)) * 1000
   const dispatch = opts.dispatch ?? {}
 

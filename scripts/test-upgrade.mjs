@@ -1,10 +1,12 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** New TUI/CLI manages OLD Pi/DSH/MCP installations. No real package-manager/host mutations. */
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, statSync, symlinkSync, readlinkSync, realpathSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
+import { writeDshHostFixture } from './dsh-host-fixture.mjs'
 
 // Use canonical fixture identities; exercise an aliased caller cwd explicitly
 // in the cache-handoff case below instead of relying on the OS temp-dir spelling.
@@ -29,8 +31,8 @@ function snapshot(dir = home) {
   }))
 }
 const fixtureSecret = 'fixture-value-not-a-real-credential'
-const { runUpgrade } = await import('../lib/upgrade/index.mjs')
-const { compareVersions } = await import('../lib/upgrade/process.mjs')
+const { runRefresh: runUpgrade } = await import('../lib/upgrade/index.mjs')
+const { compareVersions, runCommand } = await import('../lib/upgrade/process.mjs')
 const { refreshTomlMcp } = await import('../lib/upgrade/config.mjs')
 const { discoverIntegrations, refreshIntegration } = await import('../lib/upgrade/integrations.mjs')
 const { PATHS, workspaceAgents } = await import('../lib/paths.mjs')
@@ -41,7 +43,17 @@ mkdirSync(globalRoot)
 const logs = [], calls = []
 const log = (message) => logs.push(message)
 let npmVersion = version, failDshRemove = false, failNpm = false
-async function run(command, args) {
+const probeEntry = join(temp, 'fake-host', 'host.mjs')
+writeDshHostFixture(probeEntry)
+write(probeEntry, 'throw Error("runtime probe must exit before host main")')
+async function run(command, args, options) {
+  if (options?.env?.SEARCH_BOOST_DSH_PROBE_NONCE) return runCommand(process.execPath, [probeEntry, '--version'], options)
+  // Exercise the shared launcher on machines with or without global DSH/pnpm.
+  if (command === 'npm' && args[0] === 'exec') {
+    const separator = args.indexOf('--')
+    assert.equal(args[separator + 1], 'dsh')
+    command = 'dsh'; args = args.slice(separator + 2)
+  }
   calls.push({ command, args })
   if (command === 'npm' && args[0] === 'root') return { code: 0, stdout: globalRoot }
   if (command === 'npm' && args[0] === 'uninstall' && args[1] === '--prefix') {
@@ -85,6 +97,25 @@ async function run(command, args) {
   throw new Error(`Unexpected command in hermetic test: ${command} ${args[0]}`)
 }
 try {
+  // Stale historical receipts are disclosed and skipped without deleting user
+  // state or blocking usable integrations; an explicit workspace stays fatal.
+  const projectsFile = join(process.env.SEARCH_BOOST_HOME, 'state', 'upgrade-projects.json')
+  const missingProject = join(temp, 'unavailable-user-project')
+  write(projectsFile, { projects: [missingProject] })
+  const missing = await runUpgrade({ dryRun: true, run, log })
+  assert.equal(missing.ok, true, 'a stale historical receipt must not block the whole update')
+  assert.deepEqual(missing.warnings, [])
+  assert.deepEqual(missing.skippedRecords, [`Recorded project unavailable: ${missingProject}`])
+  assert(logs.some((line) => line.startsWith('[skipped]') && line.includes(missingProject)))
+  assert(logs.some((line) => line.includes('nothing was deleted') && line.includes(projectsFile)), 'skipped records must be reviewable in their state file')
+  assert.deepEqual(json(projectsFile), { projects: [missingProject] }, 'discovery must not prune user records')
+  const explicitWorkspace = await runUpgrade({ dryRun: true, run, log, workspace: missingProject })
+  assert.equal(explicitWorkspace.ok, false, 'an explicitly requested missing workspace is an actionable failure')
+  assert(explicitWorkspace.warnings.some((warning) => warning.startsWith('Workspace unavailable: ') && warning.includes(missingProject)))
+  assert.deepEqual(json(projectsFile), { projects: [missingProject] })
+  rmSync(projectsFile)
+  console.log('ok: stale recorded projects are skipped and disclosed; a missing explicit workspace still blocks')
+
   assert(compareVersions('1.10.0', '1.9.9') > 0)
   assert(compareVersions('1.0.0', '1.0.0-beta.9') > 0)
   assert(compareVersions('1.0.0-beta.10', '1.0.0-beta.2') > 0)
@@ -199,7 +230,7 @@ try {
   // npm-updated users can synchronize even offline, and the operation remains idempotent.
   calls.length = 0
   const stableClaude = bytes(PATHS.claude.settings)
-  const again = await runUpgrade({ syncOnly: true, run, log })
+  const again = await runUpgrade({ run, log })
   assert(again.ok)
   assert(!calls.some((c) => c.command === 'npm' && ['view', 'install'].includes(c.args[0])))
   assert.equal(bytes(PATHS.claude.settings), stableClaude)
@@ -222,7 +253,7 @@ try {
   // Failure/foreign ownership is partial, not a falsely successful install; other targets continue.
   write(PATHS.claude.skill, '---\nname: search-boost\ndescription: user replacement\n---\n# User-owned\n')
   const foreignConfig = bytes(PATHS.claude.config)
-  const partial = await runUpgrade({ syncOnly: true, run, log })
+  const partial = await runUpgrade({ run, log })
   assert(!partial.ok)
   assert(partial.results.some((r) => r.target === 'claude' && !r.ok))
   assert.equal(bytes(PATHS.claude.config), foreignConfig)
@@ -230,12 +261,12 @@ try {
   assert(!logs.join('\n').includes(fixtureSecret))
   console.log('ok: failed verification and foreign files block only affected targets; no false success')
 
-  // Latest check failures must not be swallowed; no credential/host mutations.
-  const beforeFailure = snapshot()
+  // Software release changes and registry failures are irrelevant to current-version refresh.
   failNpm = true
-  await assert.rejects(runUpgrade({ run, log }), /failed/)
+  calls.length = 0
+  await runUpgrade({ run, log })
   failNpm = false
-  assert.deepEqual(snapshot(), beforeFailure)
+  assert(!calls.some(c => c.command === 'npm' && ['view', 'install', 'exec'].includes(c.args[0])))
   assert(!existsSync(join(process.env.SEARCH_BOOST_HOME, 'state', 'upgrade.lock')))
 
   // A timeout must not release a lock while a handed-off worker is still alive.
@@ -250,43 +281,17 @@ try {
   assert(!existsSync(lockFile))
   console.log('ok: handed-off live workers retain the lock after parent timeout')
 
-  // A newer release runs from the npx cache, never overwritten imported files.
-  // Enter through an alias to exercise canonical cwd handoff on Linux/Windows
-  // too (macOS tmpdir already commonly aliases /private/var through /var).
-  const projectAlias = join(temp, 'project alias')
-  symlinkSync(project, projectAlias, process.platform === 'win32' ? 'junction' : 'dir')
-  process.chdir(projectAlias)
-  const latest = '99.0.0'
-  let handoff = false
-  const update = await runUpgrade({ log, run: async (command, args, opts) => {
-    assert.equal(command, 'npm')
-    if (args[0] === 'view') return { code: 0, stdout: JSON.stringify(latest) }
-    assert.equal(args[0], 'exec')
-    assert(args.includes(`--package=search-boost@${latest}`))
-    assert.deepEqual(args.slice(args.indexOf('--') + 1), ['search-boost', 'upgrade', '--yes'])
-    assert(opts.env.SEARCH_BOOST_UPGRADE_HANDOFF)
-    // Windows preserves a junction spelling in process.cwd(); POSIX generally
-    // canonicalizes it. The handoff must identify the same directory on both.
-    assert.equal(realpathSync(opts.env.SEARCH_BOOST_UPGRADE_CWD), realpathSync(project))
-    assert.notEqual(realpathSync(opts.cwd), realpathSync(project), 'project package must not shadow the cached updater')
-    handoff = true
-    return { code: 0, stdout: 'cached updater completed' }
-  } })
-  assert(update.ok && update.reloaded && handoff)
-  process.chdir(project)
-  for (const file of protectedFiles) assert.equal(bytes(file), credentialBytes[file])
-  console.log('ok: npm check failures stop cleanly; newer releases hand off to an exact npx cache worker')
-
-  const cliHelp = execFileSync(process.execPath, [join(PKG_ROOT, 'cli.mjs'), 'upgrade', '--help'], { encoding: 'utf8', env: process.env })
-  assert(cliHelp.includes('--sync-only') && cliHelp.includes('--workspace'))
-  assert(bytes(join(PKG_ROOT, 'lib', 'installer', 'tui.mjs')).includes("case 'upgrade':"))
+  // No SearchBoost npm/npx updater is reachable from the refresh command.
+  const cliHelp = execFileSync(process.execPath, [join(PKG_ROOT, 'cli.mjs'), 'refresh', '--help'], { encoding: 'utf8', env: process.env })
+  assert(cliHelp.includes('--workspace') && cliHelp.includes('no npm version check'))
+  assert(!bytes(join(PKG_ROOT, 'lib', 'installer', 'tui.mjs')).includes("case 'upgrade':"))
   const cliHome = join(temp, 'cli-home'), cliCwd = join(temp, 'cli-cwd')
   mkdirSync(cliHome); mkdirSync(cliCwd)
   write(join(cliHome, '.claude.json'), { mcpServers: { 'search-boost': { command: 'old', args: [], env: { TOKEN: fixtureSecret } } } })
   write(join(cliHome, '.search-boost-xauth.json'), { token: fixtureSecret })
   const cliEnv = { ...process.env, HOME: cliHome, USERPROFILE: cliHome, SEARCH_BOOST_HOME: join(cliHome, '.search-boost'), PI_CODING_AGENT_DIR: join(cliHome, '.pi', 'agent'), DSH_HOME: join(cliHome, '.dsh'), npm_config_prefix: join(temp, 'cli npm prefix') }
-  const cliOutput = execFileSync(process.execPath, [join(PKG_ROOT, 'cli.mjs'), 'upgrade', '--sync-only', '--yes'], { encoding: 'utf8', env: cliEnv, cwd: cliCwd })
-  assert(cliOutput.includes('Upgrade complete'))
+  const cliOutput = execFileSync(process.execPath, [join(PKG_ROOT, 'cli.mjs'), 'refresh', '--yes'], { encoding: 'utf8', env: cliEnv, cwd: cliCwd })
+  assert(cliOutput.includes('Refresh complete'))
   assert(!cliOutput.includes(fixtureSecret))
   assert(existsSync(join(cliHome, '.claude', 'skills', 'search-boost-parallel-research', 'SKILL.md')))
   assert.equal(json(join(cliHome, '.claude.json')).mcpServers['search-boost'].env.TOKEN, fixtureSecret)

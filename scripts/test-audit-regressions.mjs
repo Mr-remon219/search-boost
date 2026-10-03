@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 // Release-audit regressions: real loopback proxy traffic plus hermetic boundary
 // cases. No external service, user configuration or real credential is used.
 import assert from 'node:assert/strict'
@@ -10,8 +11,8 @@ import { ipv4Fetch, fetchPinned, closeFetchDispatchers, resetFetchDispatcher, __
 import { isBlockedIp, resolveValidatedAddresses, guardedFetch } from '../lib/search/ssrf.js'
 import { __setCurlSpawnForTests } from '../lib/search/curl-fetch.mjs'
 import { fetchPage, makePageCache, toFetchPageResult } from '../lib/search/fetch.js'
-import { runAdaptiveLoop } from '../lib/search/adaptive/loop.mjs'
-import { renderAdaptiveSummary } from '../lib/search/adaptive/describe.js'
+import { runAdaptiveSearch } from '../lib/runtime.mjs'
+import { renderAdaptiveSummary } from '../lib/search/screening/describe.js'
 import { createJevClient } from '../lib/jev/client.mjs'
 
 const proxyNames = ['http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY', 'no_proxy', 'NO_PROXY']
@@ -162,19 +163,28 @@ try {
     __setCurlSpawnForTests(() => { throw new Error('curl also unavailable in fixture') })
     await assert.rejects(fetchPage('https://reader-only.invalid/', undefined, makePageCache()), (err) => err.kind === NET_ERROR_KINDS.transportUnavailable)
   })
-  await test('no-engine adaptive calls release the host abort listener on every early return', async () => {
+  await test('a no-engine adaptive call releases the host abort listener and reports zero network reads', async () => {
     const controller = new AbortController()
+    const events = []
     for (let i = 0; i < 3; i++) {
-      const result = await runAdaptiveLoop({ questions: ['fixture'] }, { jev: { ask() { throw new Error('must not call') } }, signal: controller.signal, snapshot: () => ({ capability: {}, engines: {} }) })
+      const result = await runAdaptiveSearch(
+        { questions: ['fixture'], intent: 'fixture direction' },
+        { signal: controller.signal, host: 'mcp', audit: { write: (event) => events.push(event) } },
+        { toolState: () => ({ requested: true, enabled: true }), readConfig: () => ({ apiKey: 'fixture-secret', baseUrl: 'https://jev.fixture.invalid' }), snapshot: () => ({ enginePool: 'free' }), route: () => ({ engineNames: [], effectiveWeights: {} }), createClient: () => ({ usage: () => ({}), async ask() { throw new Error('must not call') } }) },
+      )
       assert.equal(result.stopReason, 'no_engines')
+      assert.equal(result.usage.fetchReads, 0)
+      assert.equal(result.usage.fusedCalls, 0)
       assert.equal(getEventListeners(controller.signal, 'abort').length, 0)
     }
+    assert.equal(events.length, 3)
+    assert(events.every((event) => event.type === 'screening' && event.snapshotCandidates === 0))
   })
   await test('adaptive summaries never claim a failed threshold comparison or nonexistent structured evidence', () => {
-    const summary = renderAdaptiveSummary({ questions: [{ id: 'q1', question: 'test', status: 'insufficient', assessed: true, coverage: { probability: 0.2, threshold: 0.8 }, evidence: [{ evidenceId: 'e1', url: 'https://a.example/' }, { evidenceId: 'e2', url: 'https://b.example/' }, { evidenceId: 'e3', url: 'https://c.example/' }], evidenceCount: 5 }], usage: {} })
-    assert.doesNotMatch(summary, /0\.2 > 0\.8/)
-    assert.match(summary, /1 more.*structured/)
-    assert.match(summary, /2.*omitted/)
+    const summary = renderAdaptiveSummary({ schemaVersion: 5, selection: { requested: 3, returned: 1, targetMet: false, incomplete: true, stopReason: 'judgement_unavailable' }, pageResults: 1, results: [{ url: 'https://a.example/' }], totalResults: 1, stopReason: 'judgement_unavailable', warnings: ['1 declared candidate had no usable judgement'] })
+    assert.doesNotMatch(summary, /sufficient|target met|verified/)
+    assert.match(summary, /incomplete screening/)
+    assert.match(summary, /1 declared candidate had no usable judgement/)
   })
   await test('focus merges overlapping paragraph windows without duplicated evidence', () => {
     const text = 'Context\n\nneedle first\n\nneedle second\n\nTail'

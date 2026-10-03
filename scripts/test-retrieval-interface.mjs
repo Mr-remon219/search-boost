@@ -1,50 +1,113 @@
-// Public v3 pagination/schema regression: no network or Jev calls.
+#!/usr/bin/env node
+import './isolate-tests.mjs'
+// Successor of the retired adaptive-interface suite: the ONE shared input/output
+// contract every host translates. Strict objects refuse retired fields, the
+// response is the exact-one union of a schema-v5 run and a read-only historical
+// restore, and the private v2 write path validates the same v5 definition.
 import assert from 'node:assert/strict'
-import { z } from 'zod'
-import { approvedResults, createResultPages, validatePageInput } from '../lib/search/adaptive/pages.js'
-import { adaptiveSearchInput, adaptiveSearchOutput } from '../adapters/mcp/schemas.mjs'
-import { renderAdaptiveSummary } from '../lib/search/adaptive/describe.js'
-import { runAdaptiveSearch } from '../lib/runtime.mjs'
+import * as z from 'zod'
+import Ajv from 'ajv'
+import { ADAPTIVE_INPUT_SCHEMA, CONSTRAINTS_MIGRATION_MESSAGE, normalizeAdaptiveInput } from '../lib/search/screening/input.js'
+import { ADAPTIVE_OUTPUT_SCHEMA, ADAPTIVE_V5_METADATA_SCHEMA, ADAPTIVE_V5_OUTPUT_SCHEMA } from '../lib/search/screening/schema.js'
+import { LEGACY_HISTORICAL_OUTPUT_SCHEMA } from '../lib/search/screening/legacy-snapshot.js'
+import { jsonSchemaToZod, projectObjectUnion } from '../lib/search/screening/zod-schema.js'
+import { adaptiveSearchInput, adaptiveSearchOutput, validateAdaptiveSearchOutput } from '../adapters/mcp/schemas.mjs'
+import { toDshSchema } from '../adapters/dsh/schema.js'
+import { makeHarness } from './screening-run-fixture.mjs'
+import { runAdaptiveScreening } from '../lib/search/screening/run.js'
 
-const source = (url, valueScore, extra = {}) => ({ url, title: 'Pointer', reviewedText: 'Open this migration guide for the compatibility details.', status: 'useful_result', assessed: true, valueScore, kind: 'lead', judgment: { relevance: .95, reading_value: .9, direction_match: 0 }, ...extra })
-const rows = approvedResults([source('https://example.com/a', .72), source('https://example.com/b', .9), source('https://example.com/a', .8), source('https://example.com/c', 1, { assessed: false }), source('https://example.com/d', 1, { status: 'off_topic' })])
-assert.equal(rows.length, 2)
-assert.equal(rows[0].url, 'https://example.com/b')
-assert.equal(rows[1].valueScore, .8)
-assert.equal(rows[1].directionMatch, 0, 'known mismatch is not replaced by null')
-assert.equal(rows[1].kind, 'lead', 'pointers need no answer fact')
-const shared = approvedResults([
-  source('https://example.com/shared', .8, {taskId:'t1',targetId:'a',canonicalId:'q1'}),
-  source('https://example.com/shared', .9, {taskId:'t1',targetId:'b',canonicalId:'q2',judgment:{direction_match:1},kind:'counterevidence'}),
-])
-assert.equal(shared.length, 1)
-assert.equal(shared[0].matches.length, 2)
-assert.equal(shared[0].directionMatch, 1)
-assert.equal(shared[0].matches.find(x => x.targetId === 'a').directionMatch, 0)
-assert.equal(shared[0].matches.find(x => x.targetId === 'b').kind, 'counterevidence')
-const metadata = { schemaVersion: 3, retrievalSufficient: true, coverageComplete: false, stopReason: 'keyword_queue_empty', warnings: [], pendingAssessments: 4, keywordProgress: [{ targetId: 'q1', taskId: null, canonicalId: 'q1', keyword: 'migration', status: 'satisfied', reason: 'keyword_satisfied', score: .9, distinctEvidence: 1, finalStatus: 'satisfied', A:.8, F:.8, R:0 }] }
-const pages = createResultPages()
-const first = pages.save(rows, metadata, 1)
-const second = pages.read(first.nextCursor, 1)
-for (const page of [first, second]) {
-  assert.equal(page.retrievalSufficient, true)
-  assert.equal(page.coverageComplete, false)
-  assert.equal(page.schemaVersion, 3)
-  assert.equal(page.pendingAssessments, 4)
-  assert.deepEqual(z.object(adaptiveSearchOutput).strict().parse(page), page, 'MCP schema must not strip public fields')
-  assert.match(renderAdaptiveSummary(page), /answer completeness not assessed/)
-}
-assert.equal(second.nextCursor, null)
-for (const key of ['intent', 'keywords', 'tasks', 'questions']) assert.throws(() => validatePageInput({ cursor: first.nextCursor, [key]: [] }), /cannot be combined/)
-for (const input of [{ questions: ['migration?'], keywords:['upgrade'], intent:'Find primary guides and counterexamples.' }, { questions:['a?', 'b?'], keywords:[['a'], ['b']] }, { tasks:[{ context:'Product', targets:[{ id:'a', keywords:['a'], question:'Where?', intent:'A credible pointer is useful.' }] }] }]) {
-  validatePageInput(input)
-  assert.deepEqual(z.object(adaptiveSearchInput).strict().parse(input), input)
-}
-// Invalid input is checked before credentials/network even in the runtime path.
-const invalid = await runAdaptiveSearch({ questions:['a?', 'b?'], keywords:['ambiguous'] })
-assert.equal(invalid.stopReason, 'invalid_input')
-assert.equal(invalid.retrievalSufficient, false)
-assert.equal(invalid.coverageComplete, false)
-assert.equal(invalid.schemaVersion, 3)
-assert.deepEqual(z.object(adaptiveSearchOutput).strict().parse(invalid), invalid)
-console.log('Retrieval interface checks passed: pagination, scores, schemas, cursor isolation, runtime validation (offline).')
+let tests = 0
+const test = async (name, fn) => { await fn(); tests++; console.log(`ok: ${name}`) }
+
+await test('the shared input contract is one strict object with no schema default for community', () => {
+  assert.equal(ADAPTIVE_INPUT_SCHEMA.additionalProperties, false)
+  assert.deepEqual(Object.keys(ADAPTIVE_INPUT_SCHEMA.properties).sort(), [
+    'community', 'constraints', 'cursor', 'intent', 'max_results', 'page_size', 'preferences', 'questions', 'save_results', 'saved_result_id',
+  ])
+  assert.equal('keywords' in ADAPTIVE_INPUT_SCHEMA.properties, false)
+  assert.equal(ADAPTIVE_INPUT_SCHEMA.properties.community.default, undefined)
+  assert.equal(ADAPTIVE_INPUT_SCHEMA.properties.save_results.default, undefined)
+  assert.equal(ADAPTIVE_INPUT_SCHEMA.properties.intent.maxLength, 2000)
+  assert.equal(ADAPTIVE_INPUT_SCHEMA.properties.preferences.maxItems, 8)
+  assert.equal(ADAPTIVE_INPUT_SCHEMA.properties.max_results.maximum, 50)
+  assert.match(CONSTRAINTS_MIGRATION_MESSAGE, /adaptive_search 已移除逐材料 constraints 硬准入/)
+})
+
+await test('MCP translates the shared contracts instead of re-declaring them', () => {
+  const input = z.object(adaptiveSearchInput.shape).strict()
+  assert.equal(input.safeParse({ questions: ['Q?'], intent: 'I', preferences: ['P'], community: false }).success, true)
+  for (const bad of [{ keywords: [] }, { tasks: [] }, { questions: ['a', 'b'] }, { questions: ['Q?'], intent: 'I', page_size: 51 }, { questions: ['Q?'], intent: 'I', community: 'auto' }]) {
+    assert.equal(input.safeParse(bad).success, false, JSON.stringify(bad))
+  }
+  assert.equal(input.safeParse({ cursor: 's5:x.0' }).success, true)
+  assert.equal(adaptiveSearchOutput.safeParse({ schemaVersion: 5, results: [], stopReason: 'target_met' }).success, false, 'a v5 run must satisfy its required fields')
+  const projected = projectObjectUnion(ADAPTIVE_OUTPUT_SCHEMA)
+  assert.equal(projected.additionalProperties, false)
+  assert.deepEqual(Object.keys(projected.properties).sort(), [
+    ...Object.keys(ADAPTIVE_V5_OUTPUT_SCHEMA.properties),
+    ...Object.keys(LEGACY_HISTORICAL_OUTPUT_SCHEMA.properties).filter((key) => !(key in ADAPTIVE_V5_OUTPUT_SCHEMA.properties)),
+  ].sort())
+})
+
+await test('the DSH translation accepts the union, the v5 branch and the v5 metadata shape', () => {
+  const union = toDshSchema(ADAPTIVE_OUTPUT_SCHEMA)
+  assert.equal(union.oneOf.length, 2)
+  const v5 = toDshSchema(ADAPTIVE_V5_OUTPUT_SCHEMA)
+  assert.equal(v5.type, 'object')
+  const metadata = toDshSchema(ADAPTIVE_V5_METADATA_SCHEMA)
+  assert.equal(metadata.type, 'object')
+  assert.equal('results' in metadata.properties, false)
+  assert.equal('nextCursor' in metadata.properties, false)
+})
+
+await test('both branches validate as a real union, and neither can fake the other', async () => {
+  const validate = new Ajv({ strict: true, allowUnionTypes: true }).compile(ADAPTIVE_OUTPUT_SCHEMA)
+  const { deps } = makeHarness()
+  const run = await runAdaptiveScreening({ questions: ['Q?'], intent: 'I', community: false }, {}, deps)
+  assert.equal(validate(run), true, JSON.stringify(validate.errors))
+  assert.equal(validateAdaptiveSearchOutput(run), run)
+  for (const key of ['schemaVersion', 'selection', 'run']) {
+    const incomplete = { ...run }; delete incomplete[key]
+    assert.throws(() => validateAdaptiveSearchOutput(incomplete), /^TypeError: adaptive_search: invalid response contract$/)
+  }
+  assert.equal(validate({ ...run, restoration: { historical: true, originalFormat: 'search-boost-research-v1', originalSchemaVersion: 3 } }), false, 'a v5 run cannot also claim to be historical')
+  const historical = {
+    results: [{ url: 'https://legacy.example/a', title: 'Legacy', description: 'stored' }],
+    totalResults: 1, pageResults: 1, nextCursor: null, expiresAt: new Date().toISOString(),
+    stopReason: 'keyword_queue_empty', warnings: [], coverageComplete: false,
+    inputSummary: { question: 'Legacy question', intent: 'legacy intent', keywords: ['k'], constraints: [], constraintPolicy: 'explicit_per_material' },
+    restoration: { historical: true, originalFormat: 'search-boost-research-v1', originalSchemaVersion: 3 },
+  }
+  assert.equal(validate(historical), true, JSON.stringify(validate.errors))
+  assert.equal(validateAdaptiveSearchOutput(historical), historical)
+  assert.throws(() => validateAdaptiveSearchOutput({ ...run, restoration: historical.restoration }), /invalid response contract/)
+  assert.throws(() => validateAdaptiveSearchOutput({ ...historical, selection: run.selection }), /invalid response contract/)
+  const invalidHistory = { ...historical }; delete invalidHistory.restoration
+  assert.throws(() => validateAdaptiveSearchOutput(invalidHistory), /invalid response contract/)
+  assert.equal(validate({ ...historical, selection: { requested: 1, returned: 1, targetMet: true, stopReason: 'target_met', incomplete: false } }), false, 'the historical branch must not carry v5 execution fields')
+  assert.equal(validate({ ...historical, unknownField: 1 }), false)
+  assert.equal(validate({}), false, 'the union is not an arbitrary object')
+})
+
+await test('nullability, enums and nested maps survive the host translation', () => {
+  const zod = z.object(adaptiveSearchOutput.shape).strict()
+  const { deps } = makeHarness()
+  return runAdaptiveScreening({ questions: ['Q?'], intent: 'I', community: false }, {}, deps).then((run) => {
+    assert.equal(zod.safeParse(run).success, true)
+    assert.equal(zod.safeParse({ ...run, nextCursor: 42 }).success, false)
+    assert.equal(zod.safeParse({ ...run, selection: { ...run.selection, returned: -1 } }).success, false)
+    assert.equal(zod.safeParse({ ...run, run: { ...run.run, community: { ...run.run.community, outcome: 'maybe' } } }).success, false)
+    assert.equal(zod.safeParse({ ...run, usage: { ...run.usage, fusedCalls: 'one' } }).success, false)
+    const translated = jsonSchemaToZod(ADAPTIVE_V5_METADATA_SCHEMA)
+    assert.equal(translated.safeParse({ ...run, results: undefined, nextCursor: undefined }).success, false, 'page fields are not part of the stored metadata contract')
+  })
+})
+
+await test('read-only inputs stay distinguishable and migration errors are explicit', () => {
+  assert.throws(() => normalizeAdaptiveInput({ questions: ['Q?'], intent: 'I', constraints: ['Only official sources'] }), /adaptive_constraints_removed/)
+  assert.throws(() => normalizeAdaptiveInput({ questions: ['Q?'], intent: 'I', keywords: ['k'] }), /Unsupported adaptive input field: keywords/)
+  assert.throws(() => normalizeAdaptiveInput({ cursor: 's5:a.0', saved_result_id: '11111111-1111-4111-8111-111111111111' }), /cannot be combined/)
+  assert.equal(normalizeAdaptiveInput({ questions: ['Q?'], intent: 'I', constraints: [] }).mode, 'new')
+  assert.equal(normalizeAdaptiveInput({ saved_result_id: '11111111-1111-4111-8111-111111111111', page_size: 3 }).mode, 'saved')
+})
+console.log(`screening interface contract: ${tests} groups passed (shared input/output union, MCP + DSH translation)`)

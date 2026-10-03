@@ -1,0 +1,386 @@
+{
+  "baseline": "0a0ce082c3c287e56a72400a599736b242c829e9",
+  "note": "Captured from the pre-change worktree at the N_off base SHA above; ordinary fused community on/off replays. Never regenerate from the implementation under test. Two community=true cases (balanced/free and research/hybrid) carry a declared beta.6 public-output-contract migration (BUG-003): each records its original digest plus the exact public-field removals/normalizations, and every other case, every selected summary and the baseline SHA remain the original capture. The migrated digests were independently reproduced from an archive of the immutable 0a0ce08 tree by applying only the declared projection to ranked X rows, without executing the beta.6 implementation.",
+  "cases": [
+    {
+      "args": {
+        "query": "Node fetch cancellation OR abort",
+        "ranking": "balanced",
+        "enginePool": "free",
+        "complexity": "medium",
+        "maxResults": 6,
+        "community": false
+      },
+      "digest": "49b5c8f379caa90977cb919a6d130f5a8a3b810c5d937431d516bba1522e4d5b",
+      "communityUsed": false,
+      "selected": [
+        {
+          "url": "https://reference.example/common/0",
+          "score": 1.314965521335742,
+          "selectionScore": 1.314965521335742,
+          "engines": [
+            "bing",
+            "ddg"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/common/3",
+          "score": 1.0158325231901957,
+          "selectionScore": 0.9574991898568623,
+          "engines": [
+            "bing",
+            "ddg"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/ddg/1",
+          "score": 0.9808701859225035,
+          "selectionScore": 0.9256070280277667,
+          "engines": [
+            "ddg"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/bing/1",
+          "score": 0.9572312859948126,
+          "selectionScore": 0.8634812859948126,
+          "engines": [
+            "bing"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/ddg/2",
+          "score": 0.899131003762295,
+          "selectionScore": 0.8407976704289617,
+          "engines": [
+            "ddg"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/bing/2",
+          "score": 0.8774620121619116,
+          "selectionScore": 0.7874620121619116,
+          "engines": [
+            "bing"
+          ],
+          "username": null
+        }
+      ]
+    },
+    {
+      "args": {
+        "query": "Node fetch cancellation OR abort",
+        "ranking": "balanced",
+        "enginePool": "free",
+        "complexity": "medium",
+        "maxResults": 6,
+        "community": true
+      },
+      "digest": "7eaac67a26df759bd4e47879a1362ee6b2b14542c502aaac7d4727c99868be09",
+      "digestProvenance": {
+        "original": "554ff49a7c435eb82e9397c0a703c0a4f1d34cf8061de16173027bb91f6b7371",
+        "migration": "beta.6 public output contract (BUG-003): internal scoring terms and provider-only dates no longer leave the core",
+        "removedRowFields": ["created_at", "bestIndividual", "groupEvidence", "votingEngines"],
+        "normalization": "community rows now serialize in the shared public field order",
+        "unchanged": "scores, selectionScore, selected summaries, provenance observations and final order"
+      },
+      "communityUsed": true,
+      "selected": [
+        {
+          "url": "https://reference.example/common/0",
+          "score": 1.314965521335742,
+          "selectionScore": 1.314965521335742,
+          "engines": [
+            "bing",
+            "ddg"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://x.com/carol/status/2010683173893046276",
+          "score": 1.06,
+          "selectionScore": 1.0521052631578949,
+          "engines": [
+            "x-fallback"
+          ],
+          "username": "carol"
+        },
+        {
+          "url": "https://reference.example/common/3",
+          "score": 1.0158325231901957,
+          "selectionScore": 0.9574991898568623,
+          "engines": [
+            "bing",
+            "ddg"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://x.com/alice/status/2011770337489846273",
+          "score": 1.06,
+          "selectionScore": 0.9433333333333334,
+          "engines": [
+            "x-official"
+          ],
+          "username": "alice"
+        },
+        {
+          "url": "https://reference.example/ddg/1",
+          "score": 0.9808701859225035,
+          "selectionScore": 0.9256070280277667,
+          "engines": [
+            "ddg"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/bing/1",
+          "score": 0.9572312859948126,
+          "selectionScore": 0.8634812859948126,
+          "engines": [
+            "bing"
+          ],
+          "username": null
+        }
+      ]
+    },
+    {
+      "args": {
+        "query": "Node fetch cancellation OR abort",
+        "ranking": "research",
+        "enginePool": "hybrid",
+        "complexity": "medium",
+        "maxResults": 6,
+        "community": false
+      },
+      "digest": "0d30563a4d2fc39398a79eb6220ea9de9ec03246f06e3a2b0a151f6385f9c7a4",
+      "communityUsed": false,
+      "selected": [
+        {
+          "url": "https://reference.example/common/0",
+          "score": 2.1037203570165635,
+          "selectionScore": 2.1037203570165635,
+          "engines": [
+            "bing",
+            "ddg",
+            "exa"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/common/3",
+          "score": 1.6678025330650639,
+          "selectionScore": 1.6094691997317305,
+          "engines": [
+            "bing",
+            "ddg",
+            "exa"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/common/6",
+          "score": 1.3845598507069075,
+          "selectionScore": 1.3227951448245545,
+          "engines": [
+            "bing",
+            "ddg",
+            "exa"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/exa/1",
+          "score": 1.1456337201776514,
+          "selectionScore": 1.0903705622829145,
+          "engines": [
+            "exa"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/exa/2",
+          "score": 1.0501642434961804,
+          "selectionScore": 0.9918309101628471,
+          "engines": [
+            "exa"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/exa/4",
+          "score": 0.9001407801395831,
+          "selectionScore": 0.8383760742572302,
+          "engines": [
+            "exa"
+          ],
+          "username": null
+        }
+      ]
+    },
+    {
+      "args": {
+        "query": "Node fetch cancellation OR abort",
+        "ranking": "research",
+        "enginePool": "hybrid",
+        "complexity": "medium",
+        "maxResults": 6,
+        "community": true
+      },
+      "digest": "ef30ce99271c781976fb7816f8e714b8a128adcf5b7c789bb351e9214ed5a390",
+      "digestProvenance": {
+        "original": "64bd635a77d2542713a84c540bb2f84daadff19b3d4552c3fc921b716f34684f",
+        "migration": "beta.6 public output contract (BUG-003): internal scoring terms and provider-only dates no longer leave the core",
+        "removedRowFields": ["created_at", "bestIndividual", "groupEvidence", "votingEngines"],
+        "normalization": "community rows now serialize in the shared public field order",
+        "unchanged": "scores, selectionScore, selected summaries, provenance observations and final order"
+      },
+      "communityUsed": true,
+      "selected": [
+        {
+          "url": "https://reference.example/common/0",
+          "score": 2.1037203570165635,
+          "selectionScore": 2.1037203570165635,
+          "engines": [
+            "bing",
+            "ddg",
+            "exa"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/common/3",
+          "score": 1.6678025330650639,
+          "selectionScore": 1.6094691997317305,
+          "engines": [
+            "bing",
+            "ddg",
+            "exa"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/common/6",
+          "score": 1.3845598507069075,
+          "selectionScore": 1.3227951448245545,
+          "engines": [
+            "bing",
+            "ddg",
+            "exa"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/exa/1",
+          "score": 1.1456337201776514,
+          "selectionScore": 1.0903705622829145,
+          "engines": [
+            "exa"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://x.com/carol/status/2010683173893046276",
+          "score": 1.06,
+          "selectionScore": 1.0521052631578949,
+          "engines": [
+            "x-fallback"
+          ],
+          "username": "carol"
+        },
+        {
+          "url": "https://reference.example/exa/2",
+          "score": 1.0501642434961804,
+          "selectionScore": 0.9918309101628471,
+          "engines": [
+            "exa"
+          ],
+          "username": null
+        }
+      ]
+    },
+    {
+      "args": {
+        "query": "Node fetch cancellation OR abort",
+        "ranking": "balanced",
+        "enginePool": "hybrid",
+        "complexity": "medium",
+        "maxResults": 6,
+        "community": true,
+        "excludeDomains": [
+          "x.com",
+          "twitter.com"
+        ]
+      },
+      "digest": "096c3cebbe00e5aa9439b424d4a700e52be6a8f2d8d15429e8a002a09c7916e2",
+      "communityUsed": false,
+      "selected": [
+        {
+          "url": "https://reference.example/common/0",
+          "score": 2.0307998836078833,
+          "selectionScore": 2.0307998836078833,
+          "engines": [
+            "bing",
+            "ddg",
+            "exa"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/common/3",
+          "score": 1.6154339302815468,
+          "selectionScore": 1.5571005969482135,
+          "engines": [
+            "bing",
+            "ddg",
+            "exa"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/common/6",
+          "score": 1.344384620724649,
+          "selectionScore": 1.282619914842296,
+          "engines": [
+            "bing",
+            "ddg",
+            "exa"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/exa/1",
+          "score": 1.0485943361780756,
+          "selectionScore": 0.9933311782833388,
+          "engines": [
+            "exa"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/exa/2",
+          "score": 0.9612114748299028,
+          "selectionScore": 0.9028781414965694,
+          "engines": [
+            "exa"
+          ],
+          "username": null
+        },
+        {
+          "url": "https://reference.example/ddg/1",
+          "score": 0.9808701859225035,
+          "selectionScore": 0.8871201859225035,
+          "engines": [
+            "ddg"
+          ],
+          "username": null
+        }
+      ]
+    }
+  ]
+}

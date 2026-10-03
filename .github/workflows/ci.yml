@@ -2,170 +2,123 @@ name: CI
 
 on:
   push:
-    # Validate feature branches before opening a PR, not only after submission.
-    branches: [master, main, v0.2.0, v0.2.1, v0.2.2, 'Mr-remon219/**', jev]
+    # Keep pre-PR feature-branch validation. PR merge refs are a distinct input.
+    branches: [master, main, 'Mr-remon219/**', jev]
   pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Never let an untrusted PR head name cancel a protected-branch push.
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   test:
-    name: test (${{ matrix.os }})
+    # Preserve the three existing required-check names.
+    name: test (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 45
     strategy:
-      # One platform failing must not hide the other platform's result.
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            node: '22.13.0'
+            label: ubuntu-latest
+            primary: true
+          - os: windows-latest
+            node: '22'
+            label: windows-latest
+            primary: false
+          - os: macos-latest
+            node: '22'
+            label: macos-latest
+            primary: false
+          - os: ubuntu-latest
+            node: '24'
+            label: ubuntu-latest, Node 24
+            primary: false
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          node-version: '22'
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node }}
           cache: npm
 
-      # Independent TOML parsing for Codex config/print regression assertions.
-      - uses: actions/setup-python@v5
+      # Independent TOML parser for Codex config/print assertions.
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
 
-      - run: npm ci
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - run: npm run plugin:sync-grok
+      - name: Syntax and CI policy (once, on the declared Node floor)
+        if: matrix.primary
+        run: |
+          npm run check
+          npm run check:ci
 
-      # Every step below is `if: always()` on purpose: when a suite fails the
-      # remaining suites still run, so one CI run reports every failure on that
-      # platform instead of only the first. The job still fails if any step did.
-      - name: Syntax check
-        if: always()
-        run: npm run check
+      - name: Validate all GitHub workflows with actionlint
+        if: matrix.primary
+        run: |
+          mkdir -p "$RUNNER_TEMP/actionlint"
+          curl --fail --location --proto '=https' --tlsv1.2 --retry 2 \
+            --output "$RUNNER_TEMP/actionlint/actionlint.tar.gz" \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          printf '%s  %s\n' '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8' \
+            "$RUNNER_TEMP/actionlint/actionlint.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/actionlint/actionlint.tar.gz" -C "$RUNNER_TEMP/actionlint" actionlint
+          "$RUNNER_TEMP/actionlint/actionlint" -color -shellcheck='' -pyflakes=''
 
-      - name: CLI surface
-        if: always()
-        run: npm run test:cli
+      - name: Audit the exact dependency lock (once, no credential inheritance)
+        if: matrix.primary
+        run: |
+          mkdir -p "$RUNNER_TEMP/ci-logs"
+          npm run audit:dependencies 2>&1 | tee "$RUNNER_TEMP/ci-logs/dependencies.log"
 
-      - name: Doctor CLI smoke
-        if: always()
-        run: node scripts/ci-doctor-smoke.mjs
+      # The runner aggregates failures and continues through every entry. Do not
+      # precede this with the same named suites; do not regenerate source assets.
+      - name: All regressions under a poisoned caller environment
+        id: regressions
+        run: |
+          mkdir -p "$RUNNER_TEMP/ci-logs"
+          npm run test:isolation 2>&1 | tee "$RUNNER_TEMP/ci-logs/isolation.log"
 
-      - name: Install, hooks and skill bundles
-        if: always()
-        run: npm run test:install
+      - name: Upload failure diagnostics
+        if: failure() && !cancelled()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ci-logs-${{ matrix.os }}-node-${{ matrix.node }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-logs/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
-      - name: Doctor
-        if: always()
-        run: npm run test:doctor
-
-      - name: Fusion errors
-        if: always()
-        run: npm run test:fusion
-
-      - name: X pipeline
-        if: always()
-        run: npm run test:x
-
-      - name: Engine requests
-        if: always()
-        run: npm run test:engines
-
-      - name: X auth
-        if: always()
-        run: npm run test:xauth
-
-      - name: Jev credentials (config round-trips)
-        if: always()
-        run: npm run test:jev
-
-      - name: Config authority (engines, store, credentials)
-        if: always()
-        run: npm run test:keys-authority
-
-      - name: Dry-run contract
-        if: always()
-        run: npm run test:dry-run
-
-      - name: Network policy (DNS, pinning, proxy)
-        if: always()
-        run: npm run test:network
-
-      - name: Jev client (System One transport)
-        if: always()
-        run: npm run test:jev-client
-
-      - name: Adaptive search (Jev loop)
-        if: always()
-        run: npm run test:adaptive
-
-      - name: Intent-guided retrieval (default controller, scoring and interfaces)
-        if: always()
-        run: npm run test:retrieval
-
-      - name: Frozen keyword controller regressions
-        if: always()
-        run: npm run test:keywords
-
-      - name: Frozen fact-score regressions
-        if: always()
-        run: npm run test:facts
-
-      - name: Adaptive funnel regressions
-        if: always()
-        run: npm run test:funnel
-
-      - name: Bounded recursion regressions
-        if: always()
-        run: node scripts/test-recursion.mjs
-
-      - name: Search routing
-        if: always()
-        run: npm run test:search
-
-      - name: Adapters
-        if: always()
-        run: npm run test:adapters
-
-      - name: DSH npm global and npx packed artifact
-        if: always()
-        run: npm run test:dsh-package
-
-      - name: Parallel research
-        if: always()
-        run: npm run test:parallel
-
-      - name: Upgrade and migration
-        if: always()
-        run: npm run test:upgrade
-
-      - name: MCP guidance
-        if: always()
-        run: npm run test:mcp
-
-      - name: MCP smoke
-        if: always()
-        run: npm run smoke
-
-      - name: v0.2.1 release repairs
-        if: always()
-        run: npm run test:v021
-
-      # Reproduce the tested Linux tree offline, without checkout credentials,
-      # HOME configuration, environment variables, or Git metadata.
+      # Snapshot only a provisioned, tested primary tree; no HOME, npmrc, env or
+      # Git checkout credentials. This is evidence, never a release artifact.
       - name: Prepare offline audit snapshot
-        if: always() && runner.os == 'Linux'
+        if: always() && !cancelled() && matrix.primary && steps.regressions.outcome != 'skipped'
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/search-boost-audit"
           git archive HEAD | tar -x -C "$RUNNER_TEMP/search-boost-audit"
-          if [ -d node_modules ]; then cp -a node_modules "$RUNNER_TEMP/search-boost-audit/"; fi
+          cp -a node_modules "$RUNNER_TEMP/search-boost-audit/"
           tar -czf "$RUNNER_TEMP/search-boost-audit.tar.gz" -C "$RUNNER_TEMP/search-boost-audit" .
 
       - name: Upload offline audit snapshot
-        if: always() && runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        if: always() && !cancelled() && matrix.primary && steps.regressions.outcome != 'skipped'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: search-boost-audit-${{ github.sha }}
           path: ${{ runner.temp }}/search-boost-audit.tar.gz

@@ -1,5 +1,5 @@
 import { guardedTool, watchToolStates } from '../../lib/tool-config.mjs'
-import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/adaptive/input.js'
+import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/screening/input.js'
 import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
 // pi host adapter — pi coding agent extension.
@@ -48,7 +48,7 @@ import {
   ADAPTIVE_PROMPT_GUIDELINES,
   ADAPTIVE_TOOL_NAME,
   adaptiveTextContent,
-} from '../../lib/search/adaptive/describe.js'
+} from '../../lib/search/screening/describe.js'
 
 const RECENCY_ENUM = ['day', 'week', 'month', 'year', 'any']
 
@@ -69,7 +69,9 @@ const text = (t) => ({ type: 'text', text: t })
 
 /** @param {import('@earendil-works/pi-coding-agent').ExtensionAPI} pi */
 export default function searchBoostExtension(pi) {
-  const registerTool = (definition) => pi.registerTool(guardedTool(definition))
+  // Adaptive validates structure before reading the public gate in its facade.
+  // Other tools keep the generic gate; no entry bypasses its enabled check.
+  const registerTool = (definition) => pi.registerTool(definition.name === ADAPTIVE_TOOL_NAME ? definition : guardedTool(definition))
   let stopWatching
   let removedBySwitch = new Set()
   const owned = ['fused_search', 'fetch_page', 'adaptive_search', 'search-parallel-subagent', 'x_search']
@@ -100,11 +102,10 @@ export default function searchBoostExtension(pi) {
   pi.on('before_agent_start', async (event) => {
     const base = event.systemPrompt
       .replace(/\n?<search_capabilities>[\s\S]*?<\/search_capabilities>/g, '')
-      .replace(/\n?\[search budget\][^\n]*/g, '')
+      .replace(/\n?\[(?:search usage|search budget)\][^\n]*/g, '')
     const policy = rules && !base.includes('<search_balance>') ? `\n${rules}` : ''
-    // budget state (not just a slogan): count today's searches so the model
-    // can calibrate effort — research tasks may spend more, simple lookups
-    // should not push the day's total into the hundreds
+    // Usage observation only, never a stop order: count today's direct searches
+    // so the model can calibrate effort and reuse evidence it already has.
     let todayCount = 0
     try {
       const today = new Date().toISOString().slice(0, 10)
@@ -114,10 +115,10 @@ export default function searchBoostExtension(pi) {
     } catch {
       /* audit must never break agent start */
     }
-    const budgetNote = todayCount > 0
-      ? `\n[search budget] Recent audit sample: ${todayCount} direct searches dated today (UTC), from at most 400 events; not an account quota or complete usage count. Reuse sufficient evidence and follow the task budget.`
+    const usageNote = todayCount > 0
+      ? `\n[search usage] ${todayCount} direct searches recorded today (UTC) in this audit sample (at most 400 events). This is an observation, not a quota or a reason to interrupt an in-flight screening pass; host cancellation and request limits still apply.`
       : ''
-    return { systemPrompt: `${base}${policy}${budgetNote}\n${formatRuntimeCapabilities()}` }
+    return { systemPrompt: `${base}${policy}${usageNote}\n${formatRuntimeCapabilities()}` }
   })
 
   const onProgress = (onUpdate) => (msg) => {
@@ -130,7 +131,7 @@ export default function searchBoostExtension(pi) {
     name: 'fused_search',
     label: 'Fused Web Search',
     description: FUSED_DESCRIPTION,
-    promptSnippet: 'Search the web across multiple engines in parallel with keyword variants',
+    promptSnippet: 'General-purpose multi-engine search for most public-web research; no Jev required',
     promptGuidelines: ['Use the evidence returned by this search before starting another round; inspect warnings rather than treating an empty result as proof of absence.'],
     parameters: {
       type: 'object',
@@ -237,6 +238,7 @@ export default function searchBoostExtension(pi) {
       properties: {
         url: { type: 'string', description: 'Absolute http(s) URL to fetch' },
         focus: { type: 'string', description: 'Optional focus terms: when provided, only paragraphs relevant to these terms are returned. Pass the research question or the specific thing you need from the page. Omit to keep the full preprocessed body.' },
+        offset: { type: 'integer', minimum: 0, description: 'Character offset into the page body (default 0). Use nextOffset from a previous call to continue a long page; the read is served from cache.' },
       },
       required: ['url'],
     },
@@ -246,7 +248,7 @@ export default function searchBoostExtension(pi) {
       progress(`fetch_page: ${params.url}`)
       let page
       try {
-        page = await runFetchPage(params.url, params.focus, signal)
+        page = await runFetchPage(params.url, params.focus, signal, { offset: params.offset })
       } catch (err) {
         audit.write({
           type: 'fetch',
@@ -276,15 +278,16 @@ export default function searchBoostExtension(pi) {
       return {
         content: [text([
           `URL: ${page.url}`,
-          `via: ${page.via} — fetched: ${page.fetched_at} — words: ${page.word_count}${page.truncated ? ' — [truncated]' : ''}`,
+          `via: ${page.via} — fetched: ${page.fetched_at ?? 'unknown (legacy cache)'} — words: ${page.word_count}${page.truncated ? ' — [truncated]' : ''}`,
           params.focus ? (page.focusMiss
             ? '[dynamic filtering: focus matched nothing — retry without focus to read the whole page]'
             : `[dynamic filtering: kept ${page.word_count} words relevant to focus]`) : '',
+          page.windowNote ? `[${page.windowNote}]` : '',
           page.limitation ? `WARNING: ${page.limitation.kind}: ${page.limitation.message}` : '',
           '',
           page.content,
         ].filter((l, i) => l !== '' || i === 3).join('\n'))],
-        details: { via: page.via, fetchedAt: page.fetched_at, wordCount: page.word_count, focusMiss: Boolean(page.focusMiss), ...(page.limitation ? { limitation: page.limitation } : {}) },
+        details: { via: page.via, fetchedAt: page.fetched_at, wordCount: page.word_count, totalChars: page.totalChars, offset: page.offset, nextOffset: page.nextOffset ?? null, focusMiss: Boolean(page.focusMiss), ...(page.limitation ? { limitation: page.limitation } : {}) },
       }
     },
   })
@@ -295,14 +298,14 @@ export default function searchBoostExtension(pi) {
     name: ADAPTIVE_TOOL_NAME,
     label: 'Adaptive Search (Jev)',
     description: ADAPTIVE_DESCRIPTION,
-    promptSnippet: 'Search keyword-guided targets with Jev; page through approved URLs and descriptions',
+    promptSnippet: 'Higher-quality intent-guided evidence selection for medium-to-high difficulty or uncertain questions; requires enabled, configured Jev',
     promptGuidelines: ADAPTIVE_PROMPT_GUIDELINES,
     parameters: ADAPTIVE_INPUT_SCHEMA,
     async execute(_toolCallId, params, signal, onUpdate) {
       const progress = onProgress(onUpdate)
       const started = Date.now()
-      const questions = Array.isArray(params?.questions) ? params.questions : []
-      progress(params.cursor ? 'adaptive_search: reading result page…' : 'adaptive_search: planning target searches…')
+      const reading = Boolean(params?.cursor || params?.saved_result_id)
+      progress(reading ? 'adaptive_search: reading saved results…' : 'adaptive_search: selecting the fixed ranking and community strategy…')
       const res = await runAdaptiveSearch(params, {
         signal,
         host: 'pi',
@@ -314,17 +317,18 @@ export default function searchBoostExtension(pi) {
       audit.write({
         type: 'research',
         ts: new Date().toISOString(),
-        query: `[${questions.length} adaptive question(s); text omitted]`,
+        query: '[adaptive_search question; text omitted]',
         mode: ADAPTIVE_TOOL_NAME,
-        rounds: res.rounds,
         stopReason: res.stopReason,
         sources: res.totalResults,
         domains: domains.size,
         schemaVersion: res.schemaVersion,
-        retrievalSufficient: res.retrievalSufficient,
-        coverageComplete: res.coverageComplete,
+        readOnly: reading,
+        historical: res.restoration?.historical === true,
+        community: res.run?.community?.outcome ?? null,
+        selected: res.selection?.returned ?? null,
+        incomplete: res.selection?.incomplete ?? null,
         tookMs: Date.now() - started,
-        subtasks: params.tasks?.reduce((n, task) => n + task.targets.length, 0) ?? questions.length,
         pageResults: res.results.length,
       })
       return {
@@ -339,7 +343,7 @@ export default function searchBoostExtension(pi) {
   registerTool({
     name: 'search-parallel-subagent',
     label: 'Search Parallel Subagent',
-    description: 'Run authorized isolated Pi searcher or summarizer children. Use {agent, task} for one child or {tasks:[{agent,task},...]} for a concurrent wave. Searchers have fused_search/fetch_page; summarizers have no tools. Returns each child report with completion/failure status. The caller chooses the wave size; this runner has no concurrency cap. Use direct search for ordinary lookups.',
+    description: 'Run authorized isolated Pi research children for independent evidence tasks or report synthesis. Searchers receive fused_search/fetch_page; summarizers have no tools. Returns per-child reports and execution status, not verified conclusions. This search-boost runner has no concurrency cap and is distinct from pi-subagents; the parent owns wave size and synthesis. Ordinary lookups use direct search.',
     promptSnippet: 'Run a bounded research task or a wave of authorized searcher/summarizer children',
     promptGuidelines: [
       'The /fast-parallel and /complex-parallel templates own the multi-wave workflow; do not infer permission to delegate from tool availability.',
@@ -348,8 +352,8 @@ export default function searchBoostExtension(pi) {
     parameters: {
       type: 'object',
       properties: {
-        agent: { type: 'string', enum: ['searcher', 'summarizer'], description: 'Single-mode agent' },
-        task: { type: 'string', description: 'Single-mode task for that agent' },
+        agent: { type: 'string', enum: ['searcher', 'summarizer'], description: 'Single child role; use with task, exclusive with tasks' },
+        task: { type: 'string', description: 'Bounded search task, or question plus reports/statuses for a summarizer' },
         tasks: {
           type: 'array',
           items: {
@@ -360,7 +364,7 @@ export default function searchBoostExtension(pi) {
             },
             required: ['agent', 'task'],
           },
-          description: 'Parallel wave — all items run concurrently; you choose how many',
+          description: 'One concurrent wave of explicit child roles/tasks, exclusive with agent/task; the caller chooses its size',
         },
       },
     },
@@ -565,7 +569,7 @@ export default function searchBoostExtension(pi) {
       properties: {
         type: { type: 'string', enum: X_MODES, description: 'Which X search mode: keyword (X advanced syntax), semantic (natural language), user (accounts), thread (conversation by post id)' },
         query: { type: 'string', description: 'Search query (keyword: X advanced syntax; semantic: natural language)' },
-        username: { type: 'string', description: 'Username/handle to search (type=user), or from: target for keyword' },
+        username: { type: 'string', description: 'Account handle for type=user; keyword from: filters belong in query' },
         post_id: { type: 'string', description: 'X post/status id or x.com/.../status/<id> URL (type=thread)' },
         max_results: { type: 'integer', minimum: 1, maximum: 10, default: 5, description: 'Max results' },
         from_date: { type: 'string', description: 'Inclusive start date, YYYY-MM-DD (UTC); in user mode filters recent posts' },
@@ -709,7 +713,7 @@ export default function searchBoostExtension(pi) {
   })
 
   pi.registerCommand('web_change', {
-    description: 'Switch the search layer: free (keyless bing/ddg/yahoo/exa-free) vs api (plus keyed tavily/brave/exa). Usage: /web_change [free|api|show]',
+    description: 'Inspect the compatibility layer with /web_change show. Authorized free/api changes persist future defaults (free→free pool, api→hybrid); use fused_search.engine_pool for one request.',
     handler: async (args, ctx) => {
       const cmd = (args ?? '').trim().toLowerCase()
       const current = getLayer()

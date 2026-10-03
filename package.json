@@ -1,7 +1,7 @@
 {
   "name": "search-boost",
-  "version": "0.2.3",
-  "description": "Multi-engine web search for coding agents \u2014 one SearchBoost core (fused search, fetch, X) with MCP (Cursor, Codex, Claude Code, Grok Build, Antigravity), pi extension, and DeepSeek Harness bundle adapters",
+  "version": "0.2.4",
+  "description": "Multi-engine web search for coding agents — one SearchBoost core (fused search, fetch, X) with MCP (Cursor, Codex, Claude Code, Grok Build, Antigravity), pi extension, and DeepSeek Harness bundle adapters",
   "type": "module",
   "bin": {
     "search-boost": "./cli.mjs"
@@ -46,39 +46,48 @@
     "start": "node cli.mjs serve",
     "install:agents": "node cli.mjs install",
     "smoke": "node scripts/smoke.mjs",
-    "test:install": "node scripts/test-dsh-install.mjs && node scripts/test-install.mjs && node scripts/test-startup-hooks.mjs && node scripts/test-skill-bundles.mjs",
+    "test:install": "node scripts/test-environment.mjs --install",
+    "test:isolation": "node scripts/test-environment.mjs",
     "test:skills": "node scripts/test-skill-bundles.mjs",
     "test:mcp": "node scripts/test-mcp-guidance.mjs",
     "test:parallel": "node scripts/test-parallel-research.mjs",
-    "test:upgrade": "node scripts/test-upgrade.mjs && node scripts/test-host-upgrade.mjs && node scripts/test-migration.mjs && node scripts/test-update-tui.mjs",
+    "test:refresh": "node scripts/test-dsh-upgrade.mjs && node scripts/test-upgrade.mjs && node scripts/test-host-upgrade.mjs && node scripts/test-migration.mjs && node scripts/test-manage-tui.mjs",
     "test:hooks": "node scripts/test-startup-hooks.mjs",
     "test:doctor": "node scripts/test-doctor.mjs",
     "test:adapters": "node scripts/test-adapters.mjs && node scripts/test-dsh-schema.mjs && node scripts/test-pi-subagent-config.mjs && node scripts/test-tool-switches.mjs",
-    "test:dsh-install": "node scripts/test-dsh-install.mjs",
+    "test:dsh-install": "node scripts/test-dsh-discovery.mjs && node scripts/test-dsh-install.mjs && node scripts/test-dsh-desktop.mjs && node scripts/test-dsh-desktop-local.mjs && node scripts/test-dsh-layer-regressions.mjs",
+    "test:dsh-desktop": "node scripts/test-dsh-discovery.mjs && node scripts/test-dsh-desktop.mjs && node scripts/test-dsh-desktop-local.mjs",
     "test:dsh-package": "node scripts/test-dsh-package.mjs",
     "plugin:sync-grok": "node scripts/sync-grok-plugin.mjs",
     "build:plugin": "node scripts/build-plugin.mjs",
     "check": "node scripts/check-syntax.mjs",
-    "test:fusion": "node scripts/test-fusion-errors.mjs && node scripts/test-fusion-scoring.mjs",
+    "test:fusion": "node scripts/test-fused-baseline.mjs && node scripts/test-noff-community-snapshot.mjs && node scripts/test-fusion-errors.mjs && node scripts/test-fusion-scoring.mjs",
     "test:x": "node scripts/test-x-pipeline.mjs",
     "test:engines": "node scripts/test-engine-requests.mjs && node scripts/test-engine-base-urls.mjs",
     "test:xauth": "node scripts/test-xauth.mjs",
     "test:jev": "node scripts/test-jev.mjs",
     "test:jev-client": "node scripts/test-jev-client.mjs",
-    "test:adaptive": "node scripts/test-adaptive-search.mjs",
-    "test:funnel": "node scripts/test-funnel.mjs",
-    "test:keywords": "node scripts/test-keywords.mjs",
+    "test:adaptive": "node scripts/test-adaptive-capacity.mjs && node scripts/test-adaptive-search.mjs && node scripts/test-screening-hosts.mjs",
     "jev:probe": "node scripts/jev-probe.mjs",
-    "eval:adaptive": "node scripts/eval-adaptive-search.mjs",
     "test:cli": "node scripts/test-cli-surface.mjs",
-    "prepublishOnly": "npm run plugin:sync-grok && npm run check && npm run test:cli && npm run test:install && npm run test:doctor && npm run test:fusion && npm run test:x && npm run test:engines && npm run test:xauth && npm run test:jev && npm run test:keys-authority && npm run test:dry-run && npm run test:network && npm run test:jev-client && npm run test:adaptive && npm run test:retrieval && npm run test:keywords && npm run test:facts && npm run test:funnel && node scripts/test-recursion.mjs && npm run test:search && npm run test:adapters && npm run test:parallel && npm run test:upgrade && npm run test:mcp && npm run smoke && npm run test:v021",
+    "test:tui": "node scripts/test-tui.mjs && node scripts/test-manage-tui.mjs",
+    "prepublishOnly": "npm run check && npm run check:ci && npm run audit:dependencies && npm run test:isolation",
     "test:search": "node scripts/test-search-routing.mjs",
     "test:keys-authority": "node scripts/test-keys-authority.mjs",
     "test:dry-run": "node scripts/test-dry-run.mjs",
-    "test:network": "node scripts/test-network-safety.mjs && node scripts/test-audit-regressions.mjs && node scripts/test-fetch-fallback.mjs",
+    "test:network": "node scripts/test-network-safety.mjs && node scripts/test-audit-regressions.mjs && node scripts/test-fetch-fallback.mjs && node scripts/test-fetch-pdf.mjs",
     "test:v021": "node scripts/test-v021.mjs && node scripts/test-review-regressions.mjs",
+    "test:screening": "node scripts/test-screening.mjs && node scripts/test-screening-core.mjs && node scripts/test-screening-frozen.mjs && node scripts/test-screening-ablation.mjs",
+    "test:persistence": "node scripts/test-research-persistence.mjs",
+    "test:status": "node scripts/test-installation-status.mjs",
+    "test:toml": "node scripts/test-toml-boundaries.mjs",
+    "test:clients": "node scripts/test-client-review-regressions.mjs && node scripts/test-release-review-clients.mjs",
+    "test:retrieval": "node scripts/test-retrieval-score.mjs && node scripts/test-retrieval.mjs && node scripts/test-retrieval-interface.mjs",
+    "test:keywords": "node scripts/test-keywords.mjs",
     "test:facts": "node scripts/test-fact-score.mjs",
-    "test:retrieval": "node scripts/test-retrieval-score.mjs && node scripts/test-retrieval.mjs && node scripts/test-retrieval-interface.mjs"
+    "test:funnel": "node scripts/test-funnel.mjs",
+    "check:ci": "node scripts/check-ci-policy.mjs",
+    "audit:dependencies": "node scripts/audit-dependencies.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "4.0.87",
@@ -88,6 +97,9 @@
     "ajv": "^8.20.0",
     "undici": "^6.28.1",
     "zod": "^3.25.76"
+  },
+  "optionalDependencies": {
+    "pdfjs-dist": "6.2.108"
   },
   "engines": {
     "node": ">=22.13"
@@ -121,6 +133,7 @@
   },
   "homepage": "https://github.com/Mr-remon219/search-boost#readme",
   "devDependencies": {
-    "@deepseek-ai/dsh-tools": "0.1.5-rc.3"
+    "@deepseek-ai/dsh-tools": "0.1.5-rc.3",
+    "yaml": "2.9.1"
   }
 }

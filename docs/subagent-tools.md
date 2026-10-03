@@ -29,7 +29,7 @@ only when that capability is wanted. Ordinary search uses `fused_search` and
 
 ### Migration and diagnosis
 
-`search-boost install -t pi` and `search-boost upgrade --sync-only` repair existing
+`search-boost install -t pi` and `search-boost refresh` repair existing
 owned child-extension references in:
 
 - `subagents.defaultExtensions` and `defaultSubagentOnlyExtensions`;
@@ -42,8 +42,8 @@ They do not add `adaptive_search`, expand allowlists, change model defaults,
 remove deny rules, or fill empty extension lists. Unrelated entries remain intact.
 The exact retired npm entry under that Pi scope is recognized even after the old
 package has been removed; arbitrary similarly named files are not claimed.
-Upgrade includes settings changes in its existing backup/rollback transaction.
-Upgrade discovery requires an existing top-level Pi package/extension, legacy
+Refresh includes settings changes in its existing backup/rollback transaction.
+Refresh discovery requires an existing top-level Pi package/extension, legacy
 extension directory, or owned shim. If only stale child references remain, use
 `search-boost install -t pi` when installation is wanted; otherwise remove those
 references manually. A role with only a retired tool name and no owned SearchBoost
@@ -97,5 +97,5 @@ The DSH contract was inspected at `ddefc45fbc7f8e46dd73185e68295696d1297887`:
 `test:parallel` tests real adapter registration with controlled host doubles:
 missing/disabled tools, scoped restrictions, child cleanup, and tool-free
 summarizers. `test:adapters` covers Pi settings migration/diagnosis, while
-`test:upgrade` verifies child references survive successive package relocations.
+`test:refresh` verifies child references survive successive package relocations.
 These hermetic tests are not DSH authenticated-host end-to-end tests.

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Cursor sessionStart hook — inject optional search-boost capability summary.
+ * Cursor sessionStart hook — deliver the authored standing verification policy.
+ * This hook neither discovers capabilities, searches nor grants permissions.
  * Reads search-boost-inject.md from the same directory as this script.
  */
 import { readFileSync } from 'node:fs'

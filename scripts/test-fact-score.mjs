@@ -1,137 +1,111 @@
 #!/usr/bin/env node
-// Algebra/provenance invariants, not model accuracy or live retrieval evidence.
+import './isolate-tests.mjs'
+// Successor of the retired caller-fact coverage suite. The product no longer
+// accepts caller facts/tasks/targets as completion gates; the surviving contract
+// is the fixed value rubric: only safe, code-assessed value 3/4/5 is delivered,
+// while unestablished levels, unavailable judgements and low value are disclosed
+// separately and never rewritten into each other.
 import assert from 'node:assert/strict'
-import { scoreEvidence, FACT_SCORE_WEIGHTS } from '../lib/search/adaptive/keyword-progress.js'
-import { factUnits } from '../lib/search/adaptive/facts.js'
-import { normalizeAdaptiveInput, canonicalTargets } from '../lib/search/adaptive/input.js'
-import { buildSourceJudgeRequest, factBundleRequest } from '../lib/search/adaptive/prompts.js'
-import { createHash } from 'node:crypto'
-const approx = (a,b) => assert.ok(Math.abs(a-b)<1e-10,`${a} != ${b}`)
-const text = n => Array.from({length:12},(_,i)=>createHash('sha256').update(`${n}/${i}`).digest('hex')).join(' ')
-const facts=[{id:'cancel',weight:.5},{id:'time',weight:.5}]
-const row=(id,factId='cancel',extra={})=>({evidenceId:id,text:text(id),url:`https://${id}.test/page`,judgment:{relevant:.94,states_evidence:.94,injection:.02},facts:[{factId,support:.94,stance:'support',independent:.95}],...extra})
-const one=rows=>scoreEvidence(rows,{facts:[{id:'cancel',weight:1}]})
-const both=rows=>scoreEvidence(rows,{facts})
-let passed=0
-function test(name,fn){try{fn();passed++;console.log('ok',name)}catch(e){process.exitCode=1;console.error('FAIL',name,e)}}
+import { admitAndRank } from '../lib/search/screening/controller.js'
+import { runAdaptiveScreening } from '../lib/search/screening/run.js'
+import { resultPages } from '../lib/search/screening/pages.js'
+import { VALUE_OPTIONS, PUBLISHABLE_VALUE_LEVELS, VALUE_LABELS } from '../lib/search/screening/policy.js'
+import { makeHarness, fixtureRows } from './screening-run-fixture.mjs'
 
-test('first complete evidence crosses one; base increment is max, not sum',()=>{
- const a=row('a'),b=row('b')
- const score=one([a]);assert.ok(score.ready);approx(score.A,.94);approx(score.F,.94);assert.equal(score.R,0)
- const two=one([a,b]);approx(two.A,score.A);approx(two.F,score.F);approx(two.R,.47)
+let tests = 0
+const test = async (name, fn) => { resultPages.clear(); await fn(); tests++; console.log(`ok: ${name}`) }
+const INPUT = { questions: ['How does Node.js fetch support cancellation?'], intent: 'Find traceable implementation references', community: false }
+const candidate = (n, over = {}) => ({ evidenceId: `m${n}`, key: `k${n}`, url: `https://k${n}/`, title: `T${n}`, text: `t${n}`, baseScore: 1, engines: ['bing'], safetyState: 'clear', ...over })
+const judgement = (value, over = {}) => new Map([['m1', {
+  safety: 'clear', value, discount: { state: 'selected', option: 'none', codeSelected: true, selectedBy: 'code' }, preferences: [], ...over,
+}]])
+
+await test('the rubric keeps 0-5 plus unestablished, and only 3/4/5 are publishable', () => {
+  assert.deepEqual([...VALUE_OPTIONS], ['0', '1', '2', '3', '4', '5', 'unestablished'])
+  assert.deepEqual([...PUBLISHABLE_VALUE_LEVELS], [3, 4, 5])
+  assert.deepEqual(VALUE_LABELS, { 3: 'medium', 4: 'medium_high', 5: 'high' })
 })
-test('same-fact independent corroboration has geometrically decreasing increments',()=>{
- const scores=[1,2,3,4].map(n=>one(Array.from({length:n},(_,i)=>row(`source${i}`))))
- const deltas=scores.slice(1).map((s,i)=>s.score-scores[i].score)
- approx(deltas[1]/deltas[0],.5);approx(deltas[2]/deltas[1],.5)
- const saturated=one(Array.from({length:100},(_,i)=>row(`many${i}`)))
- assert.ok(saturated.R<=1);assert.ok(saturated.score<=FACT_SCORE_WEIGHTS.alpha+FACT_SCORE_WEIGHTS.beta+FACT_SCORE_WEIGHTS.gamma)
+
+await test('0/1/2 are excluded as low value, never delivered or renamed', () => {
+  for (const level of [0, 1, 2]) {
+    const artifact = admitAndRank({ candidates: [candidate(1)], judgements: judgement({ state: 'level', level }) })
+    assert.equal(artifact.results.length, 0, `value ${level} must not be delivered`)
+    assert.equal(artifact.decisions[0].reason, 'value_filtered')
+    assert.equal(artifact.diagnostics.valueFiltered, 1)
+    assert.equal(artifact.diagnostics.valueUnestablished, 0)
+    assert.equal(artifact.diagnostics.assessmentUnavailable, 0)
+    assert.equal(artifact.diagnostics.safetyUnavailable, 0)
+    assert.deepEqual(artifact.valueGroups[3], [])
+    assert.deepEqual(artifact.valueGroups[4], [])
+    assert.deepEqual(artifact.valueGroups[5], [])
+  }
 })
-test('independent restatements cannot fill a different missing fact',()=>{
- const s=both(Array.from({length:100},(_,i)=>row(`source${i}`)))
- assert.deepEqual(s.missingFacts,['time']);approx(s.F,.47);assert.equal(s.ready,false)
+
+await test('3/4/5 are delivered with their labels and an increasing value utility', () => {
+  const artifact = admitAndRank({
+    candidates: [candidate(3), candidate(4), candidate(5)],
+    judgements: new Map([
+      ['m3', judgement({ state: 'level', level: 3 }).get('m1')],
+      ['m4', judgement({ state: 'level', level: 4 }).get('m1')],
+      ['m5', judgement({ state: 'level', level: 5 }).get('m1')],
+    ]),
+  })
+  assert.deepEqual(artifact.results.map((row) => row.valueLevel), [5, 4, 3])
+  assert.deepEqual(artifact.results.map((row) => row.valueLabel), ['high', 'medium_high', 'medium'])
+  const utilities = artifact.results.map((row) => row.valueUtility)
+  assert.ok(utilities[0] > utilities[1] && utilities[1] > utilities[2])
+  assert.deepEqual(Object.keys(artifact.valueGroups).sort(), ['3', '4', '5'])
+  assert.deepEqual(artifact.valueGroups[5], [artifact.results[0].id])
+  assert.equal(artifact.diagnostics.qualityAssessed, 3)
 })
-test('a late new fact earns exactly the same coverage gain',()=>{
- const first=row('a'),newFact=row('b','time')
- const repeats=Array.from({length:30},(_,i)=>row(`repeat${i}`))
- approx(both([first,newFact]).F-both([first]).F,both([first,...repeats,newFact]).F-both([first,...repeats]).F)
- assert.ok(both([first,...repeats,newFact]).ready)
+
+await test('unestablished and unavailable stay distinct disclosures', () => {
+  const unestablished = admitAndRank({ candidates: [candidate(1)], judgements: judgement({ state: 'unestablished' }) })
+  assert.equal(unestablished.decisions[0].reason, 'value_unestablished')
+  assert.equal(unestablished.diagnostics.valueUnestablished, 1)
+  assert.equal(unestablished.diagnostics.valueFiltered, 0)
+  const unavailable = admitAndRank({ candidates: [candidate(1)], judgements: judgement({ state: 'unavailable' }) })
+  assert.equal(unavailable.decisions[0].reason, 'value_unavailable')
+  assert.equal(unavailable.diagnostics.assessmentUnavailable, 1)
+  assert.equal(unavailable.diagnostics.judgementUnavailable, 0)
+  assert.equal(unavailable.diagnostics.valueFiltered, 0, 'an unavailable judgement is not a low-value verdict')
 })
-test('same-site complementary facts add F without source independence credit',()=>{
- const a=row('a','cancel',{url:'https://official.test/a'}),b=row('b','time',{url:'https://official.test/b'})
- const s=both([a,b]);approx(s.F,.94);assert.equal(s.R,0);assert.ok(s.ready)
+
+await test('a missing or malformed value answer is unavailable, never a fabricated level', async () => {
+  const rows = fixtureRows(2)
+  const dropped = makeHarness({ rows, answer: () => ({ value: null }) })
+  const result = await runAdaptiveScreening({ ...INPUT, max_results: 2 }, {}, dropped.deps)
+  assert.equal(result.results.length, 0, 'no value answer means no level and no fabricated pass')
+  assert.equal(result.diagnostics.valueFiltered, 0, 'a missing answer is not a low-value verdict')
+  assert.equal(result.diagnostics.assessmentUnavailable, 2)
+  assert.equal(result.selection.targetMet, false)
+  const malformed = makeHarness({ rows, answer: { value: 'not-a-level' } })
+  const second = await runAdaptiveScreening({ ...INPUT, max_results: 2 }, {}, malformed.deps)
+  assert.equal(second.results.length, 0)
+  assert.equal(second.diagnostics.valueFiltered, 0)
+  assert.equal(second.diagnostics.assessmentUnavailable, 2)
+  // A whole request with no answers at all leaves the safety state unresolved:
+  // that is disclosed as unassessable material, never cleared by default.
+  const silent = makeHarness({ rows, answer: () => null })
+  const third = await runAdaptiveScreening({ ...INPUT, max_results: 2 }, {}, silent.deps)
+  assert.equal(third.results.length, 0)
+  assert.equal(third.diagnostics.safetyUnavailable, 2)
+  assert.equal(third.selection.incomplete, true)
+  assert.equal(third.stopReason, 'unassessable_material')
 })
-test('500 mirrors with different domains do not create corroboration',()=>{
- const original=row('original')
- const copies=Array.from({length:500},(_,i)=>({...original,evidenceId:`copy${i}`,url:`https://mirror${i}.test/a`}))
- approx(one(copies).score,one([original]).score);assert.equal(one(copies).distinct,1)
+
+await test('caller facts/tasks/targets are refused: they cannot become completion gates', async () => {
+  for (const input of [
+    { ...INPUT, facts: [{ id: 'f1', text: 'must mention v24' }] },
+    { ...INPUT, tasks: [{ context: 'c', targets: [{ id: 't', question: 'q', keywords: ['k'] }] }] },
+    { ...INPUT, targets: ['https://example.com'] },
+  ]) {
+    await assert.rejects(runAdaptiveScreening(input, {}, new Proxy({}, { get: () => () => { throw new Error('no call expected') } })), /Unsupported adaptive input field/)
+  }
+  const h = makeHarness({ rows: fixtureRows(4) })
+  const result = await runAdaptiveScreening({ ...INPUT, max_results: 4, preferences: ['Implementation details'] }, {}, h.deps)
+  const state = JSON.stringify(h.calls.jev.map((call) => call.request.state))
+  assert.equal(/facts|targets|"tasks"/.test(state), false, 'no fact or target state is sent to Jev')
+  assert.equal(result.diagnostics.qualityAssessed, 4, 'the value judgement itself remains the gate')
 })
-test('short exact duplicates are grouped; unknown provenance cannot earn R',()=>{
- const a=row('a','cancel',{text:'Yes'}),b=row('b','cancel',{text:'Yes'})
- assert.equal(one([a,b]).R,0)
- const unknown=Array.from({length:20},(_,i)=>row(`x${i}`)).map(r=>({...r,facts:r.facts.map(f=>({...f,independent:null}))}))
- assert.equal(one(unknown).R,0)
-})
-test('paraphrases with no original provenance earn no corroboration',()=>{
- const a=row('a','cancel',{text:'The request expires after the allowed duration.'})
- const b=row('b','cancel',{text:'超过规定时间后请求失效。',facts:[{factId:'cancel',support:.94,stance:'support',independent:.05}]})
- assert.equal(one([a,b]).R,0)
-})
-test('support and refutation are not mutual corroboration; both remain witnesses',()=>{
- const a=row('a'),b=row('b','cancel',{facts:[{factId:'cancel',support:.94,stance:'refute',independent:.95}]})
- const s=one([a,b]);assert.equal(s.R,0);assert.equal(s.factProgress[0].conflicting,true)
- assert.deepEqual(new Set(s.witnesses),new Set(['a','b']))
-})
-test('permutation invariance of A/F/R and witness identities',()=>{
- const rows=[row('a'),row('b'),row('c','time'),row('d','time'),row('e')]
- const expected=both(rows)
- for(let i=0;i<rows.length;i++){
-  const rotated=[...rows.slice(i),...rows.slice(0,i)].reverse()
-  const s=both(rotated);approx(s.A,expected.A);approx(s.F,expected.F);approx(s.R,expected.R)
-  assert.deepEqual(new Set(s.witnesses),new Set(expected.witnesses))
- }
-})
-test('absent/invalid facts or stance cannot be inferred from quality or text novelty',()=>{
- for(const f of [[],[{factId:'cancel',support:null,stance:'support'}],[{factId:'cancel',support:.95,stance:'unknown'}],[{factId:'cancel',support:2,stance:'support'}]]){
-  const s=one([row('a','cancel',{facts:f})]);assert.equal(s.F,0);assert.equal(s.ready,false)
- }
- assert.equal(scoreEvidence([row('a')]).ready,false)
- assert.throws(()=>scoreEvidence([],{facts:[{id:'a',weight:.4}]}))
-})
-// Independent numeric validity check (invalid judgments must be rejected, not thrown).
-test('NaN, out-of-range and missing injection never qualify',()=>{
- for(const judgment of [{relevant:NaN,states_evidence:.99,injection:0},{relevant:2,states_evidence:.99,injection:0},{relevant:.99,states_evidence:.99}])assert.equal(one([row('a','cancel',{judgment})]).score,0)
-})
-test('bundle coverage never becomes independent corroboration and traces actual witnesses',()=>{
- const a=row('a','cancel',{facts:[]}),b=row('b','cancel',{facts:[]})
- const union=row('bundle','cancel',{bundle:true,witnesses:['a','b']})
- const s=scoreEvidence([a,b],{facts:[{id:'cancel',weight:1}],coverageRows:[a,b,union]})
- assert.ok(s.ready);assert.equal(s.R,0);assert.deepEqual(s.witnesses,['a','b'])
-})
-test('fixed unit extraction preserves all requirements and bounds IDs',()=>{
- const q={acceptance:'Does it cancel? Can cleanup exceed the timeout?'}
- assert.equal(factUnits(q).length,2)
- assert.equal(factUnits({acceptance:'a;b;c;d;e;f;g;h;i'}).length,1)
- const explicit=factUnits({facts:[{id:'time',question:'What is the time bound?'}]})
- assert.deepEqual(explicit,[{id:'time',question:'What is the time bound?',weight:1}])
-})
-test('strict optional fact input and canonical target isolation',()=>{
- const target={id:'t',question:'Explain behavior',keywords:['alpha'],facts:[{id:'x',question:'Does it cancel?'}]}
- const input=t=>({tasks:[{context:'Test',targets:[t]}]})
- const valid=normalizeAdaptiveInput(input(target));assert.equal(valid.error,undefined)
- for(const facts of [[...target.facts,...target.facts],[{id:'x',question:' '}],[{id:'x',question:'Valid?',weight:100}],Array.from({length:9},(_,i)=>({id:`f${i}`,question:'A?'}))])assert.ok(normalizeAdaptiveInput(input({...target,facts})).error)
- const second=normalizeAdaptiveInput(input({...target,facts:[{id:'y',question:'Can cleanup be delayed?'}]}))
- assert.equal(canonicalTargets([...valid.targets,...second.targets]).length,2)
-})
-test('actual prompt protocol supplies unit paths, stance choices and union provenance limits',()=>{
- const q={id:'q1',text:'Explain behavior',keywords:['alpha'],facts:[{id:'a',question:'Does it cancel?'}]}
- const candidate={questionId:'q1',evidenceId:'e1',assocId:'a1',textVersion:'v1',url:'https://x.test/a',text:'The task is cancelled on timeout.'}
- const request=buildSourceJudgeRequest([q],[candidate],true)
- assert.equal(request.mapping[0].facts[0].factId,'a')
- assert.equal(request.questions['src.e1.fact0.stance'].type,'choice')
- assert.ok(JSON.stringify(request.questions['src.e1.fact0.support']).includes('state.questions[0].facts[0].question'))
- assert.ok(JSON.stringify(request.questions['src.e1.fact0.independent']).includes('Unknown provenance'))
- const bundle=factBundleRequest(q,[candidate,{...candidate,evidenceId:'e2',url:'https://y.test/b'}])
- assert.ok(bundle.state.rules.some(s=>s.includes('not an independent source')))
-})
-test('eight required facts: an absent eighth fact is a hard readiness veto',()=>{
- const manyFacts=Array.from({length:8},(_,i)=>({id:`f${i}`,weight:1/8}))
- const rows=Array.from({length:7},(_,i)=>row(`e${i}`,`f${i}`,{judgment:{relevant:1,states_evidence:1,injection:0},facts:[{factId:`f${i}`,support:1,stance:'support',independent:1}]}))
- const score=scoreEvidence(rows,{facts:manyFacts})
- assert.ok(score.score>1);assert.equal(score.ready,false);assert.deepEqual(score.missingFacts,['f7'])
-})
-test('relevance and evidence have independent configured gates',()=>{
- const a=row('a','cancel',{judgment:{relevant:.6,states_evidence:.8,injection:.02}})
- const s=scoreEvidence([a],{facts:[{id:'cancel',weight:1}],gateRelevant:.5,gateStates:.7})
- assert.equal(s.eligible,1);approx(s.A,.6);assert.ok(s.F>0)
-})
-test('local distinct count does not inherit sibling keyword provenance',()=>{
- const a=row('a')
- const s=scoreEvidence([],{facts:[{id:'cancel',weight:1}],coverageRows:[a]})
- assert.equal(s.distinct,0);assert.equal(s.A,0);assert.ok(s.F>0);assert.equal(s.ready,false)
-})
-test('near-copy blocking is symmetric and cannot erase complementary coverage',()=>{
- const original=row('a'),copy=row('b','time',{text:original.text+' Extra unique statement.',facts:[{factId:'time',support:.94,stance:'support',independent:.95}]})
- const s=both([original,copy]);approx(s.F,.94);assert.equal(s.R,0)
-})
-console.log(`${passed} fact-score tests passed (offline invariants only)`)
+console.log(`screening value rubric: ${tests} groups passed (0/1/2 excluded, 3/4/5 delivered, unestablished vs unavailable disclosed)`)

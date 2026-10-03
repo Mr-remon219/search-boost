@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 // Dry-run contract: `--dry-run` must reach every persistence path, not just the
 // agent install. Each case runs the real CLI in an isolated HOME and compares a
 // full before/after snapshot (paths, contents, POSIX modes). Printing "dry run"

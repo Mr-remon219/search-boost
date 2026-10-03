@@ -8,7 +8,7 @@ description: Research independent web questions with authorized host subagents, 
 
 {{MCP_CONTEXT}}
 
-This is a workflow, not an additional MCP tool or an installed subagent definition. The parent runs it using the host's existing capabilities and permissions. No Pi installation or CLI is needed.
+This is a workflow, not an additional MCP tool or an installed subagent definition. The parent owns the research plan and final acceptance, and runs it using the chosen host runner's existing capabilities and permissions. A workflow load does not authorize delegation; no Pi installation or CLI is needed.
 
 ## Host execution
 

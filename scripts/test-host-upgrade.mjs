@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** Future releases, not today's version: v1 → v2 → v3 at different roots.
  * Host package-manager HTTP/process calls are injected. Installed modules are
  * real symlinks, and fresh Node processes verify the active adapter payload.
@@ -9,6 +10,8 @@ import { tmpdir } from 'node:os'
 import { join, dirname, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { execFileSync } from 'node:child_process'
+import { writeDshHostFixture } from './dsh-host-fixture.mjs'
+import { runCommand } from '../lib/upgrade/process.mjs'
 
 // Release roots below are expected to be canonical package identities. macOS
 // tmpdir may use /var while package discovery resolves the same tree via /private/var.
@@ -49,6 +52,7 @@ function release(version, suffix = version) {
   write(join(root, 'cli.mjs'), '// fixture cli')
   for (const entry of [piEntry(root), dshEntry(root)]) write(entry, `export default () => ${JSON.stringify(version)}\n`)
   write(join(root, 'adapters', 'dsh', 'cordis.patch.yml'), '# fixture bundle')
+  write(join(root, 'adapters', 'dsh', 'schema.js'), '// fixture schema')
   for (const src of [...piSubagentTemplatePaths(), ...piWorkflowPromptPaths()]) write(join(root, relative(PKG_ROOT, src)), `${bytes(src)}\n<!-- release ${version} -->\n`)
   return root
 }
@@ -57,7 +61,17 @@ function loadedVersion(entry) {
 }
 const calls = []
 let noOp = false, staleLink = false, failRemove = false
-async function run(command, args) {
+const probeEntry = join(temp, 'fake-host', 'host.mjs')
+writeDshHostFixture(probeEntry)
+write(probeEntry, 'throw Error("runtime probe must exit before host main")')
+async function run(command, args, options) {
+  if (options?.env?.SEARCH_BOOST_DSH_PROBE_NONCE) return runCommand(process.execPath, [probeEntry, '--version'], options)
+  // Exercise the shared launcher on machines with or without global DSH/pnpm.
+  if (command === 'npm' && args[0] === 'exec') {
+    const separator = args.indexOf('--')
+    assert.equal(args[separator + 1], 'dsh')
+    command = 'dsh'; args = args.slice(separator + 2)
+  }
   calls.push({ command, args })
   assert.equal(command, 'dsh')
   const [, , profile, verb, source] = args

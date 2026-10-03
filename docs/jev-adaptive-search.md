@@ -1,92 +1,94 @@
-# Jev 意图导向搜索：V3 契约
+# Jev 单流程筛选：当前契约（N_off, schema v5）
 
-`adaptive_search` 是**搜索结果筛选工具**，不是自主研究或答案验证工具。主 agent 提供问题、关键词和搜索意图；Jev 判断哪些结果值得阅读、哪些关键词值得继续；代码执行查询、维护状态并控制预算。主 agent 负责读原文、证据核实和最终回答。
+本文是 `adaptive_search` 生产契约的当前说明，对应 N_off 单流程：一次有界 fused 候选快照 + 一次固定选项 Jev 策略请求 + 一次固定选项筛选。它取代此前的 v3 关键词循环说明；历史文档（`adaptive-keyword-index.md`、`adaptive-history-aware-audit.md`、`adaptive-review-points.md`、`adaptive-fused-screening-plan.md`）只对应旧版本或原型设计，其中被本流程替代的部分不再生效。
 
-## 输入
+- 数值公式与价值等级沿用 screening 原型（`fused-screening-mix-v2-prototype`），本文不重复公式推导，见 `docs/adaptive-fused-screening-plan.md` 与 `lib/search/screening/scoring.js`。
+- 预算语义以 2026-10-02 的补充修正为准：**没有任何自设的累计成本、token、请求次数或整次调用时限可以停止本流程**；用量只做观测与披露。
 
-```json
-{
-  "questions": ["ExampleDB 4.2 升级有哪些兼容风险？"],
-  "keywords": ["migration guide", "breaking changes"],
-  "intent": "优先实际迁移步骤与具体不兼容案例；保留反证，不需要营销介绍。",
-  "page_size": 20
-}
+## 1. 输入契约与旧字段迁移
+
+正常新研究：
+
+| 字段 | 契约 |
+| --- | --- |
+| `questions` | 恰好一个非空字符串，最长 400 字符。就是唯一检索 query，不做关键词规划或查询扩展。 |
+| `intent` | **必填**非空字符串，最长 2000 字符；不再由问题自动填补。 |
+| `preferences` | 可选 0-8 条非空软偏好，每条最长 300 字符；按键精确去重后等权平均，只加分。 |
+| `community` | 可选严格 boolean，无 schema 默认值。省略 = 由同一次策略请求选择 `enable`/`disable`/`unknown`；显式 true/false 覆盖且不再提问该题。 |
+| `save_results` | 可选严格 boolean，默认 false。true 时私有保存**完整的最终选中集**与类型化元数据。 |
+| `max_results` | 保存/交付的目标条数，默认 10，范围 1-50。 |
+| `page_size` | 每页条数，默认 20，范围 1-50；不改变排序、selection、totalResults 或 targetMet。 |
+
+只读输入：`cursor`（`s5:` 本次运行页 / `h1:` 历史只读页）或 `saved_result_id`（36 位小写 UUID），只可搭配 `page_size`。
+
+迁移规则：
+
+- `constraints` 作为逐材料硬门槛已退役。省略或传 `[]`（返回 `deprecated_constraints_empty` 警告）；非空合法数组在任何检索/Jev 调用前以 `adaptive_constraints_removed` 拒绝；类型/长度/元素无效按输入错误拒绝。
+- `keywords`、`tasks`、`targets`、`facts`、`time_range`、嵌套关键词数组等旧字段一律零网络拒绝，不做静默丢弃。
+- `cursor` / `saved_result_id` 不得与任何新研究字段（包括 `save_results:false`、`community:false`、`constraints:[]`）混用，两个读取 ID 也不能并用。
+- 结构与旧字段检查在配置读取、工具状态检查与所有网络之前完成。工具描述继续提示 questions 与 intent 必须使用英文，但这是调用方提示，不做语言校验、拒绝、翻译或诊断；任何语言都按原文检索。
+
+## 2. 唯一执行流程
+
+```
+结构与迁移校验（零网络）
+→ 公开入口门控（显式 OFF / Jev 配置锁）+ 外部 signal
+→ cursor / saved_result_id 只读分支在此结束（不建 Jev 客户端、不问策略、不检索、不判断）
+→ 一次固定策略请求：选 ranking；community 省略时同一次选 enable/disable/unknown
+→ 代码解析显式覆盖 / 模型选择 / unknown 与缺失回退，落实能力与域名限制
+→ 调用共享 runFused：query=原问题，medium，candidateSelection=snapshot，community=解析后的布尔值
+→ 有界快照（目标 ≤10 时最多 32 条；更大目标为 ceil(max_results × 32 / 10)，最高 160；网页与社区行共用）按原融合分与稳定 key 全局排序后截取
+→ prepareMaterial 校验/哈希并标记 pending → 分批固定选项 safety/value/source discount/preferences
+→ 代码排除安全失败、基础分无效、不可判断、value 未建立与 value<3
+→ 原型 screeningScore + 稳定 tie-break + max_results 截断 → schema v5 结果
+→ save_results:true 时保存完整最终选中集，然后建立进程内 s5: 分页
 ```
 
-- `questions`：1–6 个非空问题，每个≤400字符。单问题可配扁平 `keywords`；多问题必须使用逐项对应的二维关键词列表。每组1–4个词，每词≤100字符。不传则以问题本身为检索词。
-- 也可使用 `tasks:[{context, time_range?, targets:[{id, keywords, question, intent?, facts?}]}]`：最多6任务、每任务4目标、总计12目标。任务模式不能传根级 `keywords`，与 `questions` 二选一。
-- 根级 `intent` ≤2000字符，目标级 `intent` ≤1000字符，均须非空；两者共同作为判断上下文并参与执行去重。它们是简洁搜索偏好，不是私密推理、凭据或秘密。意图送往配置的 Jev 服务，但不直接拼入引擎查询。
-- `facts:[{id,question}]` 为兼容旧调用而保留，最多8个、ID唯一。V3将其解释为**可选搜索主题**，不要求全部回答，不自动生成事实。
-- `time_range:{start,end,basis}` 是包含边界的日期约束；`basis` 为 `published` 或 `event`，不以发表时间推断事件时间。相对今天/昨天按调用开始时UTC解释；未知日期不能通过显式日期门。
-- 翻页只传 `cursor` 和可选 `page_size`，不能同时传问题、任务、关键词或意图。
+没有第二轮检索、没有关键词续搜、没有自动补读（`rescueReads` 固定为 0）、没有 N_on/N_off 开关、没有第二个 adaptive 入口。
 
-## 数学模型
+## 3. 搜索前策略与 community 优先级
 
-每个当前审查片段：切题度 `r`、阅读价值 `v`、方向帮助度 `d`。
+- 策略请求只含 `strategy.ranking` 与（省略 community 时）`strategy.community`；criteria 由代码提供，Jev 只返回选项，不产生平台名、引擎、查询变体、预算或系数。
+- 优先级：显式 boolean（按字段是否存在识别，不被 truthy/默认值覆盖） > 模型选择 > 缺失/非法回退。`enable→true`、`disable→false`、`unknown→false`；缺失/坏形状/非法 option 同样 false，但状态记为 unavailable 并披露，不伪装成模型选择 disable。
+- 能力处理基于同一个 runtime capability snapshot：官方 X 不可用但既有 fallback 可用时按原机制执行；已知整条支路不可执行或被授权边界禁止时跳过并返回结构化 `unavailable`/`blocked`；普通路由无可用引擎时仍 `no_engines` 失败。
+- `run.community` 输出固定结构：`input`、`source`、`choice`、`requested`、`effective`、`outcome`、`cacheHit`、`reason`、`usage`；状态只来自共享核心的结构化执行记录，不解析 warnings 文案，也不从 `communityUsed` 推断成功。
+- 公开 `x_search` 入口开关只关闭公开入口，不是内部引擎授权表；searcher 对 fused_search/fetch_page 的依赖检查也不适用于本流程。
+- 当前内置 snapshot 没有独立的 X 禁用/宿主权限配置，`fallback.available` 表示既有无需凭据入口可尝试，不是联网成功保证。`blocked` 仅在宿主明确提供 `capability.x.blocked` 时产生，不会把公开工具 OFF 当作内部禁令；配置不足、实际失败与无引擎分别按真实路径披露，不能仅凭官方不可用关闭 fallback。
+- `run.community.usage` 保留有限的 `officialAttempted` / `fallbackAttempted` / `dispatchedNow` / `inFlight` 布尔标记及计数。HTTP/账单 token 未观察到时为 null；共享缓存或 in-flight 复用的本次派发/请求计数为 0，原 `partial` 等执行状态仍保留，不重复计费式计数。
 
-```text
-u = min(r,v) × (1−λ+λd)
-λ = 0.2（有 intent），否则 0
-A_k = max_i(u_i × m_ik)
-F = Σ_f w_f max_i(u_i × m_if)
-R_k = Σ_f w_f Σ_{j=2..n_f} (1−ρ)ρ^(j−2)q_fj，ρ=0.5
-S_k = 0.25 A_k + 0.90 F + 0.10 R_k
-```
+## 4. 判断、价值与来源
 
-`m` 是上下文中的关键词/主题匹配分，仅大于0.5才计分。`w` 为归一化主题权重；有调用方主题时跨关键词共享主题覆盖，没有时以当前关键词为主题（`F=A_k`）。`q_fj` 是同一主题下按质量降序排列、重复分组后各组最强结果的 `u×min(m_ik,m_if)`。新主题的首条只赚F，不冒充该主题的额外重复佐证。
+- safety 固定选项 `clear`/`violation`/`unavailable`，与语义相关性独立，missing 不作为 clear；结构有效只是 pending。
+- value 固定 0-5 与 `unestablished`；只交付已建立且 ≥3 的等级，低价值、未建立与服务不可用分开披露。`qualityAssessed` 是原型口径：通过准入并获得 value≥3 的候选数，不等于拿到 value 答案的候选数。beta.6 新增 `diagnostics.valueJudged`，单独统计得到有效 value 等级或显式 unestablished 答案的候选（包括低价值和安全拒绝行），不可用答案不算；它与准入数不能混用。
+- 来源折扣只对真实正贡献引擎的固定选项生效；缺失来源中性且披露；confidence 只做审计，不参与评分、阈值或准入。
+- 偏好精确去重后取平均；反例可以有高 value 或匹配偏好；`valueGroups` 是最终结果标签索引，不改变排序。默认仅 URL 去重、`mu=0`、`dedupe=false`。
 
-首条建立基础分；新主题按权重增加最大覆盖，不因文档序号打折；只有额外重复主题结果的补充收益递减。同站及近复制保守归组仅影响R，不取消新主题的F。重复轮次不产生分数。这里的R表示补充阅读价值，不证明来源独立或事实得到佐证。
+## 5. 资源边界与用量观测
 
-筛选门：已知有限的 `r>0.60`、`v>0.50`、注入风险 `≤0.7`，且满足显式日期约束。方向分**不是硬门**；反证也能高度符合任务。方向未知保留null、不加方向奖励；缺失必要判断不通过筛选。可信导航线索、需要进一步打开的页面、局部有用信息均可有高阅读价值，不要求摘要已经包含答案事实。
+容量/协议上限（不是累计预算）：`candidateLimit=max(32, ceil(max_results × 32 / 10))`（公开目标最高 50，对应容量最高 160）、`batchSize=4`、每次最多 1 次重试、Jev 响应最大 24000 字节、state/request 上限 48000/60000 字符、初始材料最多 8000 字符、单请求 20 秒、回退最多 4 秒、`rescueReads=0`。
 
-这些权重与阈值是未校准的工程起点。`u/S`都不是正确率。S仅供续搜参考，不存在“S过线且所有事实齐全才完成”的规则。
+beta.6 保留原先默认目标 10 / 容量 32 的筛选余量比例；12 条目标对应 39，50 条目标对应 160。该容量在一次检索前确定，并贯穿 engine 请求、共享快照截取、缓存键及 `run.limits.candidateLimit`。内部显式容量覆盖仍有权威性并校验整数 1–500；覆盖小于目标时仍披露 `targetExceedsReviewCap`。不追加检索，不因已够数量提前停止，也不保证上游能供足或筛选后必然足量。扩大目标会增加判断量；标准四条批次下，160 个实到候选需约 1 次策略 + 40 批 Jev 判断（长文本尺寸拆批、重试另计），默认 10 条目标仍为原容量。
 
-## 执行与停止
+网页与 X/community 共用全局快照上限，不表示两条支路各自都能供满该容量：既有 X 支路最多返回 30 个候选，beta.6 扩大全局容量不改变它。若 160 条容量被填满，其余至少 130 条须来自网页；实际供应和筛选后数量仍不保证。
 
-```text
-问题＋绑定关键词＋意图
-  → 代码构造候选查询，Jev选择查询/引擎
-  → 搜索、去重、审查摘要或引擎提供的文本
-  → Jev typed noul/choice 判断阅读价值、方向、匹配
-  → 每关键词 typed choice：continue / satisfied / exhausted
-  → 代码维护队列、处理 pending、检查预算并返回结果
-```
+用量计量（`screening-metering-v3-no-cumulative-cap`）只记录发生过的调用与估算，并在 `usage` 中披露：`fusedCalls`、`engineRequests`（null=未知）、`jevCalls`、`jevHttpAttempts`、`jevRetries`、`jevInputTokensEstimated`、`jevTokensEstimatedReserved`、`jevInputTokens`/`jevOutputTokens`（未上报即 null）、`serverUsageCalls`、`unknownUsageCalls`，以及本层 `fetch*` 的真实 0。达到任何旧上限都不会拒绝后续请求，也不会中止已有效结果。
 
-- `satisfied` 必须至少有一条**当前有效且符合该关键词**的可用结果；不是完整答案。
-- `exhausted` 意为当前未见值得继续的路径，不是成功或不存在的证明。引擎未成功或候选尚待审查时不接受该结论。
-- `pending` 表示续搜判断缺失、无效或未能完成；不能替代满足/找不到。
-- 已改变片段不能继续支撑旧的满足判断；同URL增加新材料或日期元数据，也会使旧的 exhausted 判断重开。后来补到的发表日期会让日期相关评分重新审查，而不是沿用“日期未知”时的旧判断。当前有效的既有结果不会因后续服务失败被抹掉。
-- 必要字段或可用材料的关键词匹配缺失时，优先有界重审：同一审查版本（文本＋发表日期）最多两次、同一轮最多一次，仍受原调用/HTTP/token上限约束。用尽重审额度仍保留 pending 计数，不把未知改成否定，也不无限阻塞其他查询。
-- 连续分数不变不等于没有可搜内容：还有未尝试的关键词查询或可重审材料时继续；搜索调用额度用尽明确报告 budget_calls。分批续搜判断中断后，未执行批次都标为 pending。
-- 队列全关闭时 `stopReason=keyword_queue_empty`；只要包含 exhausted，`retrievalSufficient` 就为false。预算/截止/取消/服务失败分别报告，不能假装成功。
-- 默认没有自动正文抓取、引用追踪、事实联合判断或最终完整性验收。Jev不自由生成关键词、摘要或答案。
+真实单请求超时、有限重试、认证/限流/网络错误、SSRF/重定向与内容安全、显式取消继续生效；取消后不派发新请求，批次失败保留已有效材料。MCP/DSH 的 `adaptive_search`、`fused_search`、`x_search` 均不设置整次搜索总时限；SDK/宿主/提供商自身的外部硬限制仍可能存在，不能将它们描述为无限运行。`fetch_page` 的读取保护及研究子任务显式时限不因本补充取消。
 
-固定上限：6轮、30次搜索、72次逻辑Jev请求、80次HTTP尝试（含重试）、120万估算输入token；每轮全局最多500唯一URL、每微批最多24关联并受字节上限约束。后续轮按待搜关键词比例恢复配额。宿主截止时间仍适用。500是容量，不保证检索得到或全部审查500条；单引擎结果帽仍可远低于500。为续搜决策预留预算，未审查项公开计数。
+## 6. 返回、分页与持久化
 
-## 输出和兼容
+- 所有新研究直接 `schemaVersion=5`，策略版本：`fused-screening-mix-v2-prototype`、`screening-judgement-v4-no-scope-no-language`、`screening-strategy-v2-community-no-language`、`no-scope-v1`、计量 `screening-metering-v3-no-cumulative-cap`。
+- 结果行含 ID/rank、URL/标题/准确摘录、basis/日期/文本与分数版本、真实来源、`valueLevel`/`valueLabel`、分数组件、来源折扣与偏好匹配、有意义的 value/discount confidence。
+- `selection` 给出 `requested`/`returned`/`targetMet`/`stopReason`/`incomplete`；`diagnostics` 给出计数守恒与排除原因；`outsideReview`/`unreviewed` 统计尚未进入判断或快照之外的候选；已派发但判断不可用的候选另计入 `judgementUnavailable` / `assessmentUnavailable` / `safetyUnavailable`，因此 `unreviewed=0` 不代表全部判断有效。失败或取消批次的 `judgeFailures` 是派发失败计数，原因结合 `stopReason` 查看；不可用判断绝不当作低价值或不存在。`targetMet` 只表示数量。
+- 新响应不返回 `keywordProgress`、`retrievalSufficient`、`coverageComplete`、`scopeSummary`、`convergence`、`finalReview`、`tier`/`valueScore` 等旧字段，也不填假零/假 true。
+- 页面软容量为 96,000 UTF-8 字节（原先 45,000），元数据仍保留 16,000 字节预算；按三条 8,000 字符中文摘录（约 72,000 字节）及字段开销协调容量，避免常规长中文结果被迫每页一条。page_size 仍是条数上限，不保证装满；超软限单条仍完整交付并告警，绝不截改已审摘录。读取/完整保存集合的语义不变。合法长中文或 JSON 转义输入若使元数据超限，页面仅缩短 `inputSummary` 的 Unicode 完整前缀并告警；真实检索/判断输入、已审摘录、计数与使用量不变，显式保存成功时私有快照保留完整输入。历史 v1 元数据仍原样返回，不套用此缩短。
+- 分页：进程内共享 30 分钟 / 32 份页面池，`s5:` 对应 v5 运行、`h1:` 对应历史只读恢复；拒绝裸 UUID.offset、`s4:`、过期/驱逐/越界 cursor，且零网络。`clearAllCaches` 只清内存/检索缓存，不删除持久快照。
+- 持久化：新写入 `search-boost-research-v2` + `metadata.schemaVersion=5`；读取按 `format` 分派，v2 校验失败绝不降级 v1。旧 v1 文件只读恢复，返回 `restoration={historical:true, originalFormat, originalSchemaVersion}` 与 `h1:` cursor，保留原结果与元数据、不伪造 v5 字段、不就地升级、不刷新 `savedAt`。存储保留 64MiB 上限、UUID 文件名单硬链接与 NOFOLLOW 校验、0700/0600 私有原子写入、递归白名单清洗、取消不返回成功 ID、CLI 离线 `research list`/`research export` 与 `wx` 不覆盖。
 
-分页结果含：
+## 7. 失败语义
 
-- `schemaVersion:3`
-- `results:[{url,title,description,valueScore,directionMatch,kind,matches}]`，按阅读价值排序、URL去重。`description` 为审查过的抽取文本，不是生成总结。列表按单结果 `u/valueScore` 排序；关键词 `S` 仅供续搜判断参考，不直接作为URL排序分。`kind` 为 direct/lead/counterevidence/context/unknown。同URL跨目标合并时，顶层分数/方向/类别和摘录取最强结果；`matches` 保留各目标 taskId/targetId/canonicalId、分数、方向和类别，不能把顶层方向分套用到所有目标。相同目标复用一次执行时，仍保留每个原始目标身份。
-- `retrievalSufficient`：是否所有关键词均满足搜索需求，**不是答案完整性**。
-- `keywordProgress`：目标身份、关键词、status/reason、score/A/F/R、distinctEvidence和目标状态。
-- `pendingAssessments`：已收集但未完成审查的关联数。
-- `coverageComplete`：废弃兼容字段，V3恒为false，表示不再评估答案完整性。**不得把它改为 retrievalSufficient 的别名**。旧消费者应迁移到新字段和状态，而不是因它为false反复重跑。
-- `stopReason`、`warnings`、`totalResults`、`nextCursor`、`expiresAt`。
+真实结构错误、认证、网络、无引擎、安全拒绝、取消、超时按真实原因返回；社区支路失败或部分失败时仍交付已筛选的网页结果并把 `selection.incomplete=true`、`stopReason=community_incomplete`（除非已有更具体的停止原因）。空结果不证明不存在；被拒绝的旧 constraints 内容不发送给 Jev。成功读取一份原本 `stopReason=not_configured`/失败/空结果的历史文件表示本次读取成功，不触发新的配置诊断。
 
-单页默认20、最多50，另有软字节预算；极大单项可完整返回并警告。累计返回没有固定条数帽，但检索和审查有预算。所有候选并非都会获准；未审查/拒绝项不发布。游标只读取本进程内存，最多保留30分钟/32次结果；进程重启、到期或淘汰后失效。分页完毕不代表全网穷尽。
+## 8. 验证边界
 
-MCP/Pi/DSH共用核心输入、描述与渲染逻辑；MCP的Zod和DSH的输出schema同步维护。未配置Jev时工具仍注册，但返回not_configured且不发起网络请求。任务/意图/必要片段会发送到配置的Jev服务（默认TypeSafe），引擎凭据不会发送。调用授权不包括更改凭据或持久设置。
-
-## 验证与限制
-
-`npm run test:retrieval` 检查新默认控制器、数学性质和公开接口；完整离线门为 `npm run prepublishOnly`。旧V1/V2测试显式冻结内部策略，仅作历史回归，不能证明新默认质量。旧设计资产保持原样，见 [事实控制器历史记录](jev-fact-implementation.md)。
-
-尚无新方案的独立真实网页质量校准。合成500条测试只证明容量/预算路径；不证明真实召回、阅读价值或时延提升。来源分组可能过度合并同站独立文章，也可能漏掉改写转载。摘要不足不证明原文没有价值；关键论断仍由主agent读原文核实。
-
-## 自审回归记录
-
-本轮主执行器直接自审，先以失败测试复现缺失评分不重审、exhausted未随同URL新内容重开、停滞过早停止、规范化目标丢失归属、分批失败漏标pending、零成功引擎被当成成功、补充发表日期未触发重审，再修复验证。
-
-新默认测试：12项评分代数、41项循环与边界测试、公开接口检查；完整 `npm run prepublishOnly` 通过。日志：`/tmp/jev-self-review-prepublish.log`。本轮没有子代理、真实搜索或在线Jev质量校准；离线通过不是线上效果证明。未提交或发布。
+仓库内的离线 fixture 只证明机制、契约与失败语义，不证明线上策略质量、语义准确率或研究完成度。发布前按 `docs/test-isolation.md` 运行隔离门禁；`scripts/test-adaptive-capacity.mjs`、`scripts/test-screening*.mjs`、`scripts/test-adaptive-search.mjs`、`scripts/test-screening-hosts.mjs`、`scripts/test-fused-baseline.mjs`、`scripts/test-noff-community-snapshot.mjs` 与 `scripts/test-research-persistence.mjs` 是本文契约的自动化证据。迁移说明与退役清单见 `docs/adaptive-screening-migration.md`。

@@ -47,9 +47,9 @@ async function main() {
       await runMigrationCli(argv.slice(1))
       break
     }
-    case 'upgrade': {
-      const { runUpgradeCli } = await import('./lib/upgrade/cli.mjs')
-      await runUpgradeCli(argv.slice(1))
+    case 'refresh': {
+      const { runRefreshCli } = await import('./lib/upgrade/cli.mjs')
+      await runRefreshCli(argv.slice(1))
       break
     }
     case 'uninstall':
@@ -84,8 +84,14 @@ async function main() {
       printAgentsTsv()
       break
     case 'status':
-      printStatus()
+      if (argv.slice(1).some(arg => arg !== '--json') || argv.length > 2) throw new Error('Usage: search-boost status [--json]')
+      await printStatus({ json: argv[1] === '--json' })
       break
+    case 'research': {
+      const { runResearchResultsCli } = await import('./lib/research-results.mjs')
+      runResearchResultsCli(argv.slice(1))
+      break
+    }
     case 'plugin':
       await runPlugin(argv[1])
       break

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** Hermetic cross-host contract/lifecycle tests: no LLM, credentials, or external CLI. */
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs'
@@ -8,6 +9,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { EventEmitter } from 'node:events'
 import childProcess from 'node:child_process'
 import { syncBuiltinESMExports } from 'node:module'
+import { saveToolPreferences } from '../lib/tool-config.mjs'
 import { parallelResearch } from '../lib/search/research.js'
 import { researchRole, researchResult, researchSummary, normalizeResearchTasks } from '../lib/search/parallel-contract.mjs'
 
@@ -247,6 +249,43 @@ try {
     assert.equal(launched, 1)
   }
   console.log('ok: disabled DSH search tools block mixed/searcher waves but not tool-free summarizers')
+  // Shared entry preferences must block the actual registered DSH/Pi paths.
+  for(const name of ['fused_search','fetch_page']) {
+    saveToolPreferences({[name]:false})
+    const before=spawned.length
+    await assert.rejects(pi.runSearchParallel({tasks:[item('blocked')]}), /required searcher tools disabled/)
+    assert.equal(spawned.length,before)
+    let starts=0
+    const service=nativeService(async()=>{starts++;return {result:Promise.resolve(terminal('summary')),dispose:async()=>{}}})
+    await assert.rejects(run(service), /required searcher tools disabled/)
+    assert.equal(starts,0)
+    const aborted=new AbortController();aborted.abort()
+    assert.equal((await pi.runSearchParallel({tasks:[item('cancelled')],signal:aborted.signal})).results[0].status,'aborted')
+    assert.equal((await run(service,{signal:aborted.signal})).results[0].status,'aborted')
+    await pi.runSearchParallel({tasks:[item('summary','summarizer')]})
+    await run(service,{tasks:[item('summary','summarizer')]})
+    assert.equal(starts,1)
+    saveToolPreferences({[name]:true})
+  }
+  const before=spawned.length
+  const latePi=await pi.runSearchParallel({tasks:[item('first'),item('second')],progress:msg=>{
+    if(msg.startsWith('task 2/')) saveToolPreferences({fetch_page:false})
+  }})
+  assert.equal(spawned.length,before+1)
+  assert.equal(latePi.okCount,1)
+  assert.equal(latePi.results[1].status,'error')
+  saveToolPreferences({fetch_page:true})
+  let lateStarts=0,lateDisposedCount=0
+  const lateDsh=await run(nativeService(async()=>{
+    lateStarts++;saveToolPreferences({fused_search:false})
+    return {result:Promise.resolve(terminal('first')),dispose:async()=>{lateDisposedCount++}}
+  }))
+  assert.equal(lateStarts,1);assert.equal(lateDisposedCount,1);assert.equal(lateDsh.okCount,1)
+  assert.equal(lateDsh.results[1].status,'error')
+  saveToolPreferences({fused_search:true})
+  assert(spawned.every(row=>!existsSync(row.promptPath)))
+  console.log('ok: shared preference zero-dispatch, pre-cancel, tool-free summaries and late preference changes are enforced without abandoning live siblings')
+
 } finally {
   childProcess.spawn = originalSpawn
   syncBuiltinESMExports()

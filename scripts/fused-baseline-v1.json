@@ -1,0 +1,293 @@
+{
+  "baseline": "77e01146271f4d718cc6d8ce499978f94a517203",
+  "cases": [
+    {
+      "args": {
+        "query": "Node fetch cancellation OR abort site:reference.example",
+        "ranking": "balanced",
+        "enginePool": "free",
+        "complexity": "medium",
+        "maxResults": 6
+      },
+      "digest": "7be7e2bccd920f2c36d7984ab2d536361573074ea793b3fa916373b92117cd50",
+      "selected": [
+        {
+          "url": "https://reference.example/common/0",
+          "score": 1.314965521335742,
+          "selectionScore": 1.314965521335742
+        },
+        {
+          "url": "https://reference.example/common/3",
+          "score": 1.0158325231901957,
+          "selectionScore": 0.9658325231901956
+        },
+        {
+          "url": "https://reference.example/ddg/1",
+          "score": 0.9808701859225035,
+          "selectionScore": 0.9183701859225035
+        },
+        {
+          "url": "https://reference.example/bing/1",
+          "score": 0.9572312859948126,
+          "selectionScore": 0.8522312859948126
+        },
+        {
+          "url": "https://reference.example/ddg/2",
+          "score": 0.899131003762295,
+          "selectionScore": 0.8445855492168405
+        },
+        {
+          "url": "https://reference.example/bing/2",
+          "score": 0.8774620121619116,
+          "selectionScore": 0.7774620121619116
+        }
+      ]
+    },
+    {
+      "args": {
+        "query": "Node fetch cancellation OR abort site:reference.example",
+        "ranking": "balanced",
+        "enginePool": "hybrid",
+        "complexity": "medium",
+        "maxResults": 6
+      },
+      "digest": "a131f39459ef274e8287898515e9c472c3f40ddb4f9ffca4c987e2d309ed9d0d",
+      "selected": [
+        {
+          "url": "https://reference.example/common/0",
+          "score": 2.0307998836078833,
+          "selectionScore": 2.0307998836078833
+        },
+        {
+          "url": "https://reference.example/common/3",
+          "score": 1.6154339302815468,
+          "selectionScore": 1.5654339302815468
+        },
+        {
+          "url": "https://reference.example/common/6",
+          "score": 1.344384620724649,
+          "selectionScore": 1.2800989064389348
+        },
+        {
+          "url": "https://reference.example/exa/1",
+          "score": 1.0485943361780756,
+          "selectionScore": 0.9860943361780756
+        },
+        {
+          "url": "https://reference.example/exa/2",
+          "score": 0.9612114748299028,
+          "selectionScore": 0.9066660202844482
+        },
+        {
+          "url": "https://reference.example/ddg/1",
+          "score": 0.9808701859225035,
+          "selectionScore": 0.8758701859225035
+        }
+      ]
+    },
+    {
+      "args": {
+        "query": "Node fetch cancellation OR abort site:reference.example",
+        "ranking": "research",
+        "enginePool": "free",
+        "complexity": "medium",
+        "maxResults": 6
+      },
+      "digest": "51e288430d76722630e2379e41a63d8a4b709dfaf1ba1eb465543a774dff1899",
+      "selected": [
+        {
+          "url": "https://reference.example/common/0",
+          "score": 1.2438505379602764,
+          "selectionScore": 1.2438505379602764
+        },
+        {
+          "url": "https://reference.example/common/3",
+          "score": 0.9607017870710294,
+          "selectionScore": 0.9107017870710293
+        },
+        {
+          "url": "https://reference.example/bing/1",
+          "score": 0.9273071097009062,
+          "selectionScore": 0.8555679792661236
+        },
+        {
+          "url": "https://reference.example/ddg/1",
+          "score": 0.9025744629620457,
+          "selectionScore": 0.7975744629620457
+        },
+        {
+          "url": "https://reference.example/bing/2",
+          "score": 0.8500315172258309,
+          "selectionScore": 0.7857458029401166
+        },
+        {
+          "url": "https://reference.example/ddg/2",
+          "score": 0.8273599243818752,
+          "selectionScore": 0.7273599243818752
+        }
+      ]
+    },
+    {
+      "args": {
+        "query": "Node fetch cancellation OR abort site:reference.example",
+        "ranking": "research",
+        "enginePool": "hybrid",
+        "complexity": "medium",
+        "maxResults": 6
+      },
+      "digest": "030a6bec348fd7c3b06d655dfe188bcea0f2ce1a6dfa96d2ba64cde3bc2e99b5",
+      "selected": [
+        {
+          "url": "https://reference.example/common/0",
+          "score": 2.1037203570165635,
+          "selectionScore": 2.1037203570165635
+        },
+        {
+          "url": "https://reference.example/common/3",
+          "score": 1.6678025330650639,
+          "selectionScore": 1.6178025330650638
+        },
+        {
+          "url": "https://reference.example/common/6",
+          "score": 1.3845598507069075,
+          "selectionScore": 1.3202741364211932
+        },
+        {
+          "url": "https://reference.example/exa/1",
+          "score": 1.1456337201776514,
+          "selectionScore": 1.0831337201776514
+        },
+        {
+          "url": "https://reference.example/exa/2",
+          "score": 1.0501642434961804,
+          "selectionScore": 0.9956187889507259
+        },
+        {
+          "url": "https://reference.example/exa/4",
+          "score": 0.9001407801395831,
+          "selectionScore": 0.8358550658538688
+        }
+      ]
+    },
+    {
+      "args": {
+        "query": "Node fetch cancellation OR abort site:reference.example",
+        "ranking": "fresh",
+        "enginePool": "free",
+        "complexity": "medium",
+        "maxResults": 6
+      },
+      "digest": "96122fbbaff278e9f268ca871e562bcf39ab94c5a957f937d8c16ae18c1a4981",
+      "selected": [
+        {
+          "url": "https://reference.example/common/0",
+          "score": 1.3509769185986857,
+          "selectionScore": 1.3509769185986857
+        },
+        {
+          "url": "https://reference.example/common/3",
+          "score": 1.0432942485394505,
+          "selectionScore": 0.9932942485394505
+        },
+        {
+          "url": "https://reference.example/bing/1",
+          "score": 1.0197555682848762,
+          "selectionScore": 0.9480164378500936
+        },
+        {
+          "url": "https://reference.example/bing/2",
+          "score": 0.9347759375944701,
+          "selectionScore": 0.8704902233087558
+        },
+        {
+          "url": "https://reference.example/ddg/1",
+          "score": 0.9268489619911159,
+          "selectionScore": 0.8218489619911159
+        },
+        {
+          "url": "https://reference.example/common/6",
+          "score": 0.8498542589710241,
+          "selectionScore": 0.7855685446853098
+        }
+      ]
+    },
+    {
+      "args": {
+        "query": "Node fetch cancellation OR abort site:reference.example",
+        "ranking": "fresh",
+        "enginePool": "hybrid",
+        "complexity": "medium",
+        "maxResults": 6
+      },
+      "digest": "b5d2842c54071225640ff04dc09506c4d4fc3d0f5d356e2ea69adca80114197b",
+      "selected": [
+        {
+          "url": "https://reference.example/common/0",
+          "score": 2.0622261406924687,
+          "selectionScore": 2.0622261406924687
+        },
+        {
+          "url": "https://reference.example/common/3",
+          "score": 1.6413392570538505,
+          "selectionScore": 1.5913392570538505
+        },
+        {
+          "url": "https://reference.example/common/6",
+          "score": 1.3665417417740975,
+          "selectionScore": 1.3022560274883832
+        },
+        {
+          "url": "https://reference.example/exa/1",
+          "score": 1.0631686740118014,
+          "selectionScore": 1.0006686740118014
+        },
+        {
+          "url": "https://reference.example/exa/2",
+          "score": 0.974571284510818,
+          "selectionScore": 0.9200258299653634
+        },
+        {
+          "url": "https://reference.example/bing/1",
+          "score": 1.0197555682848762,
+          "selectionScore": 0.9147555682848763
+        }
+      ]
+    },
+    {
+      "args": {
+        "query": "Node fetch abort",
+        "ranking": "research",
+        "enginePool": "hybrid",
+        "complexity": "simple",
+        "maxResults": 4,
+        "engineWeights": {
+          "bing": 0,
+          "ddg": 2
+        }
+      },
+      "digest": "0bf5b92b5edfc64fe6e09e682a27d9cb7d80381963522272d9972b114b456d96",
+      "selected": [
+        {
+          "url": "https://reference.example/common/0",
+          "score": 3.0397784443270743,
+          "selectionScore": 3.0397784443270743
+        },
+        {
+          "url": "https://reference.example/common/3",
+          "score": 2.3874417089529594,
+          "selectionScore": 2.3374417089529596
+        },
+        {
+          "url": "https://reference.example/ddg/1",
+          "score": 2,
+          "selectionScore": 1.95
+        },
+        {
+          "url": "https://reference.example/ddg/2",
+          "score": 1.8333333333333335,
+          "selectionScore": 1.7833333333333334
+        }
+      ]
+    }
+  ]
+}

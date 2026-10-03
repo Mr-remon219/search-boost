@@ -38,7 +38,7 @@ async function writePluginJson() {
   const manifest = {
     $schema: 'https://antigravity.google/schemas/v1/plugin.json',
     name: 'search-boost',
-    description: 'Multi-engine web search MCP — optional fused search when you want citations or corroboration.',
+    description: 'Public web search, readable pages and X evidence through MCP; optional research workflows.',
   }
   await writeFile(join(PLUGIN, 'plugin.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
 }

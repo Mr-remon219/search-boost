@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /** Real npm/npx, a loopback fixture registry, and an isolated HOME/global prefix.
  * No transition release, --force, real credentials, or developer installations.
  * DSH alone is a protocol fixture; npm install/uninstall/bin handoff are real.
@@ -13,6 +14,7 @@ import { pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { PKG_ROOT } from '../lib/pkg.mjs'
 import { runCommand, npmCliEntry } from '../lib/upgrade/process.mjs'
+import { writeDshHostFixture } from './dsh-host-fixture.mjs'
 
 // Installed package identities are real paths; do not bake a macOS /var alias
 // into the fixture's expected global prefix and release roots.
@@ -86,16 +88,22 @@ try {
 
   // Lightweight DSH profile manager, exercised through the real updater process.
   const dsh = join(tools, 'dsh.mjs')
+  writeDshHostFixture(dsh)
   write(dsh, `#!/usr/bin/env node
-import {readFileSync,writeFileSync,mkdirSync,rmSync,symlinkSync} from 'node:fs'; import {join,dirname} from 'node:path';
+import {readFileSync,writeFileSync,mkdirSync,rmSync,cpSync,symlinkSync} from 'node:fs'; import {join,dirname,isAbsolute} from 'node:path';
 const [command,flag,profile,verb,source]=process.argv.slice(2); if(command!=='plugin'||flag!=='--profile') process.exit(2);
 const dir=join(process.env.DSH_HOME,'profiles',profile),file=join(dir,'package.json'),pkg=JSON.parse(readFileSync(file,'utf8'));
-if(verb==='add'){ const existed=!!pkg.dependencies['search-boost']; pkg.dependencies['search-boost']='link:'+source;
- if(!existed) pkg.dsh.profile.bundles.push('search-boost'); const dest=join(dir,'node_modules','search-boost');mkdirSync(dirname(dest),{recursive:true});rmSync(dest,{recursive:true,force:true});symlinkSync(source,dest,process.platform==='win32'?'junction':'dir');
+if(verb==='add'){ const local=isAbsolute(source); const version=local?JSON.parse(readFileSync(join(source,'package.json'))).version:source.match(/^search-boost@(.+)$/)?.[1]; if(!version) process.exit(3);
+ const existed=!!pkg.dependencies['search-boost']; pkg.dependencies['search-boost']=local?'link:'+source:'^'+version;
+ if(!existed) pkg.dsh.profile.bundles.push('search-boost'); const dest=join(dir,'node_modules','search-boost');mkdirSync(dirname(dest),{recursive:true});rmSync(dest,{recursive:true,force:true});
+ if(local)symlinkSync(source,dest,process.platform==='win32'?'junction':'dir');else cpSync(${JSON.stringify(currentRoot)},dest,{recursive:true});
 }else if(verb==='remove'){delete pkg.dependencies[source];pkg.dsh.profile.bundles=pkg.dsh.profile.bundles.filter(x=>x!==source);}else process.exit(2);
 writeFileSync(file,JSON.stringify(pkg,null,2));`)
   if (process.platform === 'win32') write(join(tools, 'dsh.cmd'), `@"${process.execPath}" "${dsh}" %*\r\n`)
   else { write(join(tools, 'dsh'), `#!/bin/sh\nexec "${process.execPath}" "${dsh}" "$@"\n`); const { chmodSync } = await import('node:fs'); chmodSync(join(tools, 'dsh'), 0o755) }
+  // The protocol fixture handles profile mutation itself; satisfy launcher
+  // discovery without depending on (or downloading) the machine's pnpm.
+  cpSync(join(tools, process.platform === 'win32' ? 'dsh.cmd' : 'dsh'), join(tools, process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'))
   const sep = process.platform === 'win32' ? ';' : ':'
   // Windows stores the variable as `Path`, so `env.PATH` is undefined there and
   // this rewrite used to drop node itself: npm's generated bin shims start with
@@ -190,14 +198,14 @@ writeFileSync(file,JSON.stringify(pkg,null,2));`)
 
   // Same-version Update is the actual integration upgrade, including native
   // references to the now-deleted global legacy root. Partial failure is retryable.
-  const partial = await runCommand(process.execPath, [join(currentRoot, 'cli.mjs'), 'upgrade', '-y'], { env, cwd })
+  const partial = await runCommand(process.execPath, [join(currentRoot, 'cli.mjs'), 'refresh', '-y'], { env, cwd })
   assert.equal(partial.code, 1)
-  assert.match(partial.stdout, /Upgrade incomplete/)
+  assert.match(partial.stdout, /Refresh incomplete/)
   assert.equal(bytes(claude), initialClaude)
   assert.ok(!existsSync(legacyRoot))
   rmSync(foreign)
-  const refreshed = await checked(process.execPath, [join(currentRoot, 'cli.mjs'), 'upgrade', '-y'])
-  assert.match(refreshed, /Upgrade complete/)
+  const refreshed = await checked(process.execPath, [join(currentRoot, 'cli.mjs'), 'refresh', '-y'])
+  assert.match(refreshed, /Refresh complete/)
   assert.equal(json(claude).mcpServers['search-boost'].args[0], join(currentRoot, 'cli.mjs'))
   assert.equal(json(claude).mcpServers['search-boost'].disabled, true)
   assert.equal(json(claude).custom, true)
@@ -210,7 +218,7 @@ writeFileSync(file,JSON.stringify(pkg,null,2));`)
   assert.equal(json(piSettings).defaultModel, 'keep-model')
   assert.deepEqual(json(projectPi).packages, [{ source: currentRoot, extensions: [] }])
   assert.equal(json(projectPi).userSetting, 'keep')
-  assert.equal(json(dshProfile).dependencies['search-boost'], `link:${currentRoot}`)
+  assert.equal(json(dshProfile).dependencies['search-boost'], 'link:' + currentRoot)
   assert.ok(!json(dshProfile).dependencies['dsh-search-boost'])
   assert.deepEqual(json(dshProfile).dsh.profile.bundles, [])
   for (const [file, text] of protectedBytes) assert.equal(bytes(file), text)
@@ -220,15 +228,15 @@ writeFileSync(file,JSON.stringify(pkg,null,2));`)
   const again = await checked(process.execPath, [join(cachedRoot, 'cli.mjs'), 'migrate', '-y'])
   assert.match(again, /Already migrated/)
   assert.equal(json(join(currentRoot, 'package.json')).version, '2.0.0', 'migrate is not the normal updater')
-  const updated = await checked(process.execPath, [join(currentRoot, 'cli.mjs'), 'upgrade', '-y'])
-  assert.equal(json(join(currentRoot, 'package.json')).version, '2.1.0')
-  assert.match(updated, /Upgrade complete/)
-  assert.ok(bytes(join(env.PI_CODING_AGENT_DIR, 'agents', 'searcher.md')).includes('fixture-release 2.1.0'))
-  assert.equal(json(dshProfile).dependencies['search-boost'], `link:${currentRoot}`)
+  const updated = await checked(process.execPath, [join(currentRoot, 'cli.mjs'), 'refresh', '-y'])
+  assert.equal(json(join(currentRoot, 'package.json')).version, '2.0.0', 'refresh never replaces the SearchBoost npm package')
+  assert.match(updated, /Refresh complete/)
+  assert.ok(bytes(join(env.PI_CODING_AGENT_DIR, 'agents', 'searcher.md')).includes('fixture-release 2.0.0'))
+  assert.equal(json(dshProfile).dependencies['search-boost'], 'link:' + currentRoot)
   assert.deepEqual(json(dshProfile).dsh.profile.bundles, [])
   for (const [file, text] of protectedBytes) assert.equal(bytes(file), text)
   assert.ok(!existsSync(join(home, '.grok', 'config.toml')), 'detected/unconfigured agents must not be newly installed')
-  console.log('ok: later Update runs a fresh npx release and refreshes all installed agents; migrate stays rename-only')
+  console.log('ok: refresh ignores newer registry releases, uses the current package and keeps migrate rename-only')
 } finally {
   await new Promise((resolve) => server.close(resolve))
   rmSync(temp, { recursive: true, force: true })

@@ -1,7 +1,8 @@
 import { assertToolEnabled, guardedTool, toolState } from '../../lib/tool-config.mjs'
 import { registerDshTool } from './schema.js'
-import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/adaptive/input.js'
-import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
+import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/screening/input.js'
+import { ADAPTIVE_OUTPUT_SCHEMA } from '../../lib/search/screening/schema.js'
+import { FETCH_DESCRIPTION, X_DESCRIPTION, STATS_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
 // DSH host adapter — DeepSeek Harness (Cordis) bundle plugin.
 //
@@ -24,9 +25,10 @@ import {
   ADAPTIVE_DESCRIPTION,
   ADAPTIVE_TOOL_NAME,
   adaptiveTextContent,
-} from '../../lib/search/adaptive/describe.js'
+} from '../../lib/search/screening/describe.js'
 import {
   ENGINE_ORDER,
+  allAttemptedEnginesFailed,
   LAYER_LABELS,
   X_MODES,
   cacheSizes,
@@ -67,7 +69,9 @@ export function loadPolicySection() {
 }
 
 function registerGuardedTool(ctx, definition) {
-  return registerDshTool(ctx, guardedTool(definition))
+  // Adaptive's facade owns parser → public gate; keep that order instead of
+  // reading configuration in the generic guard before semantic validation.
+  return registerDshTool(ctx, definition.name === ADAPTIVE_TOOL_NAME ? definition : guardedTool(definition))
 }
 
 export function apply(ctx, config = {}) {
@@ -111,7 +115,8 @@ function registerSearchProvider(ctx) {
       // resolves the configured seam (this provider after the patch) and
       // would recurse into itself.
       const result = await runFused({ query: request.query, maxResults: count, complexity: 'medium', signal })
-      if (result.results.length === 0) {
+      const attempted = Object.values(result.engineStats ?? {}).some(stat => stat?.used)
+      if (result.results.length === 0 && (!attempted || allAttemptedEnginesFailed(result.engineStats))) {
         const errs = Object.entries(result.engineStats ?? {})
           .filter(([, v]) => v.errors > 0)
           .map(([k, v]) => `${k}: ${v.note ?? 'error'}`)
@@ -265,7 +270,7 @@ function registerFusedSearchTool(ctx) {
         truncated: Boolean(meta.truncated),
       }
     },
-    timeoutMs: 90000,
+    // Per-provider requests keep their own timeouts; no whole-search quota.
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       // DSH validates executed values as lossless JSON — strip stray undefined
@@ -316,6 +321,7 @@ function registerFetchPageTool(ctx) {
       properties: {
         url: { type: 'string', description: 'The http(s) URL to fetch.' },
         focus: { type: 'string', description: 'Optional topic to keep: only paragraphs containing these terms (plus context) are returned.' },
+        offset: { type: 'integer', minimum: 0, description: 'Character offset into the page body (default 0). Pass nextOffset from a previous call to continue a long page from cache.' },
       },
       required: ['url'],
     },
@@ -330,8 +336,10 @@ function registerFetchPageTool(ctx) {
         type: 'object',
         additionalProperties: false,
         properties: {
-          url: { type: 'string' }, via: { type: 'string' }, fetched_at: { type: 'string' },
+          url: { type: 'string' }, requestedUrl: { type: 'string' }, via: { type: 'string' }, fetched_at: { type: ['string', 'null'] },
           word_count: { type: 'number' }, content: { type: 'string' }, truncated: { type: 'boolean' },
+          totalChars: { type: 'number' }, offset: { type: 'number' }, nextOffset: { type: 'number' },
+          windowNote: { type: 'string' },
           limitation: { type: 'object', properties: { kind: { type: 'string' }, message: { type: 'string' } }, required: ['kind', 'message'] },
           focusMiss: { type: 'boolean' }, cacheHit: { type: 'boolean' }, tookMs: { type: 'number' },
         },
@@ -339,7 +347,7 @@ function registerFetchPageTool(ctx) {
       },
       render: (_args, value) => [{
         type: 'text',
-        text: `**fetch_page: ${value.url}** — via ${value.via}, ${value.word_count} words, ${value.tookMs}ms${value.cacheHit ? ' (cache)' : ''}${value.truncated ? ' (truncated)' : ''}${value.focusMiss ? ' (focus matched nothing — retry without focus)' : ''}\n\n${value.content}${value.limitation ? `\nWARNING: ${value.limitation.kind}: ${value.limitation.message}` : ''}`,
+        text: `**fetch_page: ${value.url}** — via ${value.via}, ${value.word_count} words, ${value.tookMs}ms${value.cacheHit ? ' (cache)' : ''}${value.truncated ? ' (truncated)' : ''}${value.focusMiss ? ' (focus matched nothing — retry without focus)' : ''}${value.windowNote ? `\n[${value.windowNote}]` : ''}\n\n${value.content}${value.limitation ? `\nWARNING: ${value.limitation.kind}: ${value.limitation.message}` : ''}`,
       }],
       presentationMeta: (_args, value) => ({
         url: value.url,
@@ -363,7 +371,7 @@ function registerFetchPageTool(ctx) {
     timeoutMs: 60000,
     isConcurrencySafe: () => true,
     async execute(args, exec) {
-      return cleanJsonValue(await runFetchPage(args.url, args.focus, exec?.signal))
+      return cleanJsonValue(await runFetchPage(args.url, args.focus, exec?.signal, { offset: args.offset }))
     },
   })
 }
@@ -377,30 +385,14 @@ function registerAdaptiveSearchTool(ctx) {
     parameters: ADAPTIVE_INPUT_SCHEMA,
     presentCall: (args) => ({
       card: 'generic',
-      title: args?.cursor ? 'adaptive_search: result page' : 'adaptive_search: target search',
+      title: args?.saved_result_id ? 'adaptive_search: saved results' : args?.cursor ? 'adaptive_search: result page' : 'adaptive_search: question screening',
       kind: 'search',
       rawInput: (args?.questions ?? []).join(' | ').slice(0, 60),
     }),
     output: {
-      schema: {
-        type: 'object',
-        properties: {
-          results: { type: 'array', items: { type: 'object', properties: { url: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, valueScore:{type:'number'}, directionMatch:{type:['number','null']}, kind:{type:'string'}, matches:{type:'array',items:{type:'object',properties:{taskId:{type:['string','null']},targetId:{type:['string','null']},canonicalId:{type:['string','null']},valueScore:{type:'number'},directionMatch:{type:['number','null']},kind:{type:'string'}},required:['taskId','targetId','canonicalId','valueScore','directionMatch','kind']}} }, required: ['url', 'title', 'description'] } },
-          totalResults: { type: 'number' }, nextCursor: { type: ['string', 'null'] }, expiresAt: { type: 'string' },
-          schemaVersion: {type:'number'}, retrievalSufficient: {type:'boolean'},
-          coverageComplete: { type: 'boolean', description:'Deprecated: always false for schemaVersion 3; answer completeness is not assessed.' }, stopReason: { type: 'string' }, warnings: { type: 'array', items: { type: 'string' } },
-          keywordProgress: { type: 'array', items: { type: 'object', properties: {
-            targetId: {type:'string'}, taskId:{type:['string','null']}, canonicalId:{type:'string'}, keyword: {type:'string'}, score: {type:'number'}, ready: {type:'boolean'},
-            distinctEvidence: {type:'number'}, finalStatus: {type:'string'},
-            status:{type:'string',enum:['continue','satisfied','exhausted','pending']}, reason:{type:'string'},
-            A: {type:'number'}, F: {type:'number'}, R: {type:'number'},
-            missingFacts: {type:'array',items:{type:'string'}},
-            factProgress: {type:'array',items:{type:'object',properties:{id:{type:'string'},support:{type:'number'},covered:{type:'boolean'},conflicting:{type:'boolean'}},required:['id','support','covered','conflicting']}},
-          }, required: ['targetId','keyword','score','distinctEvidence','finalStatus'] } },
-          pendingAssessments: { type: 'number' },
-        },
-        required: ['results', 'totalResults', 'nextCursor', 'expiresAt', 'coverageComplete', 'stopReason', 'warnings'],
-      },
+      // The shared exact-one union (schema-v5 run | read-only historical restore):
+      // DSH translates and Ajv-validates this definition instead of a private copy.
+      schema: ADAPTIVE_OUTPUT_SCHEMA,
       render: (_args, value) => adaptiveTextContent(value),
       presentationMeta: (_args, value) => ({
         truncated: Boolean(value.nextCursor), total: value.totalResults,
@@ -413,14 +405,15 @@ function registerAdaptiveSearchTool(ctx) {
       return {
         card: 'web',
         kind: 'search',
-        title: `adaptive_search: ${meta.total} approved results`,
+        title: `adaptive_search: ${meta.total} selected results`,
         sources: meta.sources ?? [],
         truncated: Boolean(meta.truncated),
       }
     },
-    timeoutMs: 180000,
     isConcurrencySafe: () => false,
     async execute(args, exec) {
+      // No self-imposed whole-call timeout: only the host/client signal cancels
+      // this tool (2026-10-02 budget supplement).
       return cleanJsonValue(await runAdaptiveSearch(args, { signal: exec?.signal, host: 'dsh' }))
     },
   })
@@ -468,6 +461,24 @@ function registerXSearchTool(ctx) {
           inFlight: { type: 'boolean' },
           xResults: { type: 'number' },
           engineResults: { type: 'number' },
+          // Per-engine diagnostics the core always returns: declared so the host
+          // contract keeps them instead of rejecting the payload.
+          engineStats: {
+            type: 'object',
+            additionalProperties: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                used: { type: 'boolean' },
+                errors: { type: 'number' },
+                attempts: { type: 'number' },
+                successes: { type: 'number' },
+                note: { type: 'string' },
+              },
+            },
+          },
+          enginesUsed: { type: 'array', items: { type: 'string' } },
+          warnings: { type: 'array', items: { type: 'string' } },
           items: { type: 'array', items: { type: 'object', additionalProperties: true } },
         },
         required: ['via'],
@@ -502,7 +513,7 @@ function registerXSearchTool(ctx) {
         truncated: Boolean(meta.truncated),
       }
     },
-    timeoutMs: 180000,
+    // X official/fallback requests retain single-request protection only.
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       const kind = X_MODES.includes(args?.type) ? args.type : 'keyword'
@@ -602,7 +613,7 @@ function registerXLogoutCommand(ctx) {
 function registerParallelTool(ctx, provider = 'spawn') {
   return registerGuardedTool(ctx, {
     name: 'research_parallel',
-    description: 'Run authorized DSH-native research children: searchers receive fused_search/fetch_page, summarizers receive no tools. Use {agent, task} for one child or {tasks:[{agent,task},...]} for a concurrent wave. Returns reports with execution status; missing capabilities fail explicitly, without a Pi CLI fallback. Legacy {query, sub_queries} remains supported. Ordinary lookups use direct search; the shared workflow governs follow-up waves.',
+    description: 'Run authorized DSH-native research children for independent evidence tasks or report synthesis. Searchers receive fused_search/fetch_page; summarizers have no tools. Returns per-child reports and execution status, not verified conclusions. Missing host capabilities fail explicitly, without a Pi/CLI fallback. Ordinary lookups use direct search; the shared workflow owns wave planning and follow-up.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -616,7 +627,7 @@ function registerParallelTool(ctx, provider = 'spawn') {
             properties: { agent: { type: 'string', enum: ['searcher', 'summarizer'] }, task: { type: 'string', minLength: 1 } },
             required: ['agent', 'task'],
           },
-          description: 'One concurrent wave, usually 2–4 independent research tasks. Choose a size within the host budget.',
+          description: 'One concurrent wave of explicit child roles/tasks, exclusive with agent/task or sub_queries; wave size follows the host/task budget.',
         },
         query: { type: 'string', description: 'Question context; required only for legacy query/sub_queries mode.' },
         goal: { type: 'string', description: 'What the evidence must establish.' },
@@ -723,7 +734,7 @@ function registerWebChangeCommand(ctx) {
   }
   return commands.register({
     name: 'web_change',
-    description: 'Switch search layer: free (keyless bing/ddg/yahoo/exa-free) vs api (full pool incl. keyed tavily/brave/exa). Usage: /web_change [free|api|show]',
+    description: 'Inspect the compatibility layer with /web_change show. Authorized free/api changes persist future defaults (free→free pool, api→hybrid); use fused_search.engine_pool for one request.',
     input: { hint: 'free | api | show' },
     handler: ({ rawInput }) => {
       const cmd = String(rawInput ?? '').trim().toLowerCase()
@@ -748,7 +759,7 @@ function registerWebChangeCommand(ctx) {
 function registerStatsTool(ctx) {
   return registerGuardedTool(ctx, {
     name: 'search_stats',
-    description: 'search-boost audit: cache hits/misses, tier distribution, engine availability, and the most recent searches.',
+    description: STATS_DESCRIPTION,
     parameters: { type: 'object', additionalProperties: false, properties: {} },
     presentCall: () => ({ card: 'generic', title: 'search-boost stats', kind: 'other' }),
     output: {

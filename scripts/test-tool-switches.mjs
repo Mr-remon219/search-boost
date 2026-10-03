@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -34,8 +35,9 @@ try {
   assert.equal(toolState('x_search').enabled, false, 'patch preserves unrelated preferences')
   saveJevConfig({ apiKey: 'fixture-jev' })
   assert.equal(toolState('adaptive_search').enabled, true)
-  assert.match(formatRuntimeCapabilities(), /intent-guided search/)
-  assert.match(formatRuntimeCapabilities(), /not answer coverage/)
+  assert.match(formatRuntimeCapabilities(), /adaptive_search is available/)
+  assert.match(formatRuntimeCapabilities(), /Questions, intent and necessary evidence fragments are sent/)
+  assert.doesNotMatch(formatRuntimeCapabilities(), /fixture-jev|32 candidates|request-count/, 'live status is readiness/privacy, not a duplicate screening manual')
   saveToolPreferences({ adaptive_search: false })
   assert.doesNotMatch(formatRuntimeCapabilities(), /adaptive_search is available/)
   clearJevConfig()

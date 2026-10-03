@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 // Hermetic origin/proxy + real optional curl. No external sites or user credentials.
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
@@ -67,6 +68,60 @@ try {
   await test('redirected origin links resolve against the final URL', async () => {
     const result = await fetchPage(`http://127.0.0.1:${origin.port}/relative-redirect`, undefined, makePageCache())
     assert.ok(result.content.includes(`http://127.0.0.1:${origin.port}/docs/sibling`))
+  })
+
+  await test('redirected source URL survives focus, windows and both cache aliases', async () => {
+    const cache = makePageCache()
+    const requested = `http://127.0.0.1:${origin.port}/relative-redirect`
+    const final = `http://127.0.0.1:${origin.port}/docs/page`
+    const first = await fetchPage(requested, undefined, cache, undefined, { windowChars: 100 })
+    assert.equal(first.url, final)
+    assert.equal(first.requestedUrl, requested)
+    const requests = origin.requests.length
+    for (const target of [requested, final]) {
+      const next = await fetchPage(target, 'documentation', cache, undefined, { offset: 100, windowChars: 100 })
+      assert.equal(next.url, final)
+      assert.equal(next.via, 'cache')
+      assert.equal(next.offset, 100)
+      assert.equal(origin.requests.length, requests)
+    }
+  })
+
+  await test('reader fallback keeps a known redirect destination, including failed HTTP', async () => {
+    const requested = `http://127.0.0.1:${origin.port}/reader-redirect`
+    const final = `http://127.0.0.1:${origin.port}/reader-destination`
+    for (const status of [200, 403]) {
+      const seen = [], cache = makePageCache()
+      __setUndiciLoaderForTests(async () => ({ ...undici, fetch: async raw => {
+        const target = String(raw); seen.push(target)
+        if (target === requested) return new Response(null, { status: 302, headers: { location: final } })
+        if (target === final) return new Response('<p>Short.</p>', { status })
+        assert.equal(target, `https://r.jina.ai/${encodeURIComponent(final)}`)
+        return new Response(prose)
+      } }))
+      const result = await fetchPage(requested, undefined, cache)
+      assert.equal(result.url, final); assert.equal(result.requestedUrl, requested); assert.equal(result.via, 'jina')
+      assert.equal((await fetchPage(requested, undefined, cache)).url, final)
+      assert.equal((await fetchPage(final, undefined, cache)).url, final)
+      assert.equal(seen.length, 3)
+      await closeFetchDispatchers()
+    }
+  })
+
+  await test('reader source metadata is retained but article-body URL Source lines are not metadata', async () => {
+    const final = 'https://third-party.example/docs'
+    for (const wrapper of [true, false]) {
+      __setUndiciLoaderForTests(async () => ({ ...undici, fetch: async raw => {
+        if (!String(raw).startsWith('https://r.jina.ai/')) return new Response('', { status: 503 })
+        return new Response(wrapper ? `Title: Docs\nURL Source: ${final}\n\nMarkdown Content:\n${prose}`
+          : `Markdown Content:\nURL Source: ${final}\n\n${prose}`)
+      } }))
+      const cache = makePageCache()
+      const result = await fetchPage(url, undefined, cache)
+      assert.equal(result.url, wrapper ? final : url)
+      assert.equal((await fetchPage(url, undefined, cache)).url, result.url)
+      await closeFetchDispatchers()
+    }
   })
 
   await test('an origin-stage timeout may still use the reader within the total budget', async () => {

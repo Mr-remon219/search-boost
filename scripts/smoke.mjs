@@ -1,3 +1,4 @@
+import './isolate-tests.mjs'
 /**
  * MCP protocol smoke test — spawns server, lists tools/resources/prompts.
  *
@@ -14,9 +15,9 @@ const env = { ...process.env }
 delete env.SEARCH_BOOST_LAYER
 
 const transport = new StdioClientTransport({
-  command: 'node',
+  command: process.execPath,
   args: [join(PKG, 'cli.mjs'), 'serve'],
-  cwd: PKG,
+  cwd: process.cwd(),
   env,
   stderr: 'pipe',
 })

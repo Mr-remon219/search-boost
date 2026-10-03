@@ -1,6 +1,6 @@
 ---
 name: summarizer
-description: Summarize searcher reports, name gaps, prepare the next wave
+description: Assess supplied reports without tools; recommend material gaps to the parent
 search-boost: owned
 ---
 

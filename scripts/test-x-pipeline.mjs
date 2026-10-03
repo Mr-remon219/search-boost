@@ -1,7 +1,8 @@
+import './isolate-tests.mjs'
 import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
 // Hermetic X contract + runtime regression tests: no credentials or live HTTP.
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -17,7 +18,7 @@ mkdirSync(process.env.HOME, { recursive: true })
 
 const { createXPipeline, normalizePosts, normalizeUsers, snowflakeDate, xIdentity } = await import('../lib/search/x/x-pipeline.js')
 const { parseTweets, hitToPost, fallbackXSearch } = await import('../lib/search/x/xfallback.js')
-const { buildXSearchPrompt } = await import('../lib/search/x/xsearch.js')
+const { buildXSearchPrompt, runXTool } = await import('../lib/search/x/xsearch.js')
 const runtime = await import('../lib/runtime.mjs')
 let count = 0
 async function test(name, fn) { await fn(); count++; console.log(`ok: ${name}`) }
@@ -306,6 +307,69 @@ try {
     for (const patch of [{ layer: 'api' }, { model: 'another-model' }, { reasoning_effort: 'high' }, { allowed_x_handles: ['bob'] }, { to_date: '2025-02-01' }]) {
       assert.notEqual(runtime.xSearchCacheKey('keyword', { ...args, ...patch }, 2), base)
     }
+  })
+  await test('upstream credential echoes never reach X errors, fallback notes, tool returns or audit', async () => {
+    const key = 'xai-fixture-secret-never-publish'
+    const echo = `Authorization: Bearer ${key} upstream-private-marker`
+    process.env.XAI_API_KEY = key
+    const snapshot = () => ({ engines: {}, fingerprint: 'credential-echo-fixture', capability: { x: { official: { available: true } } } })
+    const params = { type: 'keyword', query: 'credential echo regression' }
+    const clean = value => {
+      const serialized = typeof value === 'string' ? value : JSON.stringify(value)
+      assert(!serialized.includes(key), 'fake key must not escape provider transport')
+      assert(!serialized.includes('upstream-private-marker'), 'upstream body must not escape provider transport')
+    }
+    for (const status of [401, 403, 429, 500]) {
+      globalThis.fetch = async () => new Response(echo, { status })
+      await assert.rejects(runXTool(params), err => { clean(err.stack); assert.match(err.message, new RegExp(`http ${status}`)); return true })
+      runtime.invalidateSearchCaches()
+      const failed = await runtime.runXSearch(params, { snapshot, fallbackSearch: async () => { throw new Error('fixture fallback failed') } })
+      assert.equal(failed.via, 'error'); clean(failed); assert.match(failed.error, new RegExp(`http ${status}`))
+      runtime.invalidateSearchCaches()
+      const fallback = await runtime.runXSearch(params, { snapshot, fallbackSearch: async () => ({ via: 'web', data: [first] }) })
+      assert.match(fallback.via, /^fallback:/); clean(fallback); assert.match(fallback.note, new RegExp(`http ${status}`))
+    }
+    for (const scenario of ['non-json', 'entitlement', 'transport', 'body-read']) {
+      globalThis.fetch = async () => {
+        if (scenario === 'transport') throw new Error(echo)
+        if (scenario === 'body-read') return { ok: true, text: async () => { throw new Error(echo) } }
+        if (scenario === 'non-json') return new Response(echo)
+        return Response.json({ output: [{ type: 'message', content: [{ type: 'output_text', text: `Subscription required. ${echo}` }] }] })
+      }
+      await assert.rejects(runXTool(params), err => { clean(err.stack); return true })
+    }
+    // Real Pi adapter -> Core -> hosted provider -> audit and model-facing text.
+    globalThis.fetch = async raw => new Response(echo, { status: new URL(String(raw)).hostname === 'api.x.ai' ? 401 : 503 })
+    runtime.invalidateSearchCaches()
+    const tools = new Map()
+    const { default: extension, auditFilePath } = await import('../adapters/pi/index.js')
+    extension({ registerTool: tool => tools.set(tool.name, tool), registerCommand() {}, on() {} })
+    const result = await tools.get('x_search').execute('credential-echo', params)
+    clean(result); assert.match(JSON.stringify(result), /http 401/)
+    const failedTool = await tools.get('x_search').execute('credential-echo-failed', { type: 'thread', post_id: first.url })
+    clean(failedTool); assert.match(JSON.stringify(failedTool), /http 401/)
+    const audit = readFileSync(auditFilePath(), 'utf8')
+    clean(audit); assert.match(audit, /http 401/)
+    delete process.env.XAI_API_KEY
+  })
+  await test('rejected Grok session refresh cannot echo either bearer or refresh token', async () => {
+    const { savePiAuth, logout } = await import('../lib/search/x/xauth.js')
+    const key = 'fixture-session-secret', rotated = 'fixture-rotated-secret', refresh = 'fixture-refresh-secret'
+    savePiAuth({ kind: 'grok-session', key, refresh_token: refresh })
+    const used = []
+    globalThis.fetch = async (raw, init) => {
+      if (String(raw).endsWith('/oauth2/token')) return Response.json({ access_token: rotated })
+      used.push(init.headers.authorization)
+      return new Response(`Authorization: ${init.headers.authorization}; refresh_token=${refresh}`, { status: 401 })
+    }
+    try {
+      await assert.rejects(runXTool({ type: 'user', username: 'alice' }), err => {
+        assert.match(err.message, /http 401/)
+        for (const secret of [key, rotated, refresh]) assert(!err.stack.includes(secret))
+        return true
+      })
+      assert.deepEqual(used, [`Bearer ${key}`, `Bearer ${rotated}`])
+    } finally { logout() }
   })
   console.log(`\n${count} X pipeline tests passed.`)
 } finally {

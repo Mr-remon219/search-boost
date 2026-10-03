@@ -1,21 +1,17 @@
+import './isolate-tests.mjs'
 /**
- * Cursor install/uninstall round-trip fixture — run with isolated HOME:
- *   node scripts/cursor-roundtrip-fixture.mjs <homeDir> <nodeExe> <repoRoot>
+ * Cursor install/uninstall round-trip fixture — always isolates its own HOME:
+ *   node scripts/cursor-roundtrip-fixture.mjs
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const home = process.argv[2]
-const node = process.argv[3]
-const repo = process.argv[4]
-if (!home || !node || !repo) {
-  console.error('usage: cursor-roundtrip-fixture.mjs <homeDir> <nodeExe> <repoRoot>')
-  process.exit(2)
-}
+// Always use our own isolated HOME, even when this fixture is invoked directly.
+const home = process.env.HOME
+const node = process.execPath
+const repo = fileURLToPath(new URL('..', import.meta.url))
 
-process.env.HOME = home
-process.env.USERPROFILE = home
 process.env.SEARCH_BOOST_CURSOR_INSTALL_STATE = join(home, '.search-boost', 'state', 'cursor-install.json')
 
 const { installCursorSurface, uninstallCursorSurface } = await import(pathToFileURL(join(repo, 'lib/agents/cursor-family.mjs')).href)

@@ -1,5 +1,5 @@
 import { assertToolEnabled, watchToolStates } from '../../lib/tool-config.mjs'
-import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
+import { FETCH_DESCRIPTION, X_DESCRIPTION, STATS_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION } from '../../lib/search/routing.js'
 /**
  * MCP host adapter — tool / resource / prompt registration (protocol-native
@@ -33,11 +33,12 @@ import {
   ADAPTIVE_DESCRIPTION,
   ADAPTIVE_TOOL_NAME,
   renderAdaptiveSummary,
-} from '../../lib/search/adaptive/describe.js'
+} from '../../lib/search/screening/describe.js'
 import {
   ANNOTATIONS,
   adaptiveSearchInput,
   adaptiveSearchOutput,
+  validateAdaptiveSearchOutput,
   fetchPageInput,
   fetchPageOutput,
   fusedSearchInput,
@@ -53,11 +54,33 @@ function summarizeAdaptive(result) {
   return result
 }
 
+/**
+ * Structured x_search content (MCP CallToolResult): the core diagnostics stay in
+ * the payload so the advertised output schema and the returned data agree.
+ */
+export function xSearchStructured(out) {
+  const items = out.items ?? []
+  return {
+    via: out.cacheHit ? (out.via ?? 'cache') : out.via,
+    ...(out.note ? { note: out.note } : {}),
+    results: items.length,
+    tookMs: out.tookMs,
+    cacheHit: Boolean(out.cacheHit),
+    ...(out.inFlight ? { inFlight: true } : {}),
+    engineStats: out.engineStats ?? {},
+    enginesUsed: out.enginesUsed ?? [],
+    warnings: out.warnings ?? [],
+    items,
+  }
+}
+
 /** @param {import('@modelcontextprotocol/sdk/server/mcp.js').McpServer} server */export function registerAll(server) {
   const handles = new Map()
   const registerTool = (name, schema, execute) => {
     const handle = server.registerTool(name, schema, async (...args) => {
-      try { assertToolEnabled(name) } catch (error) { return toolErr(error.message) }
+      // Adaptive owns parser → public gate in the shared facade. Gating it
+      // here first would read configuration before semantic input validation.
+      try { if (name !== ADAPTIVE_TOOL_NAME) assertToolEnabled(name) } catch (error) { return toolErr(error.message) }
       return execute(...args)
     })
     handles.set(name, handle)
@@ -73,7 +96,7 @@ function summarizeAdaptive(result) {
   }, async (args, extra) => {
     try {
       if (!String(args.query ?? '').trim()) return toolErr('fused_search: query is required')
-      const signal = abortSignal(extra, 90_000)
+      const signal = extra?.signal
       const result = await runFused({
         query: args.query,
         queries: args.queries,
@@ -122,15 +145,21 @@ function summarizeAdaptive(result) {
       const url = String(args.url ?? '').trim()
       if (!url) return toolErr('fetch_page: url is required')
       const signal = abortSignal(extra, 60_000)
-      const page = await runFetchPage(url, args.focus, signal)
+      const page = await runFetchPage(url, args.focus, signal, { offset: args.offset })
       const focusNote = page.focusMiss ? ' (focus matched nothing — content omitted; retry without focus)' : ''
-      const summary = `fetch_page: ${page.url} — via ${page.via}, ${page.word_count} words, ${page.tookMs}ms${focusNote}${page.limitation ? `; WARNING ${page.limitation.kind}: ${page.limitation.message}` : ''}`
-      return toolOk(`${summary}\n\n${page.content}`, {
+      const windowNote = page.windowNote ? `\n[${page.windowNote}]` : ''
+      const summary = `fetch_page: ${page.url} — via ${page.via}, ${page.word_count} words, ${page.tookMs}ms${focusNote}${page.truncated ? ' [truncated]' : ''}${page.limitation ? `; WARNING ${page.limitation.kind}: ${page.limitation.message}` : ''}`
+      return toolOk(`${summary}${windowNote}\n\n${page.content}`, {
         url: page.url,
+        ...(page.requestedUrl ? { requestedUrl: page.requestedUrl } : {}),
         via: page.via,
         word_count: page.word_count,
         tookMs: page.tookMs,
         truncated: Boolean(page.truncated),
+        totalChars: page.totalChars,
+        offset: page.offset,
+        ...(page.nextOffset != null ? { nextOffset: page.nextOffset } : {}),
+        ...(page.windowNote ? { windowNote: page.windowNote } : {}),
         content: page.content,
         focusMiss: Boolean(page.focusMiss),
         ...(page.limitation ? { limitation: page.limitation } : {}),
@@ -151,7 +180,7 @@ function summarizeAdaptive(result) {
       const kind = X_MODES.includes(args.type) ? args.type : 'keyword'
       const subj = args.query ?? args.username ?? args.post_id ?? ''
       if (!subj) return toolErr('x_search: provide query, username, or post_id')
-      const out = await runXSearch({ ...args, type: kind }, { signal: abortSignal(extra, 180_000) })
+      const out = await runXSearch({ ...args, type: kind }, { signal: extra?.signal })
       if (out.via === 'error') {
         return toolErr(`x_search: no results (${out.error ?? 'primary and fallback failed'})`)
       }
@@ -160,14 +189,7 @@ function summarizeAdaptive(result) {
         ? `x_search (cache) — ${items.length} results`
         : `x_search via ${out.via === 'parallel' ? `parallel:${out.credential}` : out.via} — ${items.length} results`
       const text = [header, out.cacheHit ? '' : out.note ?? '', '', items.map(renderXItem).join('\n')].filter(Boolean).join('\n')
-      return toolOk(text, {
-        via: out.cacheHit ? (out.via ?? 'cache') : out.via,
-        ...(out.note ? { note: out.note } : {}),
-        results: items.length,
-        tookMs: out.tookMs,
-        cacheHit: Boolean(out.cacheHit),
-        items,
-      })
+      return toolOk(text, xSearchStructured(out))
     } catch (err) {
       return toolErr(err instanceof Error ? err.message : String(err))
     }
@@ -209,7 +231,7 @@ function summarizeAdaptive(result) {
 
   registerTool('search_stats', {
     title: 'Search Stats',
-    description: 'Read-only diagnostics for failed or empty searches: cache hits/misses, tier counts, engine availability, and recent activity. Call with no arguments. Inspect tool warnings too; an empty result alone does not imply missing credentials or justify changing configuration.',
+    description: STATS_DESCRIPTION,
     inputSchema: {},
     outputSchema: searchStatsOutput,
     annotations: { ...ANNOTATIONS.stats, title: 'Search diagnostics' },
@@ -227,17 +249,20 @@ function summarizeAdaptive(result) {
     description: ADAPTIVE_DESCRIPTION,
     inputSchema: adaptiveSearchInput,
     outputSchema: adaptiveSearchOutput,
-    annotations: { ...ANNOTATIONS.search, title: 'Intent-guided search result selection (Jev)' },
+    annotations: { ...ANNOTATIONS.search, readOnlyHint: false, title: 'Intent-guided search result selection (Jev; optional local save)' },
   }, async (args, extra) => {
     try {
-      const result = await runAdaptiveSearch(args, {
-        signal: abortSignal(extra, 150_000),
+      // No self-imposed whole-call deadline: only the host/client signal can
+      // cancel this call (2026-10-02 budget supplement).
+      const result = validateAdaptiveSearchOutput(await runAdaptiveSearch(args, {
+        signal: extra?.signal,
         host: 'mcp',
         audit: extra?.audit,
-      })
-      const isError = result.stopReason === 'invalid_input' || result.stopReason === 'not_configured' || result.stopReason === 'no_engines'
-      const suffix = result.stopReason === 'not_configured'
-        ? `\n\nJev is not configured: run \`${result.configurationHint ?? 'search-boost config jev'}\`, or use fused_search / fetch_page / x_search directly.`
+      }))
+      const initial = args.cursor === undefined && args.saved_result_id === undefined
+      const isError = initial && Boolean(result.error)
+      const suffix = initial && result.stopReason === 'not_configured'
+        ? '\n\nJev is not configured: run `search-boost config jev`, or use fused_search / fetch_page / x_search directly.'
         : ''
       const text = `${renderAdaptiveSummary(result)}${suffix}\n\n${JSON.stringify(result)}`
       return isError ? toolErr(text, summarizeAdaptive(result)) : toolOk(text, summarizeAdaptive(result))

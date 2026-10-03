@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './isolate-tests.mjs'
 /**
  * Jev System One client tests — hermetic: a fake fetch, no network, no HOME.
  *
@@ -184,6 +185,122 @@ await test('estimateJevTokens is a conservative size heuristic, not a tokenizer 
   assert.equal(estimateJevTokens(0), 0)
   assert.equal(estimateJevTokens(100), 50)
   assert.ok(estimateJevTokens(4000) > 1000)
+})
+
+await test('beforeAttempt observes the real send path of every attempt, retries included', async () => {
+  let sends = 0
+  const reservations = []
+  const busy = () => new Response('{"error":"busy"}', { status: 529, headers: { 'content-type': 'application/json' } })
+  const { client, calls } = makeClient(({ index }) => {
+    sends++
+    return index <= 3 ? busy() : jsonResponse({ answers: { 'a.one': { type: 'noul', noul: 0.9 } } })
+  }, { maxRetries: 3, client: { beforeAttempt: (chars) => reservations.push({ chars, sends }) } })
+  const out = await client.ask({ state: { task: 'fixture' }, questions: questions() })
+  assert.equal(out.attempts, 4)
+  assert.equal(calls.length, 4)
+  assert.deepEqual(reservations.map((r) => r.sends), [0, 1, 2, 3], 'every observation happens before its own HTTP request')
+  for (const reservation of reservations) assert.equal(reservation.chars, String(calls[0].init.body).length, 'the hook receives the serialized request size')
+})
+
+await test('observation only: growing usage never stops dispatch, even past the removed cumulative caps', async () => {
+  const reservations = []
+  const busy = () => new Response('{"error":"busy"}', { status: 529, headers: { 'content-type': 'application/json' } })
+  let sends = 0
+  // 20 logical calls with ~30k-char states exceed the removed 16-logical,
+  // 180_000 input-token and 420_000 total-token cumulative values; one further
+  // call with 25 retries passes the removed 20-HTTP-attempt cap by itself.
+  // Every one of them must complete.
+  const { client, calls } = makeClient(({ index }) => {
+    sends++
+    return index >= 21 && index <= 45 ? busy() : jsonResponse({ answers: { 'a.one': { type: 'noul', noul: 0.9 } } })
+  }, { maxRetries: 30, client: { beforeAttempt: (chars) => reservations.push(chars) } })
+  const bigState = { task: 'x'.repeat(30_000) }
+  for (let i = 0; i < 20; i++) {
+    const out = await client.ask({ state: bigState, questions: questions() })
+    assert.equal(out.entries.get('a.one').value, 0.9, `call ${i + 1} must complete`)
+  }
+  const perCallChars = reservations[0]
+  const inputTokens = 20 * Math.ceil(perCallChars / 2)
+  const reservedTokens = 20 * (Math.ceil(perCallChars / 2) + 12_000)
+  assert.ok(inputTokens > 180_000, `cumulative input estimate ${inputTokens} must exceed the removed 180000 cap`)
+  assert.ok(reservedTokens > 420_000, `cumulative reserved estimate ${reservedTokens} must exceed the removed 420000 cap`)
+  const retried = await client.ask({ state: { task: 'retry fixture' }, questions: questions() })
+  assert.equal(retried.attempts, 26, 'one logical call may exceed the removed 20-attempt cap when the service retries it')
+  const usage = client.usage()
+  assert.equal(usage.calls, 21, 'more than the removed 16 logical calls completed')
+  assert.equal(usage.httpAttempts, 20 + 26)
+  assert.equal(reservations.length, usage.httpAttempts, 'every actual send is observed exactly once')
+  assert.equal(calls.length, usage.httpAttempts)
+})
+
+await test('a throwing observation hook is handled by the generic error rules, and cancellation still stops before dispatch', async () => {
+  let sends = 0
+  const { client, calls } = makeClient(() => {
+    sends++
+    return jsonResponse({ answers: { 'a.one': { type: 'noul', noul: 0.9 } } })
+  }, { maxRetries: 2, client: { beforeAttempt: () => { throw new Error('observer failed') } } })
+  await assert.rejects(() => client.ask({ state: {}, questions: questions() }), (err) => {
+    assert.equal(err.kind, JEV_ERROR_KINDS.network, 'no budget_* vocabulary: a real error is classified as usual')
+    return true
+  })
+  assert.equal(calls.length, 0, 'the throwing hook never let bytes leave the process')
+  assert.equal(client.usage().httpAttempts, 0)
+
+  const cancelledFirst = new AbortController()
+  cancelledFirst.abort(new Error('caller cancelled'))
+  const stops = makeClient(() => jsonResponse({ answers: { 'a.one': { type: 'noul', noul: 0.9 } } }), { client: { beforeAttempt: () => { throw new Error('must not be reached') } } })
+  await assert.rejects(() => stops.client.ask({ state: {}, questions: questions(), signal: cancelledFirst.signal }), (err) => {
+    assert.ok(err instanceof Error)
+    assert.ok(err.kind === JEV_ERROR_KINDS.cancelled || err.message === 'caller cancelled', 'the caller cancellation reason is preserved')
+    return true
+  })
+  assert.equal(stops.calls.length, 0, 'an aborted caller signal stops the call before any dispatch')
+})
+
+await test('the gateway/SDK path observes beforeAttempt before its request', async () => {
+  const reservations = []
+  let sends = 0
+  const client = createJevClient({
+    baseUrl: 'https://ai-gateway.vercel.sh/v1', apiKey: 'fixture', maxRetries: 2, sleep: () => Promise.resolve(), maxBackoffMs: 1,
+    beforeAttempt: (chars) => reservations.push({ chars, sends }),
+    fetchImpl: async (url, init) => {
+      sends++
+      assert.equal(new URL(url).origin, 'https://ai-gateway.vercel.sh')
+      return Response.json({ answers: { yes: { type: 'boolean', probability: 0.95 } }, usage: { inputTokens: 10, outputTokens: 2 }, providerMetadata: { typesafe: { confidence: {} } } })
+    },
+  })
+  const out = await client.ask({ state: 'provided evidence', questions: { yes: { type: 'noul', instructions: 'Is evidence present?' } } })
+  assert.equal(out.entries.get('yes').value, 0.95)
+  assert.equal(reservations.length, 1)
+  assert.deepEqual(reservations.map((r) => r.sends), [0])
+  assert.ok(reservations[0].chars > 0, 'the gateway body size is observed')
+
+  const controller = new AbortController()
+  let reached = 0
+  const cancelled = createJevClient({
+    baseUrl: 'https://ai-gateway.vercel.sh/v1', apiKey: 'fixture', maxRetries: 2, sleep: () => Promise.resolve(),
+    beforeAttempt: () => controller.abort(new Error('caller cancelled')),
+    fetchImpl: async (url, init) => {
+      // The real transport rejects an already-aborted signal; mirror that contract here.
+      if (init?.signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' })
+      reached++
+      return Response.json({ answers: {} })
+    },
+  })
+  await assert.rejects(() => cancelled.ask({ state: 'x', questions: { yes: { type: 'noul', instructions: 'Is evidence present?' } }, signal: controller.signal }), (err) => {
+    assert.equal(err.kind, JEV_ERROR_KINDS.cancelled, 'the caller abort stays the reported reason')
+    return true
+  })
+  assert.equal(reached, 0, 'the gateway transport is never entered once the caller cancels')
+})
+
+await test('clients without beforeAttempt keep their previous behavior', async () => {
+  const { client, calls } = makeClient(() => jsonResponse({ answers: { 'a.one': { type: 'noul', noul: 0.9 } } }))
+  const out = await client.ask({ state: {}, questions: questions() })
+  assert.equal(out.attempts, 1)
+  assert.equal(calls.length, 1)
+  assert.equal(client.usage().httpAttempts, 1)
+  assert.ok(!('beforeAttempt' in client))
 })
 
 console.log(`\n${count} Jev client tests passed.`)
