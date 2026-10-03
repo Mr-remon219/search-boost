@@ -22,10 +22,10 @@ const source = (name) => readFileSync(`${screeningDir}${name}`, 'utf8')
 // ---- input contract ----
 assert.equal(ADAPTIVE_INPUT_SCHEMA.additionalProperties, false)
 assert.deepEqual(Object.keys(ADAPTIVE_INPUT_SCHEMA.properties).sort(), ['community', 'constraints', 'cursor', 'intent', 'max_results', 'page_size', 'preferences', 'questions', 'save_results', 'saved_result_id'])
-assert.match(ADAPTIVE_INPUT_SCHEMA.properties.constraints.description, /RETIRED/)
-assert.match(ADAPTIVE_INPUT_SCHEMA.properties.community.description, /Omit to let the one pre-search strategy request choose/)
-assert.match(ADAPTIVE_INPUT_SCHEMA.properties.questions.description, /Write it in English/)
-assert.match(ADAPTIVE_INPUT_SCHEMA.properties.intent.description, /caller instruction, not a server-side language check/)
+assert.match(ADAPTIVE_INPUT_SCHEMA.properties.constraints.description, /Retired material gate/)
+assert.match(ADAPTIVE_INPUT_SCHEMA.properties.community.description, /Omit for Jev to choose/)
+assert.match(ADAPTIVE_INPUT_SCHEMA.properties.questions.description, /English is requested/)
+assert.match(ADAPTIVE_INPUT_SCHEMA.properties.intent.description, /not enforced or translated/)
 assert.equal(ADAPTIVE_INPUT_SCHEMA.properties.community.default, undefined, 'community must stay optional with no schema default')
 assert.equal(ADAPTIVE_INPUT_SCHEMA.properties.save_results.default, undefined)
 {
@@ -248,13 +248,18 @@ assert.deepEqual(Object.keys(ADAPTIVE_V5_OUTPUT_SCHEMA.properties.run.properties
 
 // ---- describe contract ----
 assert.equal(ADAPTIVE_TOOL_NAME, 'adaptive_search')
-assert.match(ADAPTIVE_DESCRIPTION, /never language-checks, rejects or translates/)
-assert.match(ADAPTIVE_DESCRIPTION, /constraints is retired/)
-assert.match(ADAPTIVE_DESCRIPTION, /explicit community true\/false overrides/)
-assert.match(ADAPTIVE_DESCRIPTION, /savedResultId/)
+// Field guidance owns language/override/migration semantics; the tool contract
+// owns purpose, whole-snapshot behavior and evidence limits.
+assert.match(ADAPTIVE_INPUT_SCHEMA.properties.questions.description, /not validated or translated/)
+assert.match(ADAPTIVE_INPUT_SCHEMA.properties.constraints.description, /Retired material gate/)
+assert.match(ADAPTIVE_INPUT_SCHEMA.properties.community.description, /true\/false overrides/)
+assert.match(ADAPTIVE_INPUT_SCHEMA.properties.save_results.description, /savedResultId/)
 assert.match(ADAPTIVE_DESCRIPTION, /Requires configured Jev/)
-assert.equal(ADAPTIVE_PROMPT_GUIDELINES.some((guideline) => /never enforced/.test(guideline)), true)
-assert.equal(ADAPTIVE_PROMPT_GUIDELINES.some((guideline) => /fused_search keeps its own community default of false/.test(guideline)), true)
+assert.match(ADAPTIVE_DESCRIPTION, /whole declared snapshot/)
+assert.match(ADAPTIVE_DESCRIPTION, /quantity only/)
+assert.match(ADAPTIVE_DESCRIPTION, /no self-imposed cumulative/)
+assert.equal(ADAPTIVE_PROMPT_GUIDELINES.some((guideline) => /not a verified answer/.test(guideline)), true)
+assert.equal(ADAPTIVE_PROMPT_GUIDELINES.some((guideline) => /does not refresh or re-verify/.test(guideline)), true)
 {
   const v5 = { pageResults: 2, results: [{}, {}], selection: { returned: 2, requested: 2, incomplete: false }, stopReason: 'target_met', warnings: [] }
   assert.match(renderAdaptiveSummary(v5), /adaptive_search: 2 on this page, 2\/2 saved/)

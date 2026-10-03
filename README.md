@@ -90,7 +90,7 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
 
 - **Core (`lib/`)**: Host-neutral algorithms, engine orchestration, Jev client protocol, and network safety policies.
 - **Adapters (`adapters/`)**: Maps core operations into host-specific protocols (MCP JSON-RPC, Pi Extension API, DSH Cordis lifecycle).
-- **Agents (`agents/`)**: Host prompt contracts, workflow templates, and native skill definitions.
+- **Agents (`agents/`)**: Host prompt contracts, workflow templates, and native skill definitions. See the [prompt responsibility contract](docs/prompt-contract.md) and [beta.8 release notes](docs/v0.2.4-beta.8-release.md) for the Agent-facing routing update.
 
 ---
 
@@ -357,11 +357,11 @@ One shared workflow with three host bindings. The parent agent splits a question
 | **DeepSeek Harness** | Native `research_parallel` tool | Children spawn on the same Cordis context through the host's subagent service. Searchers receive `toolFilter.allow = ['fused_search','fetch_page']`; summarizers receive an empty allowlist. Before a wave, `research_parallel` verifies both tools are registered and refuses to spawn otherwise. Handles are disposed on success and failure, and `maxDepth` stays at 1, so children cannot nest further research. |
 | **MCP hosts** (Cursor, Claude Code, Codex, Grok, Antigravity) | Bundled `search-boost-parallel-research` skill | The skill embeds the same roles and workflow and runs them through whatever subagent mechanism the host provides. A host without usable delegation falls back to serial research by the parent. |
 
-Installing into an MCP host also installs the companion **`search-boost`** routing skill, which picks the right tool for an open-ended question.
+Installing into an MCP host also installs the companion **`search-boost`** router skill for optional workflows. Ordinary tool selection uses the registered descriptions and schemas directly; no skill load is required.
 
 - **Fast mode**: one searcher wave, then parent synthesis — no summarizer and no second wave.
 - **Complex mode**: one to three waves with a gap review in between; another wave starts only when a material gap remains, and the run stops early when the evidence is sufficient. These wave limits are workflow instructions, not global quotas enforced across independent tool calls.
-- **Fallback**: if the host cannot delegate, the parent researches serially and says so instead of pretending a wave ran.
+- **Unavailable delegation**: the parent may research serially when browsing is allowed and parallelism is not a strict requirement, and discloses that choice. A denied or failed runtime is a blocker, not permission for a silent fallback.
 
 > [!IMPORTANT]
 > A child returning `ok` means it finished with non-empty text, **not** that its claims are verified. Failed or partial reports stay visible, but their URLs are excluded from the successful aggregate, and final judgment always belongs to the parent.

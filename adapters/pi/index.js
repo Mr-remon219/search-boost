@@ -116,7 +116,7 @@ export default function searchBoostExtension(pi) {
       /* audit must never break agent start */
     }
     const usageNote = todayCount > 0
-      ? `\n[search usage] ${todayCount} direct searches recorded today (UTC) in this audit sample (at most 400 events). This is an observation, not a quota: no self-set search/cost/time budget stops a call.`
+      ? `\n[search usage] ${todayCount} direct searches recorded today (UTC) in this audit sample (at most 400 events). This is an observation, not a quota or a reason to interrupt an in-flight screening pass; host cancellation and request limits still apply.`
       : ''
     return { systemPrompt: `${base}${policy}${usageNote}\n${formatRuntimeCapabilities()}` }
   })
@@ -131,7 +131,7 @@ export default function searchBoostExtension(pi) {
     name: 'fused_search',
     label: 'Fused Web Search',
     description: FUSED_DESCRIPTION,
-    promptSnippet: 'Search the web across multiple engines in parallel with keyword variants',
+    promptSnippet: 'General-purpose multi-engine search for most public-web research; no Jev required',
     promptGuidelines: ['Use the evidence returned by this search before starting another round; inspect warnings rather than treating an empty result as proof of absence.'],
     parameters: {
       type: 'object',
@@ -298,7 +298,7 @@ export default function searchBoostExtension(pi) {
     name: ADAPTIVE_TOOL_NAME,
     label: 'Adaptive Search (Jev)',
     description: ADAPTIVE_DESCRIPTION,
-    promptSnippet: 'Screen one full question with Jev: one bounded fused snapshot, fixed ranking/community strategy and paged reviewed results',
+    promptSnippet: 'Higher-quality intent-guided evidence selection for medium-to-high difficulty or uncertain questions; requires enabled, configured Jev',
     promptGuidelines: ADAPTIVE_PROMPT_GUIDELINES,
     parameters: ADAPTIVE_INPUT_SCHEMA,
     async execute(_toolCallId, params, signal, onUpdate) {
@@ -343,7 +343,7 @@ export default function searchBoostExtension(pi) {
   registerTool({
     name: 'search-parallel-subagent',
     label: 'Search Parallel Subagent',
-    description: 'Run authorized isolated Pi searcher or summarizer children. Use {agent, task} for one child or {tasks:[{agent,task},...]} for a concurrent wave. Searchers have fused_search/fetch_page; summarizers have no tools. Returns each child report with completion/failure status. The caller chooses the wave size; this runner has no concurrency cap. Use direct search for ordinary lookups.',
+    description: 'Run authorized isolated Pi research children for independent evidence tasks or report synthesis. Searchers receive fused_search/fetch_page; summarizers have no tools. Returns per-child reports and execution status, not verified conclusions. This search-boost runner has no concurrency cap and is distinct from pi-subagents; the parent owns wave size and synthesis. Ordinary lookups use direct search.',
     promptSnippet: 'Run a bounded research task or a wave of authorized searcher/summarizer children',
     promptGuidelines: [
       'The /fast-parallel and /complex-parallel templates own the multi-wave workflow; do not infer permission to delegate from tool availability.',
@@ -352,8 +352,8 @@ export default function searchBoostExtension(pi) {
     parameters: {
       type: 'object',
       properties: {
-        agent: { type: 'string', enum: ['searcher', 'summarizer'], description: 'Single-mode agent' },
-        task: { type: 'string', description: 'Single-mode task for that agent' },
+        agent: { type: 'string', enum: ['searcher', 'summarizer'], description: 'Single child role; use with task, exclusive with tasks' },
+        task: { type: 'string', description: 'Bounded search task, or question plus reports/statuses for a summarizer' },
         tasks: {
           type: 'array',
           items: {
@@ -364,7 +364,7 @@ export default function searchBoostExtension(pi) {
             },
             required: ['agent', 'task'],
           },
-          description: 'Parallel wave — all items run concurrently; you choose how many',
+          description: 'One concurrent wave of explicit child roles/tasks, exclusive with agent/task; the caller chooses its size',
         },
       },
     },
@@ -569,7 +569,7 @@ export default function searchBoostExtension(pi) {
       properties: {
         type: { type: 'string', enum: X_MODES, description: 'Which X search mode: keyword (X advanced syntax), semantic (natural language), user (accounts), thread (conversation by post id)' },
         query: { type: 'string', description: 'Search query (keyword: X advanced syntax; semantic: natural language)' },
-        username: { type: 'string', description: 'Username/handle to search (type=user), or from: target for keyword' },
+        username: { type: 'string', description: 'Account handle for type=user; keyword from: filters belong in query' },
         post_id: { type: 'string', description: 'X post/status id or x.com/.../status/<id> URL (type=thread)' },
         max_results: { type: 'integer', minimum: 1, maximum: 10, default: 5, description: 'Max results' },
         from_date: { type: 'string', description: 'Inclusive start date, YYYY-MM-DD (UTC); in user mode filters recent posts' },
@@ -713,7 +713,7 @@ export default function searchBoostExtension(pi) {
   })
 
   pi.registerCommand('web_change', {
-    description: 'Switch the search layer: free (keyless bing/ddg/yahoo/exa-free) vs api (plus keyed tavily/brave/exa). Usage: /web_change [free|api|show]',
+    description: 'Inspect the compatibility layer with /web_change show. Authorized free/api changes persist future defaults (free→free pool, api→hybrid); use fused_search.engine_pool for one request.',
     handler: async (args, ctx) => {
       const cmd = (args ?? '').trim().toLowerCase()
       const current = getLayer()

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // search-boost: startup-hook
-// Claude Code / Codex SessionStart contract. Standalone after installation.
+// Claude Code / Codex SessionStart transport. Standalone after installation.
+// Delivers the adjacent authored policy only; no probing, search or authorization.
 import { readFileSync } from 'node:fs'
 
 let output = {}

@@ -11,6 +11,9 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import * as z from 'zod'
 import { adaptiveSearchInput, fusedSearchInput, fetchPageInput, xSearchInput } from '../adapters/mcp/schemas.mjs'
 import { ADAPTIVE_INPUT_SCHEMA } from '../lib/search/screening/input.js'
+import { ADAPTIVE_DESCRIPTION } from '../lib/search/screening/describe.js'
+import { FUSED_DESCRIPTION } from '../lib/search/routing.js'
+import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../lib/search/tool-descriptions.js'
 
 const home = mkdtempSync(join(tmpdir(), 'sb mcp guidance '))
 const client = new Client({ name: 'guidance-test', version: '1.0.0' })
@@ -33,6 +36,9 @@ try {
   assert.ok(!tools.some((tool) => tool.name === 'adaptive_search'))
   const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]))
   for (const tool of tools) assert(tool.description?.length > 40)
+  assert.equal(byName.fetch_page.description, FETCH_DESCRIPTION)
+  assert.equal(byName.x_search.description, X_DESCRIPTION)
+  assert.ok(byName.fused_search.description.startsWith(FUSED_DESCRIPTION))
   for (const name of ['fused_search', 'fetch_page', 'x_search', 'search_layer']) {
     for (const [field, schema] of Object.entries(byName[name].inputSchema.properties)) {
       assert(schema.description, `${name}.${field}: missing direct-call guidance`)
@@ -85,6 +91,7 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 700))
   byName.adaptive_search = (await client.listTools()).tools.find((tool) => tool.name === 'adaptive_search')
   assert.ok(byName.adaptive_search, 'Jev configuration hot-enables the default tool')
+  assert.equal(byName.adaptive_search.description, ADAPTIVE_DESCRIPTION, 'MCP uses the same concise contract, not another appended field manual')
   for (const [field, schema] of Object.entries(byName.adaptive_search.inputSchema.properties)) {
     assert(schema.description, `adaptive_search.${field}: missing direct-call guidance`)
   }

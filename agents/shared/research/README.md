@@ -2,7 +2,7 @@
 
 ## Ownership
 
-- `searcher.md`, `summarizer.md`, `workflow.md`: canonical role/report and orchestration instructions. Searcher output maps claims to examined URLs; summarizer reads reports only. The parent makes final research and follow-up decisions.
+- `searcher.md`, `summarizer.md`, `workflow.md`: canonical role/report and orchestration instructions. Searcher output maps claims to examined URLs; summarizer reads reports only. The parent owns the shared question/assumptions, validates important claims and makes final research and follow-up decisions. A summarizer recommends rather than verifies new sources or authorizes another wave.
 - `lib/search/parallel-contract.mjs`: role expansion, task validation, citation-candidate extraction, per-task execution status and wave summary. URL extraction/domain counts are not source verification.
 - Pi: `adapters/pi/search-parallel-subagent.js` retains child-process launch, model inheritance, JSONL parsing, cancellation and its existing bounded transient retry. Owned agent/prompt templates are expanded when installed; packaged fallback agent templates are expanded at runtime. User-owned installed role definitions remain authoritative.
 - DSH: `lib/search/research.js`, called by the native adapter, uses DSH's subagent service. It does not call Pi or use Pi agent files. Both success and failure handles are disposed; startup is included in the deadline and late handles are observed/disposed. DSH does not auto-retry or choose an alternate provider after failure.
@@ -16,7 +16,7 @@ Shared native result fields include `results`, `okCount`, `sourceUrls`, `domains
 
 `ok` means execution completed with nonempty text, **not that every claim is proven**. Failed/partial reports remain available but their URLs are excluded from the successful aggregate. Reports longer than 50,000 characters are explicitly marked truncated; extracted URLs only cover retained text. Summarizer conclusions and reports with a BLOCKED note still require parent inspection even if the model turn completed normally.
 
-Fast/complex wave limits are workflow instructions, not global quotas enforced across independent tool calls. The native mechanisms enforce their documented tool isolation and cancellation behavior; a skill can only request controls its host provides.
+Fast/complex wave limits are parent workflow instructions, not global quotas enforced across independent tool calls. They are separate from adaptive_search's one snapshot review and do not truncate it. SearchBoost's Pi runner is not pi-subagents: model, tool and launch settings from one runner are not a contract for the other. The native mechanisms enforce their documented tool isolation and cancellation behavior; a skill can only request controls its host provides.
 
 ## Host API evidence
 

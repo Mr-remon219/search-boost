@@ -2,7 +2,7 @@
 
 The installed `search-boost` router is permanent. Ordinary MCP calls use tool descriptions and schemas directly; do not create one skill per tool or duplicate parameter documentation here.
 
-The bundled `search-boost-parallel-research` workflow reuses the Pi/DSH research roles through each MCP host's actual subagent capabilities, with an explicit serial fallback when unavailable. Shared roles/workflow live in `agents/shared/research/`; host execution notes live at `agents/<host>/parallel.md`. Cursor CLI uses Cursor's notes because the two share an installed skill directory.
+The bundled `search-boost-parallel-research` workflow reuses the Pi/DSH research roles through each MCP host's actual subagent capabilities, with a disclosed parent-serial path only when capability absence, browsing permission and the user's requirements allow it; a failed/denied runtime is not silent fallback authority. Shared roles/workflow live in `agents/shared/research/`; host execution notes live at `agents/<host>/parallel.md`. Cursor CLI uses Cursor's notes because the two share an installed skill directory.
 
 ## Adding a workflow
 
