@@ -211,7 +211,7 @@ try {
   assert(targetPrompts[0].options.some((o) => o.value === 'cursor') && targetPrompts[0].options.some((o) => o.value === 'dsh'))
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'the whole dry-run walk stays read-only')
 
-  const uninstallRun = await runScenario(['uninstall', reply('multiselect', ['cursor']), 'exit'], { dryRun: true })
+  const uninstallRun = await runScenario(['uninstall', reply('multiselect', ['cursor']), reply('confirm', true, options => assert.equal(options.initialValue, false)), 'exit'], { dryRun: true })
   assert(uninstallRun.logs.some((l) => l.includes('uninstall…')), 'Uninstall dispatches the uninstall verb, not install')
   assert(uninstallRun.logs.some((l) => l.includes('Cursor IDE: uninstalled')))
   assert(uninstallRun.logs.some((l) => l.includes('Dry run complete')))
@@ -232,6 +232,8 @@ try {
     '卸载 Agent 接入', 'TUI 设置', '退出',
   ])
   assert.equal(zhHome.records[0].message, '请选择操作')
+  const zhEngineBack = await runScenario(['keys', 'back', 'exit'])
+  assert.equal(zhEngineBack.records[1].options.find(o => o.value === 'back').label, '返回')
   console.log('ok: flat home order, localized labels and every entry dispatch the real operation')
 
   // ---------------------------------------------------------------------------
@@ -264,6 +266,7 @@ try {
   const folderOps = await runScenario(['search-tools', 'layer', 'free', 'back', 'credentials', 'keys', 'back', 'back', 'exit'])
   assert.equal(folderOps.records[3].message, 'Search & tools', 'a completed folder operation stays in its section')
   assert.equal(folderOps.records[3].initialValue, 'layer', 'and keeps its entry selected')
+  assert.equal(folderOps.records[6].options.find(o => o.value === 'back').label, 'Back', 'engine return label is layout-neutral')
   assert.equal(folderOps.records[7].message, 'Services & credentials', 'the engine entry returns to its section')
   assert.equal(folderOps.records[7].initialValue, 'keys')
   assert.equal(folderOps.records[8].message, 'What do you want to do?', 'Esc in a section returns home')
