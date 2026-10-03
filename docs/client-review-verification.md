@@ -1,5 +1,7 @@
 # Antigravity / Grok 接入审查修复
 
+> 历史审查记录（beta.4 后的 9 月 30 日修复），下文旧升级命令与原生 1.0.5 实测按当时行为保留。beta.7 当前入口、1.0.46 隔离验证和缓存确认边界见 [管理接入 note](agent-integration-management-note.md) 与 [接入刷新](host-upgrades.md)。
+
 本轮针对 `b744413` 的 9 月 30 日审查继续修复。没有发布 npm、改变用户真实接入配置或调用模型 API。GitHub 修复不代表 npm 的 `0.2.4-beta.4` 已包含这些代码；正式发布必须使用新版本号。
 
 ## Antigravity 路径与迁移

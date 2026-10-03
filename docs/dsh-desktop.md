@@ -75,9 +75,9 @@ Desktop 验证复用官方 launcher 指向的应用二进制及 ASAR carrier，�
 
 ## 更新与删除
 
-TUI Update / `search-boost upgrade` 自动发现所有已登记 SearchBoost 的 DSH profiles，并逐个选择其拥有者：Desktop 使用 bundled command，CLI 沿用普通 DSH / npm-exec 路径。不升级 Desktop 本身，不改变其他 profile 的宿主运行时。
+TUI 管理 Agent 接入 → 刷新（选择精确范围），或 `search-boost refresh`（全部已有接入），发现已登记 SearchBoost 的 DSH profiles，并逐个选择其拥有者：Desktop 使用 bundled command，CLI 沿用普通 DSH / npm-exec 路径。不升级 Desktop 本身，不改变其他 profile 的宿主运行时。
 
-更新同时验证依赖来源、profile 载荷与宿主实际解析的路径/版本及 adapter 文件；保留 bundle 顺序、启用/禁用选择和用户 patch。旧适配器依赖只在新包验证后清理。缺失命令或应用锁在 profile 备份/写入之前阻止同步；完整升级仍可能已完成全局 SearchBoost 更新，需按结果解决阻塞后重试同步。
+更新同时验证依赖来源、profile 载荷与宿主实际解析的路径/版本及 adapter 文件；保留 bundle 顺序、启用/禁用选择和用户 patch。旧适配器依赖只在新包验证后清理。缺失命令或应用锁在 profile 备份/写入之前阻止同步；同一次刷新仍可能已完成其他接入，需按结果解决阻塞后重试同步；不自动更新全局 SearchBoost 软件包。
 
 卸载在宿主命令成功后重新读取 manifest，拒绝“退出码为 0 但仍登记”的假成功。对于 optional 安装启用后遗留的 bundle 登记，确认所有直接依赖字段和 profile 包链接均已移除，再通过所属宿主的官方 manifest 锁和 `saveManifest` 只清除本插件登记，重新验证。不删除应用锁，不修复宿主全局副本。卸载不移除共享的 SearchBoost 安装和配置。
 

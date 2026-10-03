@@ -136,20 +136,23 @@ search-boost
 
 ## 升级与迁移指南
 
-### 1. 日常更新：直接在 TUI 中一键升级
+### 1. 日常更新：npm 更新软件包，再刷新接入
 
-无论你是使用标准的 `search-boost`，还是此前安装过旧版的 `pi-search-boost`、`dsh-search-boost`，**启动 TUI，在默认首页选择「更新 SearchBoost」（文件夹模式：更新与状态 → 更新），核对范围后确认「开始更新」**：
+软件包更新交给 npm；TUI 不再提供自更新功能。安装、刷新与卸载统一位于 **管理 Agent 接入**（文件夹模式：安装与接入 → 管理 Agent 接入）。
 
 ```bash
-# 方式一：进入交互式菜单一键更新
+npm install -g search-boost@beta --prefer-online
 search-boost
-# -> 选择「更新 SearchBoost」，核对范围并确认「开始更新」
-
-# 方式二：命令行静默更新（推荐脚本或快捷操作使用）
-search-boost upgrade -y
+# → 管理 Agent 接入 → 刷新已有接入 → 选择实际范围
+# 或刷新全部已有接入：
+search-boost refresh -y
+# 只预览：
+search-boost refresh --dry-run
 ```
 
-> **Update 行为说明**：检查 npm 最新版本并拉取更新，同时自动刷新所有已在系统中登记的 Agent 提示词与集成资产；保留用户已配置的所有 API Key、搜索层偏好及权限设置。
+刷新只使用当前软件包，保留凭据、权限、禁用状态及无关配置，不安装未接入的宿主。取消勾选表示本次不处理，不表示卸载。旧 `upgrade` / `--sync-only` 已移除。
+
+Grok 本地缓存若原生更新后仍陈旧，需要完全退出 Grok，再独立确认保留数据重建和对当前源的信任。`-y` 本身不授予重建同意；显式 CLI 同意为 `search-boost refresh -y --repair-grok-cache`。这会请求宿主 `uninstall --keep-data` 后 `install --trust`，不保证旧名称数据自动迁移。成功后重启宿主。详见 [接入刷新](docs/host-upgrades.md)。
 
 ---
 
@@ -164,7 +167,7 @@ npx --yes --package=search-boost@latest -- search-boost migrate -y
 
 # 迁移完成后，后续日常更新只需执行：
 search-boost
-# -> 选择「更新 SearchBoost」并确认（或 search-boost upgrade -y）
+# -> 管理 Agent 接入 → 刷新已有接入（或 search-boost refresh -y）
 ```
 
 ---
@@ -177,14 +180,13 @@ search-boost
 
 | 首页入口 | 行为 |
 | :--- | :--- |
-| 首次配置向导；安装 / 刷新 Agent 接入 | 连续首次配置；直接刷新接入，不重新询问凭据 |
-| 更新 SearchBoost；查看当前状态 | 核对范围后明确开始 / 返回；只读状态 |
+| 首次配置向导；管理 Agent 接入；查看当前状态 | 连续首次配置；安装 / 按范围刷新 / 确认卸载；只读状态 |
 | 搜索引擎配置；默认搜索层；工具开关 | 任选引擎；`free` / `api`；MCP / Pi / DSH 共用开关 |
 | X 凭据；Jev 配置（实验性） | 脱敏凭据管理 |
-| 原生搜索替换；输出 MCP 配置片段；卸载 Agent 接入 | 保留范围/权限选择；只读片段；卸载默认取消 |
+| 原生搜索替换；输出 MCP 配置片段 | 保留权限选择；只读片段 |
 | TUI 设置；退出 | 菜单布局位于显示语言之前；关闭控制台 |
 
-「TUI 设置 → 菜单布局」可选平铺 / 文件夹。文件夹模式保留安装与接入、搜索与工具、服务与凭据、更新与状态分类。操作完成后，平铺模式返回首页原选中项，文件夹模式返回所属分类；Esc 取消 / 返回，Ctrl+C 退出。切换布局立即返回新首页。更新保留凭据与权限选择，替换运行模块后旧控制台结束。
+「TUI 设置 → 菜单布局」可选平铺 / 文件夹。文件夹模式保留安装与接入、搜索与工具、服务与凭据、状态分类。操作完成后，平铺模式返回首页原选中项，文件夹模式返回所属分类；Esc 取消 / 返回，Ctrl+C 退出。切换布局立即返回新首页。管理操作完成后返回管理子菜单；卸载和 Grok 缓存重建默认取消，部分失败不会被显示成安装成功。
 
 布局和显示语言切换立即生效，保存于 `~/.search-boost/config/tui.json`（或 `$SEARCH_BOOST_HOME/config/tui.json`）。未保存布局（包括仅有语言的旧设置）默认平铺；未保存语言时，中文系统环境使用简体中文，其他环境使用 English。偏好同样适用于独立启动的交互式 setup/config 向导，不影响非交互 CLI 输出、搜索结果或 Agent 回复。工具名、命令、路径、MCP 配置片段与底层原始错误保持原样。dry-run 只预览布局 / 语言，不保存；设置损坏时告警且不覆盖。详见 [TUI 导航与语言设置](docs/tui.md)。
 

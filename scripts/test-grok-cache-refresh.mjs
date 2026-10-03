@@ -41,9 +41,10 @@ f=fixture();const result=await refreshGrokPlugin({run:f.run,pluginDir:f.source,c
  assert.equal(plan.name,'grok-plugin-legacy');assert.equal(plan.source,f.source);assert.equal(plan.path,f.cache);assert(Object.isFrozen(plan));return true
 }})
 assert.equal(result.status,'updated');assert.deepEqual(readFileSync(join(f.source,'plugin.json')),readFileSync(join(f.cache,'plugin.json')))
-for(const mutation of ['source','cache','registration']){
+for(const mutation of ['source','cache','registration','repo']){
  f=fixture();await assert.rejects(refreshGrokPlugin({run:f.run,pluginDir:f.source,confirmRepair:async()=>{
   if(mutation==='registration')f.plugin.name='another-name'
+  else if(mutation==='repo')f.plugin.repo_key='changed-repository'
   else writeFileSync(join(f[mutation],'README.md'),'changed-after-consent')
   return true
  }}),/changed after the preview/)
@@ -52,11 +53,24 @@ for(const mutation of ['source','cache','registration']){
 f=fixture({disabled:true});assert.equal((await refreshGrokPlugin({run:f.run,pluginDir:f.source,repair:true})).status,'disabled');assert.equal(f.calls.length,1)
 f=fixture({extraPlugin:true});await assert.rejects(refreshGrokPlugin({run:f.run,pluginDir:f.source,repair:true}),/other plugins/);assert(!f.calls.some(a=>a[1]==='uninstall'))
 f=fixture({removalFails:true});await assert.rejects(refreshGrokPlugin({run:f.run,pluginDir:f.source,repair:true}),/cache removal failed/);assert(!f.calls.some(a=>a[1]==='install'))
-f=fixture({installFails:true});await assert.rejects(refreshGrokPlugin({run:f.run,pluginDir:f.source,repair:true}),/cache reinstallation failed/)
+f=fixture({installFails:true});await assert.rejects(refreshGrokPlugin({run:f.run,pluginDir:f.source,repair:true}),error=>{
+ assert.match(error.message,/cache reinstallation failed/);assert.match(error.message,/removal already succeeded/);assert.match(error.message,/Refresh does not install an absent plugin/);return true
+})
+for(const repoKey of [undefined,null,'',{},42]){
+ f=fixture();f.plugin.repo_key=repoKey
+ await assert.rejects(refreshGrokPlugin({run:f.run,pluginDir:f.source,repair:true}),/repository identity cannot be verified/)
+ assert(!f.calls.some(a=>a[1]==='uninstall'))
+}
 f=fixture();assert.equal((await refreshGrokPlugin({run:f.run,pluginDir:f.source,dryRun:true,repair:true})).status,'planned');assert.equal(f.calls.length,1)
 const plan={name:'fixture',source:'/fixture/source',path:'/fixture/cache',version:'1.0.0'}
 for(const value of [false,undefined,'yes',true]){
  const consent=await confirmGrokCacheRepair({note:()=>{},confirm:async options=>{assert.equal(options.initialValue,false);return value},isCancel:()=>false},plan)
  assert.equal(consent,value===true)
 }
+// Escape during an in-flight operation must decline, never hard-exit siblings.
+const cancelled=Symbol('cancel'),originalExit=process.exit
+try {
+ process.exit=()=>{throw Error('hard exit during cache confirmation')}
+ assert.equal(await confirmGrokCacheRepair({note:()=>{},confirm:async()=>cancelled,isCancel:v=>v===cancelled,cancel:()=>{}},plan),false)
+} finally {process.exit=originalExit}
 console.log('ok: Grok stale local cache repair is native-only, exact-consent-bound, legacy-aware, verified and fails closed')

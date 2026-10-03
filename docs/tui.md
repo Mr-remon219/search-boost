@@ -6,20 +6,18 @@
 
 | 顺序 | 入口（English） | 二级内容 |
 | --- | --- | --- |
-| 1 | Setup wizard（首次配置向导） | 连续向导：搜索引擎凭据 → 默认搜索层 → X 凭据（可跳过）→ 选择 Agent → 宿主选项 → 确认并安装 |
-| 2 | Install / refresh agent integrations（安装 / 刷新 Agent 接入） | 宿主多选与宿主相关选项（DSH surface / profile、Grok 作用域、工作区、自动授权、原生搜索替换）；不重复配置 Keys、搜索层或 X 凭据 |
-| 3 | Update SearchBoost（更新 SearchBoost） | 先展示更新范围与保留内容，再选择「开始更新 / 返回」 |
-| 4 | Status（查看当前状态） | 只读状态：软件包版本、接入来源与载荷、搜索层、引擎启用与凭据状态、工具开关、X / Jev |
-| 5 | Search engine configuration（搜索引擎配置） | 任选一个引擎设置 Key / Base URL / 恢复默认 / 移除，或进入「引擎启用 / 停用」 |
-| 6 | Default search layer（默认搜索层） | `free` / `api`，显示当前值 |
-| 7 | Tool switches（工具开关） | 实际支持工具的多选 → 预览变更 → 确认保存 |
-| 8 | X credentials（X 凭据） | Grok 登录导入 / XAI API Key / 移除本地副本，显示来源与脱敏状态 |
-| 9 | Jev configuration (experimental)（Jev 配置） | Base URL 与 API Key；标注实验性并说明发送内容 |
-| 10 | Native web search（原生搜索替换） | 选择支持配置级开关的 Agent → 替换 / 保留 → 确认 |
-| 11 | Print MCP snippet（输出 MCP 配置片段） | 选择 Agent → 自动授权 / 原生搜索选项 → 输出，不写配置 |
-| 12 | Uninstall agent integrations（卸载 Agent 接入） | 选择 Agent / DSH 目标 → 展示移除范围 → 明确确认，默认取消；交互式 dry-run 也确认，但不移除内容 |
-| 13 | TUI settings（TUI 设置） | 菜单布局、显示语言 |
-| 14 | Exit（退出） | — |
+| 1 | Setup wizard（首次配置向导） | 搜索引擎凭据 → 默认搜索层 → X 凭据（可跳过）→ Agent → 宿主选项 → 确认安装 |
+| 2 | Manage agent integrations（管理 Agent 接入） | 安装接入 / 刷新已有接入 / 卸载接入 / 返回 |
+| 3 | Status（查看当前状态） | 软件包版本、接入来源/载荷、搜索层、凭据状态、工具开关、X / Jev（只读） |
+| 4 | Search engine configuration（搜索引擎配置） | 任选引擎配置，或启用 / 停用 |
+| 5 | Default search layer（默认搜索层） | free / api，显示当前值 |
+| 6 | Tool switches（工具开关） | 支持工具多选 → 变更预览 → 确认保存 |
+| 7 | X credentials（X 凭据） | 登录导入 / Key / 移除本地副本 |
+| 8 | Jev configuration (experimental)（Jev 配置） | 地址与 Key，标明实验性和发送内容 |
+| 9 | Native web search（原生搜索替换） | Agent → 替换 / 保留 → 确认 |
+| 10 | Print MCP snippet（输出 MCP 配置片段） | Agent → 权限选项 → 输出，不写配置 |
+| 11 | TUI settings（TUI 设置） | 菜单布局、显示语言 |
+| 12 | Exit（退出） | — |
 
 排序固定，不随使用次数或安装状态自动重排。空行只作视觉分隔，不占选择项；小终端使用 Clack 的滚动列表。状态提示取实际当前值（如默认搜索层显示当前层）。
 
@@ -29,13 +27,13 @@
 
 | 一级菜单（English） | 二级功能 |
 | --- | --- |
-| 安装与接入（Installation & integrations） | 首次配置向导、安装 / 刷新 Agent 接入、原生搜索替换、输出 MCP 配置片段、卸载 Agent 接入 |
+| 安装与接入（Installation & integrations） | 首次配置向导、管理 Agent 接入、原生搜索替换、输出 MCP 配置片段 |
 | 搜索与工具（Search & tools） | 默认搜索层、工具开关 |
 | 服务与凭据（Services & credentials） | 搜索引擎配置、X 凭据、Jev 配置（实验性） |
-| 更新与状态（Update & status） | 更新 SearchBoost、查看当前状态 |
+| 状态（Status） | 查看当前状态 |
 | TUI 设置（TUI settings） | 菜单布局、显示语言 |
 
-主菜单另有「退出」；二级菜单末尾有「返回主菜单」。
+主菜单另有「退出」；分类与管理子菜单末尾有「返回」，回到实际父菜单。
 
 ## 导航行为
 
@@ -43,8 +41,16 @@
 - 向导内 Esc 取消当前操作，回到所属入口层级；主菜单 Esc 退出；Ctrl+C 退出整个控制台。
 - 取消不回滚之前已经完成并保存的独立配置步骤；未提交的凭据 / 工具开关 / 布局变更不会保存。
 - 安装 / 刷新接入不重复配置 Keys、搜索层或 X 凭据。首次配置向导继续依次询问这些设置，并继续逐个凭据槽位询问，不会让初始配置提前结束。
-- 更新入口不会在选中时立即执行：先展示当前版本、更新范围（search-boost 软件包 + 所有已安装 Agent 接入）与保留内容（用户配置、凭据、权限选择），选择「开始更新」后才运行。若更新替换了运行模块，或更新操作抛出异常，旧 TUI 结束，不继续使用旧模块。
-- `search-boost setup`、`install`、`config keys|layer|x|jev|search` 等直接命令保持可用；`config keys` 的交互式流程仍是逐个槽位的顺序向导（该命令不经过首页布局）。
+- beta.7 起删除软件包自更新和独立卸载首页入口。管理子菜单先选择操作，安装 / 刷新 / 卸载完成后留在该子菜单；返回再回到实际父层。软件包由用户用 npm 更新。
+- `search-boost setup`、`install`、`refresh`、`uninstall`、`config keys|layer|x|jev|search` 等直接命令保持可用；`config keys` 的交互式流程仍是逐个槽位的顺序向导（该命令不经过首页布局）。
+
+## 管理 Agent 接入
+
+- **安装**：选择 Agent 和宿主参数（DSH surface/profile、Grok scope/workspace、权限/原生搜索等）；不重问凭据、搜索层或 X。已有 Grok 登记使用共用验收/刷新，不盲目重复安装。普通 `install -t grok` 是非交互路径，不弹缓存重建提示；遇到陈旧缓存应使用交互式刷新，或独立明确的 CLI 修复选项。
+- **刷新**：只列出现有接入，按实际资源合并重复项，再多选精确范围；Grok 原生插件与 MCP 配置是独立可选项。取消勾选不操作、不卸载；确认后新发现的 scope/profile 不加入本次范围。只使用当前包，不查询新版本或自动 npm/npx 更新 SearchBoost；凭据、权限、禁用状态与无关配置保留。
+- **卸载**：Agent / DSH 范围 → 预览实际移除目标 → 明确确认，默认取消；执行复用预览的目标计划。交互式 dry-run 也确认，但不删除内容。
+- **结果**：按目标记录成功/失败；部分安装失败显示“部分完成”和失败目标，不使用成功收尾；刷新失败保留已完成目标、显示不完整并写入 `state/last-refresh.json`。
+- **Grok 缓存**：先核验，再原生 update，再验缓存。仍陈旧时，完全退出 Grok并单独确认宿主 `uninstall --keep-data` / `install --trust`，默认取消、只有 literal true 授权；`-y` 不能代替这一同意。确认期间源、缓存、登记或仓库身份变化则拒绝执行。禁用插件不启用、不重装；无法验证身份和共享仓库拒绝自动重建。Esc 是拒绝重建，刷新中的其他事务仍完成并汇报；陈旧缓存依然是不完整结果，不伪装成功。移除后重装失败会说明可能缺失/部分登记，需审核来源后从安装入口恢复；刷新不新增插件。旧名称数据保留原址，不保证自动迁移复用。
 
 ## 搜索引擎配置入口
 
@@ -103,4 +109,4 @@ npm run test:tui
 npm run check
 ```
 
-测试覆盖菜单顺序与两种布局的入口一致性、返回与取消、Ctrl+C、布局与语言即时切换及跨进程保存、设置并发 / 损坏与 dry-run、更新范围预览与显式确认、引擎任选入口与凭据脱敏、初始配置向导保持完整、非交互 CLI 不变，以及更新替换模块后的退出行为。测试通过 `scripts/isolate-tests.mjs` 使用临时 HOME 和工作区，不读写用户真实配置。
+测试覆盖菜单顺序与两种布局的入口一致性、返回与取消、Ctrl+C、布局与语言即时切换及跨进程保存、设置并发 / 损坏与 dry-run、精确刷新范围、卸载与独立缓存重建确认、引擎任选入口与凭据脱敏、初始配置向导保持完整、非交互 CLI 不变，以及部分失败、刷新中取消不硬退出和未勾选原生插件不派发。测试通过 `scripts/isolate-tests.mjs` 使用临时 HOME 和工作区，不读写用户真实配置。

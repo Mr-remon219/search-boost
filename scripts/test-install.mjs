@@ -900,7 +900,7 @@ assert('parseFlags --skip-grok-plugin', parseFlags(['--skip-grok-plugin']).skipG
   try {
     const r = await installGrokPlugin({ dryRun: true })
     assert('installGrokPlugin dry-run ok', r.ok === true && r.dryRun === true)
-    assert('installGrokPlugin dry-run logs command', logs.some((l) => l.includes('Would run:') && l.includes('grok plugin install') && l.includes('--trust')))
+    assert('installGrokPlugin dry-run distinguishes new trust from existing refresh', logs.some((l) => l.includes('Would install a new Grok plugin') && l.includes('grok plugin install') && l.includes('--trust') && l.includes('existing registration') && l.includes('separate consent')))
   } finally {
     console.log = origLog
   }

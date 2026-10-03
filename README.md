@@ -136,20 +136,23 @@ search-boost
 
 ## Upgrade & Migration Guide
 
-### 1. Routine Updates: Upgrading via TUI
+### 1. Routine Updates: npm First, Then Refresh Integrations
 
-Whether you run unified `search-boost` or have legacy `pi-search-boost` / `dsh-search-boost` installations, **select Update SearchBoost on the default TUI home (folder layout: Update & status → Update), review the scope and confirm Start update**:
+Use npm to update the package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
 
 ```bash
-# Option 1: Open the interactive menu
+npm install -g search-boost@beta --prefer-online
 search-boost
-# -> Select "Update SearchBoost", review scope and confirm "Start update"
-
-# Option 2: Run headless update
-search-boost upgrade -y
+# → Manage agent integrations → Refresh existing integrations → select scopes
+# Or refresh all existing integrations:
+search-boost refresh -y
+# Preview only:
+search-boost refresh --dry-run
 ```
 
-> **Update Behavior**: Fetches the latest published release, updates SearchBoost, and refreshes prompt assets across all configured agents while preserving existing keys, layer choices, and permission settings.
+Refresh uses the current package and preserves credentials, permissions, disabled states and unrelated configuration. It does not install unconfigured hosts. Unchecking a target means no operation, not removal. The old `upgrade` command and `--sync-only` option are removed.
+
+If a Grok local cache remains stale after native update, fully quit Grok and separately approve data-retaining reconstruction and trust of the displayed source. `-y` alone is not approval; explicit CLI approval is `search-boost refresh -y --repair-grok-cache`. This requests native `uninstall --keep-data`, then `install --trust`; legacy-name data reuse is not guaranteed. Restart affected hosts afterward. See [integration refresh](docs/host-upgrades.md).
 
 ---
 
@@ -164,7 +167,7 @@ npx --yes --package=search-boost@latest -- search-boost migrate -y
 
 # Once migrated, routine updates only require:
 search-boost
-# -> Select "Update SearchBoost" and confirm (or search-boost upgrade -y)
+# -> Manage agent integrations → Refresh existing integrations (or search-boost refresh -y)
 ```
 
 ---
@@ -177,14 +180,13 @@ The default **flat** home lists these actions in order:
 
 | Home entries | Behavior |
 | :--- | :--- |
-| Setup wizard; Install / refresh agent integrations | Guided first setup; direct integration refresh without repeating credential setup |
-| Update SearchBoost; Status | Review update scope and confirm Start / Back; read-only status |
+| Setup wizard; Manage agent integrations; Status | Guided setup; install / scoped refresh / confirmed uninstall; read-only status |
 | Search engine configuration; Default search layer; Tool switches | Choose individual engines; `free` / `api`; shared MCP / Pi / DSH switches |
 | X credentials; Jev configuration (experimental) | Masked credential management |
-| Native web search; Print MCP snippet; Uninstall agent integrations | Explicit scope/permission choices; read-only snippets; uninstall defaults to cancel |
+| Native web search; Print MCP snippet | Explicit permission choices; read-only snippets |
 | TUI settings; Exit | Menu layout before display language; close the console |
 
-**TUI settings → Menu layout** offers flat / folder. Folder mode retains Installation & integrations, Search & tools, Services & credentials and Update & status. Completed actions return to the same flat home entry or their folder submenu. Escape cancels/navigates back; Ctrl+C exits. A layout switch immediately returns to the new home. Update preserves credentials and permission choices; a replaced runtime ends the old console.
+**TUI settings → Menu layout** offers flat / folder. Folder mode retains Installation & integrations, Search & tools, Services & credentials and Status. Completed actions return to the same flat home entry or their folder submenu. Escape cancels/navigates back; Ctrl+C exits. A layout switch immediately returns to the new home. Management returns to its own submenu; uninstall and Grok cache reconstruction default to cancel. Partial failures are reported, not styled as success.
 
 Layout and language changes apply immediately and are saved in `~/.search-boost/config/tui.json` (or `$SEARCH_BOOST_HOME/config/tui.json`). Missing layout (including legacy language-only settings) defaults to flat. Without a saved language preference, Chinese system locales select Simplified Chinese; other locales select English. The preference also applies to standalone interactive setup/config commands, not non-interactive CLI output, search results or agent replies. Tool names, commands, paths, MCP snippets and raw upstream errors remain unchanged. Dry-run previews layout/language without saving; malformed settings are warned about, not overwritten. See [TUI navigation and language settings](docs/tui.md).
 
@@ -493,7 +495,7 @@ After changing adapter or agent assets, re-run the same install command for that
 | Command | What it covers |
 | :--- | :--- |
 | `npm run check` | Syntax check across the CLI, core, adapters and scripts |
-| `npm run prepublishOnly` | The full offline suite: plugin sync, syntax, CLI, install, doctor, fusion, X, engines, X auth, Jev, key authority, dry-run, network, search routing, adapters, parallel research, upgrade, MCP and smoke |
+| `npm run prepublishOnly` | The full offline suite: plugin sync, syntax, CLI, install, doctor, fusion, X, engines, X auth, Jev, key authority, dry-run, network, search routing, adapters, parallel research, integration refresh / migration, MCP and smoke |
 | `npm run test:network` | Proxy retries, curl fallback, request bounds and compatibility regressions |
 | `npm run test:adapters` | MCP, Pi and DSH adapter protocol suites plus Pi subagent settings migration/diagnosis |
 | `npm run test:parallel` | Searcher/summarizer contracts, DSH dispatch preflight, cancellation and tool isolation |

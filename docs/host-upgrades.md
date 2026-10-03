@@ -2,31 +2,31 @@
 
 这里升级的是 **SearchBoost 在 Pi/DSH 中的集成**，不升级宿主 CLI 本身。
 
-## 用户入口
+## 用户入口（beta.7 起）
 
 ```bash
-search-boost                         # TUI → Update（所有已接入 agents，含 Pi/DSH）
-search-boost upgrade --dry-run
-search-boost upgrade -y
-# npm 已更新，或使用本地版本且不需要下载：
-search-boost upgrade --sync-only -y
-# 未记录过的项目：
-search-boost upgrade --workspace /path/to/project -y
+npm install -g search-boost@beta --prefer-online  # 用户更新软件包
+search-boost                         # 管理 Agent 接入 → 刷新已有接入 → 选范围
+search-boost refresh --dry-run
+search-boost refresh -y              # 全部已有接入
+search-boost refresh --workspace /path/to/project -y
 ```
 
-`pi-search-boost`、`dsh-search-boost` 到 `search-boost` 的适配器升级也属于 TUI Update。`migrate` 仅服务全局 `search-boost-mcp` npm 包更名，见[迁移说明](migration.md)。
+刷新只使用当前持久安装的包，不查询 npm 最新版本、不自动更新 SearchBoost，不更新宿主 CLI。临时 npx 路径不能成为持久接入目标。`upgrade` / `--sync-only` 已移除。
 
-发布新版本后仍使用相同入口，不需要重新编写一次性迁移脚本。升级完成后重启/重新加载宿主。注册改成本地包路径后，应由 `search-boost upgrade` 管理后续升级；不要把宿主对 npm 扩展的更新当作这些本地路径也已同步的证据。
+旧 Pi/DSH 适配器来源迁移属于接入刷新；`migrate` 仅服务全局 `search-boost-mcp` npm 包更名，见[迁移说明](migration.md)。TUI 可选择精确 scope/profile；取消勾选不卸载，之后新发现的目标不会扩大选择。成功后重启/重新加载宿主；不要将宿主更新 npm 扩展当作本地资产也已同步的证据。
+
+Grok 原生插件是单独可选项。原生更新后缓存仍不一致时，默认明确失败；完全退出 Grok后，可以单独确认 `--keep-data` / `--trust` 重建。CLI 显式同意为 `search-boost refresh -y --repair-grok-cache`，`-y` 本身不授予信任或重建同意。禁用插件不重装、不启用；不同来源、无法验证的仓库身份、共享仓库插件或危险别名拒绝自动重建。重建先验证源、绑定确认时的指纹，再验移除与新缓存；失败后报告实际阶段，不宣称回滚。旧名称数据保留原址，不保证自动迁移复用。刷新不会安装已不存在的插件，需审核源后通过安装入口重新接入。
 
 ## 共用流程
 
-1. `lib/upgrade/index.mjs` 检查 npm 版本；需要下载升级时，从 **npx 缓存中的新包进程**运行更新器，验证全局安装后交给新包同步所有已有 agents，避免继续运行内存中的旧升级代码。
+1. `lib/upgrade/index.mjs` 从当前软件包发现已有接入、按用户选择过滤，使用锁、备份、事务与载荷验收刷新；记录 `state/last-refresh.json`，部分成功不会显示为全部成功。
 2. `lib/package-identity.mjs` 统一识别来源：npm/git 名称、本地包根目录、manifest 声明的 Pi extension、相对路径、file URL、受管 shim。版本不参与身份匹配；最近的外部 package.json 是边界，不能因为上层目录属于 SearchBoost 就接管用户扩展。
 3. `lib/upgrade/integrations.mjs` 读取实际注册、校验目标包、拒绝降级，备份后更新；不触碰凭据、权限、用户模型配置。
 4. 成功写入的准确路径与版本保存在 `~/.search-boost/state/package-sources.json`（支持 `SEARCH_BOOST_HOME`）。下一次旧目录失效时，只按**相同作用域、相同路径**恢复身份，不按文件名猜测。
 5. 只有仍存在的宿主注册会成为升级目标。记录不能使已经卸载的集成重新出现；已有外部包/用户文件也不能被记录强行认领。
 
-来源记录采用版本化 schema 和原子写入，并纳入注册事务的备份/恢复。全局 npm 更名另会记录已验证的旧包根目录/扩展入口，因此即使 migrate 先删除了全局旧包，后续 TUI Update 仍可识别其本地注册；migrate 本身不改 agent 配置。损坏或不支持的 schema 会明确报错，而不是猜测内容。已有安装在首次成功同步后获得记录；在此之前已经删除、且没有其他归属证据的任意本地路径不能安全自动认领。
+来源记录采用版本化 schema 和原子写入，并纳入注册事务的备份/恢复。全局 npm 更名另会记录已验证的旧包根目录/扩展入口，因此即使 migrate 先删除了全局旧包，后续 TUI 刷新 仍可识别其本地注册；migrate 本身不改 agent 配置。损坏或不支持的 schema 会明确报错，而不是猜测内容。已有安装在首次成功同步后获得记录；在此之前已经删除、且没有其他归属证据的任意本地路径不能安全自动认领。
 
 ## Pi
 
@@ -60,7 +60,7 @@ DSH 不一定会重新启用已经安装但禁用的 bundle；这不是失败。
 ## 回归门禁
 
 ```bash
-npm run test:upgrade
+npm run test:refresh
 ```
 
 包括旧包迁移、全局 npm 接管，以及 `scripts/test-host-upgrade.mjs`：
@@ -75,6 +75,6 @@ npm run test:upgrade
 
 `scripts/test-dsh-upgrade.mjs` 另外通过真实子进程启动器覆盖全局命令齐全、仅 npm、缺少 pnpm、缺少 dsh 四种环境，分别验证 checkout 和 npm 包来源；同时检查禁用状态、同版本重试、dry-run、错误版本/缺失文件及失败回滚。命令端点使用隔离 fixture，不下载真实 DSH。
 
-`npm run test:isolation` 为全部自动测试提供模拟用户 HOME、重定位状态目录与假凭据，验证测试不会修改继承的配置、升级记录或源码树；`test:install` 执行其中的安装子集。所有入口统一使用 `scripts/isolate-tests.mjs`，详见[测试隔离说明](test-isolation.md)。真实项目目录不可用时仍阻止升级完成，不自动删除失效记录。
+`npm run test:isolation` 为全部自动测试提供模拟用户 HOME、重定位状态目录与假凭据，验证测试不会修改继承的配置、接入记录或源码树；`test:install` 执行其中的安装子集。所有入口统一使用 `scripts/isolate-tests.mjs`，详见[测试隔离说明](test-isolation.md)。真实项目目录不可用时仍阻止升级完成，不自动删除失效记录。
 
 这些测试不证明用户机器上真实 Pi/DSH 已完成重启或加载；宿主行为由隔离替身模拟，全局 npm 迁移另通过本地 fixture registry 执行真实 npm。
