@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // search-boost: startup-hook
-/** Antigravity PreInvocation hook — inject only before the first model call. */
+/** Deliver the adjacent authored policy before the first model call; no search,
+ * capability probing or permission grant. Global/workspace delivery is deduplicated. */
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'

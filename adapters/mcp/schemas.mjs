@@ -14,7 +14,7 @@ const engineEnum = z.enum(ENGINE_ORDER)
 
 export const fusedSearchInput = {
   query: z.string().describe('Search query (site:, -site:, "phrase", A OR B)'),
-  queries: z.array(z.string()).optional().describe('Distinct query angles, not paraphrases; use up to 3 variants'),
+  queries: z.array(z.string()).optional().describe('Distinct query angles, not paraphrases; complexity caps total variants at 1/2/3, including query and OR alternatives'),
   engines: z.array(engineEnum).min(1).optional().describe('Optional exact engine selection overriding engine_pool; unavailable or disabled engines are skipped with warnings'),
   max_results: z.number().int().min(1).max(10).optional().describe('Max results (default 6)'),
   include_domains: z.array(z.string()).optional().describe('Restrict results to these hostnames, e.g. nodejs.org; useful for official sources'),
@@ -23,7 +23,7 @@ export const fusedSearchInput = {
   complexity: z.enum(['simple', 'medium', 'complex']).optional().describe('Budget, query variants and depth only; default medium'),
   engine_pool: z.enum(['free', 'api', 'hybrid']).optional().describe('Which engines to search. Omitted: compatibility layer free→free, api→hybrid'),
   ranking: z.enum(['balanced', 'research', 'fresh']).optional().describe('Final engine-weight preset only; default balanced'),
-  engine_weights: z.object(Object.fromEntries(ENGINE_ORDER.map((name) => [name, z.number().finite().min(0).optional()]))).strict().optional().describe('Override preset engine weights; never enables or selects engines'),
+  engine_weights: z.object(Object.fromEntries(ENGINE_ORDER.map((name) => [name, z.number().finite().min(0).optional()]))).strict().optional().describe('Override preset engine weights; zero still calls the engine. Never enables or selects engines'),
   min_score: z.number().finite().min(0).optional().describe('Minimum consensus-v2 quality score; old thresholds need recalibration, default 0'),
   community: z.boolean().optional().describe('Add X developer/community voices when relevant; default false; shares final max_results'),
   layer: z.enum(['free', 'api']).optional().describe('Deprecated compatibility alias: free→free pool, api→hybrid pool; engine_pool takes precedence; not persisted'),
@@ -73,7 +73,7 @@ export const fusedSearchOutput = {
 
 export const fetchPageInput = {
   url: z.string().url().describe('http(s) URL to fetch'),
-  focus: z.string().optional().describe('Keep paragraphs matching these terms (optional; full page is returned when omitted)'),
+  focus: z.string().optional().describe('Keep matching paragraphs; omit for the readable body. Output may still be windowed; inspect nextOffset and limitations'),
   offset: z.number().int().min(0).optional().describe('Character offset into the page body (default 0); pass nextOffset from a previous call to continue a long page from cache'),
 }
 

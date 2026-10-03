@@ -1,5 +1,5 @@
 import { assertToolEnabled, watchToolStates } from '../../lib/tool-config.mjs'
-import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
+import { FETCH_DESCRIPTION, X_DESCRIPTION, STATS_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION } from '../../lib/search/routing.js'
 /**
  * MCP host adapter — tool / resource / prompt registration (protocol-native
@@ -31,7 +31,6 @@ import {
 } from '../../lib/runtime.mjs'
 import {
   ADAPTIVE_DESCRIPTION,
-  ADAPTIVE_PROMPT_GUIDELINES,
   ADAPTIVE_TOOL_NAME,
   renderAdaptiveSummary,
 } from '../../lib/search/screening/describe.js'
@@ -232,7 +231,7 @@ export function xSearchStructured(out) {
 
   registerTool('search_stats', {
     title: 'Search Stats',
-    description: 'Read-only diagnostics for failed or empty searches: cache hits/misses, tier counts, engine availability, and recent activity. Call with no arguments. Inspect tool warnings too; an empty result alone does not imply missing credentials or justify changing configuration.',
+    description: STATS_DESCRIPTION,
     inputSchema: {},
     outputSchema: searchStatsOutput,
     annotations: { ...ANNOTATIONS.stats, title: 'Search diagnostics' },
@@ -247,7 +246,7 @@ export function xSearchStructured(out) {
 
   registerTool(ADAPTIVE_TOOL_NAME, {
     title: 'Adaptive Search (Jev)',
-    description: `${ADAPTIVE_DESCRIPTION}\n\n${ADAPTIVE_PROMPT_GUIDELINES.map((line) => `- ${line}`).join('\n')}`,
+    description: ADAPTIVE_DESCRIPTION,
     inputSchema: adaptiveSearchInput,
     outputSchema: adaptiveSearchOutput,
     annotations: { ...ANNOTATIONS.search, readOnlyHint: false, title: 'Intent-guided search result selection (Jev; optional local save)' },

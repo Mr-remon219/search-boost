@@ -90,7 +90,7 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
 
 - **Core (`lib/`)**：宿主无关的算法与网络引擎，负责引擎调用、数据清洗、Jev 协议交互及安全策略。
 - **Adapters (`adapters/`)**：负责将核心能力翻译为具体协议（MCP JSON-RPC、Pi Extension API、DSH Cordis 生命周期）。
-- **Agents (`agents/`)**：受控提示词、工作流模板与原生 Skills 定义。
+- **Agents (`agents/`)**：受控提示词、工作流模板与原生 Skills 定义。面向 Agent 的工具选择与分层职责见[提示词职责契约](docs/prompt-contract.md)及 [beta.8 发布说明](docs/v0.2.4-beta.8-release.md)。
 
 ---
 
@@ -357,11 +357,11 @@ search-boost
 | **DeepSeek Harness** | 原生 `research_parallel` 工具 | 子代理经宿主 subagent 服务在同一 Cordis 上下文中创建。Searcher 获得 `toolFilter.allow = ['fused_search','fetch_page']`，Summarizer 为空白名单。发起波次前 `research_parallel` 会确认两个工具已注册，否则拒绝派发；句柄在成功或失败后都会释放，`maxDepth` 为 1，子代理不能再次嵌套调研。 |
 | **MCP 宿主**（Cursor、Claude Code、Codex、Grok、Antigravity） | 随包安装的 `search-boost-parallel-research` Skill | Skill 内嵌同一套角色与流程，用宿主自身的子代理机制执行；宿主无法派生子代理时，退回主 Agent 串行调研。 |
 
-安装到 MCP 宿主时还会同时安装配套的 **`search-boost`** 路由 Skill，为开放式问题选择合适工具。
+安装到 MCP 宿主时还会同时安装配套的 **`search-boost`** 路由 Skill，用于可选工作流。普通工具选择直接依据已注册的描述与 schema，不需要先加载 Skill。
 
 - **Fast 模式**：只跑一波 Searcher，随后由主 Agent 收敛，不启动 Summarizer，也不补第二波。
 - **Complex 模式**：1~3 波，波次之间做证据缺口复核；只有存在实质性缺口时才追加下一波，证据足够就提前停止。需注意：波次上限是提示词层面的工作流约束，不是跨独立工具调用的全局配额。
-- **降级保护**：宿主无法派生子代理时，由主 Agent 串行调研并如实说明，不会假装并行波次已经执行。
+- **派生能力缺失**：允许联网且用户不严格要求并行时，可由主 Agent 串行调研并披露该选择。权限拒绝或运行时失败应报告阻塞，不授权静默换机制。
 
 > [!IMPORTANT]
 > 子代理返回 `ok` 只代表执行完成且文本非空，**不代表结论已被证实**。失败或部分完成的报告仍会保留可见，但其 URL 不计入成功聚合；最终判断始终由主 Agent 负责。

@@ -1,7 +1,7 @@
 /**
  * Agent asset router — single registry for per-agent inject surfaces.
  *
- * Each subfolder under agents/ holds that agent's exploration artifacts:
+ * Each subfolder under agents/ holds authored host bindings (not runtime capability data):
  *   inject.md              → prompt block injected into the agent's rules file
  *   skill.md               → lightweight router skill template; frontmatter comes from the route's
  *                            skillFrontmatter unless the template declares its own
@@ -114,7 +114,7 @@ export const ROUTES = {
     skill: 'skill.md',
     mergeWith: ['cursor-cli'],
     mcp: {
-      serverUseInstructions: 'Web search, page reading, and X/Twitter via MCP. The search-boost skill routes task-specific workflows.',
+      serverUseInstructions: 'Web search, page reading, and X/Twitter via MCP. Use tools directly; the search-boost skill routes optional workflows.',
     },
     skillFrontmatter: {
       description:
@@ -130,7 +130,7 @@ export const ROUTES = {
     hookScript: 'session-start.mjs',
     mergeWith: null,
     mcp: {
-      serverUseInstructions: 'Web search, page reading, and X/Twitter via MCP. The search-boost skill routes task-specific workflows.',
+      serverUseInstructions: 'Web search, page reading, and X/Twitter via MCP. Use tools directly; the search-boost skill routes optional workflows.',
     },
     skillFrontmatter: {
       description:

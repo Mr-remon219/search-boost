@@ -2,7 +2,7 @@ import { assertToolEnabled, guardedTool, toolState } from '../../lib/tool-config
 import { registerDshTool } from './schema.js'
 import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/screening/input.js'
 import { ADAPTIVE_OUTPUT_SCHEMA } from '../../lib/search/screening/schema.js'
-import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
+import { FETCH_DESCRIPTION, X_DESCRIPTION, STATS_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
 // DSH host adapter — DeepSeek Harness (Cordis) bundle plugin.
 //
@@ -613,7 +613,7 @@ function registerXLogoutCommand(ctx) {
 function registerParallelTool(ctx, provider = 'spawn') {
   return registerGuardedTool(ctx, {
     name: 'research_parallel',
-    description: 'Run authorized DSH-native research children: searchers receive fused_search/fetch_page, summarizers receive no tools. Use {agent, task} for one child or {tasks:[{agent,task},...]} for a concurrent wave. Returns reports with execution status; missing capabilities fail explicitly, without a Pi CLI fallback. Legacy {query, sub_queries} remains supported. Ordinary lookups use direct search; the shared workflow governs follow-up waves.',
+    description: 'Run authorized DSH-native research children for independent evidence tasks or report synthesis. Searchers receive fused_search/fetch_page; summarizers have no tools. Returns per-child reports and execution status, not verified conclusions. Missing host capabilities fail explicitly, without a Pi/CLI fallback. Ordinary lookups use direct search; the shared workflow owns wave planning and follow-up.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -627,7 +627,7 @@ function registerParallelTool(ctx, provider = 'spawn') {
             properties: { agent: { type: 'string', enum: ['searcher', 'summarizer'] }, task: { type: 'string', minLength: 1 } },
             required: ['agent', 'task'],
           },
-          description: 'One concurrent wave, usually 2–4 independent research tasks. Choose a size within the host budget.',
+          description: 'One concurrent wave of explicit child roles/tasks, exclusive with agent/task or sub_queries; wave size follows the host/task budget.',
         },
         query: { type: 'string', description: 'Question context; required only for legacy query/sub_queries mode.' },
         goal: { type: 'string', description: 'What the evidence must establish.' },
@@ -734,7 +734,7 @@ function registerWebChangeCommand(ctx) {
   }
   return commands.register({
     name: 'web_change',
-    description: 'Switch search layer: free (keyless bing/ddg/yahoo/exa-free) vs api (full pool incl. keyed tavily/brave/exa). Usage: /web_change [free|api|show]',
+    description: 'Inspect the compatibility layer with /web_change show. Authorized free/api changes persist future defaults (free→free pool, api→hybrid); use fused_search.engine_pool for one request.',
     input: { hint: 'free | api | show' },
     handler: ({ rawInput }) => {
       const cmd = String(rawInput ?? '').trim().toLowerCase()
@@ -759,7 +759,7 @@ function registerWebChangeCommand(ctx) {
 function registerStatsTool(ctx) {
   return registerGuardedTool(ctx, {
     name: 'search_stats',
-    description: 'search-boost audit: cache hits/misses, tier distribution, engine availability, and the most recent searches.',
+    description: STATS_DESCRIPTION,
     parameters: { type: 'object', additionalProperties: false, properties: {} },
     presentCall: () => ({ card: 'generic', title: 'search-boost stats', kind: 'other' }),
     output: {
