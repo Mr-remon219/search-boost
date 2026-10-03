@@ -1,16 +1,24 @@
-# SearchBoost
+<p align="center">
+  <img src="./assets/banner.png" alt="SearchBoost" width="860">
+</p>
 
-**面向 AI Coding Agent 的多引擎网络搜索与证据聚合工具箱**  
-*一个核心代码库，深度适配 MCP、Pi 与 DeepSeek Harness 三大生态*
+<p align="center">
+  <strong>面向 AI Coding Agent 的多引擎网络搜索与证据聚合工具箱</strong><br>
+  <em>一个核心代码库，深度适配 MCP、Pi 与 DeepSeek Harness 三大生态</em>
+</p>
 
-[![version](https://img.shields.io/badge/version-v0.2.4-orange?style=flat-square)](#)
-[![npm version](https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm)](https://www.npmjs.com/package/search-boost)
-[![Node version](https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
-[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
-[![Architecture](https://img.shields.io/badge/architecture-unified%20core-8a2be2?style=flat-square)](#)
-[![Free tier](https://img.shields.io/badge/free%20tier-zero%20key%20required-success?style=flat-square)](#)
+<p align="center">
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.2.4-orange?style=flat-square" alt="version"></a>
+  <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm version"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
+  <a href="#"><img src="https://img.shields.io/badge/architecture-unified%20core-8a2be2?style=flat-square" alt="Architecture"></a>
+  <a href="#"><img src="https://img.shields.io/badge/free%20tier-zero%20key%20required-success?style=flat-square" alt="Free tier"></a>
+</p>
 
-[English](./README.md) · [中文文档](./README_zh.md)
+<p align="center">
+  <a href="./README.md">English</a> · <a href="./README_zh.md">中文文档</a>
+</p>
 
 ---
 

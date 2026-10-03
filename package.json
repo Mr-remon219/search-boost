@@ -36,6 +36,7 @@
     "grok-plugin/",
     "templates/",
     "docs/",
+    "assets/",
     "README.md",
     "README_zh.md",
     "LICENSE",
