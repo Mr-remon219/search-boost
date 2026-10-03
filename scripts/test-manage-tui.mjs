@@ -84,7 +84,11 @@ try {
  const cache=join(process.env.HOME,'cli-cancel-cache'),source=resolveGrokPluginDir(),cancelled=Symbol('cancel')
  cpSync(source,cache,{recursive:true});writeFileSync(join(cache,'README.md'),'stale fixture')
  const hostCalls=[],cliLogs=[];let confirms=0
- const clack={note:()=>{},confirm:async options=>{confirms++;assert.equal(options.initialValue,confirms===1);return confirms===1?true:cancelled},isCancel:value=>value===cancelled,cancel:()=>{}}
+ const clack={note:()=>{},confirm:async options=>{
+  confirms++;assert.equal(options.initialValue,confirms===1)
+  if(confirms===2) assert(cliLogs.some(line=>line.startsWith('[ok] cursor')), 'sibling refresh completes before interactive Grok consent')
+  return confirms===1?true:cancelled
+ },isCancel:value=>value===cancelled,cancel:()=>{}}
  const exit=process.exit
  try {
   process.exit=()=>{throw Error('CLI exited during an active refresh')}
@@ -97,6 +101,7 @@ try {
   assert(result.results.some(r=>r.target==='cursor'&&r.ok),'sibling transactions complete despite cancelled plugin consent')
   assert(cliLogs.some(l=>l.includes('Refresh incomplete')))
   assert.equal(JSON.parse(readFileSync(join(searchBoostHome(),'state','last-refresh.json'))).ok,false)
+  assert(cliLogs.some(line=>line.includes('Grok native plugin:')), 'native plugin results are distinct from Grok MCP')
  } finally {process.exit=exit}
  console.log('ok: management scopes, plain install, in-flight CLI cancellation, preservation and partial failure reporting')
 } finally {process.exitCode=savedExit}
