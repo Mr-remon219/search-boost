@@ -52,7 +52,7 @@
 - **Clean Webpage Content Extractor (`fetch_page`)**  
   Fetches the origin first for low latency, with optional same-route curl compatibility fallback and Jina Reader backup. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
 - **X / Twitter Community Intelligence (`x_search`)**  
-  Retrieves public posts, user timelines, and discussion threads via official xAI API or an anonymous fallback channel. Recovers accurate UTC timestamps from Snowflake post IDs and enforces local author/date filtering without hallucination.
+  Retrieves public posts, user timelines, and discussion threads via official xAI API or an anonymous fallback channel. Derives UTC timestamps from verifiable Snowflake post IDs and applies author/date filters only when metadata can be verified. Coverage may be incomplete, stale or empty; a retrieved sample does not establish platform-wide sentiment.
 - **Jev Intent-Guided Search (`adaptive_search` · Experimental)**
   Supply one full question and a required research intent. One pre-search Jev strategy request selects the fixed ranking preset and (when community is omitted) whether to add the already-wired community branch; one bounded fused snapshot (32 candidates for targets up to 10; larger targets keep the same headroom ratio, at most 160) is then screened with fixed safety, prototype value 3/4/5 and source-discount options. No keyword planning, no constraints gate, no language check, no automatic page read, and no self-set cumulative budget stop; cursor and saved-result pagination only replay stored results. No claim of verified or complete answers.
 - **Native Multi-Agent Parallel Research**  
@@ -60,7 +60,7 @@
 - **Unified Core Across All Host Ecosystems**  
   A single, host-neutral core runtime powering standard Model Context Protocol (MCP) servers, alongside native extensions for Pi and Cordis plugin bundles for DeepSeek Harness (DSH).
 - **Zero-Config Onboarding & Strict Security**  
-  **Requires zero API keys to start** using the free engine pool. Sensitive credentials are stored as plaintext in local private configs with restricted file permissions (POSIX `0600`); this is not encryption at rest. Uses local networking and proxy DNS, with bounded requests and explicit fallback, with zero credential leakage into model prompts.
+  **Requires zero API keys to start** using the free engine pool. Sensitive credentials are stored as plaintext in local private configs with restricted file permissions (POSIX `0600`); this is not encryption at rest. Uses local networking and proxy DNS, with bounded requests and explicit fallback. Configured credentials are kept out of model prompts and diagnostic output.
 
 ---
 
@@ -70,7 +70,7 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
 
 ```text
                     SearchBoost TUI / CLI
-             installation · configuration · updates
+             installation · configuration · refresh
                               │
                     Shared SearchBoost Core
                     lib/runtime.mjs facade
@@ -125,7 +125,7 @@ search-boost
 ```
 
 > [!TIP]
-> **Zero API Keys Required to Start**: SearchBoost includes a robust free engine pool (Bing, DuckDuckGo, Yahoo, Exa-free). You can begin searching immediately without signing up for any paid provider!
+> **Zero API Keys Required to Start**: SearchBoost includes a keyless free pool (Bing, DuckDuckGo, Yahoo, Exa-free, AnySearch). No paid-provider signup is required; availability and result coverage depend on the providers and your network.
 
 ### 2. 3-Step Setup Wizard
 1. Select **Setup wizard** on the default flat TUI home (folder layout: Installation & integrations → Setup). Configure engine keys (or skip to use free tier) and optional X credentials.
@@ -138,7 +138,7 @@ search-boost
 
 ### 1. Routine Updates: npm First, Then Refresh Integrations
 
-Use npm to update the package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
+The commands below describe v0.2.4. Before it is published, `@latest` may still install an older release without `refresh` or `research`; use a v0.2.4 source checkout as described below. Use npm to update the package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
 
 ```bash
 npm install -g search-boost@latest --prefer-online
@@ -159,13 +159,14 @@ If a Grok local cache remains stale after native update, fully quit Grok and sep
 ### 2. Migrating from Legacy `search-boost-mcp`
 
 > [!IMPORTANT]
-> If you have the old global package `search-boost-mcp` installed, npm cannot automatically replace the global binary across package renames. **Use the one-line npx migration command**:
+> If you have the old global package `search-boost-mcp` installed, npm cannot automatically replace the global binary across package renames. **Use the one-line npx migration command**. The refresh step below requires v0.2.4 or later:
 
 ```bash
 # Execute safe migration via npx
 npx --yes --package=search-boost@latest -- search-boost migrate -y
 
-# Once migrated, routine updates only require:
+# For v0.2.4 and later, update the package before refreshing integrations:
+npm install -g search-boost@latest --prefer-online
 search-boost
 # -> Manage agent integrations → Refresh existing integrations (or search-boost refresh -y)
 ```
@@ -174,7 +175,7 @@ search-boost
 
 ## Interactive Console (TUI)
 
-Launch `search-boost` without arguments to access the interactive dashboard built with Clack. Manage installation, updates, and credentials effortlessly:
+Launch `search-boost` without arguments to access the interactive dashboard built with Clack. Manage host integrations, search configuration and credentials here; package updates are handled by npm:
 
 The default **flat** home lists these actions in order:
 
@@ -186,7 +187,7 @@ The default **flat** home lists these actions in order:
 | Native web search; Print MCP snippet | Explicit permission choices; read-only snippets |
 | TUI settings; Exit | Menu layout before display language; close the console |
 
-**TUI settings → Menu layout** offers flat / folder. Folder mode retains Installation & integrations, Search & tools, Services & credentials and Status. Completed actions return to the same flat home entry or their folder submenu. Escape cancels/navigates back; Ctrl+C exits. A layout switch immediately returns to the new home. Management returns to its own submenu; uninstall and Grok cache reconstruction default to cancel. Partial failures are reported, not styled as success.
+**TUI settings → Menu layout** offers flat / folder. Folder mode retains Installation & integrations, Search & tools, Services & credentials and Status. Completed actions return to the same flat home entry or their folder submenu. Escape cancels/navigates back; Ctrl+C exits. A layout switch immediately returns to the new home. Management returns to its own submenu; interactive uninstall and Grok cache reconstruction default to cancel. Partial failures are reported, not styled as success.
 
 Layout and language changes apply immediately and are saved in `~/.search-boost/config/tui.json` (or `$SEARCH_BOOST_HOME/config/tui.json`). Missing layout (including legacy language-only settings) defaults to flat. Without a saved language preference, Chinese system locales select Simplified Chinese; other locales select English. The preference also applies to standalone interactive setup/config commands, not non-interactive CLI output, search results or agent replies. Tool names, commands, paths, MCP snippets and raw upstream errors remain unchanged. Dry-run previews layout/language without saving; malformed settings are warned about, not overwritten. See [TUI navigation and language settings](docs/tui.md).
 
@@ -213,7 +214,7 @@ When integrated, agents automatically receive standard tool definitions and auto
 | Tool | Best Used For | Boundary / Non-Goals |
 | :--- | :--- | :--- |
 | `fused_search` | Parallel multi-engine querying, deduplication, and diversity re-ranking | A single search step; follow-up decisions remain with the parent agent |
-| `fetch_page` | Reading clean content from public URLs with optional keyword focus | Not a browser with login state; cannot access internal/private networks |
+| `fetch_page` | Reading clean content from public URLs with optional keyword focus | Not an authenticated browser; local network and proxy policy still apply |
 | `x_search` | Retrieving public X posts, author timelines, or discussion threads | Does not guarantee exhaustive comment threads or total sentiment sampling |
 | `adaptive_search` | **Experimental**: one bounded fused snapshot + fixed-option Jev screening for one question and a required intent | Selected URLs with reviewed extracts and value labels; targetMet is quantity only, not verified answers |
 | `search_stats` | Reading engine status, memory cache hits, and recent diagnostic stats | Read-only; configuration readiness does not guarantee active external network reachability |
@@ -237,8 +238,8 @@ Dispatches queries across engines concurrently, normalizes URLs, strips redirect
 }
 ```
 
-- **`engine_pool`**: `free` (keyless Bing, DuckDuckGo, Yahoo, Exa-free), `api` (configured paid engines only), or `hybrid` (all available engines).
-- **`ranking`**: Scoring presets: `balanced` (default), `research` (favors authoritative/documentation sources), or `fresh` (favors recent publications).
+- **`engine_pool`**: `free` (keyless Bing, DuckDuckGo, Yahoo, Exa-free, AnySearch), `api` (configured API engines), or `hybrid` (both pools). Unavailable or disabled engines are skipped. When omitted, the compatibility layer maps `free` to the free pool and `api` to hybrid.
+- **`ranking`**: Final engine-weight presets: `balanced` (default), `research`, or `fresh`. They do not change query variants, search depth or recency filters, and do not establish source authority or freshness.
 - **`complexity`**: `simple` (1 query variant), `medium` (up to 2 variants), `complex` (up to 3 deep variants).
 - **`community`**: Boolean (`false` by default). Set to `true` to blend real-time X developer discussions into the final result quota.
 
@@ -273,13 +274,13 @@ Designed for real-time technical tracking and first-party developer updates. Sup
 ```json
 {
   "query": "Claude 3.7 Sonnet hybrid reasoning from:AnthropicAI",
-  "mode": "keyword",
+  "type": "keyword",
   "max_results": 5
 }
 ```
 
-- **Precise Timestamps**: When platform timestamps are missing or inconsistent, recovers true UTC creation times from 64-bit Snowflake IDs.
-- **Native Operators**: Full support for `from:username`, `since:YYYY-MM-DD`, and `until:YYYY-MM-DD`.
+- **Timestamp derivation**: When a valid Snowflake post ID is available, it can supply a UTC creation timestamp if platform metadata is missing or inconsistent; this does not verify the post text.
+- **Filters**: Keyword mode accepts X operators such as `from:username`, `since:YYYY-MM-DD`, and `until:YYYY-MM-DD`. Use `from_date` / `to_date` for explicit date bounds; candidates without verifiable author/date metadata are omitted when those filters apply.
 
 ---
 
@@ -313,7 +314,7 @@ Supply **one question** (`questions` has exactly one item) plus a **required res
 
 ### Engine Pools & Scoring Presets
 
-`engine_pool` selects engines, `ranking` selects shared cross-pool weights, and `complexity` controls only budget. AnySearch is one logical engine: anonymous in free, key-required in api, and key-preferred in hybrid. Configure `ANYSEARCH_API_KEY` or `config keys --set anysearch=KEY`.
+`engine_pool` selects engines, `ranking` selects shared cross-pool weights, and `complexity` controls query breadth and depth, not scoring weights. AnySearch is one logical engine: anonymous in free, key-required in api, and key-preferred in hybrid. Configure `ANYSEARCH_API_KEY` or `config keys --set anysearch=KEY`.
 
 | Engine | balanced | research | fresh |
 | --- | ---: | ---: | ---: |
@@ -374,7 +375,7 @@ For Pi/DSH child-tool loading, stale `pi-search-boost` references, and the retir
 
 ### Custom search API bases
 
-Open **Search engine configuration** on the flat TUI home (folder layout: Services & credentials) . Each engine shows its masked key and default/custom Base URL. Choose **Set / replace Base URL**, then keep or edit the key; **Restore default Base URL** resets only the address. Choose any individual engine without stepping through all credential slots; unrelated keys and routing selections are preserved. Status and `config keys --show` also show the effective bases. Standalone `search-boost config keys` and first setup retain the sequential guided wizard.
+Open **Search engine configuration** on the flat TUI home (folder layout: Services & credentials). Each engine shows its masked key and default/custom Base URL. Choose **Set / replace Base URL**, then keep or edit the key; **Restore default Base URL** resets only the address. Choose any individual engine without stepping through all credential slots; unrelated keys and routing selections are preserved. Status and `config keys --show` also show the effective bases. Standalone `search-boost config keys` and first setup retain the sequential guided wizard.
 
 ```bash
 search-boost config keys --base-url exa=https://gateway.example/exa
@@ -401,7 +402,7 @@ API keys use a credential store this tool owns. They are not written into prompt
 
 ## CLI Command Reference (Headless & CI)
 
-In addition to the interactive TUI, SearchBoost provides a comprehensive CLI for scripting and automation.
+The following CLI reference describes v0.2.4. `refresh` and `research` require that version or later; merging source does not publish it to npm. Use a source checkout until the required version is published.
 
 **DeepSeek Harness Desktop:** interactive installation offers Desktop / CLI / All, then **Automatic (default)** or **Local directory** for Desktop. Automatic setup retains bundled-command discovery through Windows installer registry metadata (including custom destinations), default directories and PATH; launch Desktop once, then fully quit it including its tray. Local setup runs last, after all other integrations including Grok, and displays the current durable package directory to paste into the running app's Plugins → Add plugin dialog. The TUI observes saved installation read-only and finishes after stable verification; Escape / Ctrl+C or timeout marks Desktop unfinished while retaining earlier results. Saved installation is not proof of live activation; missing bundled launchers explicitly leave runtime verification unknown. Temporary `_npx` paths are refused as persistent local links. The app also accepts `search-boost` for a registry install. Automatic install/update still verifies the owning resolver and rejects shadow copies. Disabled bundles stay disabled unless explicitly requested; local setup with `--enable-dsh-bundle` waits for the user to enable it in Desktop. See [Desktop integration](docs/dsh-desktop.md) for ownership and validation limits.
 
@@ -413,6 +414,9 @@ search-boost status --json                  # Structured read-only installation 
 search-boost research list                  # List opt-in private result snapshots
 search-boost research export <id> --output <new-file.json> # Explicit export; never overwrite
 search-boost --help                         # Display full CLI documentation
+search-boost refresh --dry-run              # Preview refreshing existing integrations
+search-boost refresh -y                     # Refresh all existing integrations from this package
+search-boost migrate --dry-run              # Preview the legacy global package rename
 
 # ----------------- Headless Installation -----------------
 search-boost install -t cursor -y           # Install for Cursor with auto-approval
@@ -495,14 +499,14 @@ After changing adapter or agent assets, re-run the same install command for that
 | Command | What it covers |
 | :--- | :--- |
 | `npm run check` | Syntax check across the CLI, core, adapters and scripts |
-| `npm run prepublishOnly` | The full offline suite: plugin sync, syntax, CLI, install, doctor, fusion, X, engines, X auth, Jev, key authority, dry-run, network, search routing, adapters, parallel research, integration refresh / migration, MCP and smoke |
+| `npm run prepublishOnly` | Syntax and CI policy checks, exact-lock dependency audit (registry access required), then every isolated regression entrypoint, including generated assets, install / refresh / migration, search, adapters and MCP |
 | `npm run test:network` | Proxy retries, curl fallback, request bounds and compatibility regressions |
 | `npm run test:adapters` | MCP, Pi and DSH adapter protocol suites plus Pi subagent settings migration/diagnosis |
 | `npm run test:parallel` | Searcher/summarizer contracts, DSH dispatch preflight, cancellation and tool isolation |
-| `npm run test:adaptive` | N_off screening flow + real MCP/Pi/DSH host fixtures |
+| `npm run test:adaptive` | Single-snapshot V5 screening, capacity boundaries and MCP/Pi/DSH adapter fixtures (not live host sessions) |
 | `npm run smoke` | MCP JSON-RPC protocol smoke test |
 
-These suites run against loopback fixtures and process doubles, so no engine keys are needed; a green `npm run prepublishOnly` is the bar for a PR.
+Regression suites use isolated state, loopback fixtures and process doubles; no engine keys are needed. The dependency audit requires registry access. A green `npm run prepublishOnly` is the local PR gate, not proof of live host loading, paid-service behaviour or evidence quality.
 
 ---
 

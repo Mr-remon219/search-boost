@@ -52,7 +52,7 @@
 - **高净度网页正文提取 (`fetch_page`)**  
   优先抓取原站降低等待；必要时使用同线路 curl 兼容兜底，Jina Reader 作为备用读取方式。自动剔除 CSS、JS 及广告噪音，支持 `focus` 关键词段落提炼，具备内存缓存与大体积熔断保护。
 - **X / Twitter 社区情报检索 (`x_search`)**  
-  支持通过官方 xAI API 或免登录回退通道获取推文、作者动态与讨论串。基于 Snowflake ID 逆向还原精准发布时间戳，本地执行作者与日期范围过滤，杜绝幻觉。
+  支持通过官方 xAI API 或免登录回退通道获取推文、作者动态与讨论串。根据可核验的 Snowflake ID 推导 UTC 发布时间，仅在元数据可核验时执行作者与日期过滤。覆盖可能不完整、过时或为空；检索样本不能代表全平台舆论。
 - **Jev 意图导向搜索 (`adaptive_search` · 实验功能)**
   提供一个完整问题与必填研究方向。检索前一次 Jev 策略请求选择固定排序预设，并在省略 community 时决定是否追加既有社区支路；随后对有界 fused 快照（目标≤10 时最多 32 条，更大目标按原余量比例扩至最高 160 条）做固定选项筛选（安全、原型价值 3/4/5、来源折扣）。没有关键词规划、没有逐材料 constraints 门槛、没有语言校验、没有自动补读，也没有自设的累计预算停止；cursor 与 saved_result_id 只重放已保存结果。不宣称答案已核实或完整。
 - **原生多智能体并行研究工作流**  
@@ -60,7 +60,7 @@
 - **统一架构，全宿主覆盖**  
   单一核心运行时（Host-neutral Core Runtime），向上提供通用的 Model Context Protocol (MCP) 标准服务，同时深度定制 Pi 原生扩展与 DeepSeek Harness (DSH) 原生插件包。
 - **开箱即用与严苛安全策略**  
-  **无需配置任何 API Key** 即可直接使用免费引擎池；敏感凭证严格存储于本地权限锁定的配置文件（POSIX `0600`）；网络访问交给本机网络和代理，保留请求边界与明确的失败兜底，严禁向模型上下文泄露凭证。
+  **无需配置任何 API Key** 即可直接使用免费引擎池；敏感凭证以明文存储于本地受限权限配置文件（POSIX `0600`），不等于静态加密；网络访问交给本机网络和代理，保留请求边界与明确的失败兜底，严禁向模型上下文泄露凭证。
 
 ---
 
@@ -70,7 +70,7 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
 
 ```text
                     SearchBoost TUI / CLI
-                      安装 · 配置 · 更新
+                      安装 · 配置 · 刷新
                               │
                     Shared SearchBoost Core
                      lib/runtime.mjs 核心门面
@@ -125,7 +125,7 @@ search-boost
 ```
 
 > [!TIP]
-> **零 Key 即可起步**：SearchBoost 默认提供免费引擎池（Bing、DuckDuckGo、Yahoo、Exa-free、AnySearch）。即便不填写任何 API Key，也能立刻享受高质量多引擎聚合搜索！
+> **零 Key 即可起步**：SearchBoost 默认提供免费引擎池（Bing、DuckDuckGo、Yahoo、Exa-free、AnySearch）。无需注册付费服务即可开始检索；实际可用性与结果覆盖取决于引擎及本机网络。
 
 ### 2. 三步完成配置
 1. 在默认平铺 TUI 首页选择 **首次配置向导**（文件夹模式：安装与接入 → 首次配置向导），跟随向导配置搜索引擎（可选填 API Key，或直接跳过使用免费池）。
@@ -138,7 +138,7 @@ search-boost
 
 ### 1. 日常更新：npm 更新软件包，再刷新接入
 
-软件包更新交给 npm；TUI 不再提供自更新功能。安装、刷新与卸载统一位于 **管理 Agent 接入**（文件夹模式：安装与接入 → 管理 Agent 接入）。
+以下命令适用于 v0.2.4。在该版本发布前，`@latest` 可能仍安装不支持 `refresh` / `research` 的旧版；可先按下文从 v0.2.4 源码运行。软件包更新交给 npm；TUI 不再提供自更新功能。安装、刷新与卸载统一位于 **管理 Agent 接入**（文件夹模式：安装与接入 → 管理 Agent 接入）。
 
 ```bash
 npm install -g search-boost@latest --prefer-online
@@ -159,13 +159,14 @@ Grok 本地缓存若原生更新后仍陈旧，需要完全退出 Grok，再独�
 ### 2. 从旧全局包 `search-boost-mcp` 迁移
 
 > [!IMPORTANT]
-> 如果你的全局环境中仍安装着旧包名 `search-boost-mcp`，由于 npm 不允许不同名包互相覆盖全局同名 bin 命令，**必须使用一次性 npx 命令平滑交接**：
+> 如果你的全局环境中仍安装着旧包名 `search-boost-mcp`，由于 npm 不允许不同名包互相覆盖全局同名 bin 命令，**必须使用一次性 npx 命令平滑交接**。下方的刷新步骤需要 v0.2.4 或更新版本：
 
 ```bash
-# 一键迁移（自动安装新包、核验证书后安全卸载旧包，保持 Agent 配置完全不变）
+# 一次性旧全局包更名迁移；不代替日常更新或接入刷新
 npx --yes --package=search-boost@latest -- search-boost migrate -y
 
-# 迁移完成后，后续日常更新只需执行：
+# v0.2.4 及后续版本：先更新软件包，再刷新接入
+npm install -g search-boost@latest --prefer-online
 search-boost
 # -> 管理 Agent 接入 → 刷新已有接入（或 search-boost refresh -y）
 ```
@@ -174,7 +175,7 @@ search-boost
 
 ## 交互式控制台 (TUI)
 
-直接在终端执行 `search-boost` 即可进入基于 Clack 的交互式控制面板。日常所有安装、维护与凭证管理均可在此完成：
+直接在终端执行 `search-boost` 即可进入基于 Clack 的交互式控制面板。可在此管理宿主接入、搜索配置与凭据；软件包本身仍通过 npm 更新：
 
 默认**平铺首页**按以下顺序直接提供全部入口：
 
@@ -186,7 +187,7 @@ search-boost
 | 原生搜索替换；输出 MCP 配置片段 | 保留权限选择；只读片段 |
 | TUI 设置；退出 | 菜单布局位于显示语言之前；关闭控制台 |
 
-「TUI 设置 → 菜单布局」可选平铺 / 文件夹。文件夹模式保留安装与接入、搜索与工具、服务与凭据、状态分类。操作完成后，平铺模式返回首页原选中项，文件夹模式返回所属分类；Esc 取消 / 返回，Ctrl+C 退出。切换布局立即返回新首页。管理操作完成后返回管理子菜单；卸载和 Grok 缓存重建默认取消，部分失败不会被显示成安装成功。
+「TUI 设置 → 菜单布局」可选平铺 / 文件夹。文件夹模式保留安装与接入、搜索与工具、服务与凭据、状态分类。操作完成后，平铺模式返回首页原选中项，文件夹模式返回所属分类；Esc 取消 / 返回，Ctrl+C 退出。切换布局立即返回新首页。管理操作完成后返回管理子菜单；交互式卸载和 Grok 缓存重建默认取消，部分失败不会被显示成安装成功。
 
 布局和显示语言切换立即生效，保存于 `~/.search-boost/config/tui.json`（或 `$SEARCH_BOOST_HOME/config/tui.json`）。未保存布局（包括仅有语言的旧设置）默认平铺；未保存语言时，中文系统环境使用简体中文，其他环境使用 English。偏好同样适用于独立启动的交互式 setup/config 向导，不影响非交互 CLI 输出、搜索结果或 Agent 回复。工具名、命令、路径、MCP 配置片段与底层原始错误保持原样。dry-run 只预览布局 / 语言，不保存；设置损坏时告警且不覆盖。详见 [TUI 导航与语言设置](docs/tui.md)。
 
@@ -213,9 +214,9 @@ search-boost
 | 工具名称 | 适用场景 | 职责边界（不适用的场景） |
 | :--- | :--- | :--- |
 | `fused_search` | 多引擎多角度并行查询、结果合并与去重排序 | 仅完成单次搜索；后续是否需要继续检索由主 Agent 判断 |
-| `fetch_page` | 读取已知公开 URL 的完整正文或特定关注段落 | 不是带登录态的无头浏览器，无法穿透内网私有地址 |
+| `fetch_page` | 读取已知公开 URL 的完整正文或特定关注段落 | 不是带登录态的浏览器；仍遵守本机网络与代理策略 |
 | `x_search` | 检索 X 平台的公开推文、博主资料或单篇讨论串 | 不承诺完整抓取所有回复，无法代表全平台完整舆论倾向 |
-| `adaptive_search` | **实验功能**：意图导向筛选与关键词续搜 | 值得阅读的 URL 和摘录，不是已核实答案 |
+| `adaptive_search` | **实验功能**：对单个问题与必填研究方向进行单次快照筛选 | 返回选中 URL、审查摘录与价值标签；targetMet 只表示数量，不代表答案已核实 |
 | `search_stats` | 查看引擎就绪状态、内存缓存命中与近期活动诊断 | 本地配置就绪不代表此时此刻外部网络一定通畅 |
 | `search_layer` | 在 MCP 环境中查看或切换兼容搜索层模式 | 查看为只读；修改会持久化写入磁盘并需要用户授权 |
 
@@ -237,8 +238,8 @@ search-boost
 }
 ```
 
-- **`engine_pool`**：`free`（默认纯免费引擎）、`api`（仅配置了 Key 的付费引擎）、`hybrid`（免费 + 付费全开）。
-- **`ranking`**：评分权重预设。可选 `balanced`（均衡）、`research`（学术与深度优先）、`fresh`（时效性优先）。
+- **`engine_pool`**：`free`（免密钥免费池）、`api`（已配置的 API 引擎）、`hybrid`（两池合并）。不可用或已关闭的引擎会跳过。省略时按兼容层映射：`free` → 免费池，`api` → hybrid。
+- **`ranking`**：最终引擎权重预设：`balanced`（默认）、`research`、`fresh`。不改变查询变体、检索深度或时间过滤，也不证明来源权威性或时效性。
 - **`complexity`**：`simple`（1 组查询变体）、`medium`（最多 2 组变体）、`complex`（最多 3 组深度变体）。
 - **`community`**：布尔值（默认 `false`）。设为 `true` 时会将 X 社区一手开发者的讨论混入结果限额中。
 
@@ -273,13 +274,13 @@ search-boost
 ```json
 {
   "query": "Claude 3.7 Sonnet hybrid reasoning from:AnthropicAI",
-  "mode": "keyword",
+  "type": "keyword",
   "max_results": 5
 }
 ```
 
-- **时间戳精准还原**：若平台返回的时间缺失，算法会基于 Snowflake ID 逆向推导真实发帖时间（UTC）。
-- **原生操作符支持**：支持 `from:username`、`since:YYYY-MM-DD`、`until:YYYY-MM-DD` 等精准过滤。
+- **时间戳推导**：平台元数据缺失或不一致时，可根据有效的 Snowflake 推文 ID 推导 UTC 创建时间；这不核实推文内容。
+- **过滤条件**：keyword 模式接受 `from:username`、`since:YYYY-MM-DD`、`until:YYYY-MM-DD` 等 X 操作符；显式日期范围可用 `from_date` / `to_date`。应用作者或日期过滤时，无法核验相应元数据的候选会被省略。
 
 ---
 
@@ -313,7 +314,7 @@ search-boost
 
 ### 引擎池与评分预设
 
-`engine_pool` 选择调用集合，`ranking` 选择跨池共享权重；`complexity` 只控制预算。AnySearch 是单一逻辑引擎：free 匿名、api 要求 key、hybrid 优先用已配置 key。使用 `ANYSEARCH_API_KEY` 或 `config keys --set anysearch=KEY` 配置。
+`engine_pool` 选择调用集合，`ranking` 选择跨池共享权重；`complexity` 控制查询广度与深度，不改变评分权重。AnySearch 是单一逻辑引擎：free 匿名、api 要求 key、hybrid 优先用已配置 key。使用 `ANYSEARCH_API_KEY` 或 `config keys --set anysearch=KEY` 配置。
 
 | 引擎 | balanced | research | fresh |
 | --- | ---: | ---: | ---: |
@@ -401,7 +402,7 @@ API Key 存放在由 SearchBoost 自己管理的凭据文件中，不写入提�
 
 ## CLI 命令参考（自动化与进阶）
 
-除交互式 TUI 外，SearchBoost 还提供了完整的命令行接口，非常适合脚本编写与 CI 自动化。
+以下 CLI 参考对应 v0.2.4；`refresh` 与 `research` 需要该版本或更新版本。源码合并不等于 npm 发布，在所需版本发布前请从源码运行。
 
 **DeepSeek Harness Desktop**：交互安装选中 DSH 后，可选择 Desktop / CLI / All，再为 Desktop 选择 **自动安装（默认）** 或 **本地目录接入**。自动方式通过注册表（含自定义安装目录）、默认目录及 PATH 找到桌面版内置命令；先启动一次再完全退出（包括托盘）。本地方式在其他接入（包括 Grok）结束后，最后显示当前包的完整持久目录，由用户粘贴到运行中的 Desktop「插件 → 添加插件」；TUI 等待只读检测，稳定完成后结束，Esc / Ctrl+C 或超时则报告未完成并保留其他结果。检测到保存的安装不代表运行中的插件已加载；没有内置启动器时会明确提示运行时未验证。临时 `_npx` 缓存不能作为本地链接来源。也可直接在应用输入 `search-boost` 从 npm 安装。自动安装/更新仍验证宿主解析器，遮蔽副本不能报成功；禁用状态保留，`--enable-dsh-bundle` 明确要求启用（本地方式由用户在 Desktop 启用）。所有权与验证限制见 [Desktop 接入说明](docs/dsh-desktop.md)。
 
@@ -413,6 +414,9 @@ search-boost status --json                  # 结构化安装证据
 search-boost research list                  # 列出显式保存的私有研究结果
 search-boost research export <id> --output <new-file.json> # 显式导出，不覆盖
 search-boost --help                         # 查看完整命令行帮助文档
+search-boost refresh --dry-run              # 预览已有接入刷新
+search-boost refresh -y                     # 使用当前包刷新全部已有接入
+search-boost migrate --dry-run              # 预览旧全局包更名迁移
 
 # ----------------- 非交互式安装 -----------------
 search-boost install -t cursor -y           # 为 Cursor 安装并自动同意权限
@@ -495,14 +499,14 @@ search-boost
 | 命令 | 覆盖范围 |
 | :--- | :--- |
 | `npm run check` | CLI、核心层、适配器与脚本的语法检查 |
-| `npm run prepublishOnly` | 完整离线套件：插件同步、语法、CLI、安装、doctor、融合搜索、X、引擎、X 认证、Jev、密钥权限、dry-run、网络、搜索路由、适配器、并行研究、升级、MCP 与冒烟测试 |
+| `npm run prepublishOnly` | 语法与 CI 策略检查、精确依赖锁审计（需要 registry 联网），再运行全部隔离回归入口，含生成资产、安装 / 刷新 / 迁移、搜索、适配器与 MCP |
 | `npm run test:network` | 代理重试、curl 兜底、请求边界与兼容性回归 |
 | `npm run test:adapters` | MCP / Pi / DSH 适配器协议测试，以及 Pi 子代理配置迁移诊断 |
 | `npm run test:parallel` | Searcher/Summarizer 契约、DSH 派发预检、取消与工具隔离 |
-| `npm run test:adaptive` | Jev 自适应证据收集循环 |
+| `npm run test:adaptive` | 单次快照 V5 筛选、候选容量边界及 MCP / Pi / DSH 适配器夹具（非真实宿主会话） |
 | `npm run smoke` | MCP JSON-RPC 协议冒烟测试 |
 
-这些套件使用本地回环夹具与进程替身运行，不需要真实引擎 Key；`npm run prepublishOnly` 全绿即可提交 PR。
+回归套件使用隔离状态、本地回环夹具与进程替身，不需要真实引擎 Key；依赖审计需要访问 registry。`npm run prepublishOnly` 全绿是本地 PR 门禁，不证明真实宿主加载、付费服务行为或证据质量。
 
 ---
 
