@@ -103,6 +103,7 @@ assert.equal(desktopPathLauncher({ env: { PATH: join(desktop, '..') } }), deskto
 assert.equal(desktopPathLauncher({ env: { PATH: [bin, join(desktop, '..')].join(delimiter) } }), null, 'a detected Desktop must not replace the CLI selected first on PATH')
 assert.equal(agentDetected('dsh'), true, 'app detection before first launch')
 assert.throws(() => desktopLaunchCommand(['plugin']), /initialize/)
+assert.deepEqual(desktopLaunchCommand(['plugin'], { dryRun: true }), { command: desktop, args: ['plugin'] }, 'dry-run previews the launcher before first initialization')
 assert.ok(!existsSync(profileDir('desktop')), 'preflight must not initialize Desktop')
 function resetProfile(name, { installed = false, disabled = false, legacy = false } = {}) {
   const dir = profileDir(name)

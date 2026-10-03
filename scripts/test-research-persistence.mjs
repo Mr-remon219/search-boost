@@ -155,6 +155,51 @@ let savedId
 }
 console.log('ok: explicit save writes search-boost-research-v2/schema-5 with the full selected set; restore and CLI list/export are offline')
 
+// Legal maximum-length input must not fail after the private save. Page-only
+// summaries may shrink, but every reviewed result and the saved input stay exact.
+{
+  for (const char of ['中', '\u0001', '😀']) {
+    const repeated = limit => char.repeat(Math.floor(limit / char.length))
+    const input = {
+      questions: [repeated(400)], intent: repeated(2000),
+      preferences: Array.from({ length: 8 }, (_, index) => repeated(298) + index),
+      max_results: 4, page_size: 1, save_results: true, community: false,
+    }
+    const harness = makeHarness()
+    const deps = { ...harness.deps, loadResults: loadResearchResults, saveResults: saveResearchResultsV2 }
+    const before = readdirSync(store).length
+    const result = await runAdaptiveSearch(input, {}, deps)
+    assert.equal(typeof result.savedResultId, 'string', 'the private write always returns a recoverable ID')
+    assert.equal(readdirSync(store).length, before + 1)
+    const stored = loadResearchResults(result.savedResultId)
+    assert.equal(stored.metadata.inputSummary.question, input.questions[0])
+    assert.equal(stored.metadata.inputSummary.intent, input.intent)
+    assert.deepEqual(stored.metadata.inputSummary.preferences, input.preferences)
+    const reads = { jev: 0, search: 0 }
+    const restoreDeps = { ...deps,
+      createClient: () => { reads.jev++; throw Error('no Jev on restore') },
+      search: () => { reads.search++; throw Error('no search on restore') },
+    }
+    const restored = await runAdaptiveSearch({ saved_result_id: result.savedResultId, page_size: 50 }, {}, restoreDeps)
+    assert.deepEqual(restored.results, stored.results, 'restore keeps the complete reviewed set intact')
+    assert.equal(reads.jev + reads.search, 0)
+    assert.equal(restored.savedResultId, result.savedResultId)
+    assert.deepEqual(restored.usage, result.usage)
+    if (JSON.stringify(restored.inputSummary) !== JSON.stringify(stored.metadata.inputSummary)) {
+      assert(restored.warnings.some(warning => /Input summary.*shortened/.test(warning)))
+    }
+    let page = result, rows = [...page.results]
+    while (page.nextCursor) {
+      page = await runAdaptiveSearch({ cursor: page.nextCursor, page_size: 1 }, {}, restoreDeps)
+      rows.push(...page.results)
+    }
+    assert.deepEqual(rows, stored.results, 'paging never clips reviewed descriptions or loses rows')
+    assert.equal(reads.jev + reads.search, 0)
+    rmSync(join(store, result.savedResultId + '.json'))
+  }
+}
+console.log('ok: legal maximum CJK/escaped/astral inputs return usable saved IDs, exact private snapshots and offline pages')
+
 // ------------------------------------------------------- format dispatch -----
 {
   const file=join(store,savedId+'.json')

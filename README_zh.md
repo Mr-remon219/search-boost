@@ -3,7 +3,7 @@
 **面向 AI Coding Agent 的多引擎网络搜索与证据聚合工具箱**  
 *一个核心代码库，深度适配 MCP、Pi 与 DeepSeek Harness 三大生态*
 
-[![version](https://img.shields.io/badge/version-v0.2.3-orange?style=flat-square)](#)
+[![version](https://img.shields.io/badge/version-v0.2.4-orange?style=flat-square)](#)
 [![npm version](https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm)](https://www.npmjs.com/package/search-boost)
 [![Node version](https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
@@ -19,7 +19,7 @@
 
 ---
 
-> **v0.2.3**：新增自定义 API Base URL、意图引导的 Jev 检索、共享工具开关与 MCP/Pi 热刷新，修复 DSH Schema 及 npm/npx 安装兼容性。详见[发布与迁移说明](./docs/v0.2.3-release.md)，特别注意 V3 的 `coverageComplete` / `retrievalSufficient` 语义变化。
+> **v0.2.4**：单次快照 Jev 筛选（Schema V5）、私有研究保存/恢复、有界 PDF 文本读取、Desktop 接入，以及软件更新与接入管理分离。详见[发布与迁移说明](./docs/v0.2.4-release.md)：V3 Adaptive 输入/输出及 `upgrade` 命令已变化。源码版本不代表 npm 已发布；`@latest` 以实际 registry 为准。
 
 ## 目录
 
@@ -141,7 +141,7 @@ search-boost
 软件包更新交给 npm；TUI 不再提供自更新功能。安装、刷新与卸载统一位于 **管理 Agent 接入**（文件夹模式：安装与接入 → 管理 Agent 接入）。
 
 ```bash
-npm install -g search-boost@beta --prefer-online
+npm install -g search-boost@latest --prefer-online
 search-boost
 # → 管理 Agent 接入 → 刷新已有接入 → 选择实际范围
 # 或刷新全部已有接入：

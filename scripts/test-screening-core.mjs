@@ -14,7 +14,7 @@ import { ADAPTIVE_DESCRIPTION, ADAPTIVE_PROMPT_GUIDELINES, renderAdaptiveSummary
 import { SCREENING_LIMITS, SCREENING_BUDGET_VERSION, SCREENING_METERING_VERSION, createScreeningBudget } from '../lib/search/screening/limits.js'
 import { toDshSchema } from '../adapters/dsh/schema.js'
 import { runAdaptiveScreening } from '../lib/search/screening/run.js'
-import { makeHarness, outputValidator } from './screening-run-fixture.mjs'
+import { makeHarness, fixtureRows, outputValidator } from './screening-run-fixture.mjs'
 
 const screeningDir = fileURLToPath(new URL('../lib/search/screening/', import.meta.url))
 const source = (name) => readFileSync(`${screeningDir}${name}`, 'utf8')
@@ -170,6 +170,36 @@ assert.deepEqual(Object.keys(ADAPTIVE_V5_OUTPUT_SCHEMA.properties.run.properties
   assert.equal(page.run.decisionsTruncated, true)
   assert.deepEqual(page.run.decisions, [])
   assert.deepEqual(page.usage, valid.usage)
+}
+
+// Max legal multibyte/escaped inputs on a full 160-candidate snapshot keep the
+// schema, counts, usage and every selected row; no persistence opt-in is required.
+{
+  const validate = outputValidator()
+  for (const char of ['中', '\u0001']) {
+    const h = makeHarness({ rows: fixtureRows(160) })
+    const input = { questions: [char.repeat(400)], intent: char.repeat(2000),
+      preferences: Array.from({ length: 8 }, (_, index) => char.repeat(299) + index),
+      max_results: 50, community: false, page_size: 50 }
+    const page = await runAdaptiveScreening(input, {}, h.deps)
+    assert.equal(validate(page), null)
+    assert.equal(page.selection.returned, 50)
+    assert.equal(page.run.snapshotCandidates, 160)
+    assert.equal(h.calls.save.length, 0)
+    assert.equal(h.calls.search.length, 1)
+    assert(page.warnings.some(warning => /Input summary.*shortened/.test(warning)))
+    let current = page, rows = [...page.results]
+    while (current.nextCursor) {
+      current = resultPages.read(current.nextCursor, 50)
+      assert.equal(validate(current), null)
+      assert.deepEqual(current.usage, page.usage)
+      rows.push(...current.results)
+    }
+    assert.equal(rows.length, 50)
+    assert.equal(new Set(rows.map(row => row.url)).size, 50)
+    assert(rows.every(row => row.description.includes('Traceable implementation evidence')))
+    assert.equal(h.calls.search.length, 1, 'pages add no search')
+  }
 }
 
 // Historical sets can exceed 999 rows: every generated cursor remains readable,

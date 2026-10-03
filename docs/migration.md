@@ -4,7 +4,7 @@
 
 | 操作 | 负责范围 |
 | --- | --- |
-| 用户执行 npm install | 更新 SearchBoost 软件包版本，beta 用 `search-boost@beta` |
+| 用户执行 npm install | 更新 SearchBoost 软件包版本，稳定频道用 `search-boost@latest`，预发布用 `search-boost@beta` |
 | TUI 管理 Agent 接入 → 刷新，或 `search-boost refresh` | 以当前包同步已有接入；含 Pi/DSH 旧适配器身份迁移，保留用户配置 |
 | CLI migrate | 一次性将全局 search-boost-mcp 更名为 search-boost；不编辑 Agent 配置 |
 
@@ -15,8 +15,8 @@
 只需要新 `search-boost` 已发布，不需要为旧包再发布过渡版：
 
 ```bash
-npx --yes --package=search-boost@beta -- search-boost migrate --dry-run
-npx --yes --package=search-boost@beta -- search-boost migrate -y
+npx --yes --package=search-boost@latest -- search-boost migrate --dry-run
+npx --yes --package=search-boost@latest -- search-boost migrate -y
 search-boost
 # 以后在 TUI 选择管理 Agent 接入 → 刷新
 ```
@@ -45,17 +45,17 @@ migrate 保持 agent 配置及 API keys、X token、认证文件、模型设置�
 ## 新包用户的日常更新
 
 ```bash
-npm install -g search-boost@beta --prefer-online
+npm install -g search-boost@latest --prefer-online
 search-boost                         # 管理 Agent 接入 → 刷新 → 选范围
 search-boost refresh -y              # 刷新全部已有接入
 search-boost refresh --dry-run       # 仅预览
 ```
 
-刷新始终只用当前持久安装的包，不做软件包更新或下载新版本接力，不新增宿主。若要稳定频道，用 npm `search-boost@latest`；本 beta 发布不推进 stable dist-tag。Grok 额外的缓存重建需单独明确同意，不由 `-y` 自动授权。来源识别、禁用状态和失败恢复见 [host-upgrades.md](host-upgrades.md)。
+刷新始终只用当前持久安装的包，不做软件包更新或下载新版本接力，不新增宿主。示例使用稳定频道 `search-boost@latest`；需要预发布时显式改为 `@beta`。源码版本或 PR 不会自动推进 npm dist-tag。Grok 额外的缓存重建需单独明确同意，不由 `-y` 自动授权。来源识别、禁用状态和失败恢复见 [host-upgrades.md](host-upgrades.md)。
 
 ## 发布与验证
 
-只发布仓库根目录的 **`search-boost`**，不构建或发布 `search-boost-mcp` 过渡版。本版新管理行为需安装已发布的 `@beta`，稳定 `latest` 不随此 beta 发布更新；开发测试不执行 npm publish。
+只发布仓库根目录的 **`search-boost`**，不构建或发布 `search-boost-mcp` 过渡版。本版管理行为需安装实际已发布的 v0.2.4（或此前 beta.7 起的预发布）；`@latest` 在正式发布前仍可能返回旧版。版本提交、PR 与 npm 发布是独立步骤；开发测试不执行 npm publish。
 
 ```bash
 npm run test:refresh

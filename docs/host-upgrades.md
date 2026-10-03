@@ -5,7 +5,7 @@
 ## 用户入口（beta.7 起）
 
 ```bash
-npm install -g search-boost@beta --prefer-online  # 用户更新软件包
+npm install -g search-boost@latest --prefer-online  # 用户更新软件包；预发布显式用 @beta
 search-boost                         # 管理 Agent 接入 → 刷新已有接入 → 选范围
 search-boost refresh --dry-run
 search-boost refresh -y              # 全部已有接入
@@ -14,7 +14,7 @@ search-boost refresh --workspace /path/to/project -y
 
 刷新只使用当前持久安装的包，不查询 npm 最新版本、不自动更新 SearchBoost，不更新宿主 CLI。临时 npx 路径不能成为持久接入目标。`upgrade` / `--sync-only` 已移除。
 
-旧 Pi/DSH 适配器来源迁移属于接入刷新；`migrate` 仅服务全局 `search-boost-mcp` npm 包更名，见[迁移说明](migration.md)。TUI 可选择精确 scope/profile；取消勾选不卸载，之后新发现的目标不会扩大选择。成功后重启/重新加载宿主；不要将宿主更新 npm 扩展当作本地资产也已同步的证据。
+旧 Pi/DSH 适配器来源迁移属于接入刷新；`migrate` 仅服务全局 `search-boost-mcp` npm 包更名，见[迁移说明](migration.md)。TUI 可选择精确 scope/profile；取消勾选不卸载，之后新发现的目标不会扩大选择。未选宿主的发现错误显示为跳过，不使已选且成功的范围失败；已选目标失效或真实执行失败仍阻塞。成功后重启/重新加载宿主；不要将宿主更新 npm 扩展当作本地资产也已同步的证据。
 
 Grok 原生插件是单独可选项。原生更新后缓存仍不一致时，默认明确失败；完全退出 Grok后，可以单独确认 `--keep-data` / `--trust` 重建。CLI 显式同意为 `search-boost refresh -y --repair-grok-cache`，`-y` 本身不授予信任或重建同意。禁用插件不重装、不启用；不同来源、无法验证的仓库身份、共享仓库插件或危险别名拒绝自动重建。重建先验证源、绑定确认时的指纹，再验移除与新缓存；失败后报告实际阶段，不宣称回滚。旧名称数据保留原址，不保证自动迁移复用。刷新不会安装已不存在的插件，需审核源后通过安装入口重新接入。
 

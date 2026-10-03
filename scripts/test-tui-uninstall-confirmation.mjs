@@ -2,13 +2,14 @@
 import './isolate-tests.mjs'
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync, existsSync } from 'node:fs'
 
 // Real installer/TUI control flow; only destructive agent calls are replaced.
 // No host command, real credential, user config or network is touched.
 process.env.SEARCH_BOOST_HOME = join(process.env.HOME, 'uninstall-confirmation-fixture')
 process.env.DSH_HOME = join(process.env.SEARCH_BOOST_HOME, 'dsh')
 const { AGENTS } = await import('../lib/agents/index.mjs')
+const { recordAntigravityWorkspace, listAntigravityWorkspaces } = await import('../lib/workspace-marker.mjs')
 const { runInstallerWithOptions } = await import('../lib/installer/index.mjs')
 const { runTui } = await import('../lib/installer/tui.mjs')
 const { saveTuiLayout, withTuiContext, TuiCancelled } = await import('../lib/installer/i18n.mjs')
@@ -91,7 +92,36 @@ try {
     assert.equal(p.confirms[0].initialValue, false)
     assert.equal(calls.length, 4, `${layout}: selecting a target is not removal consent`)
   }
-  console.log('ok: uninstall previews targets/profiles, defaults to cancel, requires literal consent, preserves dry-run/explicit --yes and both-layout navigation')
+  // Freeze the workspace scope, not just DSH profiles, before asking for consent.
+  const beforeWorkspace = join(process.env.HOME, 'antigravity-before-consent')
+  const afterWorkspace = join(process.env.HOME, 'antigravity-after-consent')
+  const addWorkspace = async root => {
+    mkdirSync(join(root, '.agents', 'rules'), { recursive: true })
+    writeFileSync(join(root, '.agents', 'rules', 'search-boost.md'), 'fixture owned rule')
+    await recordAntigravityWorkspace(root)
+  }
+  await addWorkspace(beforeWorkspace)
+  const antigravity = prompts(true)
+  antigravity.clack.confirm = async options => {
+    antigravity.confirms.push(options)
+    assert(antigravity.notes.some(note => note.body.includes(beforeWorkspace)), 'actual recorded workspace shown before consent')
+    assert(!antigravity.notes.some(note => note.body.includes(afterWorkspace)))
+    await addWorkspace(afterWorkspace)
+    return true
+  }
+  await context(() => runInstallerWithOptions({ target: 'antigravity', uninstall: true, clack: antigravity.clack }))
+  assert(!existsSync(join(beforeWorkspace, '.agents', 'rules', 'search-boost.md')))
+  assert(existsSync(join(afterWorkspace, '.agents', 'rules', 'search-boost.md')), 'workspace registered during consent is untouched')
+  assert.deepEqual(await listAntigravityWorkspaces(), [afterWorkspace])
+
+  const nativePreview = prompts(false, ['project'])
+  await context(() => runInstallerWithOptions({ target: 'grok', uninstall: true, scope: 'project', clack: nativePreview.clack }))
+  assert(nativePreview.notes.some(note => /Grok native plugin.*host-global/.test(note.body)), 'project MCP scope does not hide global plugin removal')
+  const skippedNative = prompts(false, ['project'])
+  await context(() => runInstallerWithOptions({ target: 'grok', uninstall: true, scope: 'project', skipGrokPlugin: true, clack: skippedNative.clack }))
+  assert(!skippedNative.notes.some(note => /Grok native plugin.*host-global/.test(note.body)))
+
+  console.log('ok: uninstall previews and freezes targets/profiles/workspaces, discloses global Grok removal, defaults to cancel and preserves navigation/dry-run')
 } finally {
   AGENTS.cursor.uninstall = originals.cursor
   AGENTS.dsh.uninstall = originals.dsh

@@ -35,4 +35,24 @@ assert.throws(() => parseUpgradeArgs(['--verbose'], { allowSyncOnly: false, comm
 const unsupportedVerbose = spawnSync(process.execPath, [join(PKG_ROOT, 'cli.mjs'), 'migrate', '--verbose'], { encoding: 'utf8', env: process.env })
 assert.notEqual(unsupportedVerbose.status, 0, 'migrate must reject unsupported flags before prompting or migration effects')
 assert.match(unsupportedVerbose.stderr, /Unknown .*migrate argument: --verbose/)
-console.log('ok: canonical existing-target selection deduplicates HOME and keeps migration/repair flags distinct')
+// A blocked unselected host is disclosed but must not fail a selected healthy
+// scope. Missing selected targets still fail closed, and a full refresh still fails.
+const { runRefresh } = await import('../lib/upgrade/index.mjs')
+mkdirSync(dirname(PATHS.codex.config), { recursive: true })
+const blockedToml = 'mcp_servers.search-boost.args = ["/fixture/cli.mjs"]\n'
+writeFileSync(PATHS.codex.config, blockedToml)
+const scopedPlan = await discoverIntegrations()
+const grok = scopedPlan.targets.find(target => target.id === 'grok')
+assert(grok)
+const logs = []
+const selectedResult = await runRefresh({ dryRun: true, selected: [integrationTargetKey(grok)], log: text => logs.push(text),
+  run: async () => { throw Error('no host commands for MCP-only dry-run') } })
+assert.equal(selectedResult.ok, true, 'unselected Codex must not fail selected Grok MCP')
+assert(selectedResult.warnings.some(warning => warning.startsWith('codex:')), 'unselected failure stays disclosed')
+assert(logs.some(text => text.includes('[skipped]') && text.includes('codex:')))
+const missing = await runRefresh({ dryRun: true, selected: ['missing-target'], log: () => {} })
+assert.equal(missing.ok, false, 'unavailable selected target still blocks')
+const all = await runRefresh({ dryRun: true, log: () => {}, run: async () => { throw Error('offline host') } })
+assert.equal(all.ok, false, 'full refresh still treats discovery failures as blockers')
+assert.equal((await import('node:fs')).readFileSync(PATHS.codex.config, 'utf8'), blockedToml)
+console.log('ok: canonical selection deduplicates HOME, scopes refresh failure correctly and keeps migration/repair flags distinct')

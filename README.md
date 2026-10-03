@@ -3,7 +3,7 @@
 **Multi-engine web search & evidence synthesis for AI coding agents**  
 *One shared core runtime, deeply adapted for MCP, Pi, and DeepSeek Harness*
 
-[![version](https://img.shields.io/badge/version-v0.2.3-orange?style=flat-square)](#)
+[![version](https://img.shields.io/badge/version-v0.2.4-orange?style=flat-square)](#)
 [![npm version](https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm)](https://www.npmjs.com/package/search-boost)
 [![Node version](https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
@@ -19,7 +19,7 @@
 
 ---
 
-> **v0.2.3**: custom API Base URLs, intent-guided Jev retrieval, shared tool switches with MCP/Pi hot refresh, and DSH schema/npm/npx compatibility repairs. See the [release and migration notes](./docs/v0.2.3-release.md), especially the V3 `coverageComplete` / `retrievalSufficient` semantics.
+> **v0.2.4**: single-snapshot Jev screening (schema V5), private research save/recovery, bounded PDF text extraction, Desktop integration, and separate package updates / integration management. See the [release and migration notes](./docs/v0.2.4-release.md): V3 adaptive inputs/outputs and the `upgrade` command have changed. This source version does not imply npm publication; `@latest` follows the published registry.
 
 ## Table of Contents
 
@@ -141,7 +141,7 @@ search-boost
 Use npm to update the package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
 
 ```bash
-npm install -g search-boost@beta --prefer-online
+npm install -g search-boost@latest --prefer-online
 search-boost
 # → Manage agent integrations → Refresh existing integrations → select scopes
 # Or refresh all existing integrations:
