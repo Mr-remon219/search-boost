@@ -4,7 +4,7 @@
 
 ### SearchBoost TUI
 
-运行 `search-boost`，在默认平铺首页选择首次配置向导 / 安装 / 卸载（文件夹模式先进入「安装与接入」）。交互安装选中 DSH 且未指定 profile/surface 时，会进入 **Desktop / CLI / All** 选择页；即使 Desktop 未被自动发现，也可以手动选择 Desktop。卸载仍只在发现 Desktop、未指定 profile/surface 时提供选择页。
+运行 `search-boost`，在默认平铺首页选择首次配置向导，或「管理 Agent 接入 → 安装 / 卸载」（文件夹模式先进入「安装与接入」）。交互安装选中 DSH 且未指定 profile/surface 时，会进入 **Desktop / CLI / All** 选择页；即使 Desktop 未被自动发现，也可以手动选择 Desktop。卸载仍只在发现 Desktop、未指定 profile/surface 时提供选择页。
 
 - **Desktop**：`$DSH_HOME/profiles/desktop`，通过桌面安装附带的命令操作。现有持久 SearchBoost 安装使用绝对本地包路径，避免再下载一份；临时 `_npx` 缓存不能用作持久链接，改用当前精确 npm 版本。
 - **CLI**：安装默认 `web` profile，`--profile` 可指定其他 CLI profile。与 Desktop 一样优先复用当前持久包路径，包括从本地 tarball 安装到 `node_modules` 的开发包，不以同版本 npm 包替换它。卸载只处理选中的 CLI profile，或所有已登记 SearchBoost 的 CLI profiles。
@@ -17,7 +17,7 @@
 
 安装时 Desktop 排在最后；其他目标失败也不会跳过它。卸载顺序和已确认范围不受影响。`--yes` / 非交互命令行仍使用原自动安装接口，不启动需要用户操作的等待流程。
 
-本地方式每秒只读检查 profile 中的本地依赖来源、安装包版本 / bundle 元数据及当前发布文件内容。包写锁、包进程记录或未恢复的事务存在时不判完成；两个连续稳定结果后再确认。Desktop 的应用锁允许存在，因为应用必须运行。若能找到内置 launcher，还会通过 Desktop 自有运行时只读验证实际解析来源；失败或遮蔽副本不会降级为成功。找不到 launcher 时仅报告「保存的本地安装已核对，运行时解析/加载未验证」，不声称插件已经加载。
+本地方式每秒只读检查 profile 中的本地依赖来源、安装包版本 / bundle 元数据及当前发布文件内容。包写锁、包进程记录或未恢复的事务存在时不判完成；两个连续稳定结果后再确认。Desktop 的应用锁允许存在，因为应用必须运行。若能找到内置 launcher，还会通过 Desktop 自有运行时只读验证实际解析来源；失败或遮蔽副本不会降级为成功。同一个安装指纹的失败探针最多 3 次，采用封顶 30 秒的递增退避；仍失败会提前报告“运行时验证未通过、接入未完成”，不反复启动探针直到整个 15 分钟期限。已知失败后 launcher 消失也不降级为成功，需检查运行时/来源后手动重试。找不到 launcher 时仅报告「保存的本地安装已核对，运行时解析/加载未验证」，不声称插件已经加载。
 
 已安装但禁用也算完成保存的安装，会明确提醒启用。若明确指定 `--enable-dsh-bundle`，此方式等待用户在 Desktop 保存启用选择，不由 SearchBoost 修改运行中的 profile。现有同源、同版本、同载荷安装可以直接通过检查；旧版本、其他来源及同版本旧代码不能通过。实际生效仍以 Desktop 显示 / 重启为准。
 
@@ -61,7 +61,7 @@ Desktop 独占自己的 profile 和包管理状态。先运行应用一次初始
 
 SearchBoost 只读取 profile/安装路径，不为检测启动 Desktop，也不创建 Desktop profile。原生平台发现位置包括：
 
-- Windows：先只读查询当前用户 / 整机卸载注册表（包括 `WOW6432Node`）中 DeepSeek Harness 的安装记录，使用 `InstallLocation`，缺少时从 `DisplayIcon` / `UninstallString` 提取安装目录，识别其他盘符、中文及带空格的自定义目录。仅提取路径，不执行注册表中的命令。登记目录优先于默认目录；不存在的启动器会跳过。再查用户 `LOCALAPPDATA/Programs/DeepSeek Harness/resources/runtime/cli/bin/dsh.cmd` 及可用的 Program Files 路径。注册表查询超时、被拒绝或不可用时，仍继续默认目录和 PATH 发现，不修改注册表。
+- Windows：先只读查询当前用户 / 整机卸载注册表（包括 `WOW6432Node`）中 DeepSeek Harness 的安装记录，使用 `InstallLocation`，缺少时从 `DisplayIcon` / `UninstallString` 提取安装目录，识别其他盘符、中文及带空格的自定义目录。仅提取路径，不执行注册表中的命令。自动发现只接受本地盘符绝对目录，不探查 UNC 网络共享；未知变量仍拒绝，字面 `%` 保留。登记目录优先于默认目录，且要求同级应用可执行文件存在；不存在的启动器会跳过。原始查询结果（含失败）缓存 10 秒，路径变量与文件存在性每次重新检查，避免每个状态行启动 PowerShell，同时允许随后安装/移动的 Desktop 被重新发现。再查用户 `LOCALAPPDATA/Programs/DeepSeek Harness/resources/runtime/cli/bin/dsh.cmd` 及可用的 Program Files 路径。注册表查询超时、被拒绝或不可用时，仍继续默认目录和 PATH 发现，不修改注册表。
 - macOS：`/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh` 和用户 `~/Applications`。
 - PATH 中指向 Desktop `resources/runtime/cli/bin` 的命令；macOS 登记的符号链接也可解析。
 - 未登记的便携/移动安装，或注册表不可读时，可设置 `SEARCH_BOOST_DSH_DESKTOP_COMMAND` 为 Desktop 自带命令的绝对路径。此覆盖优先于所有自动发现；设置后不查询注册表，路径无效时不会改用其他安装。

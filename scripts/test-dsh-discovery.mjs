@@ -35,6 +35,9 @@ assert.deepEqual(desktopRegistryInstallDirectories([
   product({ UninstallString: 'cmd.exe /c "D:\\app\\Uninstall DeepSeek Harness.exe"' }),
 ]), [])
 assert.deepEqual(desktopRegistryInstallDirectories({}, { env }), [])
+assert.deepEqual(desktopRegistryInstallDirectories([product({ InstallLocation: 'D:\\100% tools\\DeepSeek Harness' })]), ['D:\\100% tools\\DeepSeek Harness'])
+assert.deepEqual(desktopRegistryInstallDirectories([product({ InstallLocation: '%APPS%\\DeepSeek Harness' })], { env: { APPS: 'D:\\100% tools' } }), ['D:\\100% tools\\DeepSeek Harness'])
+assert.deepEqual(desktopRegistryInstallDirectories([product({ InstallLocation: '\\\\server\\share\\DeepSeek Harness' })]), [], 'automatic registry discovery must not probe remote UNC shares')
 console.log('ok: Windows installer metadata handles custom drives, Unicode/spaces, icon/uninstall fallbacks and rejects unrelated/invalid entries')
 
 let calls = 0
@@ -51,7 +54,21 @@ const run = (command, args, options) => {
   assert.ok(options.maxBuffer <= 1_048_576)
   return { status: 0, stdout: '\uFEFF' + JSON.stringify([product({ InstallLocation: 'D:\\自定义 应用 & tools\\DeepSeek Harness' })]) }
 }
-assert.deepEqual(windowsDesktopInstallDirectories({ platform: 'win32', env, run }), ['D:\\自定义 应用 & tools\\DeepSeek Harness'])
+assert.deepEqual(windowsDesktopInstallDirectories({ platform: 'win32', env, run, now: () => 1_000 }), ['D:\\自定义 应用 & tools\\DeepSeek Harness'])
+assert.deepEqual(windowsDesktopInstallDirectories({ platform: 'win32', env, run, now: () => 1_001 }), ['D:\\自定义 应用 & tools\\DeepSeek Harness'])
+assert.equal(calls, 1, 'hot discovery reuses a short-lived registry snapshot')
+assert.deepEqual(windowsDesktopInstallDirectories({ platform: 'win32', env, run, now: () => 11_000 }), ['D:\\自定义 应用 & tools\\DeepSeek Harness'])
+assert.equal(calls, 2, 'expired registry snapshot permits a newly installed/moved Desktop to be discovered')
+let failedCalls = 0
+const failedRun = () => { failedCalls++; return { status: 1, stdout: '' } }
+assert.deepEqual(windowsDesktopInstallDirectories({ platform: 'win32', env, run: failedRun, now: () => 1_000 }), [])
+assert.deepEqual(windowsDesktopInstallDirectories({ platform: 'win32', env, run: failedRun, now: () => 1_001 }), [])
+assert.equal(failedCalls, 1, 'unavailable registry query is not spawned for every status row')
+assert.deepEqual(windowsDesktopInstallDirectories({ platform: 'win32', env, run: failedRun, now: () => 11_000 }), [])
+assert.equal(failedCalls, 2, 'failed discovery can recover after the bounded cache expires')
+const variableRun = () => ({ status: 0, stdout: JSON.stringify([product({ InstallLocation: '%APPS%\\DeepSeek Harness' })]) })
+assert.deepEqual(windowsDesktopInstallDirectories({ platform: 'win32', env: { ...env, APPS: 'D:\\one' }, run: variableRun, now: () => 1_000 }), ['D:\\one\\DeepSeek Harness'])
+assert.deepEqual(windowsDesktopInstallDirectories({ platform: 'win32', env: { ...env, APPS: 'E:\\two' }, run: variableRun, now: () => 1_001 }), ['E:\\two\\DeepSeek Harness'], 'cached raw metadata does not freeze environment expansion')
 assert.deepEqual(windowsDesktopInstallDirectories({ platform: 'win32', env, run: () => ({ status: 0, stdout: JSON.stringify(product({ InstallLocation: 'D:\\single' })) }) }), ['D:\\single'])
 for (const result of [
   { status: 1, stdout: '[]' }, { status: 0, stdout: 'not JSON' }, { status: 0, stdout: '' },
@@ -60,7 +77,7 @@ for (const result of [
 assert.deepEqual(windowsDesktopInstallDirectories({ platform: 'win32', env, run: () => { throw Error('denied') } }), [])
 for (const platform of ['linux', 'darwin']) assert.deepEqual(windowsDesktopInstallDirectories({ platform, env, run }), [])
 assert.deepEqual(windowsDesktopInstallDirectories({ platform: 'win32', env: {}, run }), [])
-assert.equal(calls, 1, 'non-Windows/WSL and missing system paths must not query Windows registry')
+assert.equal(calls, 2, 'non-Windows/WSL and missing system paths must not query Windows registry')
 console.log('ok: bounded read-only registry query, safe JSON transport, timeout/denial/absence and native-platform gating')
 
 // Integration uses actual sandbox files, not mere candidate strings. No registry
@@ -70,6 +87,9 @@ const stale = join(process.env.HOME, 'removed installation')
 const launcher = dir => join(dir, 'resources', 'runtime', 'cli', 'bin', 'dsh.cmd')
 mkdirSync(dirname(launcher(custom)), { recursive: true })
 writeFileSync(launcher(custom), '@echo discovery-only fixture\r\n')
+assert.equal(dshDesktopStatus({ platform: 'win32', env: {}, readRegistry: () => [custom] }).command, null,
+  'a registry launcher without its sibling application is not an automatic execution source')
+writeFileSync(join(custom, 'DeepSeek Harness.exe'), 'application discovery fixture')
 const readRegistry = () => [stale, custom]
 const status = dshDesktopStatus({ platform: 'win32', home: process.env.HOME, env: {}, readRegistry })
 assert.equal(status.command, launcher(custom), 'skip stale metadata and find the custom install without PATH/default directories')

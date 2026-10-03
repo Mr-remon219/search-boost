@@ -21,9 +21,10 @@ import {
 } from '../lib/installer/i18n.mjs'
 import {
   CONFIG_KEY_NAMES, KEY_NAMES, keyStatus, keysFilePath, readEngineBaseUrls,
-  readEngineRouting, writeKeysFile,
+  readEngineRouting, readKeys, writeKeysFile,
 } from '../lib/keys.mjs'
 import { ENGINE_BASE_URLS } from '../lib/engine-endpoints.mjs'
+import { getLayer } from '../lib/layer-config.mjs'
 
 const savedExit = process.exitCode
 process.env.LC_ALL = 'en_US.UTF-8'
@@ -110,6 +111,62 @@ const keysDoc = () => JSON.parse(readFileSync(keysFilePath(), 'utf8'))
 const homeMenus = (records) => records.filter((r) => r.message === 'What do you want to do?')
 
 try {
+  // A broken credential store must not turn a display-only hint into a broken
+  // menu. Actual reads/configuration remain strict and never replace the store.
+  for (const language of ['en', 'zh-CN']) {
+    for (const corrupt of ['{secret-fixture-do-not-render', '[]']) {
+      fresh()
+      saveTuiLanguage(language)
+      writeKeysFile({ tavily: 'healthy-fixture-key' })
+      const file = keysFilePath()
+      writeFileSync(file, corrupt)
+      const records = [], logs = [], steps = ['exit']
+      await runTui({}, { clack: fakeClack(steps, records, logs) })
+      assert.equal(records.length, 1, 'corrupt keys must not prevent the first home menu')
+      assert.equal(steps.length, 0)
+      assert.equal(process.exitCode, undefined, 'display-only configuration errors do not fail a normal exit')
+      assert.equal(records[0].options.find(o => o.value === 'layer').hint,
+        language === 'en' ? 'configuration error' : '配置错误')
+      assert(!logs.some(text => text.includes('secret-fixture-do-not-render')), 'hint errors never render credential content')
+      assert.throws(() => getLayer(), error => error.code === 'store_corrupt')
+      assert.throws(() => readKeys(), error => error.code === 'store_corrupt')
+      assert.throws(() => writeKeysFile({ tavily: 'replacement-must-not-write' }), error => error.code === 'store_corrupt')
+      const action = await runScenario(['keys', 'exit'])
+      assert(action.logs.some(text => text.includes(language === 'en' ? 'Operation failed:' : '操作失败：')))
+      assert.equal(process.exitCode, 1, 'actual configuration still reports failure')
+      assert.equal(readFileSync(file, 'utf8'), corrupt, 'opening menus/failed operations do not rewrite corrupt keys')
+      process.exitCode = undefined
+      const layerAction = await runScenario(['layer', 'exit'])
+      assert.equal(process.exitCode, 1, 'actual layer inference remains strict')
+      assert(layerAction.logs.some(text => text.includes(language === 'en' ? 'Operation failed:' : '操作失败：')))
+      assert.equal(readFileSync(file, 'utf8'), corrupt)
+      process.exitCode = undefined
+      saveTuiLayout('folder')
+      const folder = await runScenario(['search-tools', 'back', 'exit'])
+      assert.equal(folder.records[1].options.find(o => o.value === 'layer').hint,
+        language === 'en' ? 'configuration error' : '配置错误')
+      assert.equal(process.exitCode, undefined)
+    }
+  }
+  fresh()
+  writeKeysFile({ tavily: 'unreadable-fixture-key' })
+  const unreadable = keysFilePath()
+  rmSync(unreadable)
+  mkdirSync(unreadable)
+  const unreadableHome = await runScenario(['exit'])
+  assert.equal(unreadableHome.records[0].options.find(o => o.value === 'layer').hint, 'configuration error')
+  assert.equal(process.exitCode, undefined)
+  assert.throws(() => readKeys(), error => ['store_unreadable', 'store_read_failed'].includes(error.code))
+  assert(existsSync(unreadable), 'an unreadable store is not removed')
+  fresh()
+  const healthyFree = await runScenario(['exit'])
+  assert.equal(healthyFree.records[0].options.find(o => o.value === 'layer').hint, 'current: free')
+  writeKeysFile({ tavily: 'healthy-fixture-key' })
+  const healthyApi = await runScenario(['exit'])
+  assert.equal(healthyApi.records[0].options.find(o => o.value === 'layer').hint, 'current: api')
+  assert.equal(process.exitCode, undefined)
+  console.log('ok: corrupt/unreadable keys show a localized hint without blocking flat/folder menus; actual config stays strict')
+
   // ---------------------------------------------------------------------------
   // Layout preference storage
   // ---------------------------------------------------------------------------

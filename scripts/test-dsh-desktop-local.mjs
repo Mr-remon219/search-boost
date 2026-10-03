@@ -125,6 +125,36 @@ result = await waitForDshDesktopLocal({ dir, source, version, timeoutMs: 40, int
 })
 assert.equal(result.ok, false, 'known runtime verification failure cannot degrade to disk-only success')
 assert.equal(result.timedOut, true)
+reset()
+const retryClock = clock(), retryStates = []
+let failedProbes = 0
+result = await waitForDshDesktopLocal({ dir, source, version, timeoutMs: 1_000, intervalMs: 10,
+  onState: state => retryStates.push(state) }, {
+  ...retryClock, desktopStatus: () => ({ command: '/fake/desktop' }),
+  verifyRuntime: async () => { failedProbes++; throw Error('deterministic runtime mismatch: private-secret') },
+})
+assert.equal(failedProbes, 3, 'runtime failures must not spawn hundreds of probes against an unchanged installation')
+assert.equal(result.verificationFailed, true, 'a bounded runtime failure is distinct from waiting for a GUI installation')
+assert.equal(result.ok, false)
+assert.equal(result.pending, true)
+assert(retryClock.now() < 1_000, 'known runtime failure returns before the full GUI wait deadline')
+assert(retryStates.includes('runtime'))
+const transientClock = clock()
+let transientProbes = 0
+result = await waitForDshDesktopLocal({ dir, source, version, timeoutMs: 1_000, intervalMs: 10 }, {
+  ...transientClock, desktopStatus: () => ({ command: '/fake/desktop' }),
+  verifyRuntime: async () => { if (++transientProbes < 3) throw Error('transient'); return {} },
+})
+assert.equal(result.ok, true, 'bounded retries still allow a transient owning-runtime failure to recover')
+assert.equal(transientProbes, 3)
+reset()
+let launcherChecks = 0
+result = await waitForDshDesktopLocal({ dir, source, version, timeoutMs: 1_000, intervalMs: 10 }, {
+  ...clock(), desktopStatus: () => ({ command: ++launcherChecks === 1 ? '/fake/desktop' : null }),
+  verifyRuntime: async () => { throw Error('known mismatch') },
+})
+assert.equal(result.verificationFailed, true, 'a disappearing launcher cannot turn a known runtime failure into disk-only success')
+assert.equal(result.ok, false)
 const changedDuringProbe = clock()
 result = await waitForDshDesktopLocal({ dir, source, version, timeoutMs: 40, intervalMs: 10 }, {
   ...changedDuringProbe, desktopStatus: () => ({ command: '/fake/desktop' }),
@@ -233,8 +263,13 @@ for (const language of ['en', 'zh-CN']) {
     const stopped = await runDshDesktopLocalInstall(out.clack, {}, { ...deps, wait: async () => ({ ok: false, pending: true, cancelled: true }) })
     assert.equal(stopped.pending, true)
     assert.equal(stopped.ok, false)
+    const unverified = await runDshDesktopLocalInstall(out.clack, {}, { ...deps,
+      wait: async () => ({ ok: false, pending: true, verificationFailed: true }) })
+    assert.equal(unverified.ok, false)
+    assert.match(unverified.error, language === 'en' ? /owning-runtime verification failed/ : /运行时验证未通过/)
+    assert(!unverified.error.includes('timed out'), 'known runtime failures are not mislabeled as GUI wait timeouts')
     await assert.rejects(() => runDshDesktopLocalInstall(out.clack, {}, { ...deps, wait: async () => { throw Error('unexpected failure') } }))
-    assert.equal(disposed, 3, 'wait input disposed on success, cancellation and failure')
+    assert.equal(disposed, 4, 'wait input disposed on success, cancellation, verification failure and unexpected failure')
     out.clack.spinner = oldSpinner
   }, { language })
 }
