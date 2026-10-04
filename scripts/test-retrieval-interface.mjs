@@ -51,7 +51,7 @@ await test('MCP translates the shared contracts instead of re-declaring them', (
 
 await test('the DSH translation accepts the union, the v5 branch and the v5 metadata shape', () => {
   const union = toDshSchema(ADAPTIVE_OUTPUT_SCHEMA)
-  assert.equal(union.oneOf.length, 2)
+  assert.equal(union.oneOf.length, 3)
   const v5 = toDshSchema(ADAPTIVE_V5_OUTPUT_SCHEMA)
   assert.equal(v5.type, 'object')
   const metadata = toDshSchema(ADAPTIVE_V5_METADATA_SCHEMA)

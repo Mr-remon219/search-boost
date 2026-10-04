@@ -10,8 +10,8 @@ import { spawnSync } from 'node:child_process'
 import { PKG_ROOT } from '../lib/pkg.mjs'
 import { runAdaptiveSearch, clearAllCaches } from '../lib/runtime.mjs'
 import {
-  saveResearchResultsV2, loadResearchResults, listResearchResults, exportResearchResults,
-  researchResultsDir, MAX_RESEARCH_BYTES, RESEARCH_FORMAT_V1, RESEARCH_FORMAT_V2,
+  saveResearchResultsV3, loadResearchResults, listResearchResults, exportResearchResults,
+  researchResultsDir, MAX_RESEARCH_BYTES, RESEARCH_FORMAT_V1, RESEARCH_FORMAT_V3,
 } from '../lib/research-results.mjs'
 import { normalizeAdaptiveInput } from '../lib/search/screening/input.js'
 import { resultPages } from '../lib/search/screening/pages.js'
@@ -112,14 +112,14 @@ const v5Input={questions:['How does Node.js fetch support cancellation?'],intent
 let savedId
 {
   const harness=makeHarness()
-  const deps={...harness.deps,loadResults:loadResearchResults,saveResults:saveResearchResultsV2}
+  const deps={...harness.deps,loadResults:loadResearchResults,saveResults:saveResearchResultsV3}
   const result=await runAdaptiveSearch({...v5Input,preferences:['Implementation details'],max_results:2,save_results:true,page_size:1},{},deps)
   savedId=result.savedResultId
   assert.equal(typeof savedId,'string')
-  assert.equal(result.schemaVersion,5)
+  assert.equal(result.schemaVersion,6)
   const stored=JSON.parse(readFileSync(join(store,savedId+'.json'),'utf8'))
-  assert.equal(stored.format,RESEARCH_FORMAT_V2)
-  assert.equal(stored.metadata.schemaVersion,5)
+  assert.equal(stored.format,RESEARCH_FORMAT_V3)
+  assert.equal(stored.metadata.schemaVersion,6)
   assert.equal(stored.results.length,2,'the complete selected set is stored, not only the first page')
   assert.equal(stored.metadata.run.community.outcome,'not_requested')
   assert.equal(stored.metadata.inputSummary.question,v5Input.questions[0])
@@ -128,17 +128,17 @@ let savedId
   // restore: same decision, no strategy/Jev/search/community/value call
   const restoreHarness=makeHarness()
   const reads={jev:0,search:0}
-  const restoreDeps={...restoreHarness.deps,loadResults:loadResearchResults,saveResults:saveResearchResultsV2,
+  const restoreDeps={...restoreHarness.deps,loadResults:loadResearchResults,saveResults:saveResearchResultsV3,
     createClient:()=>{reads.jev++;throw Error('no Jev client during restore')},search:()=>{reads.search++;throw Error('no search during restore')}}
   const restored=await runAdaptiveSearch({saved_result_id:savedId,page_size:1},{},restoreDeps)
-  assert.equal(restored.schemaVersion,5)
+  assert.equal(restored.schemaVersion,6)
   assert.equal(restored.policyVersion,'fused-screening-mix-v2-prototype')
   assert.equal(restored.run.community.outcome,'not_requested')
   assert.equal(restored.savedResultId,savedId)
   assert.equal(restored.totalResults,2)
   assert.equal(restored.results.length,1)
   assert.equal(restored.selection.targetMet,true)
-  assert.match(restored.nextCursor,/^s5:/)
+  assert.match(restored.nextCursor,/^s6:/)
   assert.equal('restoration' in restored,false)
   assert.equal(reads.jev+reads.search,0)
   // CLI list/export stay offline and never overwrite
@@ -153,7 +153,7 @@ let savedId
   assert.equal(exportResearchResults(LEGACY_ID,join(process.env.HOME,'legacy-export.json')),join(process.env.HOME,'legacy-export.json'))
   assert.equal(JSON.parse(readFileSync(join(process.env.HOME,'legacy-export.json'))).format,RESEARCH_FORMAT_V1)
 }
-console.log('ok: explicit save writes search-boost-research-v2/schema-5 with the full selected set; restore and CLI list/export are offline')
+console.log('ok: explicit save writes search-boost-research-v3/schema-6 with the full selected set; restore and CLI list/export are offline')
 
 // Legal maximum-length input must not fail after the private save. Page-only
 // summaries may shrink, but every reviewed result and the saved input stay exact.
@@ -166,7 +166,7 @@ console.log('ok: explicit save writes search-boost-research-v2/schema-5 with the
       max_results: 4, page_size: 1, save_results: true, community: false,
     }
     const harness = makeHarness()
-    const deps = { ...harness.deps, loadResults: loadResearchResults, saveResults: saveResearchResultsV2 }
+    const deps = { ...harness.deps, loadResults: loadResearchResults, saveResults: saveResearchResultsV3 }
     const before = readdirSync(store).length
     const result = await runAdaptiveSearch(input, {}, deps)
     assert.equal(typeof result.savedResultId, 'string', 'the private write always returns a recoverable ID')
@@ -226,12 +226,12 @@ console.log('ok: legal maximum CJK/escaped/astral inputs return usable saved IDs
   writeFileSync(file,tampered)
   const metadata=loadResearchResults(savedId).metadata
   const rows=loadResearchResults(savedId).results
-  assert.throws(()=>saveResearchResultsV2([{...rows[0],description:'x'.repeat(MAX_RESEARCH_BYTES)}],metadata),/64 MiB/)
+  assert.throws(()=>saveResearchResultsV3([{...rows[0],description:'x'.repeat(MAX_RESEARCH_BYTES)}],metadata),/64 MiB/)
   if(process.platform!=='win32')assert.equal(statSync(file).mode&0o777,0o600)
   rmSync(file)
   await assert.rejects(()=>runAdaptiveSearch({saved_result_id:savedId}),/not found.*no search/)
   const target=join(process.env.HOME,'outside.json')
-  writeFileSync(target,JSON.stringify(loadResearchResults(LEGACY_ID)&&{format:RESEARCH_FORMAT_V2}))
+  writeFileSync(target,JSON.stringify(loadResearchResults(LEGACY_ID)&&{format:RESEARCH_FORMAT_V3}))
   let links=true
   try{symlinkSync(target,file)}catch(err){if(process.platform!=='win32'||!['EPERM','EACCES','ENOSYS'].includes(err.code))throw err;links=false}
   if(links){assert.throws(()=>loadResearchResults(savedId),/invalid/);rmSync(file)}
@@ -240,7 +240,7 @@ console.log('ok: legal maximum CJK/escaped/astral inputs return usable saved IDs
   rmSync(file)
   if(links){
     const held=researchResultsDir();rmSync(held,{recursive:true});symlinkSync(process.env.HOME,held,process.platform==='win32'?'junction':'dir')
-    assert.throws(()=>saveResearchResultsV2(rows,metadata),/regular private directories/)
+    assert.throws(()=>saveResearchResultsV3(rows,metadata),/regular private directories/)
     rmSync(held)
   }
   mkdirSync(store,{recursive:true})
@@ -311,7 +311,7 @@ console.log('ok: MCP/Pi/DSH restore both formats without network; historical rea
 // ------------------------------------------------------------- empty save ----
 {
   const harness=makeHarness({rows:[]})
-  const deps={...harness.deps,loadResults:loadResearchResults,saveResults:saveResearchResultsV2}
+  const deps={...harness.deps,loadResults:loadResearchResults,saveResults:saveResearchResultsV3}
   const empty=await runAdaptiveSearch({...v5Input,max_results:1,save_results:true},{},deps)
   assert.equal(typeof empty.savedResultId,'string','an explicitly empty reviewed set may be saved')
   assert(empty.warnings.some((warning)=>warning.includes('snapshot is empty')))

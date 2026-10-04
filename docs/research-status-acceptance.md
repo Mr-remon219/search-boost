@@ -1,5 +1,7 @@
 # 研究结果与安装状态：接入、验收及边界
 
+v0.2.5 专用判断模型接入与验证限制见 [发布说明](v0.2.5-release.md)。
+
 此前独立保留的产品草稿现已接入公开入口。它们分别属于可靠性修复、新增保存能力和诊断增强，不应统称为同一个 bug 修复。此前 CLIENT/RUNTIME 报告修复仍见 [1856 修复记录](release-review-1856-fixes.md)。
 
 ## 1. 研究派发依赖
@@ -15,15 +17,15 @@
 {"questions":["一个研究问题"],"intent":"研究方向（必填）","preferences":["官方来源"],"save_results":true}
 ```
 
-新运行现在直接写 `search-boost-research-v2` 且 `metadata.schemaVersion=5`；旧的 `search-boost-research-v1` 文件仍按只读历史分支读取（`restoration.historical=true`、`h1:` cursor、保留原 schema 版本），不会就地升级，也不会伪造 v5 字段。返回 `inputSummary` 与成功保存后的 `savedResultId`。空结果也可显式保存，但会披露空快照警告；保存成功不代表搜索成功，应查看 stopReason。保存完整选中结果集，而不是首屏；快照只保留公开材料和类型化元数据，不保存活游标、未知字段、内部日志或配置密钥。问题、意图、偏好与摘录本身可能敏感，应按私有研究数据管理。`constraints` 作为逐材料硬门槛已退役：非空数组在任何网络前被拒绝，省略或 `[]` 仅告警。
+新运行写 `search-boost-research-v3` 且 `metadata.schemaVersion=6`，用 `run.judgment` 如实标识 Jev / Laya；旧 v2/schema 5 原样只读恢复，不升级或补造身份；旧的 `search-boost-research-v1` 文件仍按只读历史分支读取（`restoration.historical=true`、`h1:` cursor、保留原 schema 版本），不会就地升级，也不会伪造 v5 字段。返回 `inputSummary` 与成功保存后的 `savedResultId`。空结果也可显式保存，但会披露空快照警告；保存成功不代表搜索成功，应查看 stopReason。保存完整选中结果集，而不是首屏；快照只保留公开材料和类型化元数据，不保存活游标、未知字段、内部日志或配置密钥。问题、意图、偏好与摘录本身可能敏感，应按私有研究数据管理。`constraints` 作为逐材料硬门槛已退役：非空数组在任何网络前被拒绝，省略或 `[]` 仅告警。
 
 ```json
 {"saved_result_id":"<savedResultId>","page_size":20}
 ```
 
-在同一 SearchBoost home 中恢复本地结果并生成新游标；之后按 `nextCursor` 翻页。恢复不进行搜索或 Jev 请求。cursor 与 saved_result_id 不能混用，也不能混入新研究输入或 save_results。快照与原有进程内游标是不同能力：`s5:`/`h1:` 分页游标仍有30分钟/32份保留限制；快照不会因进程重启失效，也不会自动更新为最新资料。
+在同一 SearchBoost home 中恢复本地结果并生成新游标；之后按 `nextCursor` 翻页。恢复不进行搜索或 Jev 请求。cursor 与 saved_result_id 不能混用，也不能混入新研究输入或 save_results。快照与原有进程内游标是不同能力：`s6:`/`s5:`/`h1:` 分页游标仍有30分钟/32份保留限制；快照不会因进程重启失效，也不会自动更新为最新资料。
 
-**公开工具入口仍遵循显式开关和 Jev 配置锁。** 删除 Jev 配置时不会为了恢复而自动解锁/开启工具。下列 CLI 命令无需 Jev，可以离线列出和读取导出快照：
+**公开工具入口仍遵循显式开关和当前判断模型配置锁。** 选中判断模型配置不可用时不会为了恢复而自动解锁/开启工具。下列 CLI 命令无需 Jev，可以离线列出和读取导出快照：
 
 ```sh
 search-boost research list

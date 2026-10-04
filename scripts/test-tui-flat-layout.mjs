@@ -231,7 +231,7 @@ try {
     'layer', 'free',
     'tools', reply('multiselect', []), reply('confirm', false),
     'x', 'keep',
-    'jev', 'keep',
+    'jev', '+cancel',
     'search', reply('multiselect', []),
     'print', 'cursor', reply('confirm', false), reply('confirm', true),
     'manage', 'uninstall', reply('multiselect', []), 'back',
@@ -257,7 +257,7 @@ try {
   const toolsNote = walk.logs.find((l) => l.includes('Tool switches — shared by MCP / Pi / DSH'))
   assert(toolsNote && toolsNote.includes('fused_search'), 'Tool switches is the real wizard with real tool names')
   assert.equal(walk.records.find((r) => r.message === 'X credentials').options.map((o) => o.value).join(','), 'keep,import-grok,set-key,remove')
-  assert.equal(walk.records.find((r) => r.message === 'Jev credentials (experimental)').options.map((o) => o.value).join(','), 'keep,set,remove')
+  assert.equal(walk.records.find((r) => r.message === 'Judgment model profiles').options.map((o) => o.value).join(','), '+new,+cancel')
   assert(walk.logs.some((l) => l.includes('Built-in web search')), 'Native web search prints the real per-agent state')
   assert(walk.printed.some((line) => line.includes('search-boost') && line.includes('mcpServers')), 'Print MCP snippet writes a real snippet')
   const targetPrompts = walk.records.filter((r) => r.message === 'Which agents should search-boost configure?')
@@ -275,14 +275,14 @@ try {
   assert.deepEqual(englishHome.records[0].options.map((o) => o.label), [
     'Setup wizard', 'Manage agent integrations', 'Status',
     'Search engine configuration', 'Default search layer', 'Tool switches', 'X credentials',
-    'Jev configuration (experimental)', 'Native web search', 'Print MCP snippet',
+    'Judgment models (Jev / Laya)', 'Native web search', 'Print MCP snippet',
     'TUI settings', 'Exit',
   ])
   saveTuiLanguage('zh-CN')
   const zhHome = await runScenario(['exit'])
   assert.deepEqual(zhHome.records[0].options.map((o) => o.label), [
     '首次配置向导', '管理 Agent 接入', '查看当前状态', '搜索引擎配置',
-    '默认搜索层', '工具开关', 'X 凭据', 'Jev 配置', '原生搜索替换', '输出 MCP 配置片段',
+    '默认搜索层', '工具开关', 'X 凭据', '判断模型（Jev / Laya）', '原生搜索替换', '输出 MCP 配置片段',
     'TUI 设置', '退出',
   ])
   assert.equal(zhHome.records[0].message, '请选择操作')

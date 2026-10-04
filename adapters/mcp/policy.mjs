@@ -8,16 +8,16 @@ Read this optional resource for examples, result interpretation or troubleshooti
 
 ## Choose a call
 
-- fused_search: use for the vast majority of public-web research, including difficult investigations. No Jev configuration is required. Retrieves ranked extracts across configured engines; supports varied queries and explicit source control.
+- fused_search: use for the vast majority of public-web research, including difficult investigations. No judgment configuration is required. Retrieves ranked extracts across configured engines; supports varied queries and explicit source control.
 - fetch_page: read a known URL to inspect the original text or verify a claim that search extracts do not establish.
 - x_search: find X-only posts, account material or available thread content. Select the mode and its required fields using the schema.
-- adaptive_search: when enabled with configured Jev, use for higher-quality evidence selection on medium-to-high difficulty or uncertain questions. Prefer it when noisy sources, unclear relevance or many plausible leads make intent-guided screening valuable. It screens one snapshot, not an entire investigation, and does not orchestrate children.
+- adaptive_search: when enabled with a configured judgment model (Jev or Laya), use for higher-quality evidence selection on medium-to-high difficulty or uncertain questions. Prefer it when noisy sources, unclear relevance or many plausible leads make intent-guided screening valuable. It screens one snapshot, not an entire investigation, and does not orchestrate children.
 - search_stats / search_layer with layer=show: inspect diagnostics or the current compatibility default. Changing the layer persists a new default and requires authorization.
 
 Choose in this order:
-1. Check which tools are actually enabled. If Jev is not configured or Adaptive is unavailable, use enabled fused_search for research of any difficulty; do not attempt a locked call, require setup or change configuration automatically.
+1. Check which tools are actually enabled. If No judgment profile is configured or Adaptive is unavailable, use enabled fused_search for research of any difficulty; do not attempt a locked call, require setup or change configuration automatically.
 2. If both are available, prefer Adaptive when a medium-to-high difficulty or uncertain question needs higher-quality, intent-guided evidence selection. Call it directly without a preliminary fused_search.
-3. Use fused_search when direct retrieval is sufficient or varied queries/source control are needed. Neither a difficult project nor configured Jev makes every call an Adaptive call; choose by the evidence need rather than adopting one tool for every task.
+3. Use fused_search when direct retrieval is sufficient or varied queries/source control are needed. Neither a difficult project nor a configured judgment model (Jev or Laya) makes every call an Adaptive call; choose by the evidence need rather than adopting one tool for every task.
 
 These are routing heuristics, not a measured entropy score or hard difficulty threshold. Higher-quality selection is the purpose of screening, not a guarantee that its labels prove truth. For broader investigations, the parent defines the plan, verifies decisive sources and synthesizes the answer; independent angles may use an authorized parallel workflow.
 
@@ -68,7 +68,7 @@ One question with a required screening direction:
 {"questions":["How do Node.js 22 and 24 support fetch cancellation, excluding experimental APIs?"],"intent":"Find supported cancellation behavior with version-specific limits and counterexamples.","preferences":["Primary implementation references"],"max_results":8,"page_size":3,"save_results":true}
 \`\`\`
 
-This example omits community so Jev chooses the existing branch. Explicit true/false overrides it without another community question. The ordinary fused_search default remains false and never calls Jev. For saved reads, use cursor or saved_result_id with page_size only; new search fields must not be mixed in:
+This example omits community so the selected judgment model chooses the existing branch. Explicit true/false overrides it without another community question. The ordinary fused_search default remains false and never calls a judgment model. For saved reads, use cursor or saved_result_id with page_size only; new search fields must not be mixed in:
 
 \`\`\`json
 {"saved_result_id":"00000000-0000-0000-0000-000000000000","page_size":20}
@@ -78,7 +78,7 @@ Replace the example ID with the returned savedResultId; a syntactically valid pl
 
 ## Adaptive result interpretation
 
-One pre-search Jev request selects the fixed ranking preset and, when omitted by the caller, the already-wired community branch. Unknown/missing community choices mean off, with disclosure; strategy never widens engines, credentials, permissions or domain limits. English is requested by field guidance, not server-validated or translated. Only the original question is searched: intent/preferences guide screening, not query expansion.
+One pre-search judgment request selects the fixed ranking preset and, when omitted by the caller, the already-wired community branch. Unknown/missing community choices mean off, with disclosure; strategy never widens engines, credentials, permissions or domain limits. English is requested by field guidance, not server-validated or translated. Only the original question is searched: intent/preferences guide screening, not query expansion.
 
 The single fused snapshot has capacity ${adaptiveCandidateLimit(10)} for result targets through 10, scales proportionally for larger targets, and reaches ${adaptiveCandidateLimit(50)} at target 50. Web and community share that capacity. Capacity is a ceiling, not a supply, qualified-result, latency or cost guarantee. Every declared candidate is reviewed before selection; no early stop at the first K acceptable links and no automatic full-page reading occur.
 
@@ -86,7 +86,7 @@ Only safety-clear material with established value 3/4/5 is admitted. Values are 
 
 No self-imposed cumulative cost, token, request-count or whole-run quota stops screening. Actual per-request timeouts, limited retries, authentication/rate-limit/network failures, safety refusals and explicit cancellation still apply. The parent's research rounds and optional child waves are separate from this one screening pass.
 
-constraints is a retired material gate: omit it; [] only warns and non-empty arrays fail before network calls. Keep research conditions in question/intent, use site:/-site: or fused_search domain filters for hard domain restrictions, and verify required document properties by reading. Jev receives question, direction and necessary fragments, never engine credentials or fingerprints. Do not send secrets/private reasoning or configure the external service without authorization.
+constraints is a retired material gate: omit it; [] only warns and non-empty arrays fail before network calls. Keep research conditions in question/intent, use site:/-site: or fused_search domain filters for hard domain restrictions, and verify required document properties by reading. The selected judgment service receives question, direction and necessary fragments, never engine credentials or fingerprints. Do not send secrets/private reasoning or configure the external service without authorization.
 
 save_results opts into a private local snapshot of the complete selected set and typed metadata, without credentials or model logs. Host sessions/audit may retain their own data; local saving is not a blanket no-retention promise. Pagination/restoration performs no search, strategy or value judgment. Cursors are process-local (${PAGE_TTL_MS / 60_000} minutes, up to ${MAX_PAGE_RUNS} retained runs); a savedResultId supports recovery after restart. Historical h1: restores are read-only original evidence, not fresh search, new scores or re-verification. Page size affects delivery only; byte limits can shorten a page, with explicit warnings and continuation.
 

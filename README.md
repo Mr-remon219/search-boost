@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.2.4-orange?style=flat-square" alt="version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.2.5-orange?style=flat-square" alt="version"></a>
   <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm version"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
@@ -27,7 +27,7 @@
 
 ---
 
-> **v0.2.4**: single-snapshot Jev screening (schema V5), private research save/recovery, bounded PDF text extraction, Desktop integration, and separate package updates / integration management. See the [release and migration notes](./docs/v0.2.4-release.md): V3 adaptive inputs/outputs and the `upgrade` command have changed. This source version does not imply npm publication; `@latest` follows the published registry.
+> **v0.2.5**: unified dedicated judgment adapters for Jev and self-hosted Laya, named profiles, truthful schema V6 identity and compatible private snapshot recovery. See the [release and configuration notes](./docs/v0.2.5-release.md). Laya requires complete diagnostics and pinned offline head-capacity evidence; registration is not a live-service or model-quality claim. This source version does not imply npm publication; `@latest` follows the published registry.
 
 ## Table of Contents
 
@@ -42,7 +42,7 @@
   - [1. `fused_search` Multi-Engine Search](#1-fused_search-multi-engine-search)
   - [2. `fetch_page` Smart Content Reader](#2-fetch_page-smart-content-reader)
   - [3. `x_search` X (Twitter) Intelligence](#3-x_search-x-twitter-intelligence)
-  - [4. `adaptive_search` Jev Intent-Guided Search (Experimental)](#4-adaptive_search-jev-intent-guided-search-experimental)
+  - [4. `adaptive_search` Jev / Laya Intent-Guided Search (Experimental)](#4-adaptive_search-jev--laya-intent-guided-search-experimental)
   - [Engine Pools & Scoring Presets](#engine-pools--scoring-presets)
 - [Parallel Multi-Agent Research Workflows](#parallel-multi-agent-research-workflows)
 - [Security](#security)
@@ -61,8 +61,8 @@
   Fetches the origin first for low latency, with optional same-route curl compatibility fallback and Jina Reader backup. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
 - **X / Twitter Community Intelligence (`x_search`)**  
   Retrieves public posts, user timelines, and discussion threads via official xAI API or an anonymous fallback channel. Derives UTC timestamps from verifiable Snowflake post IDs and applies author/date filters only when metadata can be verified. Coverage may be incomplete, stale or empty; a retrieved sample does not establish platform-wide sentiment.
-- **Jev Intent-Guided Search (`adaptive_search` · Experimental)**
-  Supply one full question and a required research intent. One pre-search Jev strategy request selects the fixed ranking preset and (when community is omitted) whether to add the already-wired community branch; one bounded fused snapshot (32 candidates for targets up to 10; larger targets keep the same headroom ratio, at most 160) is then screened with fixed safety, prototype value 3/4/5 and source-discount options. No keyword planning, no constraints gate, no language check, no automatic page read, and no self-set cumulative budget stop; cursor and saved-result pagination only replay stored results. No claim of verified or complete answers.
+- **Jev / Laya Intent-Guided Search (`adaptive_search` · Experimental)**
+  Supply one full question and a required research intent. One pre-search judgment strategy request selects the fixed ranking preset and (when community is omitted) whether to add the already-wired community branch; one bounded fused snapshot (32 candidates for targets up to 10; larger targets keep the same headroom ratio, at most 160) is then screened with fixed safety, prototype value 3/4/5 and source-discount options. No keyword planning, no constraints gate, no language check, no automatic page read, and no self-set cumulative budget stop; cursor and saved-result pagination only replay stored results. No claim of verified or complete answers.
 - **Native Multi-Agent Parallel Research**  
   Bundles `search-boost` and `search-boost-parallel-research` skills. In hosts supporting subagents (Cursor, Claude Code, Pi, DSH), tasks can be dispatched to parallel Searchers (gathering evidence) and Summarizers (pure synthesis without tools), supporting both Fast and Complex waves.
 - **Unified Core Across All Host Ecosystems**  
@@ -96,7 +96,7 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
      └─────────────────┘
 ```
 
-- **Core (`lib/`)**: Host-neutral algorithms, engine orchestration, Jev client protocol, and network safety policies.
+- **Core (`lib/`)**: Host-neutral algorithms, engine orchestration, dedicated judgment adapter protocol, and network safety policies.
 - **Adapters (`adapters/`)**: Maps core operations into host-specific protocols (MCP JSON-RPC, Pi Extension API, DSH Cordis lifecycle).
 - **Agents (`agents/`)**: Host prompt contracts, workflow templates, and native skill definitions. See the [prompt responsibility contract](docs/prompt-contract.md) and [beta.8 release notes](docs/v0.2.4-beta.8-release.md) for the Agent-facing routing update.
 
@@ -191,7 +191,7 @@ The default **flat** home lists these actions in order:
 | :--- | :--- |
 | Setup wizard; Manage agent integrations; Status | Guided setup; install / scoped refresh / confirmed uninstall; read-only status |
 | Search engine configuration; Default search layer; Tool switches | Choose individual engines; `free` / `api`; shared MCP / Pi / DSH switches |
-| X credentials; Jev configuration (experimental) | Masked credential management |
+| X credentials; judgment models (Jev / Laya) | Masked credential management |
 | Native web search; Print MCP snippet | Explicit permission choices; read-only snippets |
 | TUI settings; Exit | Menu layout before display language; close the console |
 
@@ -201,7 +201,7 @@ Layout and language changes apply immediately and are saved in `~/.search-boost/
 
 ### Tool switches
 
-Open **Tool switches** (folder layout: Search & tools → Tool switches), toggle with Space, press Enter to review, then confirm. Esc or declining confirmation writes nothing; an empty selection disables all tools. Locked `adaptive_search` appears struck through in the status panel and is excluded from selectable choices until Jev is configured. Configuring Jev makes it available by default; an explicit OFF preference is preserved.
+Open **Tool switches** (folder layout: Search & tools → Tool switches), toggle with Space, press Enter to review, then confirm. Esc or declining confirmation writes nothing; an empty selection disables all tools. Locked `adaptive_search` appears struck through in the status panel and is excluded from selectable choices until a judgment profile is configured. Configuring a profile makes it available by default; an explicit OFF preference is preserved.
 
 Preferences are shared through `~/.search-boost/config/tools.json` (or `$SEARCH_BOOST_HOME/config/tools.json`), using atomic, locked writes. No host restart or reinstall is needed once the updated adapters are loaded:
 
@@ -209,7 +209,7 @@ Preferences are shared through `~/.search-boost/config/tools.json` (or `$SEARCH_
 - **Pi:** active tools refresh within approximately 300ms; unrelated and initially excluded tools are preserved. Watchers stop on session shutdown.
 - **DSH:** registrations remain present but disabled calls fail immediately; the native search/fetch provider paths obey the same switches.
 
-Every new invocation checks the current preference, including stale tool handles. Existing requests finish normally. Removing Jev credentials locks adaptive calls (including pagination and saved-result recovery); restoring credentials does not override explicit OFF. These are **tool-entry switches**, not engine permissions: enabled adaptive research screens one internal fused snapshot and does not read pages automatically, and fused community search may still use internal X retrieval. Searcher waves in Pi/DSH also require the shared fused_search and fetch_page entries and DSH scoped tools: disabled dependencies prevent initial dispatch, and are checked again before each child starts. Started children finish normally; tool-free summarizers do not require these entries. Checks never enable tools or expand permissions. Slash commands remain available for recovery. Existing processes running older adapter code require one reload/update first. Hosts sharing these settings must use the same SearchBoost home.
+Every new invocation checks the current preference, including stale tool handles. Existing requests finish normally. An unavailable selected judgment profile locks adaptive calls (including pagination and saved-result recovery); restoring configuration does not override explicit OFF. These are **tool-entry switches**, not engine permissions: enabled adaptive research screens one internal fused snapshot and does not read pages automatically, and fused community search may still use internal X retrieval. Searcher waves in Pi/DSH also require the shared fused_search and fetch_page entries and DSH scoped tools: disabled dependencies prevent initial dispatch, and are checked again before each child starts. Started children finish normally; tool-free summarizers do not require these entries. Checks never enable tools or expand permissions. Slash commands remain available for recovery. Existing processes running older adapter code require one reload/update first. Hosts sharing these settings must use the same SearchBoost home.
 
 ---
 
@@ -224,7 +224,7 @@ When integrated, agents automatically receive standard tool definitions and auto
 | `fused_search` | Parallel multi-engine querying, deduplication, and diversity re-ranking | A single search step; follow-up decisions remain with the parent agent |
 | `fetch_page` | Reading clean content from public URLs with optional keyword focus | Not an authenticated browser; local network and proxy policy still apply |
 | `x_search` | Retrieving public X posts, author timelines, or discussion threads | Does not guarantee exhaustive comment threads or total sentiment sampling |
-| `adaptive_search` | **Experimental**: one bounded fused snapshot + fixed-option Jev screening for one question and a required intent | Selected URLs with reviewed extracts and value labels; targetMet is quantity only, not verified answers |
+| `adaptive_search` | **Experimental**: one bounded fused snapshot + fixed-option judgment screening for one question and a required intent | Selected URLs with reviewed extracts and value labels; targetMet is quantity only, not verified answers |
 | `search_stats` | Reading engine status, memory cache hits, and recent diagnostic stats | Read-only; configuration readiness does not guarantee active external network reachability |
 | `search_layer` | Viewing or switching compatibility search layer in MCP | `show` is read-only; changing layers mutates persistent configuration on disk |
 
@@ -292,11 +292,13 @@ Designed for real-time technical tracking and first-party developer updates. Sup
 
 ---
 
-### 4. `adaptive_search` Jev Intent-Guided Search (Experimental)
+### 4. `adaptive_search` Jev / Laya Intent-Guided Search (Experimental)
 
-**Vercel support**: in TUI → Jev configuration (folder layout: Services & credentials → Jev configuration), enter `https://ai-gateway.vercel.sh/v1` and a Vercel AI Gateway key. SearchBoost selects the official SDK evaluation model `typesafe-ai/jev`, not chat completions. The default TypeSafe `/systemone` path remains supported. Both paths use only the canonical user Jev credential, not environment keys, and respect server rate-limit delays.
+**Vercel support**: in TUI → Judgment models (Jev / Laya) (folder layout: Services & credentials → Judgment models), enter `https://ai-gateway.vercel.sh/v1` and a Vercel AI Gateway key. SearchBoost selects the official SDK evaluation model `typesafe-ai/jev`, not chat completions. The default TypeSafe `/systemone` path remains supported. Both paths use only the selected canonical user judgment profile, not environment keys, and respect server rate-limit delays.
 
-Supply **one question** (`questions` has exactly one item) plus a **required research `intent`** and optional soft `preferences`. Write them in English as a caller instruction: the server never language-checks, rejects or translates them, and any language is searched exactly as written. The original question is the only query — there is no keyword planning and no query expansion. One pre-search Jev strategy request selects the fixed `balanced`/`research`/`fresh` ranking and, when `community` is omitted, `enable`/`disable`/`unknown` for the already-wired community (X) branch; an explicit `community` true/false overrides that choice and is never asked back. That single fused call collects a **bounded snapshot: 32 candidates for targets up to 10, ceil(max_results×32/10) for larger targets (at most 160)** (web and community rows share it), and every declared candidate is screened with fixed options: safety `clear`/`violation`/`unavailable`, prototype value levels 0-5, source discounts from real positive-contribution engines, and one match per preference. Only safe material with an established value 3/4/5 is delivered, ranked by the versioned screening formula; confidence is audit-only. There is no early stop at the first K acceptable links, no automatic page read, and no self-imposed cumulative cost, token, request-count or whole-run time budget — real single-request timeouts, limited retries, authentication/rate-limit failures, safety refusals and explicit cancellation still apply.
+**Laya support**: add a self-hosted profile in the same TUI, choose an explicit model and optional authentication. No empty Bearer is sent; nullable token budgets inherit server defaults. Missing diagnostics, truncation, collapsed options, abstention or absent offline head-capacity evidence make judgments unavailable, never model-approved residual choices. See [capacity evidence and migration](docs/v0.2.5-release.md). New runs identify the selected provider in `run.judgment`; historical records are never silently upgraded.
+
+Supply **one question** (`questions` has exactly one item) plus a **required research `intent`** and optional soft `preferences`. Write them in English as a caller instruction: the server never language-checks, rejects or translates them, and any language is searched exactly as written. The original question is the only query — there is no keyword planning and no query expansion. One pre-search judgment strategy request selects the fixed `balanced`/`research`/`fresh` ranking and, when `community` is omitted, `enable`/`disable`/`unknown` for the already-wired community (X) branch; an explicit `community` true/false overrides that choice and is never asked back. That single fused call collects a **bounded snapshot: 32 candidates for targets up to 10, ceil(max_results×32/10) for larger targets (at most 160)** (web and community rows share it), and every declared candidate is screened with fixed options: safety `clear`/`violation`/`unavailable`, prototype value levels 0-5, source discounts from real positive-contribution engines, and one match per preference. Only safe material with an established value 3/4/5 is delivered, ranked by the versioned screening formula; confidence is audit-only. There is no early stop at the first K acceptable links, no automatic page read, and no self-imposed cumulative cost, token, request-count or whole-run time budget — real single-request timeouts, limited retries, authentication/rate-limit failures, safety refusals and explicit cancellation still apply.
 
 ```json
 {
@@ -314,8 +316,8 @@ Supply **one question** (`questions` has exactly one item) plus a **required res
 - `max_results` caps the selected and saved set (default 10, max 50); `page_size` only changes the page (default 20, max 50) and never re-orders or re-filters.
 - Results contain selected URLs, titles, reviewed extracts, `valueLevel`/`valueLabel`, rank, real provenance and score components — never generated answers. `selection.targetMet` means quantity only, never research completion or verification; `selection.incomplete`, `diagnostics`, `stopReason`, `outsideReview` and `unreviewed` disclose what was not finished rather than treating it as low value.
 - `run.community` reports the finite community decision and the actual execution status (`not_requested`/`domain_excluded`/`unavailable`/`blocked`/`succeeded`/`empty`/`failed`/`partial`/`not_run`), never model reasoning. A failed or partial community branch keeps valid web results and marks the run incomplete.
-- Read saved pages with `{"cursor":"<s5:…>"}` (optional `page_size`) only: no new search, strategy, Jev, community or value call. Default 20/max 50 per page with a byte budget. Cursors last up to 30 minutes/32 recent sets in the current process and are not exhaustive search.
-- With explicit `save_results:true`, the complete final selected set plus typed metadata is stored privately under the SearchBoost home (`search-boost-research-v2`, schema version 5) and you receive a `savedResultId`. After a restart or cache clear, read `{"saved_result_id":"<savedResultId>"}` (optional `page_size`) without another search or Jev call. Older `search-boost-research-v1` files stay readable in a marked read-only `h1:` historical branch (`restoration.historical: true`, original schema version preserved, no invented v5 fields). Public tool switches and the Jev configuration lock still apply to reads; `search-boost research list` / `research export <id> --output <new-file.json>` work offline without Jev. See [integration and acceptance boundaries](docs/research-status-acceptance.md).
+- Read saved pages with `{"cursor":"<s6:…>"}` (optional `page_size`) only: no new search, strategy, Jev, community or value call. Default 20/max 50 per page with a byte budget. Cursors last up to 30 minutes/32 recent sets in the current process and are not exhaustive search.
+- With explicit `save_results:true`, the complete final selected set plus typed metadata is stored privately under the SearchBoost home (`search-boost-research-v3`, schema version 6) and you receive a `savedResultId`. After a restart or cache clear, read `{"saved_result_id":"<savedResultId>"}` (optional `page_size`) without another search or Jev call. Older v2/schema-5 files stay unchanged and readable with `s5:` cursors; older `search-boost-research-v1` files stay readable in a marked read-only `h1:` historical branch (`restoration.historical: true`, original schema version preserved, no invented v5 fields). Public tool switches and the judgment-profile configuration lock still apply to reads; `search-boost research list` / `research export <id> --output <new-file.json>` work offline without Jev. See [integration and acceptance boundaries](docs/research-status-acceptance.md).
 - Thresholds remain uncalibrated engineering starting points. See the [contract, budgets and migration notes](docs/jev-adaptive-search.md).
 
 ---

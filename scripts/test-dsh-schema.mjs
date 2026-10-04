@@ -63,9 +63,9 @@ assert.equal(typeof stats.xOfficial, 'boolean')
 assert.equal(typeof stats.xSource, 'string')
 const adaptive = tools.get('adaptive_search')
 // The registered output contract is the shared v5 ∪ historical union, translated.
-assert.ok(ADAPTIVE_OUTPUT_SCHEMA.oneOf.length === 2, 'shared union keeps two explicit branches')
+assert.ok(ADAPTIVE_OUTPUT_SCHEMA.oneOf.length === 3, 'shared union keeps two explicit branches')
 assert.notEqual(tools.get('adaptive_search').output.schema, undefined)
-await assert.rejects(() => adaptive.execute({ questions: ['test'], intent: 'find references' }, {}), /Jev not configured/)
+await assert.rejects(() => adaptive.execute({ questions: ['test'], intent: 'find references' }, {}), /Judgment model not configured/)
 // Injected deps keep this a pure contract check: the entry gate is open, no Jev
 // credential exists, so the core returns its structured not_configured result.
 const empty = await runAdaptiveSearch({ questions: ['test'], intent: 'find references' }, {}, {
@@ -127,7 +127,7 @@ console.log('ok: nullable dates/cursors, engine maps, v5 and historical adaptive
 for (const intent of ['Find useful pointers']) {
   const input = { questions: ['a?'], intent, preferences: ['Implementation details'], community: false }
   assert.deepEqual(validateJsonSchemaValue(adaptive.parameters, input), [])
-  await assert.rejects(() => adaptive.execute(input, {}), /Jev not configured/)
+  await assert.rejects(() => adaptive.execute(input, {}), /Judgment model not configured/)
 }
 for (const input of [
   { questions: [], intent: 'x' }, { questions: ['a?', 'b?'], intent: 'x' }, { questions: ['a?'], page_size: 51 },

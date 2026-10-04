@@ -6,7 +6,7 @@ import { ENGINE_ORDER } from '../../lib/runtime.mjs'
 import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/screening/input.js'
 import {
   ADAPTIVE_OUTPUT_SCHEMA,
-  ADAPTIVE_V5_OUTPUT_SCHEMA,
+  ADAPTIVE_V5_OUTPUT_SCHEMA, ADAPTIVE_V6_OUTPUT_SCHEMA,
 } from '../../lib/search/screening/schema.js'
 import { jsonSchemaToZod, projectObjectUnion } from '../../lib/search/screening/zod-schema.js'
 
@@ -168,6 +168,7 @@ export function validateAdaptiveSearchOutput(value) {
   return value
 }
 /** The v5 branch alone, for callers that need the strict new-run contract. */
+export const adaptiveSearchV6Output = jsonSchemaToZod(ADAPTIVE_V6_OUTPUT_SCHEMA)
 export const adaptiveSearchV5Output = jsonSchemaToZod(ADAPTIVE_V5_OUTPUT_SCHEMA)
 export { ADAPTIVE_INPUT_SCHEMA }
 

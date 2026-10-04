@@ -296,9 +296,9 @@ export default function searchBoostExtension(pi) {
 
   registerTool({
     name: ADAPTIVE_TOOL_NAME,
-    label: 'Adaptive Search (Jev)',
+    label: 'Adaptive Search (Jev / Laya)',
     description: ADAPTIVE_DESCRIPTION,
-    promptSnippet: 'Higher-quality intent-guided evidence selection for medium-to-high difficulty or uncertain questions; requires enabled, configured Jev',
+    promptSnippet: 'Higher-quality intent-guided evidence selection for medium-to-high difficulty or uncertain questions; requires an enabled tool and a configured judgment model (Jev or Laya)',
     promptGuidelines: ADAPTIVE_PROMPT_GUIDELINES,
     parameters: ADAPTIVE_INPUT_SCHEMA,
     async execute(_toolCallId, params, signal, onUpdate) {

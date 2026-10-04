@@ -45,6 +45,7 @@ export function makeHarness(options = {}) {
     createClient: (config) => {
       calls.clientConfig = config
       return {
+        describe: () => ({ provider: options.config?.provider ?? 'jev', transport: options.config?.transport ?? 'systemone', requestedModel: options.config?.model ?? 'jev-latest', adapterVersion: 1 }),
         usage: () => ({ model: options.model ?? 'fixture-jev', calls: calls.jev.length }),
         async ask(request) {
           calls.jev.push({ request, config })
@@ -111,7 +112,7 @@ export function makeHarness(options = {}) {
   } else {
     deps.saveResults = options.saveResults ?? ((results, metadata) => {
       calls.save.push({ results, metadata })
-      store.set(FIXTURE_SAVED_ID, { format: 'search-boost-research-v2', schemaVersion: 5, results, metadata })
+      store.set(FIXTURE_SAVED_ID, { format: 'search-boost-research-v3', schemaVersion: 6, results, metadata })
       return FIXTURE_SAVED_ID
     })
     deps.loadResults = options.loadResults ?? ((id) => {

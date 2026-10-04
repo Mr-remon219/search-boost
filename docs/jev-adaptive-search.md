@@ -1,6 +1,8 @@
-# Jev 单流程筛选：当前契约（N_off, schema v5）
+# Jev / Laya 单流程筛选：当前契约（N_off, schema v6）
 
-本文是 `adaptive_search` 生产契约的当前说明，对应 N_off 单流程：一次有界 fused 候选快照 + 一次固定选项 Jev 策略请求 + 一次固定选项筛选。它取代此前的 v3 关键词循环说明；历史文档（`adaptive-keyword-index.md`、`adaptive-history-aware-audit.md`、`adaptive-review-points.md`、`adaptive-fused-screening-plan.md`）只对应旧版本或原型设计，其中被本流程替代的部分不再生效。
+专用判断适配、用户 profile、Laya 严格诊断与离线容量证据见 [v0.2.5 接入说明](v0.2.5-release.md)；本页保留不变的业务合同。
+
+本文是 `adaptive_search` 生产契约的当前说明，对应 N_off 单流程：一次有界 fused 候选快照 + 一次固定选项判断模型策略请求 + 一次固定选项筛选。它取代此前的 v3 关键词循环说明；历史文档（`adaptive-keyword-index.md`、`adaptive-history-aware-audit.md`、`adaptive-review-points.md`、`adaptive-fused-screening-plan.md`）只对应旧版本或原型设计，其中被本流程替代的部分不再生效。
 
 - 数值公式与价值等级沿用 screening 原型（`fused-screening-mix-v2-prototype`），本文不重复公式推导，见 `docs/adaptive-fused-screening-plan.md` 与 `lib/search/screening/scoring.js`。
 - 预算语义以 2026-10-02 的补充修正为准：**没有任何自设的累计成本、token、请求次数或整次调用时限可以停止本流程**；用量只做观测与披露。
@@ -19,11 +21,11 @@
 | `max_results` | 保存/交付的目标条数，默认 10，范围 1-50。 |
 | `page_size` | 每页条数，默认 20，范围 1-50；不改变排序、selection、totalResults 或 targetMet。 |
 
-只读输入：`cursor`（`s5:` 本次运行页 / `h1:` 历史只读页）或 `saved_result_id`（36 位小写 UUID），只可搭配 `page_size`。
+只读输入：`cursor`（`s6:` 本次运行页 / `s5:` 原 v5 页 / `h1:` 历史只读页）或 `saved_result_id`（36 位小写 UUID），只可搭配 `page_size`。
 
 迁移规则：
 
-- `constraints` 作为逐材料硬门槛已退役。省略或传 `[]`（返回 `deprecated_constraints_empty` 警告）；非空合法数组在任何检索/Jev 调用前以 `adaptive_constraints_removed` 拒绝；类型/长度/元素无效按输入错误拒绝。
+- `constraints` 作为逐材料硬门槛已退役。省略或传 `[]`（返回 `deprecated_constraints_empty` 警告）；非空合法数组在任何检索/判断调用前以 `adaptive_constraints_removed` 拒绝；类型/长度/元素无效按输入错误拒绝。
 - `keywords`、`tasks`、`targets`、`facts`、`time_range`、嵌套关键词数组等旧字段一律零网络拒绝，不做静默丢弃。
 - `cursor` / `saved_result_id` 不得与任何新研究字段（包括 `save_results:false`、`community:false`、`constraints:[]`）混用，两个读取 ID 也不能并用。
 - 结构与旧字段检查在配置读取、工具状态检查与所有网络之前完成。工具描述继续提示 questions 与 intent 必须使用英文，但这是调用方提示，不做语言校验、拒绝、翻译或诊断；任何语言都按原文检索。
@@ -32,23 +34,23 @@
 
 ```
 结构与迁移校验（零网络）
-→ 公开入口门控（显式 OFF / Jev 配置锁）+ 外部 signal
-→ cursor / saved_result_id 只读分支在此结束（不建 Jev 客户端、不问策略、不检索、不判断）
+→ 公开入口门控（显式 OFF / 判断模型配置锁）+ 外部 signal
+→ cursor / saved_result_id 只读分支在此结束（不建判断客户端、不问策略、不检索、不判断）
 → 一次固定策略请求：选 ranking；community 省略时同一次选 enable/disable/unknown
 → 代码解析显式覆盖 / 模型选择 / unknown 与缺失回退，落实能力与域名限制
 → 调用共享 runFused：query=原问题，medium，candidateSelection=snapshot，community=解析后的布尔值
 → 有界快照（目标 ≤10 时最多 32 条；更大目标为 ceil(max_results × 32 / 10)，最高 160；网页与社区行共用）按原融合分与稳定 key 全局排序后截取
 → prepareMaterial 校验/哈希并标记 pending → 分批固定选项 safety/value/source discount/preferences
 → 代码排除安全失败、基础分无效、不可判断、value 未建立与 value<3
-→ 原型 screeningScore + 稳定 tie-break + max_results 截断 → schema v5 结果
-→ save_results:true 时保存完整最终选中集，然后建立进程内 s5: 分页
+→ 原型 screeningScore + 稳定 tie-break + max_results 截断 → schema v6 结果
+→ save_results:true 时保存完整最终选中集，然后建立进程内 s6: 分页
 ```
 
 没有第二轮检索、没有关键词续搜、没有自动补读（`rescueReads` 固定为 0）、没有 N_on/N_off 开关、没有第二个 adaptive 入口。
 
 ## 3. 搜索前策略与 community 优先级
 
-- 策略请求只含 `strategy.ranking` 与（省略 community 时）`strategy.community`；criteria 由代码提供，Jev 只返回选项，不产生平台名、引擎、查询变体、预算或系数。
+- 策略请求只含 `strategy.ranking` 与（省略 community 时）`strategy.community`；criteria 由代码提供，判断模型只返回选项，不产生平台名、引擎、查询变体、预算或系数。
 - 优先级：显式 boolean（按字段是否存在识别，不被 truthy/默认值覆盖） > 模型选择 > 缺失/非法回退。`enable→true`、`disable→false`、`unknown→false`；缺失/坏形状/非法 option 同样 false，但状态记为 unavailable 并披露，不伪装成模型选择 disable。
 - 能力处理基于同一个 runtime capability snapshot：官方 X 不可用但既有 fallback 可用时按原机制执行；已知整条支路不可执行或被授权边界禁止时跳过并返回结构化 `unavailable`/`blocked`；普通路由无可用引擎时仍 `no_engines` 失败。
 - `run.community` 输出固定结构：`input`、`source`、`choice`、`requested`、`effective`、`outcome`、`cacheHit`、`reason`、`usage`；状态只来自共享核心的结构化执行记录，不解析 warnings 文案，也不从 `communityUsed` 推断成功。
@@ -77,13 +79,13 @@ beta.6 保留原先默认目标 10 / 容量 32 的筛选余量比例；12 条目
 
 ## 6. 返回、分页与持久化
 
-- 所有新研究直接 `schemaVersion=5`，策略版本：`fused-screening-mix-v2-prototype`、`screening-judgement-v4-no-scope-no-language`、`screening-strategy-v2-community-no-language`、`no-scope-v1`、计量 `screening-metering-v3-no-cumulative-cap`。
+- 所有新研究直接 `schemaVersion=6`，`run.judgment` 记录真实 provider / requestedModel / resolvedModel / transport / adapterVersion；未知身份保持 null。`run.community.source` 为 judge 或 explicit，策略版本：`fused-screening-mix-v2-prototype`、`screening-judgement-v4-no-scope-no-language`、`screening-strategy-v2-community-no-language`、`no-scope-v1`、计量 `screening-metering-v3-no-cumulative-cap`。
 - 结果行含 ID/rank、URL/标题/准确摘录、basis/日期/文本与分数版本、真实来源、`valueLevel`/`valueLabel`、分数组件、来源折扣与偏好匹配、有意义的 value/discount confidence。
 - `selection` 给出 `requested`/`returned`/`targetMet`/`stopReason`/`incomplete`；`diagnostics` 给出计数守恒与排除原因；`outsideReview`/`unreviewed` 统计尚未进入判断或快照之外的候选；已派发但判断不可用的候选另计入 `judgementUnavailable` / `assessmentUnavailable` / `safetyUnavailable`，因此 `unreviewed=0` 不代表全部判断有效。失败或取消批次的 `judgeFailures` 是派发失败计数，原因结合 `stopReason` 查看；不可用判断绝不当作低价值或不存在。`targetMet` 只表示数量。
 - 新响应不返回 `keywordProgress`、`retrievalSufficient`、`coverageComplete`、`scopeSummary`、`convergence`、`finalReview`、`tier`/`valueScore` 等旧字段，也不填假零/假 true。
 - 页面软容量为 96,000 UTF-8 字节（原先 45,000），元数据仍保留 16,000 字节预算；按三条 8,000 字符中文摘录（约 72,000 字节）及字段开销协调容量，避免常规长中文结果被迫每页一条。page_size 仍是条数上限，不保证装满；超软限单条仍完整交付并告警，绝不截改已审摘录。读取/完整保存集合的语义不变。合法长中文或 JSON 转义输入若使元数据超限，页面仅缩短 `inputSummary` 的 Unicode 完整前缀并告警；真实检索/判断输入、已审摘录、计数与使用量不变，显式保存成功时私有快照保留完整输入。历史 v1 元数据仍原样返回，不套用此缩短。
-- 分页：进程内共享 30 分钟 / 32 份页面池，`s5:` 对应 v5 运行、`h1:` 对应历史只读恢复；拒绝裸 UUID.offset、`s4:`、过期/驱逐/越界 cursor，且零网络。`clearAllCaches` 只清内存/检索缓存，不删除持久快照。
-- 持久化：新写入 `search-boost-research-v2` + `metadata.schemaVersion=5`；读取按 `format` 分派，v2 校验失败绝不降级 v1。旧 v1 文件只读恢复，返回 `restoration={historical:true, originalFormat, originalSchemaVersion}` 与 `h1:` cursor，保留原结果与元数据、不伪造 v5 字段、不就地升级、不刷新 `savedAt`。存储保留 64MiB 上限、UUID 文件名单硬链接与 NOFOLLOW 校验、0700/0600 私有原子写入、递归白名单清洗、取消不返回成功 ID、CLI 离线 `research list`/`research export` 与 `wx` 不覆盖。
+- 分页：进程内共享 30 分钟 / 32 份页面池，`s6:` 对应新 v6 运行，`s5:` 对应原 v5、`h1:` 对应历史只读恢复；拒绝裸 UUID.offset、`s4:`、过期/驱逐/越界 cursor，且零网络。`clearAllCaches` 只清内存/检索缓存，不删除持久快照。
+- 持久化：新写入 `search-boost-research-v3` + `metadata.schemaVersion=6`；旧 v2/schema 5 保留原身份和 s5: 读取，不补造 run.judgment；读取按 `format` 分派，v3/v2 校验失败绝不降级其他格式。旧 v1 文件只读恢复，返回 `restoration={historical:true, originalFormat, originalSchemaVersion}` 与 `h1:` cursor，保留原结果与元数据、不伪造 v5 字段、不就地升级、不刷新 `savedAt`。存储保留 64MiB 上限、UUID 文件名单硬链接与 NOFOLLOW 校验、0700/0600 私有原子写入、递归白名单清洗、取消不返回成功 ID、CLI 离线 `research list`/`research export` 与 `wx` 不覆盖。
 
 ## 7. 失败语义
 
