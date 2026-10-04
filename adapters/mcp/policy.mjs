@@ -15,7 +15,7 @@ Read this optional resource for examples, result interpretation or troubleshooti
 - search_stats / search_layer with layer=show: inspect diagnostics or the current compatibility default. Changing the layer persists a new default and requires authorization.
 
 Choose in this order:
-1. Check which tools are actually enabled. If No judgment profile is configured or Adaptive is unavailable, use enabled fused_search for research of any difficulty; do not attempt a locked call, require setup or change configuration automatically.
+1. Check which tools are actually enabled. If no judgment profile is configured or Adaptive is unavailable, use enabled fused_search for research of any difficulty; do not attempt a locked call, require setup or change configuration automatically.
 2. If both are available, prefer Adaptive when a medium-to-high difficulty or uncertain question needs higher-quality, intent-guided evidence selection. Call it directly without a preliminary fused_search.
 3. Use fused_search when direct retrieval is sufficient or varied queries/source control are needed. Neither a difficult project nor a configured judgment model (Jev or Laya) makes every call an Adaptive call; choose by the evidence need rather than adopting one tool for every task.
 

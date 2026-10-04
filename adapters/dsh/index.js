@@ -390,7 +390,7 @@ function registerAdaptiveSearchTool(ctx) {
       rawInput: (args?.questions ?? []).join(' | ').slice(0, 60),
     }),
     output: {
-      // The shared exact-one union (schema-v5 run | read-only historical restore):
+      // The shared exact-one union (schema-v6 run | schema-v5 run | historical restore):
       // DSH translates and Ajv-validates this definition instead of a private copy.
       schema: ADAPTIVE_OUTPUT_SCHEMA,
       render: (_args, value) => adaptiveTextContent(value),

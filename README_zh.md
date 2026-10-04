@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.2.5-orange?style=flat-square" alt="version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.2.5--beta1-orange?style=flat-square" alt="version"></a>
   <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm version"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
@@ -27,7 +27,7 @@
 
 ---
 
-> **v0.2.5**：统一专用判断适配器 Jev / 自部署 Laya、命名配置、真实 Schema V6 身份及兼容的私有快照恢复。详见[发布、配置与容量证据说明](./docs/v0.2.5-release.md)。Laya 要求完整诊断与固定版本离线题头容量证据；已注册不等于服务已联通或质量已验证。源码版本不代表 npm 已发布；`@latest` 以实际 registry 为准。
+> **v0.2.5-beta1**：统一专用判断适配器 Jev / 自部署 Laya、命名配置、真实 Schema V6 身份及兼容的私有快照恢复。详见[发布、配置与容量证据说明](./docs/v0.2.5-release.md)。Laya 要求完整诊断与固定版本离线题头容量证据；已注册不等于服务已联通或质量已验证。源码版本不代表 npm 已发布；`@latest` 以实际 registry 为准。
 
 ## 目录
 

@@ -46,7 +46,7 @@ export function makeHarness(options = {}) {
       calls.clientConfig = config
       return {
         describe: () => ({ provider: options.config?.provider ?? 'jev', transport: options.config?.transport ?? 'systemone', requestedModel: options.config?.model ?? 'jev-latest', adapterVersion: 1 }),
-        usage: () => ({ model: options.model ?? 'fixture-jev', calls: calls.jev.length }),
+        usage: () => ({ model: options.model ?? 'fixture-jev', resolvedModel: options.model ?? 'fixture-jev', calls: calls.jev.length }),
         async ask(request) {
           calls.jev.push({ request, config })
           const attempts = options.attempts ?? 1

@@ -63,7 +63,7 @@ assert.equal(typeof stats.xOfficial, 'boolean')
 assert.equal(typeof stats.xSource, 'string')
 const adaptive = tools.get('adaptive_search')
 // The registered output contract is the shared v5 ∪ historical union, translated.
-assert.ok(ADAPTIVE_OUTPUT_SCHEMA.oneOf.length === 3, 'shared union keeps two explicit branches')
+assert.ok(ADAPTIVE_OUTPUT_SCHEMA.oneOf.length === 3, 'shared union keeps three explicit branches')
 assert.notEqual(tools.get('adaptive_search').output.schema, undefined)
 await assert.rejects(() => adaptive.execute({ questions: ['test'], intent: 'find references' }, {}), /Judgment model not configured/)
 // Injected deps keep this a pure contract check: the entry gate is open, no Jev

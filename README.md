@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.2.5-orange?style=flat-square" alt="version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.2.5--beta1-orange?style=flat-square" alt="version"></a>
   <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm version"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
@@ -27,7 +27,7 @@
 
 ---
 
-> **v0.2.5**: unified dedicated judgment adapters for Jev and self-hosted Laya, named profiles, truthful schema V6 identity and compatible private snapshot recovery. See the [release and configuration notes](./docs/v0.2.5-release.md). Laya requires complete diagnostics and pinned offline head-capacity evidence; registration is not a live-service or model-quality claim. This source version does not imply npm publication; `@latest` follows the published registry.
+> **v0.2.5-beta1**: unified dedicated judgment adapters for Jev and self-hosted Laya, named profiles, truthful schema V6 identity and compatible private snapshot recovery. See the [release and configuration notes](./docs/v0.2.5-release.md). Laya requires complete diagnostics and pinned offline head-capacity evidence; registration is not a live-service or model-quality claim. This source version does not imply npm publication; `@latest` follows the published registry.
 
 ## Table of Contents
 
