@@ -34,8 +34,8 @@ await test('strict input migration rejects legacy, malformed and mixed read inpu
     [{ questions: ['Q?'], intent: 'I', constraints: ['Must be v22'] }, /adaptive_constraints_removed/],
     [{ questions: ['Q?'], intent: 'I', preferences: Array.from({ length: 9 }, (_, i) => `p${i}`) }, /preferences must contain 0-8/],
     [{ saved_result_id: 'nope', page_size: 5 }, /Invalid saved research result ID/],
-    [{ cursor: 's5:x.0', saved_result_id: FIXTURE_SAVED_ID }, /cannot be combined/],
-    [{ cursor: 's5:x.0', intent: 'I' }, /accepts page_size only/],
+    [{ cursor: 's6:x.0', saved_result_id: FIXTURE_SAVED_ID }, /cannot be combined/],
+    [{ cursor: 's6:x.0', intent: 'I' }, /accepts page_size only/],
     [{ saved_result_id: FIXTURE_SAVED_ID, save_results: false }, /accepts page_size only/],
     [{ saved_result_id: FIXTURE_SAVED_ID, constraints: [] }, /accepts page_size only/],
     [{ saved_result_id: FIXTURE_SAVED_ID, community: false }, /accepts page_size only/],
@@ -64,7 +64,7 @@ await test('explicit community false asks only the ranking question and keeps th
   const h = makeHarness()
   const result = await runAdaptiveScreening({ ...NEW_INPUT, community: false, page_size: 1 }, { host: 'mcp' }, h.deps)
   assert.equal(validateOutput(result), null)
-  assert.equal(result.schemaVersion, 5)
+  assert.equal(result.schemaVersion, 6)
   assert.equal(result.policyVersion, 'fused-screening-mix-v2-prototype')
   assert.equal(result.judgementPolicyVersion, 'screening-judgement-v4-no-scope-no-language')
   assert.equal(result.strategyPolicyVersion, 'screening-strategy-v2-community-no-language')
@@ -85,7 +85,7 @@ await test('explicit community false asks only the ranking question and keeps th
   assert.equal(result.selection.returned, 2)
   assert.equal(result.pageResults, 1)
   assert.equal(result.totalResults, 2)
-  assert.match(result.nextCursor, /^s5:[a-f0-9-]{36}\.\d+$/)
+  assert.match(result.nextCursor, /^s6:[a-f0-9-]{36}\.\d+$/)
   assert.equal(result.diagnostics.collected, h.rows.length)
   assert.equal(result.diagnostics.snapshotCandidates, h.rows.length)
   assert.equal(result.diagnostics.outsideReview, 0)
@@ -120,7 +120,7 @@ await test('omitted community is decided by the same strategy request', async ()
   assert.equal(h.calls.search[0].args.community, true)
   assert.deepEqual(result.run.strategy.community, { state: 'selected', choice: 'enable' })
   assert.deepEqual(result.run.community, {
-    input: 'auto', source: 'jev', choice: 'enable', requested: true, effective: true,
+    input: 'auto', source: 'judge', choice: 'enable', requested: true, effective: true,
     outcome: 'succeeded', cacheHit: false, reason: null, usage: { logicalOperations: 1, providerRequests: 2 },
   })
   assert.equal(result.selection.incomplete, false)
@@ -377,7 +377,7 @@ await test('save_results persists the complete selected set before page trimming
   assert.equal(h.calls.save.length, 1)
   const saved = h.calls.save[0]
   assert.equal(saved.results.length, 5, 'the full selected set is saved, not the first page')
-  assert.equal(saved.metadata.schemaVersion, 5)
+  assert.equal(saved.metadata.schemaVersion, 6)
   assert.equal(saved.metadata.run.community.input, 'auto')
   assert.equal(Array.isArray(saved.metadata.run.decisions), true)
   assert.deepEqual(saved.metadata.inputSummary, { question: NEW_INPUT.questions[0], intent: NEW_INPUT.intent, preferences: NEW_INPUT.preferences, community: 'auto', maxResults: 5 })
@@ -387,7 +387,7 @@ await test('save_results persists the complete selected set before page trimming
   assert.deepEqual(h.calls.load, [FIXTURE_SAVED_ID])
   assert.equal(h.calls.jev.length, jevBefore, 'restoring never asks Jev again')
   assert.equal(h.calls.search.length, 1, 'restoring never searches again')
-  assert.equal(restored.schemaVersion, 5)
+  assert.equal(restored.schemaVersion, 6)
   assert.equal(restored.savedResultId, FIXTURE_SAVED_ID)
   assert.deepEqual(restored.selection, result.selection)
   assert.deepEqual(restored.run.community, result.run.community, 'a v2 restore keeps the original community decision/execution state')
@@ -395,7 +395,7 @@ await test('save_results persists the complete selected set before page trimming
   assert.equal(restored.inputSummary.community, 'auto')
   assert.equal(restored.totalResults, 5)
   assert.equal(restored.pageResults, 1)
-  assert.match(restored.nextCursor, /^s5:/)
+  assert.match(restored.nextCursor, /^s6:/)
   assert.equal(restored.results[0].url, result.results[0].url)
   assert.equal(validateOutput(restored), null)
   // default: no save at all
@@ -470,7 +470,7 @@ await test('historical v1 snapshots restore read-only with an h1 page and no inv
   assert.equal('schemaVersion' in missing, false)
   // a v2 file that is not schema 5, and an unknown format, fail closed
   const brokenV2 = makeHarness({ loadResults: () => ({ format: 'search-boost-research-v2', schemaVersion: 4, results: [], metadata: {} }) })
-  await assert.rejects(runAdaptiveScreening({ saved_result_id: FIXTURE_SAVED_ID }, {}, brokenV2.deps), /not schema version 5/)
+  await assert.rejects(runAdaptiveScreening({ saved_result_id: FIXTURE_SAVED_ID }, {}, brokenV2.deps), /format and schema version do not match/)
   const unknownFormat = makeHarness({ loadResults: () => ({ format: 'search-boost-research-v9', results: [], metadata: {} }) })
   await assert.rejects(runAdaptiveScreening({ saved_result_id: FIXTURE_SAVED_ID }, {}, unknownFormat.deps), /unsupported saved research format/)
 })
@@ -478,12 +478,12 @@ await test('historical v1 snapshots restore read-only with an h1 page and no inv
 await test('page cursors are process-local, namespace-bound and rejected without any call', async () => {
   const h = makeHarness()
   const result = await runAdaptiveScreening({ ...NEW_INPUT, page_size: 1 }, {}, h.deps)
-  const cursorId = result.nextCursor.slice('s5:'.length).split('.')[0]
+  const cursorId = result.nextCursor.slice('s6:'.length).split('.')[0]
   const jevBefore = h.calls.jev.length
   await assert.rejects(runAdaptiveScreening({ cursor: `${FIXTURE_SAVED_ID}.1` }, {}, h.deps), /Invalid or incompatible adaptive cursor/)
   await assert.rejects(runAdaptiveScreening({ cursor: `s4:${FIXTURE_SAVED_ID}.0` }, {}, h.deps), /Invalid or incompatible adaptive cursor/)
-  await assert.rejects(runAdaptiveScreening({ cursor: 's5:99999999-9999-4999-8999-999999999999.0' }, {}, h.deps), /expired or were evicted/)
-  await assert.rejects(runAdaptiveScreening({ cursor: `s5:${cursorId}.9`, page_size: 1 }, {}, h.deps), /offset is out of range/)
+  await assert.rejects(runAdaptiveScreening({ cursor: 's6:99999999-9999-4999-8999-999999999999.0' }, {}, h.deps), /expired or were evicted/)
+  await assert.rejects(runAdaptiveScreening({ cursor: `s6:${cursorId}.9`, page_size: 1 }, {}, h.deps), /offset is out of range/)
   assert.equal(h.calls.jev.length, jevBefore)
   assert.equal(h.calls.search.length, 1)
   // an h1 cursor cannot read a v5 record even with a valid uuid
@@ -493,7 +493,7 @@ await test('page cursors are process-local, namespace-bound and rejected without
 await test('the public entry gate blocks new calls and reads alike', async () => {
   const disabled = makeHarness({ toolState: { requested: false, enabled: false, locked: false, reason: 'Disabled by user' } })
   await assert.rejects(runAdaptiveScreening(NEW_INPUT, {}, disabled.deps), /Disabled by user/)
-  await assert.rejects(runAdaptiveScreening({ cursor: 's5:00000000-0000-4000-8000-000000000000.0' }, {}, disabled.deps), /Disabled by user/)
+  await assert.rejects(runAdaptiveScreening({ cursor: 's6:00000000-0000-4000-8000-000000000000.0' }, {}, disabled.deps), /Disabled by user/)
   await assert.rejects(runAdaptiveScreening({ saved_result_id: FIXTURE_SAVED_ID }, {}, disabled.deps), /Disabled by user/)
   assert.equal(disabled.calls.load.length, 0)
   const locked = makeHarness({ toolState: { requested: true, enabled: false, locked: true, reason: 'Jev not configured — configure Jev credentials first' } })

@@ -245,11 +245,11 @@ export function xSearchStructured(out) {
   })
 
   registerTool(ADAPTIVE_TOOL_NAME, {
-    title: 'Adaptive Search (Jev)',
+    title: 'Adaptive Search (Jev / Laya)',
     description: ADAPTIVE_DESCRIPTION,
     inputSchema: adaptiveSearchInput,
     outputSchema: adaptiveSearchOutput,
-    annotations: { ...ANNOTATIONS.search, readOnlyHint: false, title: 'Intent-guided search result selection (Jev; optional local save)' },
+    annotations: { ...ANNOTATIONS.search, readOnlyHint: false, title: 'Intent-guided search result selection (typed judgment; optional local save)' },
   }, async (args, extra) => {
     try {
       // No self-imposed whole-call deadline: only the host/client signal can
@@ -262,7 +262,7 @@ export function xSearchStructured(out) {
       const initial = args.cursor === undefined && args.saved_result_id === undefined
       const isError = initial && Boolean(result.error)
       const suffix = initial && result.stopReason === 'not_configured'
-        ? '\n\nJev is not configured: run `search-boost config jev`, or use fused_search / fetch_page / x_search directly.'
+        ? '\n\nNo judgment profile is configured: use TUI → Judgment models (or `search-boost config jev` for legacy Jev), or use fused_search / fetch_page / x_search directly.'
         : ''
       const text = `${renderAdaptiveSummary(result)}${suffix}\n\n${JSON.stringify(result)}`
       return isError ? toolErr(text, summarizeAdaptive(result)) : toolOk(text, summarizeAdaptive(result))

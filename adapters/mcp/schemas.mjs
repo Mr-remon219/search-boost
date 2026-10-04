@@ -6,7 +6,7 @@ import { ENGINE_ORDER } from '../../lib/runtime.mjs'
 import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/screening/input.js'
 import {
   ADAPTIVE_OUTPUT_SCHEMA,
-  ADAPTIVE_V5_OUTPUT_SCHEMA,
+  ADAPTIVE_V5_OUTPUT_SCHEMA, ADAPTIVE_V6_OUTPUT_SCHEMA,
 } from '../../lib/search/screening/schema.js'
 import { jsonSchemaToZod, projectObjectUnion } from '../../lib/search/screening/zod-schema.js'
 
@@ -154,8 +154,8 @@ export const searchStatsOutput = {
  * is refused before the handler runs instead of being stripped and executed.
  */
 export const adaptiveSearchInput = jsonSchemaToZod(ADAPTIVE_INPUT_SCHEMA)
-/** v5 run and read-only historical restore: the shared exact-one union projected
- * to one strict object so the SDK can validate either branch. */
+/** v6 runs, unchanged v5 runs and historical restores: the shared exact-one
+ * union projected to a strict object for SDK discovery. */
 export const adaptiveSearchOutput = jsonSchemaToZod(projectObjectUnion(ADAPTIVE_OUTPUT_SCHEMA))
 // The SDK requires an object-shaped discovery schema. Validate the complete
 // disjoint union separately before returning a response; projection alone would
@@ -167,7 +167,8 @@ export function validateAdaptiveSearchOutput(value) {
   }
   return value
 }
-/** The v5 branch alone, for callers that need the strict new-run contract. */
+/** The v6 branch for new runs; v5 remains available for old snapshots. */
+export const adaptiveSearchV6Output = jsonSchemaToZod(ADAPTIVE_V6_OUTPUT_SCHEMA)
 export const adaptiveSearchV5Output = jsonSchemaToZod(ADAPTIVE_V5_OUTPUT_SCHEMA)
 export { ADAPTIVE_INPUT_SCHEMA }
 

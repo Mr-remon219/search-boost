@@ -20,7 +20,7 @@ let stop, shutdown
 try {
   assert.ok(toolState('fused_search').enabled)
   assert.ok(toolState('adaptive_search').locked)
-  assert.throws(() => saveToolPreferences({ adaptive_search: true }), /Jev not configured/)
+  assert.throws(() => saveToolPreferences({ adaptive_search: true }), /Judgment model not configured/)
   assert.ok(!existsSync(toolsFilePath()))
   assert.throws(() => saveToolPreferences({ unknown: false }), /Invalid tool/)
   assert.throws(() => saveToolPreferences({ x_search: 'false' }), /Invalid tool/)

@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.2.4-orange?style=flat-square" alt="version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.2.5--beta1-orange?style=flat-square" alt="version"></a>
   <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm version"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
@@ -27,7 +27,7 @@
 
 ---
 
-> **v0.2.4**：单次快照 Jev 筛选（Schema V5）、私有研究保存/恢复、有界 PDF 文本读取、Desktop 接入，以及软件更新与接入管理分离。详见[发布与迁移说明](./docs/v0.2.4-release.md)：V3 Adaptive 输入/输出及 `upgrade` 命令已变化。源码版本不代表 npm 已发布；`@latest` 以实际 registry 为准。
+> **v0.2.5-beta1**：统一专用判断适配器 Jev / 自部署 Laya、命名配置、真实 Schema V6 身份及兼容的私有快照恢复。详见[发布、配置与容量证据说明](./docs/v0.2.5-release.md)。Laya 要求完整诊断与固定版本离线题头容量证据；已注册不等于服务已联通或质量已验证。源码版本不代表 npm 已发布；`@latest` 以实际 registry 为准。
 
 ## 目录
 
@@ -42,7 +42,7 @@
   - [1. `fused_search` 多引擎融合搜索](#1-fused_search-多引擎融合搜索)
   - [2. `fetch_page` 智能网页提炼](#2-fetch_page-智能网页提炼)
   - [3. `x_search` X (Twitter) 动态检索](#3-x_search-x-twitter-动态检索)
-  - [4. `adaptive_search` Jev 意图导向搜索（实验功能）](#4-adaptive_search-jev-意图导向搜索实验功能)
+  - [4. `adaptive_search` Jev / Laya 意图导向搜索（实验功能）](#4-adaptive_search-jev--laya-意图导向搜索实验功能)
   - [引擎池与评分预设](#引擎池与评分预设)
 - [多智能体并行研究工作流](#多智能体并行研究工作流)
 - [安全](#安全)
@@ -61,8 +61,8 @@
   优先抓取原站降低等待；必要时使用同线路 curl 兼容兜底，Jina Reader 作为备用读取方式。自动剔除 CSS、JS 及广告噪音，支持 `focus` 关键词段落提炼，具备内存缓存与大体积熔断保护。
 - **X / Twitter 社区情报检索 (`x_search`)**  
   支持通过官方 xAI API 或免登录回退通道获取推文、作者动态与讨论串。根据可核验的 Snowflake ID 推导 UTC 发布时间，仅在元数据可核验时执行作者与日期过滤。覆盖可能不完整、过时或为空；检索样本不能代表全平台舆论。
-- **Jev 意图导向搜索 (`adaptive_search` · 实验功能)**
-  提供一个完整问题与必填研究方向。检索前一次 Jev 策略请求选择固定排序预设，并在省略 community 时决定是否追加既有社区支路；随后对有界 fused 快照（目标≤10 时最多 32 条，更大目标按原余量比例扩至最高 160 条）做固定选项筛选（安全、原型价值 3/4/5、来源折扣）。没有关键词规划、没有逐材料 constraints 门槛、没有语言校验、没有自动补读，也没有自设的累计预算停止；cursor 与 saved_result_id 只重放已保存结果。不宣称答案已核实或完整。
+- **Jev / Laya 意图导向搜索 (`adaptive_search` · 实验功能)**
+  提供一个完整问题与必填研究方向。检索前一次判断模型策略请求选择固定排序预设，并在省略 community 时决定是否追加既有社区支路；随后对有界 fused 快照（目标≤10 时最多 32 条，更大目标按原余量比例扩至最高 160 条）做固定选项筛选（安全、原型价值 3/4/5、来源折扣）。没有关键词规划、没有逐材料 constraints 门槛、没有语言校验、没有自动补读，也没有自设的累计预算停止；cursor 与 saved_result_id 只重放已保存结果。不宣称答案已核实或完整。
 - **原生多智能体并行研究工作流**  
   随包提供 `search-boost` 与 `search-boost-parallel-research` Skills。在支持子代理的宿主（如 Cursor、Claude Code、Pi、DSH）中，可将复杂调研拆分为多路 Searcher（抓取证据）与 Summarizer（无工具综合），提供 Fast 与 Complex 两种研究波次。
 - **统一架构，全宿主覆盖**  
@@ -82,7 +82,7 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
                               │
                     Shared SearchBoost Core
                      lib/runtime.mjs 核心门面
-               搜索 · 抓取 · X · Jev 意图导向搜索
+               搜索 · 抓取 · X · Jev / Laya 意图导向搜索
                               │
               ┌───────────────┼───────────────┐
               │               │               │
@@ -96,7 +96,7 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
      └─────────────────┘
 ```
 
-- **Core (`lib/`)**：宿主无关的算法与网络引擎，负责引擎调用、数据清洗、Jev 协议交互及安全策略。
+- **Core (`lib/`)**：宿主无关的算法与网络引擎，负责引擎调用、数据清洗、专用判断适配器协议交互及安全策略。
 - **Adapters (`adapters/`)**：负责将核心能力翻译为具体协议（MCP JSON-RPC、Pi Extension API、DSH Cordis 生命周期）。
 - **Agents (`agents/`)**：受控提示词、工作流模板与原生 Skills 定义。面向 Agent 的工具选择与分层职责见[提示词职责契约](docs/prompt-contract.md)及 [beta.8 发布说明](docs/v0.2.4-beta.8-release.md)。
 
@@ -191,7 +191,7 @@ search-boost
 | :--- | :--- |
 | 首次配置向导；管理 Agent 接入；查看当前状态 | 连续首次配置；安装 / 按范围刷新 / 确认卸载；只读状态 |
 | 搜索引擎配置；默认搜索层；工具开关 | 任选引擎；`free` / `api`；MCP / Pi / DSH 共用开关 |
-| X 凭据；Jev 配置（实验性） | 脱敏凭据管理 |
+| X 凭据；判断模型（Jev / Laya） | 脱敏凭据管理 |
 | 原生搜索替换；输出 MCP 配置片段 | 保留权限选择；只读片段 |
 | TUI 设置；退出 | 菜单布局位于显示语言之前；关闭控制台 |
 
@@ -201,7 +201,7 @@ search-boost
 
 ### 工具开关
 
-进入 **工具开关**（文件夹模式：搜索与工具 → 工具开关），空格勾选，回车查看变更并确认保存。Esc 或取消确认不写入配置；允许全部关闭。未配置 Jev 时，`adaptive_search` 在状态面板中显示删除线和锁定原因，不进入可选列表。配置 Jev 后默认可用，但此前明确关闭的偏好不会被覆盖。
+进入 **工具开关**（文件夹模式：搜索与工具 → 工具开关），空格勾选，回车查看变更并确认保存。Esc 或取消确认不写入配置；允许全部关闭。未配置判断模型时，`adaptive_search` 在状态面板中显示删除线和锁定原因，不进入可选列表。配置判断模型后默认可用，但此前明确关闭的偏好不会被覆盖。
 
 开关统一保存于 `~/.search-boost/config/tools.json`（或 `$SEARCH_BOOST_HOME/config/tools.json`），采用文件锁和原子写入。加载新版适配器后无需重启、重装宿主：
 
@@ -209,7 +209,7 @@ search-boost
 - **Pi**：约 300ms 内更新活跃工具，保留其他插件工具和原本被宿主排除的工具；会话结束时清理监听。
 - **DSH**：保留注册但立即拒绝关闭工具的新调用；原生搜索/抓取 provider 也遵守对应开关。
 
-每次调用都会重新检查开关，旧工具句柄也不能绕过；正在执行的请求正常完成。移除 Jev 凭据会锁定 adaptive 调用（包括分页和保存结果恢复），恢复凭据不覆盖明确关闭的偏好。这里开关的是**工具入口**，不是底层引擎权限：已开启的 adaptive 只筛选一次内部融合快照，不自动抓取页面，融合搜索的 community 模式仍可内部检索 X。Pi/DSH 的 searcher 波次还要求共享 fused_search、fetch_page 入口及 DSH 范围内工具可用：初始依赖关闭时零派发，每个子进程启动前再次检查；已启动子任务正常完成，无工具 summarizer 不受这两个依赖限制。检查不自动启用工具、不扩大权限。Slash 命令保留用于恢复配置。正在运行旧适配器代码的进程需先更新/重载一次；各宿主需使用同一 SearchBoost 配置目录。
+每次调用都会重新检查开关，旧工具句柄也不能绕过；正在执行的请求正常完成。选中判断模型配置不可用会锁定 adaptive 调用（包括分页和保存结果恢复），恢复配置不覆盖明确关闭的偏好。这里开关的是**工具入口**，不是底层引擎权限：已开启的 adaptive 只筛选一次内部融合快照，不自动抓取页面，融合搜索的 community 模式仍可内部检索 X。Pi/DSH 的 searcher 波次还要求共享 fused_search、fetch_page 入口及 DSH 范围内工具可用：初始依赖关闭时零派发，每个子进程启动前再次检查；已启动子任务正常完成，无工具 summarizer 不受这两个依赖限制。检查不自动启用工具、不扩大权限。Slash 命令保留用于恢复配置。正在运行旧适配器代码的进程需先更新/重载一次；各宿主需使用同一 SearchBoost 配置目录。
 
 ---
 
@@ -292,11 +292,13 @@ search-boost
 
 ---
 
-### 4. `adaptive_search` Jev 意图导向搜索（实验功能）
+### 4. `adaptive_search` Jev / Laya 意图导向搜索（实验功能）
 
-**Vercel 接入**：在 TUI → Jev 配置（文件夹模式：服务与凭据 → Jev 配置）填写 `https://ai-gateway.vercel.sh/v1` 和 Vercel AI Gateway Key。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级配置中的 Jev Key，不读取环境变量；服务端限流等待不会被缩短。
+**Vercel 接入**：在 TUI → 判断模型（Jev / Laya）（文件夹模式：服务与凭据 → 判断模型）填写 `https://ai-gateway.vercel.sh/v1` 和 Vercel AI Gateway Key。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级选中判断模型配置中的 Key，不读取环境变量；服务端限流等待不会被缩短。
 
-调用方提供**一个问题**（`questions` 恰好一项）、**必填的研究方向 `intent`** 以及 0-8 条可选软偏好 `preferences`。工具描述要求用英文书写，但这是给调用方的提示，服务端不做语言校验、拒绝或翻译，任何语言都按原文检索。原文问题就是唯一查询：不再规划关键词、不做查询扩展。检索前的一次 Jev 策略请求选择固定 `balanced`/`research`/`fresh` 排序，并在省略 `community` 时决定是否启用既有社区（X）支路；显式 `community` true/false 覆盖该选择，且不重复提问。随后这次 fused 调用收集**有界快照：目标≤10 时最多 32 条，更大目标为 ceil(max_results×32/10)，最高 160 条**（网页与社区行共用），每条声明候选都以固定选项判断：安全 clear/violation/unavailable、原型价值 0-5、来自真实正贡献引擎的来源折扣，以及每条偏好一次匹配。只有安全且价值已建立为 3/4/5 的材料会被交付，并按版本化筛选公式排序；置信度仅用于审计。不会在凑够前若干条可接受链接后提前停止，没有自动补读，也没有自设的累计成本、token、请求次数或整次时限停止——真实单请求超时、有限重试、认证/限流失败、安全拒绝与显式取消照常生效。
+**Laya 接入**：在同一 TUI 新增自部署 profile，明确选择模型与可选认证；无 Key 时不发送空 Bearer，预算留空沿用服务默认值。诊断缺失、截断、选项坍缩、弃答或缺少离线题头容量证据时，判断保持不可用，不把残存选项当作通过。详见[容量证据与迁移](docs/v0.2.5-release.md)。新运行用 `run.judgment` 记录真实提供方，旧记录不静默升级。
+
+调用方提供**一个问题**（`questions` 恰好一项）、**必填的研究方向 `intent`** 以及 0-8 条可选软偏好 `preferences`。工具描述要求用英文书写，但这是给调用方的提示，服务端不做语言校验、拒绝或翻译，任何语言都按原文检索。原文问题就是唯一查询：不再规划关键词、不做查询扩展。检索前的一次判断模型策略请求选择固定 `balanced`/`research`/`fresh` 排序，并在省略 `community` 时决定是否启用既有社区（X）支路；显式 `community` true/false 覆盖该选择，且不重复提问。随后这次 fused 调用收集**有界快照：目标≤10 时最多 32 条，更大目标为 ceil(max_results×32/10)，最高 160 条**（网页与社区行共用），每条声明候选都以固定选项判断：安全 clear/violation/unavailable、原型价值 0-5、来自真实正贡献引擎的来源折扣，以及每条偏好一次匹配。只有安全且价值已建立为 3/4/5 的材料会被交付，并按版本化筛选公式排序；置信度仅用于审计。不会在凑够前若干条可接受链接后提前停止，没有自动补读，也没有自设的累计成本、token、请求次数或整次时限停止——真实单请求超时、有限重试、认证/限流失败、安全拒绝与显式取消照常生效。
 
 ```json
 {
@@ -314,8 +316,8 @@ search-boost
 - `max_results` 限制本次选中并保存的数量（默认 10，最大 50）；`page_size` 只影响每页（默认 20，最大 50），不重排、不重新筛选。
 - 返回选中材料的 URL、标题、审查摘录、`valueLevel`/`valueLabel`、rank、真实来源与分数组件，不生成答案。`selection.targetMet` 只表示数量，绝不代表研究完成或已核实；`selection.incomplete`、`diagnostics`、`stopReason`、`outsideReview`、`unreviewed` 如实披露未完成部分，而不是当作低价值。
 - `run.community` 返回有限的社区决策与实际执行状态（`not_requested`/`domain_excluded`/`unavailable`/`blocked`/`succeeded`/`empty`/`failed`/`partial`/`not_run`），不输出模型推理；社区支路失败或部分失败时仍交付有效网页结果，并把本次标记为 incomplete。
-- 用 `{"cursor":"<s5:…>"}`（可附 `page_size`）读取已保存页：不发起新的检索、策略、Jev、社区或价值判断。每页默认 20、最大 50，并有字节预算；cursor 在当前进程内最多保留 30 分钟/32 份结果，翻页结束不等于穷尽检索。
-- 显式 `save_results:true` 时，完整的最终选中集与类型化元数据会私有保存到 SearchBoost home（`search-boost-research-v2`，schema version 5），并返回 `savedResultId`。重启或清缓存后用 `{"saved_result_id":"<savedResultId>"}`（可附 `page_size`）读取，不再重新检索或询问 Jev。旧的 `search-boost-research-v1` 文件继续可读，进入带标记的只读 `h1:` 历史分支（`restoration.historical: true`，保留原 schema 版本，不伪造 v5 字段）。公开工具开关与 Jev 配置锁同样作用于读取；`search-boost research list` / `research export <id> --output <new-file.json>` 无需 Jev、可离线使用。参见[接入与验收边界](docs/research-status-acceptance.md)。
+- 用 `{"cursor":"<s6:…>"}`（可附 `page_size`）读取已保存页：不发起新的检索、策略、Jev、社区或价值判断。每页默认 20、最大 50，并有字节预算；cursor 在当前进程内最多保留 30 分钟/32 份结果，翻页结束不等于穷尽检索。
+- 显式 `save_results:true` 时，完整的最终选中集与类型化元数据会私有保存到 SearchBoost home（`search-boost-research-v3`，schema version 6），并返回 `savedResultId`。重启或清缓存后用 `{"saved_result_id":"<savedResultId>"}`（可附 `page_size`）读取，不再重新检索或询问 Jev。旧 v2/schema-5 文件不升级，继续按原合同及 `s5:` 读取；旧的 `search-boost-research-v1` 文件继续可读，进入带标记的只读 `h1:` 历史分支（`restoration.historical: true`，保留原 schema 版本，不伪造 v5 字段）。公开工具开关与判断模型配置锁同样作用于读取；`search-boost research list` / `research export <id> --output <new-file.json>` 无需 Jev、可离线使用。参见[接入与验收边界](docs/research-status-acceptance.md)。
 - 阈值仍是未标定工程起点。完整契约、预算和迁移说明见 [Jev 单问题研究检索](docs/jev-adaptive-search.md)。
 
 ---
@@ -511,7 +513,7 @@ search-boost
 | `npm run test:network` | 代理重试、curl 兜底、请求边界与兼容性回归 |
 | `npm run test:adapters` | MCP / Pi / DSH 适配器协议测试，以及 Pi 子代理配置迁移诊断 |
 | `npm run test:parallel` | Searcher/Summarizer 契约、DSH 派发预检、取消与工具隔离 |
-| `npm run test:adaptive` | 单次快照 V5 筛选、候选容量边界及 MCP / Pi / DSH 适配器夹具（非真实宿主会话） |
+| `npm run test:adaptive` | 单次快照 V6 筛选（保留 V5 历史读取）、候选容量边界及 MCP / Pi / DSH 适配器夹具（非真实宿主会话） |
 | `npm run smoke` | MCP JSON-RPC 协议冒烟测试 |
 
 回归套件使用隔离状态、本地回环夹具与进程替身，不需要真实引擎 Key；依赖审计需要访问 registry。`npm run prepublishOnly` 全绿是本地 PR 门禁，不证明真实宿主加载、付费服务行为或证据质量。
