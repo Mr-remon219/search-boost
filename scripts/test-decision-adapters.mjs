@@ -171,7 +171,7 @@ await test('canonical profiles support keyless Laya, preserve legacy keys, freez
   assert.equal(readJudgmentConfig().capacityStatus, 'mismatch')
   assert.equal(readJudgmentConfig().capacityManifest, null)
   assert.equal(toolState('adaptive_search').locked, false, 'stale evidence is unavailable, not a false credential failure')
-  assert(formatJudgmentStatusLines().join('\n').includes('judgment-capacity/local-laya.json'))
+  assert.match(formatJudgmentStatusLines().join('\n'), /judgment-capacity[/\\]local-laya\.json/)
   rmSync(capacityPath)
   const old = readFileSync(judgmentFilePath(), 'utf8')
   for (const broken of ['{broken', '{}', 'null']) {
