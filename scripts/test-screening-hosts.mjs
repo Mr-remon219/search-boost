@@ -67,12 +67,11 @@ let expectedIntent = INPUT.intent
 let failAllEngines = false
 let failFreeEngines = false
 let usageOnWire = true
-const ALLOWED_HOSTS = new Set(['api.search.brave.com', 'api.typesafe.ai', 'publish.x.com', 'www.bing.com', 'html.duckduckgo.com', 'search.yahoo.com', 'mcp.exa.ai'])
+const ALLOWED_HOSTS = new Set(['api.search.brave.com', 'api.typesafe.ai', 'publish.x.com', 'www.bing.com', 'html.duckduckgo.com', 'mcp.exa.ai'])
 const node = (d) => ({ title: d.title, url: d.url, description: d.description })
 const resultsFor = (query, count) => /x\.com|twitter\.com/.test(query) ? communityPosts(count) : webDocs(count)
 const bingPage = (docs) => `<html><body>${docs.map((d) => `<li class="b_algo"><h2><a href="${d.url}">${d.title}</a></h2><p>${d.description}</p></li>`).join('')}</body></html>`
 const ddgPage = (docs) => `<html><body>${docs.map((d) => `<a class="result__a" href="${d.url}">${d.title}</a><a class="result__snippet">${d.description}</a>`).join('')}</body></html>`
-const yahooPage = (docs) => `<html><body>${docs.map((d) => `<div class="dd fst algo "><div class="compTitle"><a href="${d.url}">result</a></div><h3 class="title">${d.title}</h3><div class="compText"><p>${d.description}</p></div></div>`).join('')}</body></html>`
 const exaText = (docs) => docs.map((d) => `Title: ${d.title}\nURL: ${d.url}\nHighlights: ${d.description}`).join('\n---\n')
 const queryOf = (url) => url.searchParams.get('q') ?? url.searchParams.get('p') ?? ''
 globalThis.fetch = async (raw, init) => {
@@ -90,7 +89,6 @@ globalThis.fetch = async (raw, init) => {
   }
   if (url.hostname === 'www.bing.com') return new Response(bingPage(resultsFor(queryOf(url), Number(url.searchParams.get('count') ?? 10)).map(node)), { status: 200 })
   if (url.hostname === 'html.duckduckgo.com') return new Response(ddgPage(resultsFor(queryOf(url), 10).map(node)), { status: 200 })
-  if (url.hostname === 'search.yahoo.com') return new Response(yahooPage(resultsFor(queryOf(url), 10).map(node)), { status: 200 })
   if (url.hostname === 'mcp.exa.ai') {
     const body = JSON.parse(init?.body ?? '{}')
     if (body.method === 'initialize') return Response.json({ jsonrpc: '2.0', id: body.id, result: { protocolVersion: '2025-03-26', capabilities: {}, serverInfo: { name: 'exa-fixture', version: 'fixture' } } }, { headers: { 'mcp-session-id': 'fixture-session' } })
@@ -186,7 +184,7 @@ try {
     assert.equal(value.pageResults, 2)
     assert.match(value.nextCursor, /^s6:[a-f0-9-]{36}\.\d+$/)
     assert.equal(value.results.every((row) => row.rank >= 1 && row.valueLevel >= 3), true)
-    assert.equal(value.results.every((row) => row.engines.length > 0 && row.engines.every((name) => ['brave', 'bing', 'ddg', 'yahoo', 'exa-free'].includes(name))), true)
+    assert.equal(value.results.every((row) => row.engines.length > 0 && row.engines.every((name) => ['brave', 'bing', 'ddg', 'exa-free'].includes(name))), true)
     assert.equal(value.results.every((row) => row.url.startsWith('https://ref')), true)
     assert.equal(value.diagnostics.snapshotCandidates >= 3, true)
     assert.equal(value.run.host, host)
@@ -394,7 +392,7 @@ try {
     clearAllCaches()
     const direct = await dshTools.get('fused_search').execute({ query: expectedQuestion, community: false }, {})
     assert.deepEqual(direct.results, [])
-    assert.equal(Object.values(direct.engineStats).filter(stat => stat.successes > 0).length, partial ? 1 : 5)
+    assert.equal(Object.values(direct.engineStats).filter(stat => stat.successes > 0).length, partial ? 1 : 4)
     clearAllCaches()
     const native = await nativeSearchProvider.search({ query: expectedQuestion, maxResults: 6 })
     assert.deepEqual(native.sources, [])

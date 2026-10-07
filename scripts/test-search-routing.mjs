@@ -32,8 +32,8 @@ const engines = Object.fromEntries(ENGINE_POOLS.hybrid.map((name) => [name, {
     if (mode === 'partial-variants' && query.includes('guide')) throw new Error('fixture variant timeout')
     if (query.startsWith('site:x.com')) {
       let posts = xPosts
-      if (mode === 'many-authors') posts = name === 'yahoo' ? [post('bob', now, 999)] : Array.from({ length: count }, (_, i) => post('alice', now, (name === 'bing' ? 500 : 600) + i))
-      if (mode === 'late-author') posts = name === 'yahoo' ? [post('alice', now, 99)] : Array.from({ length: count }, (_, i) => post('bob', now, (name === 'bing' ? 200 : 300) + i))
+      if (mode === 'many-authors') posts = name === 'tinyfish' ? [post('bob', now, 999)] : Array.from({ length: count }, (_, i) => post('alice', now, (name === 'bing' ? 500 : 600) + i))
+      if (mode === 'late-author') posts = name === 'tinyfish' ? [post('alice', now, 99)] : Array.from({ length: count }, (_, i) => post('bob', now, (name === 'bing' ? 200 : 300) + i))
       return posts.slice(0, count).map((p) => ({ url: p.url, title: p.text, snippet: p.text }))
     }
     const docs = Array.from({ length: count }, (_, i) => ({ url: `https://${name.replace('-', '')}${i}.example/doc`, title: 'alpha beta', snippet: 'alpha beta evidence' }))
@@ -70,8 +70,11 @@ try {
       calls = []
       const out = await fused({ enginePool: pool, ranking })
       const prior = priors[ranking]
+      // Historical GM is only a reference for unchanged engines. Current defaults
+      // explicitly remove Yahoo, reduce DDG and add neutral TinyFish.
       const gm = Math.exp(Object.values(prior).reduce((sum, w) => sum + Math.log(w), 0) / 8)
-      const wanted = Object.fromEntries(ENGINE_POOLS[pool].map((name) => [name, Math.sqrt(prior[name] / gm)]))
+      const wanted = Object.fromEntries(ENGINE_POOLS[pool].map((name) => [name,
+        name === 'tinyfish' ? 1 : Math.sqrt(prior[name] / gm) * (name === 'ddg' ? .6 : 1)]))
       for (const name of ENGINE_POOLS[pool]) assert.ok(Math.abs(RANKING_WEIGHTS[pool][ranking][name] - wanted[name]) < 1e-12)
       assert.deepEqual(out.effectiveWeights, RANKING_WEIGHTS[pool][ranking])
       assert.deepEqual(out.enginesUsed, ENGINE_POOLS[pool])
@@ -132,7 +135,7 @@ try {
     assert.deepEqual(missing.enginesUsed, [])
     assert.equal(calls.length, 0)
     assert.match(missing.warnings.join(' '), /No available engines/)
-    for (const bad of [{engineList:[]}, {engineList:['unknown']}, {ranking:'newest'}, {enginePool:'unknown'}, {engineWeights:{exa:-1}}, {engineWeights:{exa:Infinity}}, {engineWeights:{unknown:1}}, {community:'true'}]) await assert.rejects(() => fused(bad))
+    for (const bad of [{engineList:[]}, {engineList:['unknown']}, {engineList:['yahoo']}, {ranking:'newest'}, {enginePool:'unknown'}, {engineWeights:{exa:-1}}, {engineWeights:{exa:Infinity}}, {engineWeights:{unknown:1}}, {engineWeights:{yahoo:1}}, {community:'true'}]) await assert.rejects(() => fused(bad))
     enabled = new Set(ENGINE_POOLS.hybrid)
   })
   await test('legacy layer api maps hybrid; explicit pool wins; capability fingerprint partitions caches', async () => {
@@ -188,15 +191,15 @@ try {
   })
   await test('X final filtering sees later-engine candidates; no early domain-search truncation', async () => {
     auth = false; mode = 'late-author'
-    const out = await xSearch({ query: 'alpha', type: 'keyword', allowed_x_handles: ['alice'], max_results: 1, engineList: ['bing','ddg','yahoo'] }, {})
+    const out = await xSearch({ query: 'alpha', type: 'keyword', allowed_x_handles: ['alice'], max_results: 1, engineList: ['bing','ddg','tinyfish'] }, {})
     assert.equal(out.results, 1)
     assert.equal(out.items[0].username, 'alice')
-    assert.deepEqual(out.enginesUsed, ['bing','ddg','yahoo'])
+    assert.deepEqual(out.enginesUsed, ['bing','ddg','tinyfish'])
     mode = 'web'
   })
   await test('community defers final cap until author diversity, even beyond 30 candidates', async () => {
     auth = false; mode = 'many-authors'
-    const out = await fused({ engineList: ['bing','ddg','yahoo'], community: true, maxResults: 8, includeDomains: ['x.com'] })
+    const out = await fused({ engineList: ['bing','ddg','tinyfish'], community: true, maxResults: 8, includeDomains: ['x.com'] })
     assert.ok(out.results.some((r) => r.username === 'bob'), 'later authors must survive the candidate stage')
     assert.ok(out.results.filter((r) => r.username === 'alice').length <= 2)
     mode = 'web'

@@ -69,16 +69,8 @@ try {
     assert.equal(lastCall().url.searchParams.get('freshness'), 'pm')
   })
 
-  await test('Yahoo preserves primary and supplemental positions through malformed/duplicate cards', async () => {
-    const saved = globalThis.fetch
-    const card = (url, title, primary = true) => `${primary ? '<div class="dd fst algo result">' : ''}<div class="compTitle"><a href="${url}"><h3 class="title">${title}</h3></a></div><div class="compText"><p>snippet</p></div>`
-    try {
-      globalThis.fetch = async () => new Response(card('javascript:bad', 'invalid') + card('https://one.example', 'one') + card('https://one.example', 'duplicate') + card('https://two.example', 'two'))
-      const rows = await engines.yahoo.search('query', 10, {})
-      assert.deepEqual(rows.map((r) => r.providerRank), [2, 4])
-      globalThis.fetch = async () => new Response(card('javascript:bad', 'invalid', false) + card('https://one.example', 'one', false) + card('https://one.example', 'duplicate', false) + card('https://two.example', 'two', false))
-      assert.deepEqual((await engines.yahoo.search('query', 10, {})).map((r) => r.providerRank), [2, 4])
-    } finally { globalThis.fetch = saved }
+  await test('removed Yahoo has no registry entry or hidden adapter', () => {
+    assert.equal(Object.hasOwn(engines, 'yahoo'), false)
   })
   await test('AnySearch pool readiness, optional auth and bounded documented envelope', async () => {
     const anonymous = engineRegistry({}).anysearch

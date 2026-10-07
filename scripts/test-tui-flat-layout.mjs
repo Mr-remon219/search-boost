@@ -430,7 +430,7 @@ try {
   const setup = await runScenario([
     'setup',
     reply('confirm', true),
-    'keep', 'keep', 'keep', 'keep',
+    ...CONFIG_KEY_NAMES.map(() => 'keep'),
     reply('multiselect', ['tavily']),
     'free',
     reply('confirm', false),
@@ -439,7 +439,7 @@ try {
   ])
   assert(setup.records[1].message.includes('Configure API keys now?'), 'Setup asks before credentials')
   assert.deepEqual(
-    setup.records.slice(2, 6).map((r) => r.message.match(/^(\w+)/)[1]),
+    setup.records.slice(2, 2 + CONFIG_KEY_NAMES.length).map((r) => r.message.match(/^(\w+)/)[1]),
     CONFIG_KEY_NAMES,
     'Setup still guides every credential slot',
   )

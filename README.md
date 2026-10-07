@@ -56,7 +56,7 @@
 ## Key Features
 
 - **Multi-Engine Parallel Fusion (`fused_search`)**  
-  Queries multiple search providers in parallel. Features an out-of-the-box **keyless free pool** (Bing, DuckDuckGo, Yahoo, Exa-free, AnySearch) and a keyed **API pool** (Tavily, Brave, Exa, AnySearch). Automatically performs cross-engine URL deduplication, domain routing, and relevance re-ranking.
+  Queries multiple search providers in parallel. Features an out-of-the-box **keyless free pool** (Bing, DuckDuckGo, Exa-free, AnySearch) and a keyed **API pool** (Tavily, Brave, Exa, AnySearch, TinyFish). Automatically performs cross-engine URL deduplication, domain routing, and relevance re-ranking.
 - **Clean Webpage Content Extractor (`fetch_page`)**  
   Fetches the origin first for low latency, with optional same-route curl compatibility fallback and Jina Reader backup. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
 - **X / Twitter Community Intelligence (`x_search`)**  
@@ -133,7 +133,7 @@ search-boost
 ```
 
 > [!TIP]
-> **Zero API Keys Required to Start**: SearchBoost includes a keyless free pool (Bing, DuckDuckGo, Yahoo, Exa-free, AnySearch). No paid-provider signup is required; availability and result coverage depend on the providers and your network.
+> **Zero API Keys Required to Start**: SearchBoost includes a keyless free pool (Bing, DuckDuckGo, Exa-free, AnySearch). No paid-provider signup is required; availability and result coverage depend on the providers and your network.
 
 ### 2. 3-Step Setup Wizard
 1. Select **Setup wizard** on the default flat TUI home (folder layout: Installation & integrations → Setup). Configure engine keys (or skip to use free tier) and optional X credentials.
@@ -246,7 +246,7 @@ Dispatches queries across engines concurrently, normalizes URLs, strips redirect
 }
 ```
 
-- **`engine_pool`**: `free` (keyless Bing, DuckDuckGo, Yahoo, Exa-free, AnySearch), `api` (configured API engines), or `hybrid` (both pools). Unavailable or disabled engines are skipped. When omitted, the compatibility layer maps `free` to the free pool and `api` to hybrid.
+- **`engine_pool`**: `free` (keyless Bing, DuckDuckGo, Exa-free, AnySearch), `api` (configured API engines), or `hybrid` (both pools). Unavailable or disabled engines are skipped. When omitted, the compatibility layer maps `free` to the free pool and `api` to hybrid.
 - **`ranking`**: Final engine-weight presets: `balanced` (default), `research`, or `fresh`. They do not change query variants, search depth or recency filters, and do not establish source authority or freshness.
 - **`complexity`**: `simple` (1 query variant), `medium` (up to 2 variants), `complex` (up to 3 deep variants).
 - **`community`**: Boolean (`false` by default). Set to `true` to blend real-time X developer discussions into the final result quota.
@@ -328,18 +328,20 @@ Supply **one question** (`questions` has exactly one item) plus a **required res
 
 `engine_pool` selects engines, `ranking` selects shared cross-pool weights, and `complexity` controls query breadth and depth, not scoring weights. AnySearch is one logical engine: anonymous in free, key-required in api, and key-preferred in hybrid. Configure `ANYSEARCH_API_KEY` or `config keys --set anysearch=KEY`.
 
+TinyFish Search is a keyed API engine: configure `TINYFISH_API_KEY` or `config keys --set tinyfish=KEY`. It joins api/hybrid, not the default free pool (explicit `engines` still overrides pool membership). Search is zero-priced at a $0 wallet balance, with current limits of 30 requests/minute and 500/hour; each query variant counts as a request. No automatic pagination or inline Fetch is used. Requests default to the service's US/en locale. Yahoo has been removed; explicit Yahoo engine/weight inputs are rejected.
+
 | Engine | balanced | research | fresh |
 | --- | ---: | ---: | ---: |
 | bing | 0.957 | 0.927 | 1.020 |
-| ddg | 0.981 | 0.903 | 0.927 |
-| yahoo | 0.957 | 0.877 | 0.902 |
+| ddg | 0.589 | 0.542 | 0.556 |
 | exa-free | 1.004 | 1.085 | 0.951 |
 | tavily | 1.049 | 1.105 | 1.084 |
 | brave | 1.004 | 0.951 | 1.125 |
 | exa | 1.049 | 1.146 | 1.063 |
 | anysearch | 1.004 | 1.042 | 0.951 |
+| tinyfish | 1.000 | 1.000 | 1.000 |
 
-These are uncalibrated cold-start priors, not measured quality rankings. `consensus-v2.1` combines original ranks, related-provider discounts and max+log consensus, with metadata adjustments capped at 20%. Quality and list-selection scores stay separate; zero-weight sources cannot vote. Recalibrate old `min_score` thresholds. See [scoring and migration](docs/fusion-scoring.md) and [pool routing](docs/search-routing.md).
+These are uncalibrated cold-start defaults, not measured quality rankings. DDG uses 60% of its previous weights; TinyFish starts neutral, and other defaults are unchanged without re-normalization. `consensus-v2.1` combines original ranks, related-provider discounts and max+log consensus, with metadata adjustments capped at 20%. Quality and list-selection scores stay separate; zero-weight sources cannot vote. Recalibrate old `min_score` thresholds. See [scoring and migration](docs/fusion-scoring.md) and [pool routing](docs/search-routing.md).
 
 ---
 
@@ -400,6 +402,7 @@ search-boost config keys --reset-base-url exa
 | Exa | `https://api.exa.ai` | `/search` |
 | Brave | `https://api.search.brave.com/res/v1` | `/web/search` |
 | AnySearch | `https://api.anysearch.com/v1` | `/search` |
+| TinyFish Search | `https://api.search.tinyfish.ai` | `/` |
 
 Supply an API base, **not a full search endpoint**; gateway prefixes are preserved. Overrides live in `engines.<name>.baseUrl` in the keys file; existing key strings and routing flags are unchanged. Use only trusted API-compatible gateways: queries and configured keys are sent there (AnySearch remains anonymous in the free pool). Prefer HTTPS; HTTP is supported for local gateways. Credentials, query strings and fragments in URLs are rejected. Exa-free is unaffected. Changing a base invalidates the search cache partition.
 
@@ -407,7 +410,7 @@ API keys use a credential store this tool owns. They are not written into prompt
 
 - **Private file permissions**: keys live in `~/.search-boost/config/keys.json` (redirect the root with `SEARCH_BOOST_HOME`). On POSIX the store directory is `0700` and the file is `0600`; a rewrite is built from a fresh `0600` temporary file rather than written in place, so an existing file is never widened. Backups and upgrade receipts under the same root are `0600` as well. An env-overridden directory keeps its own mode, while the credential file is still created `0600`. Windows has no POSIX mode bits — ACL inheritance applies there.
 - **Atomic, locked writes**: replacement uses an `O_EXCL` temporary file plus rename, so a reader sees either the old or the new file and never a partial one; a failed write cleans up after itself and leaves the previous file untouched. Read-modify-write cycles take an exclusive lock, so two writers cannot silently lose each other's update, and a rejected change does not touch the file at all.
-- **Never echoed back**: a key is only sent to the engine it belongs to (Tavily, Brave, Exa and AnySearch request parameters/headers). Status output, `search-boost config keys --show` and the doctor report print masked values (`abcd****wxyz`); error messages are tested not to contain credential material, and Jev evaluation payloads deliberately carry no key, masked key or fingerprint. AnySearch uses anonymous quota in free, requires a key in api, and prefers a configured key in hybrid. Its potentially credential-bearing error envelopes are never echoed or persisted.
+- **Never echoed back**: a key is only sent to the engine it belongs to (Tavily, Brave, Exa, AnySearch and TinyFish request parameters/headers). Status output, `search-boost config keys --show` and the doctor report print masked values (`abcd****wxyz`); error messages are tested not to contain credential material, and Jev evaluation payloads deliberately carry no key, masked key or fingerprint. AnySearch uses anonymous quota in free, requires a key in api, and prefers a configured key in hybrid. Its potentially credential-bearing error envelopes are never echoed or persisted.
 
 
 ---
@@ -446,6 +449,7 @@ search-boost install -t cursor --dry-run    # Preview installation without writi
 # ----------------- Configuration Management -----------------
 search-boost config keys                    # Manage API keys from CLI
 search-boost config keys --set anysearch=KEY  # Configure the AnySearch key (ANYSEARCH_API_KEY)
+search-boost config keys --set tinyfish=KEY   # Configure TinyFish Search (TINYFISH_API_KEY)
 search-boost config layer                   # Switch default layer (free / api)
 search-boost config x --import-grok         # Import X credentials from local Grok login
 search-boost config jev                     # Configure Jev endpoint and token

@@ -64,7 +64,7 @@
     "check": "node scripts/check-syntax.mjs",
     "test:fusion": "node scripts/test-fused-baseline.mjs && node scripts/test-noff-community-snapshot.mjs && node scripts/test-fusion-errors.mjs && node scripts/test-fusion-scoring.mjs",
     "test:x": "node scripts/test-x-pipeline.mjs",
-    "test:engines": "node scripts/test-engine-requests.mjs && node scripts/test-engine-base-urls.mjs",
+    "test:engines": "node scripts/test-engine-requests.mjs && node scripts/test-engine-base-urls.mjs && node scripts/test-tinyfish.mjs",
     "test:xauth": "node scripts/test-xauth.mjs",
     "test:jev": "node scripts/test-jev.mjs",
     "test:jev-client": "node scripts/test-jev-client.mjs",
@@ -95,7 +95,7 @@
   "dependencies": {
     "@ai-sdk/gateway": "4.0.87",
     "@clack/prompts": "^0.10.1",
-    "@modelcontextprotocol/sdk": "^1.31.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "ai": "7.0.107",
     "ajv": "^8.20.0",
     "undici": "^6.28.1",

@@ -208,10 +208,10 @@ try {
   })
 
   await test('x_search degraded engines keep their failure notes in warnings', async () => {
-    engineFailure = new Set(['yahoo'])
+    engineFailure = new Set(['ddg'])
     const payload = cleanJsonValue(await xRun())
-    assert.ok(payload.engineStats.yahoo.errors > 0)
-    assert.ok(payload.warnings.some((warning) => warning.startsWith('yahoo:')), JSON.stringify(payload.warnings))
+    assert.ok(payload.engineStats.ddg.errors > 0)
+    assert.ok(payload.warnings.some((warning) => warning.startsWith('ddg:')), JSON.stringify(payload.warnings))
     assertDiagnostics(payload)
     await acceptThroughDsh('x_search', payload, X_ARGS)
   })

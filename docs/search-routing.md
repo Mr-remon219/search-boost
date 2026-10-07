@@ -53,19 +53,29 @@ MCP / Pi / DSH x_search
 | 引擎 | balanced | research | fresh |
 | --- | ---: | ---: | ---: |
 | bing | 0.957 | 0.927 | 1.020 |
-| ddg | 0.981 | 0.903 | 0.927 |
-| yahoo | 0.957 | 0.877 | 0.902 |
+| ddg | 0.589 | 0.542 | 0.556 |
 | exa-free | 1.004 | 1.085 | 0.951 |
 | tavily | 1.049 | 1.105 | 1.084 |
 | brave | 1.004 | 0.951 | 1.125 |
 | exa | 1.049 | 1.146 | 1.063 |
 | anysearch | 1.004 | 1.042 | 0.951 |
+| tinyfish | 1.000 | 1.000 | 1.000 |
 
-同一引擎、同一策略的权重跨池共享。上表为固定八引擎原生先验的对数收缩冷启动值（几何均值为 1），不是实测质量排名；完整精度在 routing.js。free 为 bing/ddg/yahoo/exa-free/anysearch；api 为 tavily/brave/exa/anysearch；hybrid 为去重并集。不可按本次成功/可用引擎重新归一化。后续离线标注评估须包含全 1 权重 neutral baseline。
+同一引擎、同一策略的权重跨池共享。原有先验采用固定集合的对数收缩冷启动尺度；本次删除 Yahoo，DDG 乘 0.60，TinyFish 以 1.0 加入，其他数值不变，因此当前表不再承诺几何均值为 1。权重不是实测质量排名；完整精度在 routing.js。free 为 bing/ddg/exa-free/anysearch；api 为 tavily/brave/exa/anysearch/tinyfish；hybrid 为去重并集。不可按本次成功/可用引擎重新归一化。后续离线标注评估须包含全 1 权重 neutral baseline。
 
 池成员固定，实际可用性动态读取。API-only 池没有可用 key 时返回空集合与 warnings，不偷偷启用免费池。
 
 `anysearch` 同时属于 free/api 池，hybrid 去重后只调用一次；`ANYSEARCH_API_KEY` 或 keys.json 的 `anysearch` 保存密钥。free 匿名调用，api 要求 key，hybrid 有 key 时用 key、否则匿名。显式禁用/白名单也作用于匿名路径，不降级绕过禁用。匿名限额和网络错误正常报告，不从错误正文自动注册或保存凭据。
+
+### TinyFish Search 与 Yahoo 移除
+
+`tinyfish` 是正式 keyed API 引擎，通过 `TINYFISH_API_KEY` 或 `config keys --set tinyfish=KEY` 配置，支持既有启停、白名单及 Base URL。默认 free 集合不包含它；显式 `engines` 依然可跨池选择。已有白名单不自动增加新引擎。配置可用性不等于真实联网成功。
+
+请求 `GET https://api.search.tinyfish.ai/`，使用 `X-API-Key`，发送 `query`、原生域名参数及可选 `recency_minutes`。第一页结果在客户端限量，不发未文档化 count 参数、不自动翻页、不启用内嵌 Fetch。保留 `position` 原始排名，`date` 缺失时未知；默认地区/语言为服务的 US/en。
+
+当前零费用额度为 30 请求/分钟、500 请求/小时，钱包 $0 仍可使用；每个 variant 和社区检索请求独立占额度。HTTP 配额与权限失败正常披露，不自动充值或重试。数字型 Retry-After 在 429 提示中保留。
+
+Yahoo 不再有运行时或公开枚举入口，显式引擎/权重输入拒绝；历史记录保持原始来源，不转译成其他引擎。此次不改变 TinyFetch、Jina 或 `fetch_page`。
 
 ## 兼容方案
 
@@ -81,7 +91,7 @@ MCP / Pi / DSH x_search
 2. `allowed_x_handles` / `excluded_x_handles` / username 与字段日期做交集；字段 `to_date` 包含整天，query `until:` 仍为排他上界。可验证的 query metadata operators 统一在本地执行；无法验证的约束会提示或排除缺元数据项。
 3. X 用 post ID 去重，所以 x.com、twitter.com、mobile、`i/web/status` 与带作者路径不会重复。Web 使用去 tracking/fragment 的 URL key，保留路径大小写、有意义的 query 和端口。
 4. community 候选模式不提前执行最终过滤/限量；先与普通 Web leg 中的 X 帖子合并元数据，再统一执行 X 约束，防止普通 Web 结果绕过作者/日期过滤。候选模式有独立缓存键，不会污染公开 x_search。
-5. 相同来源不重复计分：同引擎多个 variant 命中的 URL 只保留最佳 rank 贡献；Web/X 两条路都找到同一帖子时，每个引擎只贡献一次。official 或无 Web provenance 的 fallback 使用中性权重 1，不属于可自定义的八个 Web engine weights。
+5. 相同来源不重复计分：同引擎多个 variant 命中的 URL 只保留最佳 rank 贡献；Web/X 两条路都找到同一帖子时，每个引擎只贡献一次。official 或无 Web provenance 的 fallback 使用中性权重 1，不属于可自定义的当前 Web engine weights。
 6. 最终使用已入选结果的标题/摘要 shingle 相似度选择，质量分不变；短摘要 Web 回退为每域最多两条，单站点限制豁免；X 按作者最多两条。未知 X 作者使用同一保守桶，不允许靠缺元数据绕过作者多样性。
 7. include/exclude domains（含 query 中的 site 规则）作用于全部结果。X/Twitter 域名 aliases 视为同一来源；排除 X 时跳过 community。显式 recency 在社区通道转为 UTC 日期下界，最终也检查普通 Web leg 的 X 帖子。Web recency 仍为软时效偏好/引擎提示，未知日期中立。
 

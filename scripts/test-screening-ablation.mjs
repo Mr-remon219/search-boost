@@ -31,8 +31,8 @@ const EPSILON = 0.1
 const GENERIC_WEB_POLICY = validateSourceBiasPolicy({
   version: 'ablation-generic-web-v1',
   nature: 'policy_preference',
-  mildEligible: ['bing', 'ddg', 'yahoo', 'exa-free', 'anysearch'],
-  strongEligible: ['bing', 'ddg', 'yahoo'],
+  mildEligible: ['bing', 'ddg', 'exa-free', 'anysearch'],
+  strongEligible: ['bing', 'ddg'],
 })
 
 const STRONGEST = ['strong', 'mild', 'none']
