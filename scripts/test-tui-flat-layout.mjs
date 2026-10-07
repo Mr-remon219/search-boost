@@ -231,7 +231,7 @@ try {
     'layer', 'free',
     'tools', reply('multiselect', []), reply('confirm', false),
     'x', 'keep',
-    'jev', '+cancel',
+    'jev', cancel,
     'search', reply('multiselect', []),
     'print', 'cursor', reply('confirm', false), reply('confirm', true),
     'manage', 'uninstall', reply('multiselect', []), 'back',
@@ -244,7 +244,7 @@ try {
   assert(homes[0].options.every((o) => o.label && !/^\s*$/.test(o.label)), 'no blank spacer row occupies a selection')
   assert.deepEqual(
     homes.map((h) => h.initialValue),
-    [undefined, 'setup', 'manage', 'status', 'keys', 'layer', 'tools', 'x', 'jev', 'search', 'print', 'manage', 'settings'],
+    [undefined, 'setup', 'manage', 'status', 'keys', 'layer', 'tools', 'x', 'x', 'search', 'print', 'manage', 'settings'],
     'a completed flat operation returns to the home menu with its entry selected',
   )
   assert(walk.logs.some((l) => l.includes('dry-run: would offer API key setup')), 'Setup still offers the credential step')
@@ -257,7 +257,7 @@ try {
   const toolsNote = walk.logs.find((l) => l.includes('Tool switches — shared by MCP / Pi / DSH'))
   assert(toolsNote && toolsNote.includes('fused_search'), 'Tool switches is the real wizard with real tool names')
   assert.equal(walk.records.find((r) => r.message === 'X credentials').options.map((o) => o.value).join(','), 'keep,import-grok,set-key,remove')
-  assert.equal(walk.records.find((r) => r.message === 'Judgment model profiles').options.map((o) => o.value).join(','), '+new,+cancel')
+  assert.equal(walk.records.find((r) => r.message === 'Judgment model configuration').options.map((o) => o.value).join(','), 'change,home')
   assert(walk.logs.some((l) => l.includes('Built-in web search')), 'Native web search prints the real per-agent state')
   assert(walk.printed.some((line) => line.includes('search-boost') && line.includes('mcpServers')), 'Print MCP snippet writes a real snippet')
   const targetPrompts = walk.records.filter((r) => r.message === 'Which agents should search-boost configure?')
@@ -433,6 +433,7 @@ try {
     'keep', 'keep', 'keep', 'keep',
     reply('multiselect', ['tavily']),
     'free',
+    reply('confirm', false),
     reply('multiselect', []),
     'exit',
   ])
@@ -443,6 +444,7 @@ try {
     'Setup still guides every credential slot',
   )
   assert(setup.records.some((r) => r.message === 'Default search layer?'), 'Setup still sets the search layer')
+  assert(setup.records.some((r) => r.message.startsWith('Configure a judgment model?') && r.initialValue === false), 'Setup offers optional judgments, skipped by default')
   assert.equal(setup.logs.filter((l) => l.includes('Skipped API keys')).length, 0, 'Setup does not skip credentials')
   assert(setup.logs.some((l) => l.includes('No agents selected')), 'Setup reached the agent selection step')
   assert.equal(keysDoc().tavily, 'tvly-setup-fixture-key-1234', 'Setup keeps existing credentials')

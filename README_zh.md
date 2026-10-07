@@ -294,9 +294,11 @@ search-boost
 
 ### 4. `adaptive_search` Jev / Laya 意图导向搜索（实验功能）
 
-**Vercel 接入**：在 TUI → 判断模型（Jev / Laya）（文件夹模式：服务与凭据 → 判断模型）填写 `https://ai-gateway.vercel.sh/v1` 和 Vercel AI Gateway Key。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级选中判断模型配置中的 Key，不读取环境变量；服务端限流等待不会被缩短。
+**简化配置**：TUI → 判断模型（Jev / Laya）（文件夹模式：服务与凭据 → 判断模型）先选择“现有配置”或“更改配置”；未配置时只有“更改配置”，Esc 可退出。更改配置只需选择 Jev / Laya、设置 Base URL 和 API Key，确认后保存。首次配置向导也提供此可选步骤，默认跳过；普通搜索无需判断模型。
 
-**Laya 接入**：在同一 TUI 新增自部署 profile，明确选择模型与可选认证；无 Key 时不发送空 Bearer，预算留空沿用服务默认值。诊断缺失、截断、选项坍缩、弃答或缺少离线题头容量证据时，判断保持不可用，不把残存选项当作通过。详见[容量证据与迁移](docs/v0.2.5-release.md)。新运行用 `run.judgment` 记录真实提供方，旧记录不静默升级。
+**Vercel 接入**：选择“更改配置 → Jev → Vercel AI Gateway”，Base URL 自动设为 `https://ai-gateway.vercel.sh/v1`，仅需填写 Vercel AI Gateway Key（不是 TypeSafe Key）。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级选中判断模型配置中的 Key，不读取环境变量；服务端限流等待不会被缩短。
+
+**Laya 接入**：选择“更改配置 → Laya”，填写自部署服务的 API 前缀（不含 `/systemone`），API Key 可留空；无 Key 时不发送空 Bearer。新配置自动使用 `multilingual`，预算沿用服务默认值；更改同一目的地时保留已有模型与预算，Key 留空保留原值、输入 `-` 清除。配置名称自动生成，现有配置中仍可切换或删除。诊断缺失、截断、选项坍缩、弃答或缺少离线题头容量证据时，判断保持不可用，不把残存选项当作通过。详见[容量证据与迁移](docs/v0.2.5-release.md)。新运行用 `run.judgment` 记录真实提供方，旧记录不静默升级。
 
 调用方提供**一个问题**（`questions` 恰好一项）、**必填的研究方向 `intent`** 以及 0-8 条可选软偏好 `preferences`。工具描述要求用英文书写，但这是给调用方的提示，服务端不做语言校验、拒绝或翻译，任何语言都按原文检索。原文问题就是唯一查询：不再规划关键词、不做查询扩展。检索前的一次判断模型策略请求选择固定 `balanced`/`research`/`fresh` 排序，并在省略 `community` 时决定是否启用既有社区（X）支路；显式 `community` true/false 覆盖该选择，且不重复提问。随后这次 fused 调用收集**有界快照：目标≤10 时最多 32 条，更大目标为 ceil(max_results×32/10)，最高 160 条**（网页与社区行共用），每条声明候选都以固定选项判断：安全 clear/violation/unavailable、原型价值 0-5、来自真实正贡献引擎的来源折扣，以及每条偏好一次匹配。只有安全且价值已建立为 3/4/5 的材料会被交付，并按版本化筛选公式排序；置信度仅用于审计。不会在凑够前若干条可接受链接后提前停止，没有自动补读，也没有自设的累计成本、token、请求次数或整次时限停止——真实单请求超时、有限重试、认证/限流失败、安全拒绝与显式取消照常生效。
 

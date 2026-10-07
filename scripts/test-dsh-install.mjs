@@ -109,7 +109,7 @@ if (args.includes('remove')) {
     assert.equal(result.status, 0, result.stderr)
     const actual = JSON.parse(readFileSync(capture, 'utf8'))
     const prefix = ['global', 'desktop-path'].includes(mode) ? [] : ['exec', '--yes', ...(mode === 'npx' ? ['--package', '@deepseek-ai/dsh'] : []), '--package', 'pnpm', '--', 'dsh']
-    assert.deepEqual(actual.slice(0, -1), [...prefix, 'plugin', '--profile', 'profile with spaces', 'add'])
+    assert.deepEqual(actual.slice(0, -1), [...prefix, 'plugin', '--profile', 'profile with spaces', 'add', '--save-prod', '--save-dev=false', '--save-peer=false', '--save-optional=false'])
     assert.equal(actual.at(-1), fileURLToPath(new URL('..', import.meta.url)).replace(/[\\/]$/, ''))
     const removal = run(`await host.uninstallDshBundle({ profile: 'profile with spaces' });`)
     assert.equal(removal.status, 0, removal.stderr)
