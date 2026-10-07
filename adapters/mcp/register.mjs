@@ -10,6 +10,7 @@ import { FUSED_DESCRIPTION } from '../../lib/search/routing.js'
 import * as z from 'zod'
 import { abortSignal, toolErr, toolOk } from './result.mjs'
 import { MCP_POLICY_TEXT } from './policy.mjs'
+import { COMMUNITY_SEARCH_INPUT, COMMUNITY_BACKEND_INPUT, COMMUNITY_OUTPUT, COMMUNITY_BACKEND_OUTPUT, COMMUNITY_DESCRIPTION, COMMUNITY_BACKEND_DESCRIPTION, communityZod, formatCommunityResult } from '../../lib/community/schemas.mjs'
 import {
   X_MODES,
   collectSearchStats,
@@ -27,6 +28,8 @@ import {
   runFetchPage,
   runFused,
   runXSearch,
+  runCommunitySearch,
+  runCommunityBackend,
   switchLayer,
 } from '../../lib/runtime.mjs'
 import {
@@ -121,6 +124,7 @@ export function xSearchStructured(out) {
         enginesRequested: result.enginesRequested ?? [],
         enginesUsed: result.enginesUsed ?? [],
         enginePool: result.enginePool, ranking: result.ranking, effectiveWeights: result.effectiveWeights, communityUsed: result.communityUsed,
+        communityPlatforms: result.communityPlatforms, communityChannels: result.communityChannels,
         results: hits,
         engineStats: result.engineStats ?? {},
         warnings: result.warnings ?? [],
@@ -168,6 +172,22 @@ export function xSearchStructured(out) {
       return toolErr(err instanceof Error ? err.message : String(err))
     }
   })
+
+  for (const [name, description, input, output, run, readOnly] of [
+    ['community_search', COMMUNITY_DESCRIPTION, COMMUNITY_SEARCH_INPUT, COMMUNITY_OUTPUT, runCommunitySearch, true],
+    ['community_backend', COMMUNITY_BACKEND_DESCRIPTION, COMMUNITY_BACKEND_INPUT, COMMUNITY_BACKEND_OUTPUT, runCommunityBackend, false],
+  ]) {
+    registerTool(name, {
+      title: name, description,
+      inputSchema: communityZod(input).shape, outputSchema: communityZod(output).shape,
+      annotations: { readOnlyHint: readOnly, destructiveHint: !readOnly, openWorldHint: readOnly, idempotentHint: false },
+    }, async (args, extra) => {
+      try {
+        const result = await run(args, { signal: extra?.signal, audit: extra?.audit })
+        return result.status === 'failed' ? toolErr(formatCommunityResult(result), result) : toolOk(formatCommunityResult(result), result)
+      } catch (error) { return toolErr(error instanceof Error ? error.message : String(error)) }
+    })
+  }
 
   registerTool('x_search', {
     title: 'X (Twitter) Search',
@@ -275,6 +295,12 @@ export function xSearchStructured(out) {
     description: 'Current available engines, pool defaults, compatibility layer and X official/fallback readiness. Recomputed on every read; no credentials or live connectivity guarantee.',
     mimeType: 'application/json',
   }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(collectRuntimeCapabilities(), null, 2) }] }))
+
+  server.registerResource('community-capabilities', 'search-boost://community-capabilities', {
+    title: 'Community backend capabilities',
+    description: 'Implemented platforms and configured backend readiness. No credentials or connectivity probes.',
+    mimeType: 'application/json',
+  }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(collectRuntimeCapabilities().community, null, 2) }] }))
 
   server.registerResource('search-policy', 'search-boost://policy', {
     title: 'Search usage reference',

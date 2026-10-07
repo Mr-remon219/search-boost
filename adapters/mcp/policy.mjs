@@ -10,7 +10,8 @@ Read this optional resource for examples, result interpretation or troubleshooti
 
 - fused_search: use for the vast majority of public-web research, including difficult investigations. No judgment configuration is required. Retrieves ranked extracts across configured engines; supports varied queries and explicit source control.
 - fetch_page: read a known URL to inspect the original text or verify a claim that search extracts do not establish.
-- x_search: find X-only posts, account material or available thread content. Select the mode and its required fields using the schema.
+- community_search: selected-platform evidence; currently supports X keyword, semantic, user and thread modes through the existing X pipeline. Other platforms return explicit not-implemented diagnostics. x_search remains a compatible X-only entry.
+- community_backend: list/check inspect configuration readiness without network probing; register/update/remove persist instance configuration and require user authorization. Only existing-x is implemented; arbitrary code, packages, endpoints and secrets are not accepted in this slice. Search failures never authorize enabling or registering a backend.
 - adaptive_search: when enabled with a configured judgment model (Jev or Laya), use for higher-quality evidence selection on medium-to-high difficulty or uncertain questions. Prefer it when noisy sources, unclear relevance or many plausible leads make intent-guided screening valuable. It screens one snapshot, not an entire investigation, and does not orchestrate children.
 - search_stats / search_layer with layer=show: inspect diagnostics or the current compatibility default. Changing the layer persists a new default and requires authorization.
 
@@ -24,6 +25,14 @@ These are routing heuristics, not a measured entropy score or hard difficulty th
 Search controls have separate roles: pool/engines select sources, ranking/weights affect scoring, and complexity sets retrieval breadth/depth. Request-local choices do not change persistent defaults.
 
 The optional search-boost://capabilities resource reports current configuration readiness, tool switches and pool defaults, not connectivity, coverage or permission grants. A disabled tool must not be called. Unavailable engines are disclosed, not silently replaced. Legacy layer=api maps to the hybrid pool, whereas engine_pool=api selects only configured/enabled API engines.
+
+## Community entries
+
+Use community_search with {"engines":["x"],"query":"Node.js migration experiences","max_results":5}, or {"engines":["x"],"type":"user","username":"nodejs"}. Four X modes and author/date filters retain their existing evidence limitations. max_results is the final total, not a per-platform multiplier.
+
+community_backend {"action":"list"} lists implementation metadata and instance readiness. {"action":"check","id":"x-default"} checks configuration only, not live connectivity. Explicitly authorized {"action":"update","id":"x-default","enabled":false} disables the community instance; it does not yet change legacy x_search or fused community behavior. The built-in instance cannot be removed. Registrations use the existing X credentials, not credentials passed in tool arguments.
+
+search-boost://community-capabilities reports supported platforms and instances without exposing credentials or making network requests. Multi-platform fused/Adaptive integration remains unchanged in this initial slice: their community option is still boolean and X-only.
 
 ## Examples
 

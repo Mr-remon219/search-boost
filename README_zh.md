@@ -249,7 +249,7 @@ search-boost
 - **`engine_pool`**：`free`（免密钥免费池）、`api`（已配置的 API 引擎）、`hybrid`（两池合并）。不可用或已关闭的引擎会跳过。省略时按兼容层映射：`free` → 免费池，`api` → hybrid。
 - **`ranking`**：最终引擎权重预设：`balanced`（默认）、`research`、`fresh`。不改变查询变体、检索深度或时间过滤，也不证明来源权威性或时效性。
 - **`complexity`**：`simple`（1 组查询变体）、`medium`（最多 2 组变体）、`complex`（最多 3 组深度变体）。
-- **`community`**：布尔值（默认 `false`）。设为 `true` 时会将 X 社区一手开发者的讨论混入结果限额中。
+- **`community`**：平台名称数组（例如 `["reddit","x","zhihu"]`）或兼容布尔值。`false`/`[]` 关闭；旧 `true` 仍只选择 X。默认 false，共用最终结果限额，不自动启用后端。
 
 ---
 
@@ -273,6 +273,12 @@ search-boost
   > 二进制响应（图片、压缩包、无法解析的 PDF）会明确报错，不会当作网页正文交给模型。
 
 ---
+
+### 社区搜索（初始实现）
+
+MCP、Pi、DSH 已提供 `community_search` 和 `community_backend`，支持 Reddit、X、B站、知乎、小红书。X 保留四模式；Reddit 使用有界 Arctic Shift 采集、checkpoint 和本地检索；中文平台有公共网页索引 adapter 与可选的 SearchBoost 自有只读浏览器桥，B站另有可选公共视频 API。来源路线和覆盖限制明确披露。`x_search` 保留兼容；fused／Adaptive 接受平台数组，旧 true 仍只选择 X。
+
+示例：`community_search` 传入 `{"engines":["reddit","x","zhihu"],"query":"Node.js 迁移体验"}`。浏览器路线由用户手动运行 `search-boost community-browser`、加载 `browser/community-bridge/` 扩展并启用；不自动安装、登录或导出 cookie。后端管理的 list／check 仅检查配置就绪状态，不探测网络；register／update／remove 只在用户授权时修改本地配置。`search-boost://community-capabilities` 显示已实现的平台和实例状态。详见[当前使用与迁移边界](docs/community-search.md)及[动态执行计划](docs/community-search-plan.md)。
 
 ### 3. `x_search` X (Twitter) 动态检索
 
@@ -298,7 +304,7 @@ search-boost
 
 **Laya 接入**：在同一 TUI 新增自部署 profile，明确选择模型与可选认证；无 Key 时不发送空 Bearer，预算留空沿用服务默认值。诊断缺失、截断、选项坍缩、弃答或缺少离线题头容量证据时，判断保持不可用，不把残存选项当作通过。详见[容量证据与迁移](docs/v0.2.5-release.md)。新运行用 `run.judgment` 记录真实提供方，旧记录不静默升级。
 
-调用方提供**一个问题**（`questions` 恰好一项）、**必填的研究方向 `intent`** 以及 0-8 条可选软偏好 `preferences`。工具描述要求用英文书写，但这是给调用方的提示，服务端不做语言校验、拒绝或翻译，任何语言都按原文检索。原文问题就是唯一查询：不再规划关键词、不做查询扩展。检索前的一次判断模型策略请求选择固定 `balanced`/`research`/`fresh` 排序，并在省略 `community` 时决定是否启用既有社区（X）支路；显式 `community` true/false 覆盖该选择，且不重复提问。随后这次 fused 调用收集**有界快照：目标≤10 时最多 32 条，更大目标为 ceil(max_results×32/10)，最高 160 条**（网页与社区行共用），每条声明候选都以固定选项判断：安全 clear/violation/unavailable、原型价值 0-5、来自真实正贡献引擎的来源折扣，以及每条偏好一次匹配。只有安全且价值已建立为 3/4/5 的材料会被交付，并按版本化筛选公式排序；置信度仅用于审计。不会在凑够前若干条可接受链接后提前停止，没有自动补读，也没有自设的累计成本、token、请求次数或整次时限停止——真实单请求超时、有限重试、认证/限流失败、安全拒绝与显式取消照常生效。
+调用方提供**一个问题**（`questions` 恰好一项）、**必填的研究方向 `intent`** 以及 0-8 条可选软偏好 `preferences`。工具描述要求用英文书写，但这是给调用方的提示，服务端不做语言校验、拒绝或翻译，任何语言都按原文检索。原文问题就是唯一查询：不再规划关键词、不做查询扩展。检索前的一次判断模型策略请求选择固定 `balanced`/`research`/`fresh` 排序，并在省略 `community` 时决定是否启用既有社区（X）支路；显式 `community` 布尔值/平台数组覆盖该选择，且不重复提问；true 仍仅 X，数组不会自动启用后端。随后这次 fused 调用收集**有界快照：目标≤10 时最多 32 条，更大目标为 ceil(max_results×32/10)，最高 160 条**（网页与社区行共用），每条声明候选都以固定选项判断：安全 clear/violation/unavailable、原型价值 0-5、来自真实正贡献引擎的来源折扣，以及每条偏好一次匹配。只有安全且价值已建立为 3/4/5 的材料会被交付，并按版本化筛选公式排序；置信度仅用于审计。不会在凑够前若干条可接受链接后提前停止，没有自动补读，也没有自设的累计成本、token、请求次数或整次时限停止——真实单请求超时、有限重试、认证/限流失败、安全拒绝与显式取消照常生效。
 
 ```json
 {

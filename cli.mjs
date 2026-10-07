@@ -35,6 +35,10 @@ async function main() {
     case 'mcp':
       await import('./server.mjs')
       break
+    case 'community-browser':
+      if (argv.length !== 1) throw new Error('Usage: search-boost community-browser')
+      await import('./scripts/community-browser-bridge.mjs')
+      break
     case 'setup':
     case 'wizard':
       await runWizard(installOpts(parseFlags(argv.slice(1))))

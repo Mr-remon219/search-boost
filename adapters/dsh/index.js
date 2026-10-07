@@ -1,5 +1,6 @@
 import { assertToolEnabled, guardedTool, toolState } from '../../lib/tool-config.mjs'
 import { registerDshTool } from './schema.js'
+import { COMMUNITY_SEARCH_INPUT, COMMUNITY_BACKEND_INPUT, COMMUNITY_OUTPUT, COMMUNITY_BACKEND_OUTPUT, COMMUNITY_DESCRIPTION, COMMUNITY_BACKEND_DESCRIPTION, formatCommunityResult } from '../../lib/community/schemas.mjs'
 import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/screening/input.js'
 import { ADAPTIVE_OUTPUT_SCHEMA } from '../../lib/search/screening/schema.js'
 import { FETCH_DESCRIPTION, X_DESCRIPTION, STATS_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
@@ -44,6 +45,8 @@ import {
   runFetchPage,
   runFused,
   runXSearch,
+  runCommunitySearch,
+  runCommunityBackend,
   switchLayer,
   xAuthAvailableSync,
   xAuthCommands,
@@ -93,6 +96,7 @@ export function apply(ctx, config = {}) {
   safe('fetch_page', () => { if (config.fetchPage !== false) registerFetchPageTool(ctx) })
   safe('adaptive_search', () => { if (config.adaptiveSearch !== false) registerAdaptiveSearchTool(ctx) })
   safe('x_search', () => { if (config.xSearch !== false) registerXSearchTool(ctx) })
+  safe('community tools', () => registerCommunityTools(ctx, config))
   safe('research_parallel', () => { if (config.researchParallel !== false) registerParallelTool(ctx, config.researchProvider) })
   safe('search_stats', () => { if (config.searchStats !== false) registerStatsTool(ctx) })
   safe('policy section', () => { if (config.policy !== false) ctx.systemPrompt?.section(loadPolicySection()) })
@@ -222,6 +226,8 @@ function registerFusedSearchTool(ctx) {
           depth: { type: 'string' },
           layer: { type: 'string' },
           enginePool: { type: 'string' }, ranking: { type: 'string' }, effectiveWeights: { type: 'object', additionalProperties: { type: 'number' } }, communityUsed: { type: 'boolean' },
+          communityPlatforms: { type: 'array', items: { type: 'string' } },
+          communityChannels: { type: 'array', items: { type: 'object' } },
           enginesRequested: { type: 'array', items: { type: 'string' } },
           enginesUsed: { type: 'array', items: { type: 'string' } },
           warnings: { type: 'array', items: { type: 'string' } },
@@ -295,6 +301,7 @@ function renderFused(value) {
   const lines = []
   lines.push(`**fused_search: "${value.query}"** — layer ${value.layer ?? 'api'}, tier ${value.tier}, ${value.results.length} hits, ${value.tookMs}ms${value.cacheHit ? ' (cache hit)' : ''}`)
   lines.push(`scoreVersion: ${value.scoreVersion}; engine_pool: ${value.enginePool}; ranking: ${value.ranking}; enginesUsed: ${(value.enginesUsed ?? []).join(', ')}; effectiveWeights: ${JSON.stringify(value.effectiveWeights ?? {})}; communityUsed: ${!!value.communityUsed}`)
+  if (value.communityChannels?.length) lines.push(`Community routes: ${value.communityChannels.map(c => `${c.platform}: ${c.status}/${c.retrieval_mode ?? 'unavailable'}${c.note ? ` — ${c.note}` : ''}`).join('; ')}`)
   for (const [i, r] of value.results.entries()) {
     const eng = (r.engines ?? []).join('+')
     lines.push(`${i + 1}. [${r.score}] ${r.title} — ${r.domain} (${eng})${r.published ? `, ${r.published}` : ''}`)
@@ -417,6 +424,23 @@ function registerAdaptiveSearchTool(ctx) {
       return cleanJsonValue(await runAdaptiveSearch(args, { signal: exec?.signal, host: 'dsh' }))
     },
   })
+}
+
+// ---------- community ----------
+function registerCommunityTools(ctx, config) {
+  for (const [name, description, parameters, schema, run, option, readOnly] of [
+    ['community_search', COMMUNITY_DESCRIPTION, COMMUNITY_SEARCH_INPUT, COMMUNITY_OUTPUT, runCommunitySearch, 'communitySearch', true],
+    ['community_backend', COMMUNITY_BACKEND_DESCRIPTION, COMMUNITY_BACKEND_INPUT, COMMUNITY_BACKEND_OUTPUT, runCommunityBackend, 'communityBackend', false],
+  ]) {
+    if (config[option] === false) continue
+    registerGuardedTool(ctx, {
+      name, description, parameters,
+      output: { schema, render: (_args, value) => [{ type: 'text', text: formatCommunityResult(value) }] },
+      presentCall: args => ({ card: 'generic', kind: readOnly ? 'search' : 'generic', title: `${name}: ${args.action ?? args.type ?? 'keyword'}` }),
+      isConcurrencySafe: () => readOnly,
+      async execute(args, exec) { return run(args, { signal: exec?.signal }) },
+    })
+  }
 }
 
 // ---------- x_search ----------

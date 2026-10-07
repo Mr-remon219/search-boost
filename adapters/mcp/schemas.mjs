@@ -25,7 +25,7 @@ export const fusedSearchInput = {
   ranking: z.enum(['balanced', 'research', 'fresh']).optional().describe('Final engine-weight preset only; default balanced'),
   engine_weights: z.object(Object.fromEntries(ENGINE_ORDER.map((name) => [name, z.number().finite().min(0).optional()]))).strict().optional().describe('Override preset engine weights; zero still calls the engine. Never enables or selects engines'),
   min_score: z.number().finite().min(0).optional().describe('Minimum consensus-v2 quality score; old thresholds need recalibration, default 0'),
-  community: z.boolean().optional().describe('Add X developer/community voices when relevant; default false; shares final max_results'),
+  community: z.union([z.boolean(), z.array(z.enum(['reddit', 'x', 'bilibili', 'zhihu', 'xiaohongshu'])).max(5)]).optional().describe('Selected community platforms. false/[] disables; legacy true means X only. Shares final max_results; never enables backends.'),
   layer: z.enum(['free', 'api']).optional().describe('Deprecated compatibility alias: free→free pool, api→hybrid pool; engine_pool takes precedence; not persisted'),
 }
 
@@ -43,6 +43,8 @@ export const fusedSearchOutput = {
   ranking: z.enum(['balanced', 'research', 'fresh']),
   effectiveWeights: z.record(z.number()),
   communityUsed: z.boolean(),
+  communityPlatforms: z.array(z.string()).optional(),
+  communityChannels: z.array(z.object({}).passthrough()).optional(),
   engineStats: z.record(z.object({
     used: z.boolean(),
     errors: z.number(),
@@ -61,7 +63,7 @@ export const fusedSearchOutput = {
     rankScore: z.number(), evidenceScore: z.number(), consensusBoost: z.number(),
     metadataDelta: z.number(), selectionScore: z.number().optional(),
     engineRanks: z.record(z.number()), contributions: z.record(z.number()),
-    provenance: z.array(z.object({ engine: z.string(), rank: z.number(), variant: z.string().optional(), url: z.string(), title: z.string(), snippet: z.string(), published: z.string().nullable() })),
+    provenance: z.array(z.object({ engine: z.string(), rank: z.number(), variant: z.string().optional(), url: z.string(), title: z.string().optional(), snippet: z.string().optional(), published: z.string().nullable().optional(), platform: z.string().optional(), provider: z.string().optional(), backend: z.string().optional(), retrieval_mode: z.string().optional(), content_type: z.string().optional() })),
     dateStatus: z.enum(['known', 'unknown', 'conflicting']),
     engines: z.array(z.string()),
     published: z.string().nullable(),

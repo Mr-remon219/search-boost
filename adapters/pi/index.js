@@ -1,4 +1,5 @@
 import { guardedTool, watchToolStates } from '../../lib/tool-config.mjs'
+import { COMMUNITY_SEARCH_INPUT, COMMUNITY_BACKEND_INPUT, COMMUNITY_OUTPUT, COMMUNITY_BACKEND_OUTPUT, COMMUNITY_DESCRIPTION, COMMUNITY_BACKEND_DESCRIPTION, formatCommunityResult } from '../../lib/community/schemas.mjs'
 import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/screening/input.js'
 import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
@@ -38,6 +39,8 @@ import {
   runFetchPage,
   runFused,
   runXSearch,
+  runCommunitySearch,
+  runCommunityBackend,
   switchLayer,
   tierName,
   xAuthCommands,
@@ -74,7 +77,7 @@ export default function searchBoostExtension(pi) {
   const registerTool = (definition) => pi.registerTool(definition.name === ADAPTIVE_TOOL_NAME ? definition : guardedTool(definition))
   let stopWatching
   let removedBySwitch = new Set()
-  const owned = ['fused_search', 'fetch_page', 'adaptive_search', 'search-parallel-subagent', 'x_search']
+  const owned = ['fused_search', 'fetch_page', 'adaptive_search', 'search-parallel-subagent', 'x_search', 'community_search', 'community_backend']
   pi.on('session_start', () => {
     stopWatching?.()
     removedBySwitch = new Set()
@@ -195,6 +198,7 @@ export default function searchBoostExtension(pi) {
         `Layer: ${res.layer} — ${LAYER_LABELS[res.layer]}`,
         `Tier: ${res.tier} — Queries used: ${(res.queriesUsed ?? []).join(' | ')}`,
         `Score: ${res.scoreVersion}; Pool: ${res.enginePool}; ranking: ${res.ranking}; enginesUsed: ${res.enginesUsed.join(', ')}; effectiveWeights: ${JSON.stringify(res.effectiveWeights)}; communityUsed: ${res.communityUsed}`,
+        ...(res.communityChannels?.length ? [`Community routes: ${res.communityChannels.map(c => `${c.platform}: ${c.status}/${c.retrieval_mode ?? 'unavailable'}${c.note ? ` — ${c.note}` : ''}`).join('; ')}`] : []),
         `Engines: ${stats}${res.cacheHit ? ' — cache hit' : ''} — ${res.tookMs}ms`,
         ...(res.warnings ?? []).map((w) => `WARNING: ${w}`),
         includeDomains.length > 0 ? `Include domains: ${includeDomains.join(', ')}` : '',
@@ -220,7 +224,7 @@ export default function searchBoostExtension(pi) {
       })
       return {
         content: [text(lines.join('\n').trim())],
-        details: { scoreVersion: res.scoreVersion, results: res.results, enginesUsed: res.enginesUsed, effectiveWeights: res.effectiveWeights, communityUsed: res.communityUsed, warnings: res.warnings, enginePool: res.enginePool, ranking: res.ranking, engineStats: res.engineStats, cacheHit: Boolean(res.cacheHit), tookMs: res.tookMs, layer: res.layer, tier: res.tier },
+        details: { scoreVersion: res.scoreVersion, results: res.results, enginesUsed: res.enginesUsed, effectiveWeights: res.effectiveWeights, communityUsed: res.communityUsed, communityPlatforms: res.communityPlatforms, communityChannels: res.communityChannels, warnings: res.warnings, enginePool: res.enginePool, ranking: res.ranking, engineStats: res.engineStats, cacheHit: Boolean(res.cacheHit), tookMs: res.tookMs, layer: res.layer, tier: res.tier },
       }
     },
   })
@@ -555,6 +559,27 @@ export default function searchBoostExtension(pi) {
       )
     },
   })
+
+  /* -------------------------- community entries ------------------------- */
+  for (const [name, description, parameters, outputSchema, run, readOnly] of [
+    ['community_search', COMMUNITY_DESCRIPTION, COMMUNITY_SEARCH_INPUT, COMMUNITY_OUTPUT, runCommunitySearch, true],
+    ['community_backend', COMMUNITY_BACKEND_DESCRIPTION, COMMUNITY_BACKEND_INPUT, COMMUNITY_BACKEND_OUTPUT, runCommunityBackend, false],
+  ]) {
+    registerTool({
+      name, label: name, description, parameters, outputSchema,
+      annotations: { readOnlyHint: readOnly, destructiveHint: !readOnly, openWorldHint: readOnly },
+      promptSnippet: readOnly ? 'Selected-platform evidence: Reddit, X, Bilibili, Zhihu, Xiaohongshu' : 'Inspect or explicitly manage local community backend configuration',
+      promptGuidelines: [readOnly
+        ? 'Community samples and incomplete threads do not establish complete coverage or platform-wide sentiment.'
+        : 'Backend configuration writes require user authorization; never register or enable a backend merely because search failed.'],
+      async execute(_id, args, signal, onUpdate) {
+        onUpdate?.({ content: [text(`${name}: ${readOnly ? 'retrieving' : args.action}…`)] })
+        const result = await run(args, { signal, audit })
+        return { content: [text(formatCommunityResult(result))], details: result, structuredContent: result,
+          ...(result.status === 'failed' ? { isError: true } : {}) }
+      },
+    })
+  }
 
   /* ------------------------------ x_search ------------------------------ */
 

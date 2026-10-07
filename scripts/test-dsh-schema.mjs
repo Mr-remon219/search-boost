@@ -35,7 +35,7 @@ try {
   console.error = logError
 }
 assert.deepEqual(errors, [], 'DSH startup must not silently swallow registration failures')
-const names = ['fused_search', 'fetch_page', 'adaptive_search', 'x_search', 'research_parallel', 'search_stats']
+const names = ['fused_search', 'fetch_page', 'adaptive_search', 'x_search', 'community_search', 'community_backend', 'research_parallel', 'search_stats']
 assert.deepEqual([...tools.view().visible.keys()].sort(), names.toSorted())
 for (const name of names) {
   const tool = tools.get(name)
@@ -48,7 +48,18 @@ for (const name of names) {
 }
 assert.equal(tools.schemas().length, names.length)
 assert.equal(tools.sdkSchemas().length, names.length)
-console.log('ok: all six tools register in real DSH and compile for native/TypeScript/Python presentation')
+console.log('ok: all eight tools register in real DSH and compile for native/TypeScript/Python presentation')
+const backendList = await tools.get('community_backend').execute({ action: 'list' }, {})
+assert.equal(backendList.changed, false)
+assert.deepEqual(validateJsonSchemaValue(tools.get('community_backend').output.schema, backendList), [])
+assert.equal(backendList.backends[0].provider, 'existing-x')
+await tools.get('community_backend').execute({ action: 'update', id: 'reddit-default', enabled: false }, {})
+const notImplemented = await tools.get('community_search').execute({ engines: ['reddit'], query: 'fixture' }, {})
+assert.equal(notImplemented.status, 'failed')
+assert.equal(notImplemented.channels[0].status, 'disabled')
+assert.deepEqual(validateJsonSchemaValue(tools.get('community_search').output.schema, notImplemented), [])
+await assert.rejects(() => tools.get('community_search').execute({ engines: ['x', 'x'], query: 'fixture' }, {}), /invalid arguments/)
+await assert.rejects(() => tools.get('community_backend').execute({ action: 'register', id: 'fixture', provider: 'existing-x', config: { token: 'not-accepted' } }, {}), /invalid arguments/)
 const cacheRuntime = process.argv[2] ? await import(new URL('../../lib/runtime.mjs', pathToFileURL(process.argv[2])).href) : await import('../lib/runtime.mjs')
 cacheRuntime.PAGE_CACHE.set('page:https://example.test/legacy-cache', 'Historical cached document text. '.repeat(8))
 const legacyPage = await tools.get('fetch_page').execute({ url: 'https://example.test/legacy-cache' }, {})
