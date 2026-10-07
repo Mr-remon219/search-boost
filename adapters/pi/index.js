@@ -728,10 +728,10 @@ export default function searchBoostExtension(pi) {
         if (info.layer === 'api' && info.keyedEngines.enabled === 0) {
           hints.push('no API keys configured — the api layer currently runs the keyless engines only; add keys with `search-boost config keys`, or run /web_change free')
         } else if (info.layer === 'api' && info.keyedEngines.enabled < info.keyedEngines.total) {
-          hints.push(`keyed engines: ${info.keyedEngines.enabledNames.join(', ')} — configure additional engines (tavily, brave, exa, anysearch) via \`search-boost config keys\` for the fullest fusion`)
+          hints.push(`keyed engines: ${info.keyedEngines.enabledNames.join(', ')} — configure additional engines (tavily, brave, exa, anysearch, tinyfish) via \`search-boost config keys\` for the fullest fusion`)
         }
         if (info.layer === 'free') {
-          hints.push('keyless mode — run /web_change api after configuring keys (`search-boost config keys`) to add tavily/brave/exa to the fusion')
+          hints.push('keyless mode — run /web_change api after configuring keys (`search-boost config keys`) to add tavily/brave/exa/anysearch/tinyfish to the fusion')
         }
         ctx.ui.notify(
           [

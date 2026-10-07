@@ -353,7 +353,7 @@ for (const fn of ['runFused', 'runFetchPage', 'runXSearch', 'describeLayer', 'sw
   assert(`runtime exports ${fn}`, fn in runtime)
 }
 const info = runtime.describeLayer()
-assert('describeLayer shape', info.layer === 'free' && Array.isArray(info.engines) && typeof info.xOfficial === 'boolean' && info.keyedEngines.total === 4)
+assert('describeLayer shape', info.layer === 'free' && Array.isArray(info.engines) && typeof info.xOfficial === 'boolean' && info.keyedEngines.total === 5)
 const k1 = runtime.xSearchCacheKey('keyword', { query: 'a' }, 5)
 runtime.switchLayer('api')
 const k2 = runtime.xSearchCacheKey('keyword', { query: 'a' }, 5)

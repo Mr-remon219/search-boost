@@ -136,10 +136,10 @@ await withIsolatedHome(async (home) => {
   })
   const check = findCheck(report, 'layer_keys_coherence')
   assert('layer_keys_coherence warn on api with single key', check?.status === 'warn')
-  assert('layer_keys_coherence single key mentions 1/4', check?.message?.includes('1/4'))
+  assert('layer_keys_coherence single key mentions 1/5', check?.message?.includes('1/5'))
 })
 
-// layer_keys_coherence pass (api with four keys)
+// layer_keys_coherence pass (api with five keys)
 await withIsolatedHome(async (home) => {
   writeFileSync(join(home, '.search-boost-layer.json'), `${JSON.stringify({ layer: 'api' })}\n`, 'utf8')
   writeFileSync(
@@ -149,6 +149,7 @@ await withIsolatedHome(async (home) => {
       brave: 'brave-test-key-12345678',
       exa: 'exa-test-key-1234567890',
       anysearch: 'as-test-key-1234567890',
+      tinyfish: 'tf-test-key-1234567890',
     })}\n`,
     'utf8',
   )
@@ -164,7 +165,7 @@ await withIsolatedHome(async (home) => {
     },
   })
   const check = findCheck(report, 'layer_keys_coherence')
-  assert('layer_keys_coherence pass with api + four keys', check?.status === 'pass')
+  assert('layer_keys_coherence pass with api + five keys', check?.status === 'pass')
 })
 
 // api_keyed_pool warn on partial keyed engines
@@ -191,7 +192,7 @@ await withIsolatedHome(async (home) => {
   assert('api_keyed_pool single engine OK message', check?.message?.includes('single engine OK'))
 })
 
-// api_keyed_pool pass with all four keys
+// api_keyed_pool pass with all five keys
 await withIsolatedHome(async (home) => {
   writeFileSync(join(home, '.search-boost-layer.json'), `${JSON.stringify({ layer: 'api' })}\n`, 'utf8')
   writeFileSync(
@@ -201,6 +202,7 @@ await withIsolatedHome(async (home) => {
       brave: 'brave-test-key-12345678',
       exa: 'exa-test-key-1234567890',
       anysearch: 'as-test-key-1234567890',
+      tinyfish: 'tf-test-key-1234567890',
     })}\n`,
     'utf8',
   )
@@ -216,7 +218,7 @@ await withIsolatedHome(async (home) => {
     },
   })
   const check = findCheck(report, 'api_keyed_pool')
-  assert('api_keyed_pool pass with four keys', check?.status === 'pass')
+  assert('api_keyed_pool pass with five keys', check?.status === 'pass')
 })
 
 // keys_file_integrity fail (corrupt JSON) → exit 1

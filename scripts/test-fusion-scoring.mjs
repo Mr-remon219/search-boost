@@ -21,7 +21,13 @@ const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-11
 near(score(obs('bing')), 1)
 near(score(obs('bing', 'tavily')), 1 + Math.log(2))
 near(score(obs('bing', 'tavily', 'brave')), 1 + Math.log(3))
-near(score(obs('bing', 'ddg', 'yahoo')), 1 + Math.log(1.5))
+near(score(obs('bing', 'ddg')), 1 + Math.log(1.25))
+// A synthetic third family member retains the original three-correlated-votes property.
+near(score(obs('bing', 'ddg', 'fixture-bing'), { ...neutral, 'fixture-bing': 1 }, {
+  ...SCORE_CONFIG, families: { ...SCORE_CONFIG.families, 'fixture-bing': 'bing' },
+}), 1 + Math.log(1.5))
+assert.equal(SCORE_CONFIG.families.tinyfish, 'google')
+assert.equal(Object.hasOwn(SCORE_CONFIG.families, 'yahoo'), false)
 near(score(obs('exa', 'exa-free')), 1 + Math.log(1.2))
 near(score([{ engine: 'bing', rank: 20 }]), 10 / 29)
 assert.ok(score(['bing', 'tavily'].map((engine) => ({ engine, rank: 10 }))) < 1)
@@ -33,7 +39,11 @@ assert.ok(Number.isFinite(score(obs(...names), Object.fromEntries(names.map((n) 
 for (const invalid of [0, -1, 1.5, Infinity, NaN]) assert.throws(() => score([{ engine: 'bing', rank: invalid }]))
 for (const invalid of [-1, Infinity, NaN, '1']) assert.throws(() => score(obs('bing'), { bing: invalid }))
 for (const config of [{ kappa: 0 }, { beta: -1 }, { retention: { bing: 2 } }]) assert.throws(() => score(obs('bing'), neutral, { ...SCORE_CONFIG, ...config }))
-for (const weights of Object.values(SHARED_RANKING_WEIGHTS)) near(Math.exp(Object.values(weights).reduce((sum, n) => sum + Math.log(n), 0) / 8), 1)
+for (const weights of Object.values(SHARED_RANKING_WEIGHTS)) {
+  assert.equal(weights.tinyfish, 1)
+  assert.ok(weights.ddg > 0 && weights.ddg < .6)
+  assert.equal(Object.hasOwn(weights, 'yahoo'), false)
+}
 
 // Fixed seed: reproducible property checks, not a relevance benchmark.
 let seed = 20260922
