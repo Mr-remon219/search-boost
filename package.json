@@ -95,7 +95,7 @@
   "dependencies": {
     "@ai-sdk/gateway": "4.0.87",
     "@clack/prompts": "^0.10.1",
-    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "ai": "7.0.107",
     "ajv": "^8.20.0",
     "undici": "^6.28.1",

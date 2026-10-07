@@ -54,12 +54,12 @@ assert.equal(readJudgmentConfig().transport, 'vercel-evaluation')
 assert(gateway.logs.some(s => s.includes('/v4/ai/evaluation-model')))
 assert(!gateway.records.some(p => p.method === 'text'), 'official Gateway URL is fixed')
 const before = readFileSync(judgmentFilePath(), 'utf8')
-await wizard([['select', 'existing', p => assert.deepEqual(p.options.map(o => o.value), ['existing', 'change', 'home'])], ['select', 'jev-vercel'], ['select', 'activate'], ['confirm', true]])
+await wizard([['select', 'existing', p => assert.deepEqual(p.options.map(o => o.value), ['existing', 'change', 'home'])], ['select', 'profile:jev-vercel'], ['select', 'activate'], ['confirm', true]])
 assert.equal(readFileSync(judgmentFilePath(), 'utf8'), before)
 
 fresh()
 saveJevConfig({ apiKey: key })
-await wizard([['select', 'existing'], ['select', 'legacy-jev'], ['select', 'activate'], ['confirm', true]])
+await wizard([['select', 'existing'], ['select', 'profile:legacy-jev'], ['select', 'activate'], ['confirm', true]])
 assert.equal(readJudgmentConfig().profileId, 'legacy-jev', 'legacy config is selectable')
 await wizard([change(), provider('jev'), ['select', 'vercel'], ['password', key, p => assert(p.validate(''), 'TypeSafe key must not be reused for Gateway')], ['confirm', true]])
 assert.equal(Object.keys(readJudgmentProfiles().profiles).length, 2, 'old destination preserved')
@@ -122,7 +122,7 @@ assert.equal(readJudgmentConfig().provider, 'jev')
 const onboardingBefore = readFileSync(judgmentFilePath(), 'utf8')
 const onboardingBack = prompter([
   ['confirm', true],
-  ['select', 'existing'], ['select', 'jev'], ['select', 'back'], ['select', 'back'],
+  ['select', 'existing'], ['select', 'profile:jev'], ['select', 'back'], ['select', 'back'],
   change(), provider('jev', true), ['select', 'back'], ['select', 'back'],
   ['select', 'back'], ['confirm', false],
 ], { onboarding: true })
@@ -137,11 +137,36 @@ for (const steps of [
   [change(), provider('jev'), ['select', 'home']],
   [change(), provider('jev'), ['select', 'back'], ['select', 'back'], ['select', 'home']],
   [['select', 'existing'], ['select', 'back'], ['select', 'home']],
-  [['select', 'existing'], ['select', 'jev'], ['select', 'back'], ['select', 'home']],
+  [['select', 'existing'], ['select', 'profile:jev'], ['select', 'back'], ['select', 'home']],
 ]) {
   const p = prompter(steps)
   await assert.rejects(withTuiContext(() => runJudgmentWizard(p.clack), { language: 'zh-CN', navigation: true }), TuiHome)
   p.done()
   assert.equal(readFileSync(judgmentFilePath(), 'utf8'), navigationBefore, 'back/home navigation is read-only')
 }
-console.log('ok: simplified judgment menus, explicit back/home navigation, legacy reuse, Gateway separation, key isolation, Laya defaults/preservation, cancellation and optional onboarding (offline)')
+// Existing disk IDs remain untouched, even when they match navigation values.
+for (const id of ['home', 'back', 'existing', 'change']) {
+  fresh()
+  saveJudgmentProfile(id, jev)
+  saveJudgmentProfile('other', laya)
+  const rootMenu = ['select', 'existing']
+  const profileMenu = ['select', `profile:${id}`, p => {
+    assert(p.options.some(o => o.value === 'back'))
+    assert(p.options.some(o => o.value === 'home'))
+    assert(p.options.some(o => o.value === `profile:${id}`))
+    assert.equal(p.initialValue, 'profile:other')
+  }]
+  await wizard([rootMenu, profileMenu, ['select', 'activate'], ['confirm', true]])
+  assert.equal(readJudgmentConfig().profileId, id, `${id} is activated as a profile, never navigation`)
+  const before = readFileSync(judgmentFilePath(), 'utf8')
+  const selectCurrent = ['select', `profile:${id}`, p => assert.equal(p.initialValue, `profile:${id}`)]
+  await wizard([rootMenu, selectCurrent, ['select', 'remove'], ['confirm', false]])
+  assert.equal(readFileSync(judgmentFilePath(), 'utf8'), before)
+  await wizard([rootMenu, selectCurrent, ['select', 'remove'], ['confirm', true]], { dryRun: true })
+  assert.equal(readFileSync(judgmentFilePath(), 'utf8'), before)
+  await wizard([rootMenu, selectCurrent, ['select', 'remove'], ['confirm', true]])
+  assert(!Object.hasOwn(readJudgmentProfiles().profiles, id))
+  assert(Object.hasOwn(readJudgmentProfiles().profiles, 'other'))
+  assert.equal(readJudgmentConfig().ready, false, 'deleting active reserved-name profile still disables judgments')
+}
+console.log('ok: simplified judgment menus, collision-free profile IDs, explicit back/home navigation, legacy reuse, Gateway separation, key isolation, Laya defaults/preservation, cancellation and optional onboarding (offline)')
