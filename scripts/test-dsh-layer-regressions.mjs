@@ -33,14 +33,17 @@ import { join, dirname, isAbsolute } from 'node:path';
 const raw = process.argv.slice(2);
 const args = raw[0] === 'exec' ? raw.slice(raw.indexOf('--') + 2) : raw;
 appendFileSync(process.env.DSH_TEST_CAPTURE, JSON.stringify(args) + '\\n');
-const [, , profile, verb, source] = args;
+const [, , profile, verb] = args;
+const source = args.at(-1);
 const dir = join(process.env.DSH_HOME, 'profiles', profile), file = join(dir, 'package.json');
 let pkg; try { pkg = JSON.parse(readFileSync(file)); } catch { pkg = { dependencies: {}, dsh: { profile: { bundles: [] } } }; }
 if (process.env.DSH_TEST_NOOP) process.exit(0);
 const fields = ['dependencies', 'devDependencies', 'optionalDependencies'];
 if (verb === 'add') {
   const existed = fields.some(field => pkg[field]?.['search-boost']);
-  const field = process.env.DSH_TEST_FIELD ?? 'dependencies';
+  const production = args.includes('--save-prod');
+  const field = production ? 'dependencies' : process.env.DSH_TEST_FIELD ?? 'dependencies';
+  if (production) for (const edge of ['devDependencies', 'optionalDependencies', 'peerDependencies']) delete pkg[edge]?.['search-boost'];
   pkg[field] ??= {};
   const installed = join(dir, 'node_modules', 'search-boost');
   mkdirSync(dirname(installed), { recursive: true }); rmSync(installed, { recursive: true, force: true });
@@ -98,6 +101,8 @@ await test('optional-only reinstall is verified without re-enabling; explicit en
     assert.equal(result.status, 0, `${result.error?.message ?? ''}; signal=${result.signal}; ${result.stderr}`)
     assert.equal(JSON.parse(result.stdout).enabled, enable)
     assert.equal(json(manifest).dsh.profile.custom, 'keep')
+    assert.equal(typeof json(manifest).dependencies['search-boost'], 'string', 'explicit production install must register in the manager-visible field')
+    assert.equal(json(manifest).optionalDependencies['search-boost'], undefined, 'pnpm moves the old optional edge to production')
   }
 })
 await test('optional -> explicit enable -> official-style orphan removal cleans only our bundle under host lock', async () => {

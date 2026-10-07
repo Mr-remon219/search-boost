@@ -137,7 +137,7 @@ try {
   out = await scenario(['layer', cancel, 'x', cancel, 'jev', cancel, 'keys', cancel, 'print', cancel, 'manage', 'install', reply('multiselect', cancel), 'back', 'exit'])
   assert.equal(out.records[1].message, 'Default search layer?')
   assert.equal(out.records[3].message, 'X credentials')
-  assert.equal(out.records[5].message, 'Judgment model profiles')
+  assert.equal(out.records[5].message, 'Judgment model configuration')
   assert.equal(out.records[7].message, 'Engine configuration')
   assert.equal(out.records[9].message, 'Print MCP snippet for which agent?')
   assert.equal(out.records[12].message, 'Which agents should search-boost configure?')
@@ -158,11 +158,18 @@ try {
   console.log('ok: nested Escape returns to its submenu, submenu Escape returns home, Ctrl+C exits and listeners are cleaned up')
 
   fresh()
+  out = await scenario(['settings', 'layout', 'folder', 'credentials', 'jev', 'change', 'jev', 'back', 'back', 'home', 'exit'])
+  assert.equal(out.records.at(-1).message, 'What do you want to do?', 'explicit judgment Home bypasses the credentials folder')
+  assert(!existsSync(join(process.env.SEARCH_BOOST_HOME, 'config', 'judgment.json')), 'navigation never writes judgment configuration')
+  console.log('ok: explicit judgment back steps stay in the wizard; Home returns to the actual main menu in folder layout')
+  fresh()
+
+  fresh()
   out = await scenario(['settings', 'language', 'zh-CN', 'back', 'layer', 'api', 'tools', reply('multiselect', []), reply('confirm', true, (options) => {
     assert.equal(options.active, '是'); assert.equal(options.inactive, '否')
   }), 'setup', 'free', reply('multiselect', []), 'manage', 'install', reply('multiselect', []), 'uninstall', reply('multiselect', []), 'back', 'search', reply('multiselect', []), 'x', 'set-key', reply('password', 'xai-dry-run-sentinel', (options) => {
     assert.equal(options.validate('bad'), '必须以 xai- 开头（可在 console.x.ai 获取）。')
-  }), 'jev', '+new', reply('text', 'preview'), 'jev', reply('text', 'https://api.typesafe.ai/v1'), 'jev-latest', reply('password', 'jev-dry-run-sentinel'), reply('confirm', true), 'exit'], { dryRun: true })
+  }), 'jev', 'change', 'jev', 'typesafe', reply('password', 'jev-dry-run-sentinel'), reply('confirm', true), 'exit'], { dryRun: true })
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'dry-run remains entirely read-only, including language preference')
   assert(out.logs.some((line) => line.includes('仅预览显示语言')))
   assert(out.records.some((record) => record.message === '判断模型配置'))
@@ -172,7 +179,7 @@ try {
 
   fresh()
   saveTuiLanguage('zh-CN')
-  out = await scenario(['keys', 'back', 'x', 'keep', 'jev', '+cancel', 'status', 'exit'])
+  out = await scenario(['keys', 'back', 'x', 'keep', 'jev', cancel, 'status', 'exit'])
   const engineMenu = out.records.find((record) => record.message === '搜索引擎配置')
   assert.deepEqual(engineMenu.options.map((o) => o.value), [...CONFIG_KEY_NAMES, 'routing', 'back'], 'the engine entry lists every credential slot in Chinese too')
   assert(!engineMenu.options.some((o) => /tvly|brave|exa|anysearch/i.test(o.hint ?? '') && /[A-Za-z0-9]{12}/.test(o.hint)), 'engine hints stay masked')

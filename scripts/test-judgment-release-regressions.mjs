@@ -147,7 +147,7 @@ await test('profile deletion TUI supports rejection/dry-run and explicit confirm
   saveJudgmentProfile('delete-me', JEV)
   const before = readFileSync(judgmentFilePath(), 'utf8')
   async function wizard(confirm, dryRun) {
-    const selections = ['delete-me', 'remove']
+    const selections = ['existing', 'profile:delete-me', 'remove']
     await runJudgmentWizard({ select: async () => selections.shift(), confirm: async () => confirm,
       log: { info: () => {} }, isCancel: () => false }, { dryRun })
     assert.equal(selections.length, 0)

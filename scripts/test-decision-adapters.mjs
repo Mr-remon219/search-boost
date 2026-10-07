@@ -230,20 +230,21 @@ await test('v2/v5 snapshots retain identity, rows and metadata without writes, n
   assert.equal(outputValidator()(out), null)
 })
 await test('TUI derives gateway model/endpoint from registry, saves keyless Laya and supports cancel/dry-run', async () => {
-  const execute = async (values, dryRun = false, gateway = false) => {
+  const execute = async (values, dryRun = false) => {
     const logs = []
-    const clack = { isCancel: () => false, log: { info: s => logs.push(s), success: s => logs.push(s) }, select: async p => { if (p.message === 'Model' && gateway) assert.deepEqual(p.options.map(o => o.value), ['typesafe-ai/jev']); return values.shift() }, text: async () => values.shift(), password: async () => values.shift(), confirm: async () => values.shift() }
+    const clack = { isCancel: () => false, log: { info: s => logs.push(s), success: s => logs.push(s) }, select: async () => values.shift(), text: async () => values.shift(), password: async () => values.shift(), confirm: async () => values.shift() }
     await runJudgmentWizard(clack, { dryRun }); assert.equal(values.length, 0); return logs
   }
   const prior = readFileSync(judgmentFilePath(), 'utf8')
-  await execute(['+new', 'cancelled', 'laya', PROFILE.baseUrl, 'multilingual', 'none', '', '', false])
+  await execute(['change', 'laya', PROFILE.baseUrl, '', false])
   assert.equal(readFileSync(judgmentFilePath(), 'utf8'), prior)
-  await execute(['+new', 'dry-run', 'laya', PROFILE.baseUrl, 'multilingual', 'none', '', '', true], true)
+  await execute(['change', 'laya', PROFILE.baseUrl, '', true], true)
   assert.equal(readFileSync(judgmentFilePath(), 'utf8'), prior)
-  const logs = await execute(['+new', 'gateway', 'jev', 'https://ai-gateway.vercel.sh/v1', 'typesafe-ai/jev', KEY, true], false, true)
+  const logs = await execute(['change', 'jev', 'vercel', KEY, true])
+  assert.equal(readJudgmentConfig().model, 'typesafe-ai/jev')
   assert(logs.join('\n').includes('/v4/ai/evaluation-model'))
   assert(!logs.join('\n').includes(KEY))
-  await execute(['+new', 'keyless', 'laya', PROFILE.baseUrl, 'multilingual', 'none', '', '', true])
+  await execute(['change', 'laya', PROFILE.baseUrl, '', true])
   assert.equal(readJudgmentConfig().provider, 'laya')
   assert.equal(readJudgmentConfig().apiKey, null)
 })
