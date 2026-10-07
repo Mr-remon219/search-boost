@@ -140,7 +140,7 @@ try {
   })
 
   test('Jev is not a search engine (absent from KEY_NAMES and routing)', () => {
-    assert.deepEqual(KEY_NAMES, ['tavily', 'brave', 'exa', 'anysearch'])
+    assert.deepEqual(KEY_NAMES, ['tavily', 'brave', 'exa', 'anysearch', 'tinyfish'])
     assert.ok(!readKeysRouting().enabledNames.includes('jev'))
   })
 

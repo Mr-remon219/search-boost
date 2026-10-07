@@ -44,7 +44,7 @@ try {
   await assert.rejects(runKeysWizard(null, parseFlags(['--base-url', 'exa=https://example.org', '--reset-base-url', 'exa'])))
   assert.equal(readFileSync(keysFilePath(), 'utf8'), original)
 
-  const actions = ['url', 'set', 'keep', 'keep', 'reset-url', 'keep']
+  const actions = ['url', 'set', 'keep', 'keep', 'reset-url', 'keep', 'keep']
   const prompts = []
   const clack = {
     isCancel: () => false,
@@ -66,7 +66,7 @@ try {
   assert.equal(readKeysFileDocument().doc.tavily, 'new-key')
   assert.equal(readKeysFileDocument().doc.jev.apiKey, 'jev-key')
   original = readFileSync(keysFilePath(), 'utf8')
-  actions.push('url', 'keep', 'keep', 'keep', 'keep')
+  actions.push('url', 'keep', 'keep', 'keep', 'keep', 'keep')
   await runKeysWizard(clack, { dryRun: true })
   assert.equal(readFileSync(keysFilePath(), 'utf8'), original)
   actions.push('url')

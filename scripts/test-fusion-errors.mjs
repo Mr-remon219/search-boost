@@ -39,14 +39,14 @@ function assert(name, cond) {
 const allFailStats = {
   bing: { used: true, errors: 1, note: 'bing: timeout' },
   ddg: { used: true, errors: 1, note: 'ddg: HTTP 202 (bot challenge)' },
-  yahoo: { used: true, errors: 1, note: 'yahoo: http 403' },
+  anysearch: { used: true, errors: 1, note: 'anysearch: http 403' },
   'exa-free': { used: true, errors: 1, note: 'exa-free: rate-limited (429)' },
 }
 
 const partialStats = {
   bing: { used: true, errors: 1, note: 'bing: timeout' },
   ddg: { used: true, errors: 0 },
-  yahoo: { used: true, errors: 0 },
+  anysearch: { used: true, errors: 0 },
 }
 
 assert('allAttemptedEnginesFailed true', allAttemptedEnginesFailed(allFailStats))
@@ -75,7 +75,7 @@ const summary = formatFusedSummary({
 assert('summary includes engines line', summary.includes('engines: bing: FAIL'))
 assert('summary includes warnings', summary.includes('warnings: ddg slow'))
 
-const freeOnlyWarn = apiLayerFreeOnlyWarning('api', ['bing', 'ddg', 'yahoo', 'exa-free'])
+const freeOnlyWarn = apiLayerFreeOnlyWarning('api', ['bing', 'ddg', 'exa-free', 'anysearch'])
 assert('apiLayerFreeOnlyWarning on api+free', freeOnlyWarn?.includes('layer api but using free engines only'))
 assert('apiLayerFreeOnlyWarning null on free layer', apiLayerFreeOnlyWarning('free', ['bing']) === null)
 assert('apiLayerFreeOnlyWarning null when keyed used', apiLayerFreeOnlyWarning('api', ['bing', 'tavily']) === null)
@@ -104,9 +104,9 @@ assert(
 
 const partialSummary = keyedPoolSummary(tavilyOnlyKeys, emptyRouting)
 const poolWarn = partialKeyedPoolWarning(partialSummary)
-assert('partialKeyedPoolWarning when 1 of 4', poolWarn?.includes('1/4 keyed engine') && poolWarn?.includes('tavily'))
-assert('partialKeyedPoolWarning null when all four', partialKeyedPoolWarning(keyedPoolSummary(
-  { tavily: 'a', brave: 'b', exa: 'c', anysearch: 'd' },
+assert('partialKeyedPoolWarning when 1 of 5', poolWarn?.includes('1/5 keyed engine') && poolWarn?.includes('tavily'))
+assert('partialKeyedPoolWarning null when all five', partialKeyedPoolWarning(keyedPoolSummary(
+  { tavily: 'a', brave: 'b', exa: 'c', anysearch: 'd', tinyfish: 'e' },
   emptyRouting,
 )) === null)
 assert('partialKeyedPoolWarning null when none enabled', partialKeyedPoolWarning(keyedPoolSummary(
