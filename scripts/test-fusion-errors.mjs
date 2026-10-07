@@ -19,7 +19,9 @@ import {
   formatAllEnginesFailedMessage,
   formatEngineStatsLine,
   formatFusedSummary,
+  invalidateSearchCaches,
   layerTierTable,
+  runFused,
 } from '../lib/runtime.mjs'
 
 // Legacy Pi environment names are credential inputs too; never inherit real keys in tests.
@@ -80,6 +82,25 @@ assert('apiLayerFreeOnlyWarning on api+free', freeOnlyWarn?.includes('layer api 
 assert('apiLayerFreeOnlyWarning null on free layer', apiLayerFreeOnlyWarning('free', ['bing']) === null)
 assert('apiLayerFreeOnlyWarning null when keyed used', apiLayerFreeOnlyWarning('api', ['bing', 'tavily']) === null)
 assert('apiLayerFreeOnlyWarning null with single keyed engine', apiLayerFreeOnlyWarning('api', ['bing', 'ddg', 'tavily']) === null)
+assert('TinyFish alone is a keyed API engine, not free-only', apiLayerFreeOnlyWarning('api', ['tinyfish']) === null)
+assert('Bing plus TinyFish is not free-only', apiLayerFreeOnlyWarning('api', ['bing', 'tinyfish']) === null)
+
+// Exercise the real runFused warning path, not only its classification helper.
+for (const names of [['tinyfish'], ['bing', 'tinyfish']]) {
+  invalidateSearchCaches()
+  const state = {
+    fingerprint: `tinyfish-free-only-regression:${names.join('+')}`,
+    routing: { keys: { tinyfish: 'fixture-key' } },
+    engines: Object.fromEntries(names.map(name => [name, {
+      available: () => true,
+      search: async () => [{ title: 'alpha evidence', url: `https://${name}.example/alpha`, snippet: 'alpha evidence' }],
+    }])),
+  }
+  const result = await runFused({ query: 'alpha evidence', layer: 'api', enginePool: 'api', engineList: names, complexity: 'simple' }, { snapshot: () => state })
+  assert(`${names.join('+')} succeeds through runFused`, result.results.length > 0 && result.enginesUsed.join() === names.join() && names.every(name => result.engineStats[name].successes === 1))
+  assert(`${names.join('+')} runFused emits no false free-only warning`, !result.warnings.some(w => w.includes('free engines only')))
+}
+invalidateSearchCaches()
 
 assert('anonymous AnySearch does not suppress free-only warning', !!apiLayerFreeOnlyWarning('api', ['anysearch']))
 assert('keyed AnySearch suppresses free-only warning with snapshot evidence', apiLayerFreeOnlyWarning('api', ['anysearch'], { anysearchKeyed: true }) === null)
