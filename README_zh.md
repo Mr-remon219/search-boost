@@ -183,6 +183,8 @@ search-boost
 
 ## 交互式控制台 (TUI)
 
+**两套界面并行**：`search-boost` 保留原有向导；`search-boost tui` 打开独立全屏控制台（固定侧栏、配置列表、宽屏详情区、原地表单与确认）。支持 `--dry-run`、`--no-color` 和只读 `--preview`。Tab 切换栏、方向键导航、1–8 跳分类、Enter 操作、E 编辑、Space 开关、? 帮助、Q 退出。详见 [独立全屏控制台](docs/console-tui.md)。以下描述的是原有向导。
+
 直接在终端执行 `search-boost` 即可进入基于 Clack 的交互式控制面板。可在此管理宿主接入、搜索配置与凭据；软件包本身仍通过 npm 更新：
 
 默认**平铺首页**按以下顺序直接提供全部入口：

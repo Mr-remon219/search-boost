@@ -183,6 +183,8 @@ search-boost
 
 ## Interactive Console (TUI)
 
+**Two interfaces coexist:** `search-boost` retains the legacy wizard; `search-boost tui` opens an independent full-screen console with a fixed sidebar, configuration list, wide-screen details and inline forms/confirmation. Supports `--dry-run`, `--no-color` and read-only `--preview`. Tab switches panes, arrows navigate, 1–8 jump sections, Enter opens actions, E edits, Space toggles, ? shows help and Q exits. See [Independent console TUI](docs/console-tui.md). The following describes the legacy wizard.
+
 Launch `search-boost` without arguments to access the interactive dashboard built with Clack. Manage host integrations, search configuration and credentials here; package updates are handled by npm:
 
 The default **flat** home lists these actions in order:
