@@ -60,7 +60,7 @@ try {
     assert.deepEqual(community.options.map(row => row.value), ['reddit', 'x', 'bilibili', 'zhihu', 'xiaohongshu', 'back'])
     assert(!out.records[0].options.some(row => row.value === 'x'))
     assert(!out.records.some(record => record.options?.some(row => ['show', 'check', 'advanced', 'help', 'credentials'].includes(row.value))), 'no duplicate view/check/credential menus')
-    assert.deepEqual(out.records[4].options.map(row => row.value), ['set-key', 'disable', 'back'], 'X actions are direct; impossible import/removal options are absent')
+    assert.deepEqual(out.records[4].options.map(row => row.value), ['set-key', 'disable', 'view', 'back'], 'X actions are direct; impossible import/removal options are absent')
     assert.equal(bytes(), before)
     assert.equal(out.records.at(-1).initialValue, 'community')
     assert(!out.logs.some(text => /provider|configuration-ready/.test(text)), 'internal implementation terms stay out of normal UI')
@@ -202,6 +202,19 @@ try {
   assert(page(expired, 'X —')[0].message.includes('basic search'))
   assert(!expired.logs.some(text => text.includes('expired-secret-fixture')))
   console.log('ok: direct X credential actions, conditional removal, environment priority and local-only logout')
+
+  fresh()
+  const savedSource = rows('reddit').find(row => row.provider === 'reddit-arctic')
+  await scenario(['community', 'reddit', 'source', 'new:reddit-web', reply('confirm', true), `configure:${savedSource.id}`, reply('text', 'r/node'), reply('confirm', true), ...close])
+  assert.equal(rows('reddit').find(row => row.provider === 'reddit-web').enabled, true)
+  assert.deepEqual(rows('reddit').find(row => row.provider === 'reddit-arctic').config.subreddits, ['node'])
+  assert.equal(rows('reddit').find(row => row.provider === 'reddit-arctic').enabled, false, 'editing a saved inactive source must not switch routing')
+
+  fresh()
+  const viewed = await scenario(['community', 'reddit', 'view', ...close])
+  assert(viewed.logs.some(text => text.includes('reddit-default')))
+  assert(viewed.logs.some(text => text.includes('not live connectivity')))
+  assert.equal(bytes(), null, 'viewing saved configuration does not create defaults')
 
   fresh()
   saveToolPreferences({ community_search: false })

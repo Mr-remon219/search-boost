@@ -183,7 +183,9 @@ search-boost
 
 ## 交互式控制台 (TUI)
 
-**两套界面并行**：`search-boost` 保留原有向导；`search-boost tui` 打开独立全屏控制台（固定侧栏、配置列表、宽屏详情区、原地表单与确认）。支持 `--dry-run`、`--no-color` 和只读 `--preview`。Tab 切换栏、方向键导航、1–8 跳分类、Enter 操作、E 编辑、Space 开关、? 帮助、Q 退出。详见 [独立全屏控制台](docs/console-tui.md)。以下描述的是原有向导。
+**两套界面并行**：`search-boost` 是侧重直接修改的快速配置 TUI（保留原有 Clack）；`search-boost tui` 是侧重状态与配置详情的独立全屏控制台（固定侧栏、配置列表、宽屏详情区、原地表单与确认）。支持 `--dry-run`、`--no-color` 和只读 `--preview`。Tab / Shift+Tab 切换三栏、方向键导航、1–8 跳分类、Enter 从列表进入详情（再执行选中操作）、PgUp / PgDn 滚动详情、E 编辑、Space 开关、? 帮助、Q 退出。详见 [独立全屏控制台](docs/console-tui.md)。以下描述的是快速配置 TUI。
+
+**控制台专属：API 额度**。引擎详情内显示额度卡片，列表末尾提供额度总览；按 U 确认后主动查询，浏览不联网。Tavily 查询 credits，Brave 用一次可能计费的搜索读取请求配额，TinyFish 查询账户钱包；Exa / AnySearch 暂提供原因与官方后台入口，不编造余额。详见 [额度接口与安全边界](docs/engine-quota.md)。
 
 直接在终端执行 `search-boost` 即可进入基于 Clack 的交互式控制面板。可在此管理宿主接入、搜索配置与凭据；软件包本身仍通过 npm 更新：
 
@@ -305,11 +307,11 @@ MCP、Pi、DSH 已提供 `community_search` 和 `community_backend`，支持 Red
 
 ### 4. `adaptive_search` Jev / Laya 意图导向搜索（实验功能）
 
-**简化配置**：TUI → 判断模型（Jev / Laya）（文件夹模式：服务与凭据 → 判断模型）先选择“现有配置”或“更改配置”；未配置时只有“更改配置”，Esc 可退出。更改配置只需选择 Jev / Laya、设置 Base URL 和 API Key，确认后保存。首次配置向导也提供此可选步骤，默认跳过；普通搜索无需判断模型。
+**简化配置**：TUI → 判断模型（Jev / Laya）（文件夹模式：服务与凭据 → 判断模型）就地显示当前配置，先提供“配置判断服务”，再提供“切换 / 管理已保存配置”；未配置时隐藏已有配置入口，Esc 可退出。配置服务只需选择 Jev / Laya、设置 Base URL 和 API Key，确认后保存。首次配置向导也提供此可选步骤，默认跳过；普通搜索无需判断模型。
 
-**Vercel 接入**：选择“更改配置 → Jev → Vercel AI Gateway”，Base URL 自动设为 `https://ai-gateway.vercel.sh/v1`，仅需填写 Vercel AI Gateway Key（不是 TypeSafe Key）。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级选中判断模型配置中的 Key，不读取环境变量；服务端限流等待不会被缩短。
+**Vercel 接入**：选择“配置判断服务 → Jev → Vercel AI Gateway”，Base URL 自动设为 `https://ai-gateway.vercel.sh/v1`，仅需填写 Vercel AI Gateway Key（不是 TypeSafe Key）。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级选中判断模型配置中的 Key，不读取环境变量；服务端限流等待不会被缩短。
 
-**Laya 接入**：选择“更改配置 → Laya”，填写自部署服务的 API 前缀（不含 `/systemone`），API Key 可留空；无 Key 时不发送空 Bearer。新配置自动使用 `multilingual`，预算沿用服务默认值；更改同一目的地时保留已有模型与预算，Key 留空保留原值、输入 `-` 清除。配置名称自动生成，现有配置中仍可切换或删除。诊断缺失、截断、选项坍缩、弃答或缺少离线题头容量证据时，判断保持不可用，不把残存选项当作通过。详见[容量证据与迁移](docs/v0.2.5-release.md)。新运行用 `run.judgment` 记录真实提供方，旧记录不静默升级。
+**Laya 接入**：选择“配置判断服务 → Laya”，填写自部署服务的 API 前缀（不含 `/systemone`），API Key 可留空；无 Key 时不发送空 Bearer。新配置自动使用 `multilingual`，预算沿用服务默认值；更改同一目的地时保留已有模型与预算，Key 留空保留原值、输入 `-` 清除。快速配置自动生成名称；已有配置可切换、编辑、查看或删除。编辑不切换当前使用配置，换址不继承旧 Key。诊断缺失、截断、选项坍缩、弃答或缺少离线题头容量证据时，判断保持不可用，不把残存选项当作通过。详见[容量证据与迁移](docs/v0.2.5-release.md)。新运行用 `run.judgment` 记录真实提供方，旧记录不静默升级。
 
 调用方提供**一个问题**（`questions` 恰好一项）、**必填的研究方向 `intent`** 以及 0-8 条可选软偏好 `preferences`。工具描述要求用英文书写，但这是给调用方的提示，服务端不做语言校验、拒绝或翻译，任何语言都按原文检索。原文问题就是 Web 查询：不再规划关键词、不由模型扩写；只有调用者明确给出的平台 query 能覆盖其社区支路。共享 nullable `platform_options` 经同一 fused 底座接入（不另调分页社区入口），且必须明确选择对应 community 平台。检索前的一次判断模型策略请求选择固定 `balanced`/`research`/`fresh` 排序，并在省略 `community` 时决定是否启用既有社区（X）支路；显式 `community` 布尔值/平台数组覆盖该选择，且不重复提问；true 仍仅 X，数组不会自动启用后端。随后这次 fused 调用收集**有界快照：目标≤10 时最多 32 条，更大目标为 ceil(max_results×32/10)，最高 160 条**（网页与社区行共用），每条声明候选都以固定选项判断：安全 clear/violation/unavailable、原型价值 0-5、来自真实正贡献引擎的来源折扣，以及每条偏好一次匹配。只有安全且价值已建立为 3/4/5 的材料会被交付，并按版本化筛选公式排序；置信度仅用于审计。不会在凑够前若干条可接受链接后提前停止，没有自动补读，也没有自设的累计成本、token、请求次数或整次时限停止——真实单请求超时、有限重试、认证/限流失败、安全拒绝与显式取消照常生效。
 
