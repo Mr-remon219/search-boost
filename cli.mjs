@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * search-boost CLI — one command surface, one TUI.
+ * search-boost CLI — legacy wizard and independent full-screen console.
  */
 import { help, installOpts, parseFlags } from './lib/cli/args.mjs'
 import {
@@ -17,13 +17,13 @@ import {
 } from './lib/cli/commands.mjs'
 import { runWizard } from './lib/installer/index.mjs'
 import { printStatus } from './lib/installer/status.mjs'
-import { runTui } from './lib/installer/tui.mjs'
 import { getVersion } from './lib/pkg.mjs'
 
 const argv = process.argv.slice(2)
 
 async function main() {
   if (argv.length === 0) {
+    const { runTui } = await import('./lib/installer/tui.mjs')
     await runTui()
     return
   }
@@ -31,6 +31,11 @@ async function main() {
   const cmd = argv[0]
 
   switch (cmd) {
+    case 'tui': {
+      const { runConsoleTui } = await import('./lib/console-tui.mjs')
+      await runConsoleTui(argv.slice(1))
+      break
+    }
     case 'serve':
     case 'mcp':
       await import('./server.mjs')
