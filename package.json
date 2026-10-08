@@ -1,6 +1,6 @@
 {
   "name": "search-boost",
-  "version": "0.2.5-beta1",
+  "version": "0.3.0-beta1",
   "description": "Multi-engine web search for coding agents — one SearchBoost core (fused search, fetch, five-platform community retrieval) with MCP (Cursor, Codex, Claude Code, Grok Build, Antigravity), pi extension, and DeepSeek Harness bundle adapters",
   "type": "module",
   "bin": {

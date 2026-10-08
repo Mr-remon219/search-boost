@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.2.5--beta1-orange?style=flat-square" alt="version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.0--beta1-orange?style=flat-square" alt="version"></a>
   <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm version"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
@@ -27,7 +27,7 @@
 
 ---
 
-> **v0.2.5-beta1**: unified dedicated judgment adapters for Jev and self-hosted Laya, named profiles, truthful schema V6 identity and compatible private snapshot recovery. See the [release and configuration notes](./docs/v0.2.5-release.md). Laya requires complete diagnostics and pinned offline head-capacity evidence; registration is not a live-service or model-quality claim. This source version does not imply npm publication; `@latest` follows the published registry.
+> **v0.3.0-beta1 · npm `beta` channel**: independent full-screen console with Ayu / TokyoNight themes and consent-based API quota cards; five-platform community retrieval with explicit sources, filters and snapshot recovery; Jev / Laya judgment profiles. Install with `search-boost@beta` or pin `search-boost@0.3.0-beta1`. `@latest` remains the stable channel and does not opt into this beta. See [release notes](./docs/v0.3.0-beta1-release.md).
 
 ## Table of Contents
 
@@ -41,7 +41,7 @@
   - [Tool Responsibilities & Boundaries](#tool-responsibilities--boundaries)
   - [1. `fused_search` Multi-Engine Search](#1-fused_search-multi-engine-search)
   - [2. `fetch_page` Smart Content Reader](#2-fetch_page-smart-content-reader)
-  - [3. `community_search` X (Twitter) Intelligence](#3-community_search-x-twitter-intelligence)
+  - [3. `community_search` Five-Platform Retrieval](#3-community_search-five-platform-retrieval)
   - [4. `adaptive_search` Jev / Laya Intent-Guided Search (Experimental)](#4-adaptive_search-jev--laya-intent-guided-search-experimental)
   - [Engine Pools & Scoring Presets](#engine-pools--scoring-presets)
 - [Parallel Multi-Agent Research Workflows](#parallel-multi-agent-research-workflows)
@@ -59,12 +59,14 @@
   Queries multiple search providers in parallel. Features an out-of-the-box **keyless free pool** (Bing, DuckDuckGo, Exa-free, AnySearch) and a keyed **API pool** (Tavily, Brave, Exa, AnySearch, TinyFish). Automatically performs cross-engine URL deduplication, domain routing, and relevance re-ranking.
 - **Clean Webpage Content Extractor (`fetch_page`)**  
   Fetches the origin first for low latency, with optional same-route curl compatibility fallback and Jina Reader backup. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
-- **X / Twitter Community Intelligence (`community_search`, `engines:["x"]`)**
-  Retrieves public posts, user timelines, and discussion threads via official xAI API or an anonymous fallback channel. Derives UTC timestamps from verifiable Snowflake post IDs and applies author/date filters only when metadata can be verified. Coverage may be incomplete, stale or empty; a retrieved sample does not establish platform-wide sentiment.
+- **Five-Platform Community Retrieval (`community_search`)**
+  Explicitly select Reddit, X, Bilibili, Zhihu or Xiaohongshu. Routes include bounded Reddit archives, web-index snippets, optional public video metadata and a manually enabled read-only browser bridge; X retains keyword / semantic / user / thread modes. Per-platform filters, provenance and failure states stay visible. These are not exhaustive comments, full content or a representative sentiment sample.
 - **Jev / Laya Intent-Guided Search (`adaptive_search` · Experimental)**
   Supply one full question and a required research intent. One pre-search judgment strategy request selects the fixed ranking preset and (when community is omitted) whether to add the already-wired community branch; one bounded fused snapshot (32 candidates for targets up to 10; larger targets keep the same headroom ratio, at most 160) is then screened with fixed safety, prototype value 3/4/5 and source-discount options. No keyword planning, no constraints gate, no language check, no automatic page read, and no self-set cumulative budget stop; cursor and saved-result pagination only replay stored results. No claim of verified or complete answers.
 - **Native Multi-Agent Parallel Research**  
   Bundles `search-boost` and `search-boost-parallel-research` skills. In hosts supporting subagents (Cursor, Claude Code, Pi, DSH), tasks can be dispatched to parallel Searchers (gathering evidence) and Summarizers (pure synthesis without tools), supporting both Fast and Complex waves.
+- **Two Purpose-Built Terminal Interfaces**
+  Keep the quick configuration wizard with `search-boost`, or open the status-first three-pane console with `search-boost tui`. The console offers independent themes, masked inline editing and quota snapshots after explicit consent; browsing and preview stay offline.
 - **Unified Core Across All Host Ecosystems**  
   A single, host-neutral core runtime powering standard Model Context Protocol (MCP) servers, alongside native extensions for Pi and Cordis plugin bundles for DeepSeek Harness (DSH).
 - **Zero-Config Onboarding & Strict Security**  
@@ -82,7 +84,7 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
                               │
                     Shared SearchBoost Core
                     lib/runtime.mjs facade
-              search · fetch · X · adaptive evidence
+              search · fetch · community · adaptive
                               │
               ┌───────────────┼───────────────┐
               │               │               │
@@ -125,11 +127,12 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
 ### 1. Install & Launch the Dashboard
 
 ```bash
-# Install globally
-npm install -g search-boost
+# Install this beta (does not change the npm stable channel)
+npm install -g search-boost@beta
+# Reproducible alternative: npm install -g search-boost@0.3.0-beta1
 
-# Launch the interactive terminal UI (TUI)
-search-boost
+search-boost       # Quick setup / configuration wizard
+search-boost tui   # Independent full-screen control center
 ```
 
 > [!TIP]
@@ -146,10 +149,10 @@ search-boost
 
 ### 1. Routine Updates: npm First, Then Refresh Integrations
 
-The commands below describe v0.2.4. Before it is published, `@latest` may still install an older release without `refresh` or `research`; use a v0.2.4 source checkout as described below. Use npm to update the package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
+Use `@beta` to follow this prerelease series, or `@latest` to return to the stable release. Installing either channel replaces your local global executable; the registry channels remain independent. Use npm to update the package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
 
 ```bash
-npm install -g search-boost@latest --prefer-online
+npm install -g search-boost@beta --prefer-online
 search-boost
 # → Manage agent integrations → Refresh existing integrations → select scopes
 # Or refresh all existing integrations:
@@ -183,9 +186,11 @@ search-boost
 
 ## Interactive Console (TUI)
 
-**Two interfaces coexist:** `search-boost` is the configuration-first quick TUI (retaining Clack); `search-boost tui` is the status-first independent full-screen console with a fixed sidebar, configuration list, wide-screen details and inline forms/confirmation. Supports `--dry-run`, `--no-color` and read-only `--preview`. Tab / Shift+Tab switches the three panes, arrows navigate, 1–8 jump sections, Enter moves from the list to details (then runs the selected action), PgUp / PgDn scrolls details, E edits, Space toggles, ? shows help and Q exits. See [Independent console TUI](docs/console-tui.md). The following describes the quick configuration TUI.
+**Two interfaces coexist:** `search-boost` is the configuration-first quick TUI (retaining Clack); `search-boost tui` is the status-first independent full-screen console with a fixed sidebar, configuration list, wide-screen details and inline forms/confirmation. Supports `--dry-run`, `--no-color` and read-only `--preview`. Tab / Shift+Tab switches the three panes, arrows navigate, 1–8 jump sections, Enter moves from the list to details (then runs the selected action), PgUp / PgDn scrolls details, E edits, Space toggles, ? shows help and Q exits. See [Independent console TUI](docs/console-tui.md). The console is available in this beta; `search-boost` without arguments keeps the existing quick configuration TUI.
 
 **Console-only: API quota cards and overview.** Press U to query after explicit network consent; browsing stays offline. Tavily reports credits, Brave reads request quotas via one potentially billable search, and TinyFish reports the account wallet. Exa / AnySearch currently show requirements and official dashboard links rather than invented balances. See [quota adapters and safety boundaries](docs/engine-quota.md).
+
+### Quick configuration TUI
 
 Launch `search-boost` without arguments to access the interactive dashboard built with Clack. Manage host integrations, search configuration and credentials here; package updates are handled by npm:
 
@@ -203,7 +208,7 @@ The default **flat** home lists these actions in order:
 
 Layout and language changes apply immediately and are saved in `~/.search-boost/config/tui.json` (or `$SEARCH_BOOST_HOME/config/tui.json`). Missing layout (including legacy language-only settings) defaults to flat. Without a saved language preference, Chinese system locales select Simplified Chinese; other locales select English. The preference also applies to standalone interactive setup/config commands, not non-interactive CLI output, search results or agent replies. Tool names, commands, paths, MCP snippets and raw upstream errors remain unchanged. Dry-run previews layout/language without saving; malformed settings are warned about, not overwritten. See [TUI navigation and language settings](docs/tui.md).
 
-**Community configuration** opens Reddit, X, Bilibili, Zhihu and Xiaohongshu directly. Each page shows a short setup status and only relevant actions: choose a search source, configure its required fields, or disable the platform. X credential actions are on the X page, not another wizard. Browser setup instructions appear when needed; connections are not probed. Source changes are previewed and saved atomically; cancellation and dry-run write nothing. `config x` and `/x-login` / `/x-logout` remain available.
+**Community configuration** opens Reddit, X, Bilibili, Zhihu and Xiaohongshu directly. Each page shows setup status and relevant actions: choose a source, edit current or saved source settings, view saved configuration, or disable the platform. Judgment configuration also supports viewing, editing, activating and deleting named profiles; editing preserves the active selection and a new destination never inherits an old key. X credential actions are on the X page, not another wizard. Browser setup instructions appear when needed; connections are not probed. Source changes are previewed and saved atomically; cancellation and dry-run write nothing. `config x` and `/x-login` / `/x-logout` remain available.
 
 ### Tool switches
 
@@ -229,7 +234,8 @@ When integrated, agents automatically receive standard tool definitions and auto
 | :--- | :--- | :--- |
 | `fused_search` | Parallel multi-engine querying, deduplication, and diversity re-ranking | A single search step; follow-up decisions remain with the parent agent |
 | `fetch_page` | Reading clean content from public URLs with optional keyword focus | Not an authenticated browser; local network and proxy policy still apply |
-| `community_search` (`engines:["x"]`) | Retrieving public X posts, author timelines, or discussion threads | Does not guarantee exhaustive comment threads or total sentiment sampling |
+| `community_search` | Explicit Reddit / X / Bilibili / Zhihu / Xiaohongshu retrieval, per-platform filters and snapshot paging | Source availability varies; no exhaustive coverage, automatic login or sentiment guarantee |
+| `community_backend` | List/check or explicitly register/update/remove a platform source | List/check are offline readiness checks; mutations require user authorization, not just a tool parameter |
 | `adaptive_search` | **Experimental**: one bounded fused snapshot + fixed-option judgment screening for one question and a required intent | Selected URLs with reviewed extracts and value labels; targetMet is quantity only, not verified answers |
 | `search_stats` | Reading engine status, memory cache hits, and recent diagnostic stats | Read-only; configuration readiness does not guarantee active external network reachability |
 | `search_layer` | Viewing or switching compatibility search layer in MCP | `show` is read-only; changing layers mutates persistent configuration on disk |
@@ -280,28 +286,38 @@ Reads webpage content from search URLs. Reads and cleans the origin first; PDFs 
 
 ---
 
-### Community Search (initial implementation)
+### 3. `community_search` Five-Platform Retrieval
 
-`community_search` and `community_backend` are available through MCP, Pi and DSH for Reddit, X, Bilibili, Zhihu and Xiaohongshu. X retains its four existing modes; Reddit uses bounded Arctic Shift acquisition/checkpoints and local retrieval; Chinese platforms have public web-index adapters and an optional SearchBoost-owned read-only browser bridge, plus an optional Bilibili public video API. Retrieval mode and coverage are disclosed. The separate `x_search` entry is removed; select `engines:["x"]` in `community_search`. Fused/Adaptive accept platform arrays; legacy `true` still means X only.
+Choose platforms explicitly; configure their sources in either TUI. Selection does not enable a disabled backend or install a browser bridge. The former public `x_search` entry is retired; use `community_search` with `engines:["x"]`. CLI X credentials and Pi / DSH `/x-login` / `/x-logout` remain available.
 
-Use `community_search` with `{"engines":["reddit","x","zhihu"],"query":"Node.js migration experiences"}`. Browser setup is manual via `search-boost community-browser` and the unpacked `browser/community-bridge/` extension; no automatic login, installation or cookie export. Backend `list`/`check` inspect configuration readiness without probing the network; `register`/`update`/`remove` modify local configuration only when authorized. Read `search-boost://community-capabilities` for supported platforms and backend state. Fused and Adaptive accept the same nullable `platform_options` for explicitly selected community channels, using one shared fused candidate core; Adaptive preserves typed routes/provenance and offline saved pages. See [Adaptive community integration](docs/adaptive-community-integration-spec.md). Use nullable `platform_options` for independent platform conditions; direct results retain typed platform `data` and return snapshot pages (`page_size`, `next_cursor`). Cursor reads add no network calls; `save_results:true` enables private persistence and `saved_result_id` restores historical evidence. See [current community usage and migration boundaries](docs/community-search.md), the [dynamic implementation plan](docs/community-search-plan.md), and the [rolling platform processing/pagination design](docs/community-platform-pipeline-spec.md).
-
-### 3. `community_search` X (Twitter) Intelligence
-
-Designed for real-time technical tracking and first-party developer updates. Supports keyword search, author timelines, and thread conversations.
-
-**Tool Arguments Example**:
 ```json
 {
-  "engines": ["x"],
-  "query": "Claude 3.7 Sonnet hybrid reasoning from:AnthropicAI",
-  "type": "keyword",
-  "max_results": 5
+  "engines": ["reddit", "zhihu"],
+  "query": "Node.js migration experience",
+  "platform_options": {
+    "reddit": { "subreddits": ["node"], "max_pages": 2 },
+    "zhihu": { "content_type": "answer" }
+  },
+  "max_results": 10,
+  "page_size": 3
 }
 ```
 
-- **Timestamp derivation**: When a valid Snowflake post ID is available, it can supply a UTC creation timestamp if platform metadata is missing or inconsistent; this does not verify the post text.
-- **Filters**: Keyword mode accepts X operators such as `from:username`, `since:YYYY-MM-DD`, and `until:YYYY-MM-DD`. Use `from_date` / `to_date` for explicit date bounds; candidates without verifiable author/date metadata are omitted when those filters apply.
+| Platform | Implemented sources | Important limits |
+| :--- | :--- | :--- |
+| Reddit | Bounded Arctic Shift archive collection; web index | Scoped / cached corpus, not real-time all-Reddit search or complete comments |
+| X | Existing hosted xAI / Grok search and best-effort fallback | Keyword, semantic, user, thread; metadata filters require verification; threads may be partial |
+| Bilibili | Web index; optional public video API / browser cards | Metadata or visible cards, not subtitles / full bullet comments; public API can reject requests |
+| Zhihu | Web index / optional browser cards | Snippets / visible cards, not full answers or complete discussions |
+| Xiaohongshu | Web index / optional browser cards | Visible notes, not full notes / comments; no signature generation or cookie export |
+
+- `engines` is required for a new direct search. Per-platform options include query/date overrides and supported content / author / scope filters. Unknown dates or authors cannot satisfy hard filters.
+- Items expose provenance, route and typed platform data; channels distinguish unavailable, excluded, empty, failed and partial results. A sample cannot establish platform-wide sentiment or completeness.
+- `cursor` replays the captured result set; `save_results:true` opts into private persistence and `saved_result_id` recovery. Reads are zero-network and retain the original capture date; they do not refresh evidence.
+- In `fused_search` / `adaptive_search`, use `community:["reddit","x"]` to opt into platforms. Legacy `true` means X only; `false` / `[]` disables. Omitted fused community stays off; omitted Adaptive community lets its strategy decide X only.
+- Browser sources require a manually enabled local bridge, extension and token environment variable. They do not log in, export cookies, bypass gates or modify platform content. Source registration/update/removal uses `community_backend` and requires user authorization.
+
+See [community sources, setup and evidence boundaries](docs/community-search.md).
 
 ---
 
@@ -341,7 +357,7 @@ Supply **one question** (`questions` has exactly one item) plus a **required res
 
 `engine_pool` selects engines, `ranking` selects shared cross-pool weights, and `complexity` controls query breadth and depth, not scoring weights. AnySearch is one logical engine: anonymous in free, key-required in api, and key-preferred in hybrid. Configure `ANYSEARCH_API_KEY` or `config keys --set anysearch=KEY`.
 
-TinyFish Search is a keyed API engine: use TUI → Search engine configuration → TinyFish Search (folder layout: Services & credentials → Search engine configuration), `TINYFISH_API_KEY`, or `config keys --set tinyfish=KEY`. The TUI supports key replacement/removal, custom/reset Base URLs and masked status; use Enable / disable engines to select `tinyfish` without silently expanding an existing whitelist. It joins api/hybrid, not the default free pool (explicit `engines` still overrides pool membership). Search is zero-priced at a $0 wallet balance, with current limits of 30 requests/minute and 500/hour; each query variant counts as a request. No automatic pagination or inline Fetch is used. Requests default to the service's US/en locale. Yahoo has been removed; explicit Yahoo engine/weight inputs are rejected.
+TinyFish Search is a keyed API engine: use TUI → Search engine configuration → TinyFish Search (folder layout: Services & credentials → Search engine configuration), `TINYFISH_API_KEY`, or `config keys --set tinyfish=KEY`. The TUI supports key replacement/removal, custom/reset Base URLs and masked status; use Enable / disable engines to select `tinyfish` without silently expanding an existing whitelist. It joins api/hybrid, not the default free pool (explicit `engines` still overrides pool membership). Service pricing and limits can change; a wallet balance is not a count of searches remaining. Each query variant counts as a request. No automatic pagination or inline Fetch is used. Requests default to the service's US/en locale. Yahoo has been removed; explicit Yahoo engine/weight inputs are rejected.
 
 | Engine | balanced | research | fresh |
 | --- | ---: | ---: | ---: |
@@ -430,13 +446,16 @@ API keys use a credential store this tool owns. They are not written into prompt
 
 ## CLI Command Reference (Headless & CI)
 
-The following CLI reference describes v0.2.4. `refresh` and `research` require that version or later; merging source does not publish it to npm. Use a source checkout until the required version is published.
+This CLI reference describes **0.3.0-beta1**. Install `search-boost@beta` (or the exact version) for the console and five-platform community features; `@latest` selects the stable release.
 
 **DeepSeek Harness Desktop:** interactive installation offers Desktop / CLI / All, then **Automatic (default)** or **Local directory** for Desktop. Automatic setup retains bundled-command discovery through Windows installer registry metadata (including custom destinations), default directories and PATH; launch Desktop once, then fully quit it including its tray. Local setup runs last, after all other integrations including Grok, and displays the current durable package directory to paste into the running app's Plugins → Add plugin dialog. The TUI observes saved installation read-only and finishes after stable verification; Escape / Ctrl+C or timeout marks Desktop unfinished while retaining earlier results. Saved installation is not proof of live activation; missing bundled launchers explicitly leave runtime verification unknown. Temporary `_npx` paths are refused as persistent local links. The app also accepts `search-boost` for a registry install. Automatic install/update still verifies the owning resolver and rejects shadow copies. Disabled bundles stay disabled unless explicitly requested; local setup with `--enable-dsh-bundle` waits for the user to enable it in Desktop. See [Desktop integration](docs/dsh-desktop.md) for ownership and validation limits.
 
 ```bash
 # ----------------- Core & Interactive -----------------
-search-boost                                # Launch interactive dashboard (TUI)
+search-boost                                # Quick configuration wizard
+search-boost tui                            # Independent full-screen console
+search-boost tui --preview                  # Offline, read-only snapshot without a TTY
+search-boost tui --dry-run                  # Preview changes; no writes or quota requests
 search-boost status                         # Disk/configuration evidence; running host version remains unknown
 search-boost status --json                  # Structured read-only installation evidence
 search-boost research list                  # List opt-in private result snapshots
@@ -456,7 +475,7 @@ search-boost install -t dsh --profile web   # Connect to DeepSeek Harness CLI we
 search-boost install -t dsh --dsh-surface desktop -y # Desktop bundled command + local package
 search-boost install -t dsh --dsh-surface all -y     # Manage Desktop and CLI independently
 # No global search-boost / dsh / pnpm required (Windows, Linux, macOS):
-npx --yes search-boost@latest install -t dsh --profile web -y
+npx --yes search-boost@beta install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # Preview installation without writing files
 
 # ----------------- Configuration Management -----------------
@@ -480,7 +499,7 @@ search-boost uninstall -t cursor,claude -y  # Remove integrations from selected 
 
 ## Installation from Source & Development
 
-Use this path to contribute to SearchBoost, or to test code that is not in a published release yet. Everywhere else, `@latest` refers to the published package.
+Use this path to contribute to SearchBoost, or to test code that is not in a published release yet. `@beta` selects the prerelease channel; `@latest` selects the stable channel.
 
 ### Prerequisites
 
@@ -495,6 +514,7 @@ Use this path to contribute to SearchBoost, or to test code that is not in a pub
 # 1. Clone the repository
 git clone https://github.com/Mr-remon219/search-boost.git
 cd search-boost
+git checkout v0.3.0-beta1  # Or v0.3.0 for development
 
 # 2. Install dependencies exactly as CI does
 npm ci
@@ -508,7 +528,8 @@ The clone lands on the repository's default branch. To test a different branch o
 ### Run it without a global install
 
 ```bash
-node cli.mjs                  # interactive TUI straight from the checkout
+node cli.mjs                  # Quick configuration wizard
+node cli.mjs tui              # Independent console from the checkout
 node cli.mjs status           # one-shot status summary
 node cli.mjs install -t pi -y # mount the Pi extension from this checkout
 node cli.mjs install -t dsh --profile web
@@ -529,6 +550,8 @@ After changing adapter or agent assets, re-run the same install command for that
 | :--- | :--- |
 | `npm run check` | Syntax check across the CLI, core, adapters and scripts |
 | `npm run prepublishOnly` | Syntax and CI policy checks, exact-lock dependency audit (registry access required), then every isolated regression entrypoint, including generated assets, install / refresh / migration, search, adapters and MCP |
+| `npm run test:console` | Console navigation, themes, masked editing, quota consent / cancellation and offline response fixtures |
+| `npm run test:community` | Five-platform routing, filters, snapshot paging, bridge / worker fixtures and Adaptive integration |
 | `npm run test:network` | Proxy retries, curl fallback, request bounds and compatibility regressions |
 | `npm run test:adapters` | MCP, Pi and DSH adapter protocol suites plus Pi subagent settings migration/diagnosis |
 | `npm run test:parallel` | Searcher/summarizer contracts, DSH dispatch preflight, cancellation and tool isolation |
