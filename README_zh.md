@@ -328,7 +328,7 @@ search-boost
 
 `engine_pool` 选择调用集合，`ranking` 选择跨池共享权重；`complexity` 控制查询广度与深度，不改变评分权重。AnySearch 是单一逻辑引擎：free 匿名、api 要求 key、hybrid 优先用已配置 key。使用 `ANYSEARCH_API_KEY` 或 `config keys --set anysearch=KEY` 配置。
 
-TinyFish Search 是需要 key 的 API 引擎：使用 `TINYFISH_API_KEY` 或 `config keys --set tinyfish=KEY` 配置，默认加入 api/hybrid，不加入 free 池（显式 `engines` 仍可覆盖池选择）。Search 在钱包 $0 时仍零费用，当前限额为 30 请求/分钟、500 请求/小时，每个查询变体各计一次；不自动翻页或启用内嵌 Fetch。请求沿用服务默认 US/en 地区/语言。Yahoo 已移除，显式 Yahoo 引擎/权重输入会被拒绝。
+TinyFish Search 是需要 key 的 API 引擎：在 TUI → 搜索引擎配置 → TinyFish Search（文件夹模式：服务与凭据 → 搜索引擎配置）中配置，或使用 `TINYFISH_API_KEY`、`config keys --set tinyfish=KEY`。TUI 支持更换 / 删除 Key、自定义 / 恢复 Base URL 和脱敏状态；在“引擎启用 / 停用”中选择 `tinyfish`，不会因保存 Key 静默扩张已有白名单。TinyFish 默认加入 api/hybrid，不加入 free 池（显式 `engines` 仍可覆盖池选择）。Search 在钱包 $0 时仍零费用，当前限额为 30 请求/分钟、500 请求/小时，每个查询变体各计一次；不自动翻页或启用内嵌 Fetch。请求沿用服务默认 US/en 地区/语言。Yahoo 已移除，显式 Yahoo 引擎/权重输入会被拒绝。
 
 | 引擎 | balanced | research | fresh |
 | --- | ---: | ---: | ---: |

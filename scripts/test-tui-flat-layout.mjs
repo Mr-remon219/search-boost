@@ -21,7 +21,7 @@ import {
 } from '../lib/installer/i18n.mjs'
 import {
   CONFIG_KEY_NAMES, KEY_NAMES, keyStatus, keysFilePath, readEngineBaseUrls,
-  readEngineRouting, readKeys, writeKeysFile,
+  readEngineRouting, readKeys, readKeysRouting, writeKeysFile,
 } from '../lib/keys.mjs'
 import { ENGINE_BASE_URLS } from '../lib/engine-endpoints.mjs'
 import { getLayer } from '../lib/layer-config.mjs'
@@ -421,6 +421,67 @@ try {
   assert.deepEqual(engineCredentialRows().map((row) => row.name), CONFIG_KEY_NAMES)
   assert(!engineCredentialRows().some((row) => row.storedOnly), 'no stored-only slot ships today; the rule is still enforced')
   console.log('ok: engine configuration is engine-first, writes only what changed and keeps stored-only slots unroutable')
+
+  // TinyFish must be reachable through both real TUI layouts, not just CLI
+  // configuration. Keep refactor's navigation and judgment profiles intact.
+  for (const language of ['en', 'zh-CN']) {
+    for (const layout of ['flat', 'folder']) {
+      fresh()
+      saveTuiLanguage(language)
+      saveTuiLayout(layout)
+      writeKeysFile({ tavily: 'unrelated-fixture-key', enabledEngines: ['tavily'], jev: { apiKey: 'unrelated-jev-key' } })
+      const secret = 'tinyfish-private-tui-fixture-123456'
+      const prefix = layout === 'folder' ? ['credentials'] : []
+      const suffix = layout === 'folder' ? ['back', 'exit'] : ['exit']
+      const open = steps => runScenario([...prefix, 'keys', ...steps, ...suffix])
+      const edited = await open([
+        'tinyfish', 'url', reply('text', 'https://gateway.example/tinyfish/'),
+        'set', reply('password', secret), 'back', 'back',
+      ])
+      const menus = edited.records.filter(record => record.options?.some(option => option.value === 'tinyfish'))
+      assert.equal(menus[0].options.find(option => option.value === 'tinyfish').label, 'TinyFish Search')
+      const hint = menus.at(-1).options.find(option => option.value === 'tinyfish').hint
+      assert(hint.includes('api/hybrid'))
+      assert(hint.includes(language === 'en' ? 'disabled' : '已停用'))
+      assert(hint.includes('****') && !hint.includes(secret))
+      assert(edited.logs.some(line => line.includes('TINYFISH_API_KEY') && line.includes('api/hybrid')))
+      assert(edited.logs.some(line => line.includes('https://gateway.example/tinyfish/')), 'root search path preserves the gateway prefix')
+      assert(!JSON.stringify({ records: edited.records, logs: edited.logs }).includes(secret), 'TUI never echoes the entered key')
+      assert.equal(readKeys().tinyfish, secret)
+      assert.equal(readEngineBaseUrls().tinyfish, 'https://gateway.example/tinyfish')
+      assert.deepEqual(readKeysRouting().enabledNames, ['tavily'], 'saving TinyFish never expands an existing whitelist')
+
+      await open(['routing', reply('multiselect', ['tavily', 'tinyfish'], prompt => {
+        assert.deepEqual(prompt.options.map(option => option.value), ['tavily', 'tinyfish'])
+        assert.deepEqual(prompt.initialValues, ['tavily'])
+      }), 'back'])
+      assert.deepEqual(readKeysRouting().enabledNames, ['tavily', 'tinyfish'])
+      await open(['routing', reply('multiselect', ['tavily']), 'back'])
+      assert.deepEqual(readKeysRouting().enabledNames, ['tavily'])
+      const before = readFileSync(keysFilePath(), 'utf8')
+      await open(['tinyfish', 'set', reply('password', cancel), 'back'])
+      assert.equal(readFileSync(keysFilePath(), 'utf8'), before, 'cancelled TinyFish password writes nothing')
+      await runScenario([...prefix, 'keys', 'tinyfish', 'url', reply('text', 'https://dry.example/'),
+        'set', reply('password', 'dry-fixture-key'), 'reset-url', 'remove', 'back', 'back', ...suffix], { dryRun: true })
+      assert.equal(readFileSync(keysFilePath(), 'utf8'), before, 'all TinyFish dry-run mutations remain read-only')
+      await open(['tinyfish', 'reset-url', 'remove', 'back', 'back'])
+      assert.equal(readEngineBaseUrls().tinyfish, ENGINE_BASE_URLS.tinyfish)
+      assert.equal(readKeys().tinyfish, undefined)
+      assert.equal(keysDoc().tavily, 'unrelated-fixture-key')
+      assert.equal(keysDoc().jev.apiKey, 'unrelated-jev-key')
+      assert.deepEqual(readEngineRouting().enabledEngines, ['tavily'])
+
+      process.env.TINYFISH_API_KEY = secret
+      try {
+        const environment = await open(['tinyfish', 'back', 'back'])
+        const entry = environment.records.find(record => record.message.startsWith('tinyfish —'))
+        assert(entry.message.includes(language === 'en' ? 'from env' : '来自环境变量'))
+        assert(!entry.options.some(option => option.value === 'remove'), 'an environment-only TinyFish key cannot be removed from the file')
+        assert(!JSON.stringify(environment.logs).includes(secret))
+      } finally { delete process.env.TINYFISH_API_KEY }
+    }
+  }
+  console.log('ok: TinyFish TUI works in both languages/layouts: key, gateway, routing, reset/remove, env masking, cancel and dry-run')
 
   // ---------------------------------------------------------------------------
   // Setup keeps guiding the full initial configuration

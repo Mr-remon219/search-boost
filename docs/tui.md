@@ -6,14 +6,14 @@
 
 | 顺序 | 入口（English） | 二级内容 |
 | --- | --- | --- |
-| 1 | Setup wizard（首次配置向导） | 搜索引擎凭据 → 默认搜索层 → X 凭据（可跳过）→ Agent → 宿主选项 → 确认安装 |
+| 1 | Setup wizard（首次配置向导） | 搜索引擎凭据 → 默认搜索层 → X 凭据（可跳过）→ 判断模型（可跳过）→ Agent → 宿主选项 → 确认安装 |
 | 2 | Manage agent integrations（管理 Agent 接入） | 安装接入 / 刷新已有接入 / 卸载接入 / 返回 |
-| 3 | Status（查看当前状态） | 软件包版本、接入来源/载荷、搜索层、凭据状态、工具开关、X / Jev（只读） |
+| 3 | Status（查看当前状态） | 软件包版本、接入来源/载荷、搜索层、凭据状态、工具开关、X / 判断模型（只读） |
 | 4 | Search engine configuration（搜索引擎配置） | 任选引擎配置，或启用 / 停用 |
 | 5 | Default search layer（默认搜索层） | free / api，显示当前值 |
 | 6 | Tool switches（工具开关） | 支持工具多选 → 变更预览 → 确认保存 |
 | 7 | X credentials（X 凭据） | 登录导入 / Key / 移除本地副本 |
-| 8 | Jev configuration (experimental)（Jev 配置） | 地址与 Key，标明实验性和发送内容 |
+| 8 | Judgment models (Jev / Laya)（判断模型） | 现有配置 / 更改配置，标明实验性和发送内容 |
 | 9 | Native web search（原生搜索替换） | Agent → 替换 / 保留 → 确认 |
 | 10 | Print MCP snippet（输出 MCP 配置片段） | Agent → 权限选项 → 输出，不写配置 |
 | 11 | TUI settings（TUI 设置） | 菜单布局、显示语言 |
@@ -29,7 +29,7 @@
 | --- | --- |
 | 安装与接入（Installation & integrations） | 首次配置向导、管理 Agent 接入、原生搜索替换、输出 MCP 配置片段 |
 | 搜索与工具（Search & tools） | 默认搜索层、工具开关 |
-| 服务与凭据（Services & credentials） | 搜索引擎配置、X 凭据、Jev 配置（实验性） |
+| 服务与凭据（Services & credentials） | 搜索引擎配置、X 凭据、判断模型（Jev / Laya，实验性） |
 | 状态（Status） | 查看当前状态 |
 | TUI 设置（TUI settings） | 菜单布局、显示语言 |
 
@@ -59,6 +59,7 @@
 ```text
 搜索引擎配置
   tavily / brave / exa / anysearch   凭据来源与启用状态（脱敏）
+  TinyFish Search                   tinyfish，脱敏状态 · api/hybrid · 需要 Key
   其他凭据槽位                       仅保存，适配器尚未实现
   引擎启用 / 停用
   返回
@@ -67,6 +68,16 @@
 选择引擎后可：设置 / 更换 API Key、设置 / 更换 Base URL、恢复默认 Base URL、移除文件中的 Key、返回搜索引擎配置。仅保存的凭据槽位只提供设置与移除，不参与路由。
 
 「引擎启用 / 停用」仅提供已配置 Key 且适配器可运行的引擎；未配置 Key 的引擎不进入可选项（安装的 Clack 0.10 不支持 disabled option）。不存在文件 Key 时不提供移除项，过期选择也不会改写环境变量凭据；结果与当前启用状态一致时不写入文件。修改单个引擎不会重置 `enabledEngines`，也不会覆盖其他凭据、Jev 配置或未改动的字段；dry-run 只预览，不写入。保留自定义网关的查询与凭据发送提示、环境变量优先级与并发写入保护。
+
+### TinyFish Search
+
+平铺首页：**搜索引擎配置 → TinyFish Search**；文件夹模式：**服务与凭据 → 搜索引擎配置 → TinyFish Search**。可设置 / 更换 Key、自定义或恢复 Base URL、移除文件 Key；环境变量 `TINYFISH_API_KEY` 也可使用，菜单只显示脱敏值，环境变量凭据不提供文件移除操作。
+
+保存 Key 不改变已有白名单；随后在「引擎启用 / 停用」中显式选中 `tinyfish`。启用后默认参与 api/hybrid，不加入默认 free 池；显式 `engines` 可覆盖池选择。默认 Base URL 为 `https://api.search.tinyfish.ai`，搜索路径是 `/`，自定义网关的路径前缀保留。配置不发起联网测试，不保证真实服务可用性。取消未提交的输入不保存，dry-run 的 Key、Base URL、删除与启停均不写文件。
+
+### 判断模型（Jev / Laya）
+
+入口提供「现有配置」「更改配置」「返回主菜单」；无可用配置时隐藏「现有配置」。现有配置可启用或删除；更改配置只需选择 Jev / Laya、设置 Base URL 和 API Key，再确认保存，不再逐项询问 profile 名称、模型和预算。首次配置向导默认跳过判断模型，其内部只提供返回上一页，不跳到主菜单。详见 [v0.2.5 配置与迁移](v0.2.5-release.md)。
 
 ## 布局与显示语言偏好
 
