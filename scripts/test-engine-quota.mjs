@@ -104,6 +104,25 @@ await test('HTTP failures, oversized/invalid responses, rate limiting and cancel
   assert.equal(cancelled.status, 'cancelled'); assert.equal(calls, 0)
 })
 
+await test('mid-body transport failures stay network errors without exposing response or exception secrets', async () => {
+  for (const name of ['tavily', 'tinyfish']) {
+    const result = await fetchEngineQuota(name, routing(), { fetchImpl: async () => new Response(new ReadableStream({
+      start(controller) { controller.enqueue(new TextEncoder().encode('{"secret":"fixture-secret"')); },
+      pull(controller) { controller.error(new Error('socket closed fixture-secret')); },
+    })) })
+    assert.deepEqual(result, { status: 'network_error', metrics: [] })
+    assert.doesNotMatch(JSON.stringify(result), /fixture-secret/)
+  }
+})
+await test('Retry-After preserves dates and fails closed for unrepresentable waits', async () => {
+  const now = () => Date.parse('2026-10-08T00:00:00Z')
+  const query = retry => fetchEngineQuota('tavily', routing(), { now, fetchImpl: async () => new Response('', { status: 429, headers: { 'retry-after': retry } }) })
+  assert.equal((await query('Thu, 08 Oct 2026 00:02:00 GMT')).retryAfterMs, 120000)
+  assert.equal((await query('99999999999999999999999')).retryAfterMs, Infinity)
+  assert.equal((await query('9'.repeat(400))).retryAfterMs, Infinity)
+  for (const value of ['nonsense', '0']) assert.equal((await query(value)).retryAfterMs, undefined)
+})
+
 let homeId = 0
 async function modelFixture(fn) {
   const home = process.env.SEARCH_BOOST_HOME
@@ -131,6 +150,15 @@ await test('console alone exposes quota details/overview; browsing, default canc
   assert.equal(existsSync(searchBoostHome()), false)
   const quick = ['tui.mjs', 'keys-wizard.mjs'].map(name => readFileSync(new URL(`../lib/installer/${name}`, import.meta.url), 'utf8')).join('\n')
   assert.doesNotMatch(quick, /engine-quota|fetchEngineQuota|quota-overview/)
+}))
+await test('an unrepresentable provider retry interval blocks further queries in this session', () => modelFixture(async () => {
+  let calls = 0, time = 200000
+  const model = makeModel({ now: () => time, run: async () => { calls++; return { status: 'rate_limited', metrics: [], retryAfterMs: Infinity } } })
+  model.requestQuota(['tavily']); await consent(model)
+  assert.equal(calls, 1)
+  time += 86400000
+  model.requestQuota(['tavily']); await consent(model)
+  assert.equal(calls, 1, 'do not retry early after overflow')
 }))
 await test('explicit consent shows Brave cost and TinyFish destination; bulk queries are independent and cached', () => modelFixture(async () => {
   let calls = [], time = 200000
