@@ -38,13 +38,13 @@ const cancel = Symbol('fixture cancel')
 const reply = (method, value, check) => ({ method, value, check })
 
 /** Flat home order approved for BUG-004. */
-const FLAT_VALUES = ['setup', 'manage', 'status', 'keys', 'layer', 'tools', 'x', 'jev', 'search', 'print', 'settings', 'exit']
+const FLAT_VALUES = ['setup', 'manage', 'status', 'keys', 'layer', 'tools', 'community', 'jev', 'search', 'print', 'settings', 'exit']
 const FOLDER_HOME = ['integration', 'search-tools', 'credentials', 'maintenance', 'settings', 'exit']
 const CATEGORY_VALUES = ['integration', 'search-tools', 'credentials', 'maintenance']
 const SECTIONS = {
   integration: ['setup', 'manage', 'search', 'print', 'back'],
   'search-tools': ['layer', 'tools', 'back'],
-  credentials: ['keys', 'x', 'jev', 'back'],
+  credentials: ['keys', 'community', 'jev', 'back'],
   maintenance: ['status', 'back'],
   settings: ['layout', 'language', 'back'],
 }
@@ -230,7 +230,7 @@ try {
     'keys', 'back',
     'layer', 'free',
     'tools', reply('multiselect', []), reply('confirm', false),
-    'x', 'keep',
+    'community', 'x', 'back', 'back',
     'jev', '+cancel',
     'search', reply('multiselect', []),
     'print', 'cursor', reply('confirm', false), reply('confirm', true),
@@ -244,7 +244,7 @@ try {
   assert(homes[0].options.every((o) => o.label && !/^\s*$/.test(o.label)), 'no blank spacer row occupies a selection')
   assert.deepEqual(
     homes.map((h) => h.initialValue),
-    [undefined, 'setup', 'manage', 'status', 'keys', 'layer', 'tools', 'x', 'jev', 'search', 'print', 'manage', 'settings'],
+    [undefined, 'setup', 'manage', 'status', 'keys', 'layer', 'tools', 'community', 'jev', 'search', 'print', 'manage', 'settings'],
     'a completed flat operation returns to the home menu with its entry selected',
   )
   assert(walk.logs.some((l) => l.includes('dry-run: would offer API key setup')), 'Setup still offers the credential step')
@@ -256,7 +256,8 @@ try {
   assert.equal(walk.records.find((r) => r.message === 'Default search layer?').options.map((o) => o.value).join(','), 'free,api')
   const toolsNote = walk.logs.find((l) => l.includes('Tool switches — shared by MCP / Pi / DSH'))
   assert(toolsNote && toolsNote.includes('fused_search'), 'Tool switches is the real wizard with real tool names')
-  assert.equal(walk.records.find((r) => r.message === 'X credentials').options.map((o) => o.value).join(','), 'keep,import-grok,set-key,remove')
+  assert.deepEqual(walk.records.find((r) => r.message === 'Community configuration').options.map((o) => o.value), ['reddit', 'x', 'bilibili', 'zhihu', 'xiaohongshu', 'back'])
+  assert.equal(walk.records.find((r) => r.message.startsWith('X —')).options.map((o) => o.value).join(','), 'set-key,disable,back', 'X actions are direct; unavailable credential actions are absent')
   assert.equal(walk.records.find((r) => r.message === 'Judgment model profiles').options.map((o) => o.value).join(','), '+new,+cancel')
   assert(walk.logs.some((l) => l.includes('Built-in web search')), 'Native web search prints the real per-agent state')
   assert(walk.printed.some((line) => line.includes('search-boost') && line.includes('mcpServers')), 'Print MCP snippet writes a real snippet')
@@ -274,7 +275,7 @@ try {
   const englishHome = await runScenario(['exit'])
   assert.deepEqual(englishHome.records[0].options.map((o) => o.label), [
     'Setup wizard', 'Manage agent integrations', 'Status',
-    'Search engine configuration', 'Default search layer', 'Tool switches', 'X credentials',
+    'Search engine configuration', 'Default search layer', 'Tool switches', 'Community configuration',
     'Judgment models (Jev / Laya)', 'Native web search', 'Print MCP snippet',
     'TUI settings', 'Exit',
   ])
@@ -282,7 +283,7 @@ try {
   const zhHome = await runScenario(['exit'])
   assert.deepEqual(zhHome.records[0].options.map((o) => o.label), [
     '首次配置向导', '管理 Agent 接入', '查看当前状态', '搜索引擎配置',
-    '默认搜索层', '工具开关', 'X 凭据', '判断模型（Jev / Laya）', '原生搜索替换', '输出 MCP 配置片段',
+    '默认搜索层', '工具开关', 'Community 配置', '判断模型（Jev / Laya）', '原生搜索替换', '输出 MCP 配置片段',
     'TUI 设置', '退出',
   ])
   assert.equal(zhHome.records[0].message, '请选择操作')

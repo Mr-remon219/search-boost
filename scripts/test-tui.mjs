@@ -107,7 +107,7 @@ try {
   let out = await scenario(['settings', 'back', 'exit'])
   assert.deepEqual(
     out.records[0].options.map((o) => o.value),
-    ['setup', 'manage', 'status', 'keys', 'layer', 'tools', 'x', 'jev', 'search', 'print', 'settings', 'exit'],
+    ['setup', 'manage', 'status', 'keys', 'layer', 'tools', 'community', 'jev', 'search', 'print', 'settings', 'exit'],
   )
   assert.deepEqual(out.records[1].options.map((o) => o.value), ['layout', 'language', 'back'])
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'browsing menus is read-only')
@@ -134,9 +134,9 @@ try {
   console.log('ok: English and Chinese tool-switch help describe the single snapshot and no automatic page reads')
 
   fresh()
-  out = await scenario(['layer', cancel, 'x', cancel, 'jev', cancel, 'keys', cancel, 'print', cancel, 'manage', 'install', reply('multiselect', cancel), 'back', 'exit'])
+  out = await scenario(['layer', cancel, 'community', cancel, 'jev', cancel, 'keys', cancel, 'print', cancel, 'manage', 'install', reply('multiselect', cancel), 'back', 'exit'])
   assert.equal(out.records[1].message, 'Default search layer?')
-  assert.equal(out.records[3].message, 'X credentials')
+  assert.equal(out.records[3].message, 'Community configuration')
   assert.equal(out.records[5].message, 'Judgment model profiles')
   assert.equal(out.records[7].message, 'Engine configuration')
   assert.equal(out.records[9].message, 'Print MCP snippet for which agent?')
@@ -160,9 +160,9 @@ try {
   fresh()
   out = await scenario(['settings', 'language', 'zh-CN', 'back', 'layer', 'api', 'tools', reply('multiselect', []), reply('confirm', true, (options) => {
     assert.equal(options.active, '是'); assert.equal(options.inactive, '否')
-  }), 'setup', 'free', reply('multiselect', []), 'manage', 'install', reply('multiselect', []), 'uninstall', reply('multiselect', []), 'back', 'search', reply('multiselect', []), 'x', 'set-key', reply('password', 'xai-dry-run-sentinel', (options) => {
+  }), 'setup', 'free', reply('multiselect', []), 'manage', 'install', reply('multiselect', []), 'uninstall', reply('multiselect', []), 'back', 'search', reply('multiselect', []), 'community', 'x', 'set-key', reply('password', 'xai-dry-run-sentinel', (options) => {
     assert.equal(options.validate('bad'), '必须以 xai- 开头（可在 console.x.ai 获取）。')
-  }), 'jev', '+new', reply('text', 'preview'), 'jev', reply('text', 'https://api.typesafe.ai/v1'), 'jev-latest', reply('password', 'jev-dry-run-sentinel'), reply('confirm', true), 'exit'], { dryRun: true })
+  }), 'back', 'back', 'jev', '+new', reply('text', 'preview'), 'jev', reply('text', 'https://api.typesafe.ai/v1'), 'jev-latest', reply('password', 'jev-dry-run-sentinel'), reply('confirm', true), 'exit'], { dryRun: true })
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'dry-run remains entirely read-only, including language preference')
   assert(out.logs.some((line) => line.includes('仅预览显示语言')))
   assert(out.records.some((record) => record.message === '判断模型配置'))
@@ -172,12 +172,12 @@ try {
 
   fresh()
   saveTuiLanguage('zh-CN')
-  out = await scenario(['keys', 'back', 'x', 'keep', 'jev', '+cancel', 'status', 'exit'])
+  out = await scenario(['keys', 'back', 'community', 'x', 'back', 'back', 'jev', '+cancel', 'status', 'exit'])
   const engineMenu = out.records.find((record) => record.message === '搜索引擎配置')
   assert.deepEqual(engineMenu.options.map((o) => o.value), [...CONFIG_KEY_NAMES, 'routing', 'back'], 'the engine entry lists every credential slot in Chinese too')
   assert(!engineMenu.options.some((o) => /tvly|brave|exa|anysearch/i.test(o.hint ?? '') && /[A-Za-z0-9]{12}/.test(o.hint)), 'engine hints stay masked')
   assert(out.logs.some((line) => line.includes('API 引擎池') || line.includes('API Keys')))
-  assert(out.logs.some((line) => line.includes('X 凭据（x_search）')))
+  assert(out.logs.some((line) => line.includes('X 凭据（community_search）')))
   assert(out.logs.some((line) => line.includes('搜索层：')))
   assert(out.logs.some((line) => line.includes('已管理 / 旧版接入')))
   assert(!out.logs.some((line) => /no credentials|not set|not configured/.test(line)), 'owned status text is localized')

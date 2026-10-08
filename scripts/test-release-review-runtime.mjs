@@ -26,18 +26,17 @@ try {
     return new Response(JSON.stringify({ output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ username: 'alice', name: 'Alice', id: '123', bio: 'fixture user' }) }] }] }), { headers: { 'content-type': 'application/json' } })
   }
   clearAllCaches()
-  const abort = new AbortController(), args = { type: 'user', username: 'alice' }
-  const first = tools.get('x_search').execute('cancelled', args, abort.signal)
+  const abort = new AbortController(), args = { engines: ['x'], type: 'user', username: 'alice' }
+  const first = tools.get('community_search').execute('cancelled', args, abort.signal)
   await started
   abort.abort()
-  const cancelled = await first
-  assert.ok(cancelled.details.error)
-  const retried = await tools.get('x_search').execute('immediate-retry', args)
+  await assert.rejects(first, /abort/i)
+  const retried = await tools.get('community_search').execute('immediate-retry', args)
   assert.equal(retried.details.results, 1, JSON.stringify(retried))
   assert.equal(calls, 2, 'immediate retry must start a new HTTP request')
-  const cached = await tools.get('x_search').execute('cache', args)
-  assert.equal(cached.details.cacheHit, true); assert.equal(calls, 2)
-  console.log('ok: public Pi X execute cancels then immediately retries with fresh HTTP; cache and credential redaction remain correct')
+  const cached = await tools.get('community_search').execute('cache', args)
+  assert.equal(cached.details.channels[0].cache_hit, true); assert.equal(calls, 2)
+  console.log('ok: public Pi community X cancels then immediately retries with fresh HTTP; cache and credential redaction remain correct')
 
   // Deliberately hold the old provider after abort, then settle it while its
   // replacement is still active. This checks identity-safe registry cleanup.

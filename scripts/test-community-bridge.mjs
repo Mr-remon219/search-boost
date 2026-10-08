@@ -41,17 +41,37 @@ try {
   console.log('ok: cancellation removes queued/claimed work, late replies are refused and request deadlines remain bounded')
 } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)) }
 
-const originalDocument = globalThis.document
+const originalDocument = globalThis.document, originalStyle = globalThis.getComputedStyle
 try {
-  globalThis.document = { body: { innerText: '' }, querySelectorAll: () => [{ href: 'https://www.zhihu.com/question/1?tracking=secret', textContent: ' Alpha ', getAttribute: () => null, closest: () => ({ textContent: 'Alpha practical card' }) }] }
+  const node = extra => ({ innerText: '', getAttribute: () => null, getClientRects: () => [{ width: 100, height: 100 }], ...extra })
+  globalThis.getComputedStyle = () => ({ opacity: '1', display: 'block', visibility: 'visible' })
+  const card = node({ innerText: 'Alpha practical card' })
+  const anchor = node({ href: 'https://www.zhihu.com/question/1?tracking=secret', innerText: ' Alpha ', closest: () => card })
+  globalThis.document = { body: { innerText: '' }, querySelectorAll: selector => selector.startsWith('a[') ? [anchor] : [] }
   const cards = extractCards('zhihu', 5)
   assert.equal(cards.items[0].url, 'https://www.zhihu.com/question/1')
   assert.equal(cards.items[0].published, null)
-  globalThis.document = { body: { innerText: '' }, querySelectorAll: () => [{ href: 'https://www.zhihu.com/question/1', textContent: 'Unrelated navigation', getAttribute: () => null, closest: () => null, parentElement: { textContent: 'not a search card' } }] }
+  globalThis.document = { body: { innerText: '' }, querySelectorAll: selector => selector.startsWith('a[') ? [node({ href: 'https://www.zhihu.com/question/1', innerText: 'Unrelated navigation', closest: () => null })] : [] }
   assert.equal(extractCards('zhihu', 5).items.length, 0, 'navigation links outside recognized cards are not search evidence')
   globalThis.document = { body: { innerText: '请先登录 安全验证' }, querySelectorAll: () => [] }
   assert.equal(extractCards('xiaohongshu', 5).status, 'blocked')
-} finally { globalThis.document = originalDocument }
+  globalThis.document = { body: { innerText: '安全验证 请先完成验证码' }, querySelectorAll: selector => selector.startsWith('a[') ? [anchor] : [] }
+  card.hidden = true
+  assert.equal(extractCards('zhihu', 5).status, 'blocked', 'hidden background cards cannot defeat gate detection')
+  card.hidden = false
+  const gate = node({ innerText: '安全验证' })
+  globalThis.document.querySelectorAll = selector => selector.startsWith('a[') ? [anchor] : selector.includes('role=') ? [gate] : []
+  assert.equal(extractCards('zhihu', 5).status, 'blocked', 'visible gate precedes otherwise visible background evidence')
+  gate.hidden = true
+  card.innerText = anchor.innerText = 'How to implement captcha safely'
+  assert.equal(extractCards('zhihu', 5).status, 'ok', 'captcha discussion is not a gate; hidden dialogs do not block')
+  card.parentElement = node({ hidden: true })
+  globalThis.document.body.innerText = ''
+  assert.equal(extractCards('zhihu', 5).items.length, 0, 'hidden ancestors are excluded')
+  delete card.parentElement
+  card.getClientRects = () => []
+  assert.equal(extractCards('zhihu', 5).items.length, 0, 'no layout is not visible evidence')
+} finally { globalThis.document = originalDocument; globalThis.getComputedStyle = originalStyle }
 const manifest = JSON.parse(readFileSync(new URL('../browser/community-bridge/manifest.json', import.meta.url)))
 assert.deepEqual(manifest.permissions, ['storage', 'scripting'])
 assert.equal(manifest.host_permissions.includes('<all_urls>'), false)

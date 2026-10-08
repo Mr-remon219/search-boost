@@ -8,6 +8,7 @@ import {
   ADAPTIVE_OUTPUT_SCHEMA,
   ADAPTIVE_V5_OUTPUT_SCHEMA, ADAPTIVE_V6_OUTPUT_SCHEMA,
 } from '../../lib/search/screening/schema.js'
+import { FUSED_PLATFORM_OPTIONS_SCHEMA } from '../../lib/community/fused-input.mjs'
 import { jsonSchemaToZod, projectObjectUnion } from '../../lib/search/screening/zod-schema.js'
 
 const engineEnum = z.enum(ENGINE_ORDER)
@@ -26,6 +27,7 @@ export const fusedSearchInput = {
   engine_weights: z.object(Object.fromEntries(ENGINE_ORDER.map((name) => [name, z.number().finite().min(0).optional()]))).strict().optional().describe('Override preset engine weights; zero still calls the engine. Never enables or selects engines'),
   min_score: z.number().finite().min(0).optional().describe('Minimum consensus-v2 quality score; old thresholds need recalibration, default 0'),
   community: z.union([z.boolean(), z.array(z.enum(['reddit', 'x', 'bilibili', 'zhihu', 'xiaohongshu'])).max(5)]).optional().describe('Selected community platforms. false/[] disables; legacy true means X only. Shares final max_results; never enables backends.'),
+  platform_options: jsonSchemaToZod(FUSED_PLATFORM_OPTIONS_SCHEMA).optional(),
   layer: z.enum(['free', 'api']).optional().describe('Deprecated compatibility alias: free→free pool, api→hybrid pool; engine_pool takes precedence; not persisted'),
 }
 
@@ -93,39 +95,6 @@ export const fetchPageOutput = {
   nextOffset: z.number().optional(),
   windowNote: z.string().optional(),
   content: z.string(),
-}
-
-export const xSearchInput = {
-  type: z.enum(['keyword', 'semantic', 'user', 'thread']).optional().describe('Mode: keyword (default) or semantic uses query; user uses username; thread uses post_id'),
-  query: z.string().optional().describe('Search terms and X filters (e.g. from:OpenAI), or a natural-language topic for semantic mode'),
-  username: z.string().optional().describe('X account handle for type=user'),
-  post_id: z.string().optional().describe('Real X post ID or status URL for type=thread'),
-  max_results: z.number().int().min(1).max(10).optional().describe('Requested result limit, 1–10'),
-  from_date: z.string().optional().describe('Inclusive start date, YYYY-MM-DD (UTC)'),
-  to_date: z.string().optional().describe('Inclusive end date, YYYY-MM-DD (UTC)'),
-  allowed_x_handles: z.array(z.string()).max(20).optional().describe('Only these authors; mutually exclusive with excluded_x_handles'),
-  excluded_x_handles: z.array(z.string()).max(20).optional().describe('Exclude these authors; mutually exclusive with allowed_x_handles'),
-}
-
-export const xSearchOutput = {
-  via: z.string(),
-  note: z.string().optional(),
-  results: z.number(),
-  tookMs: z.number(),
-  cacheHit: z.boolean().optional(),
-  inFlight: z.boolean().optional(),
-  // Diagnostics the core returns on every path (success, empty, failure, cache,
-  // single-flight join): advertised, not silently dropped by the host contract.
-  engineStats: z.record(z.object({
-    used: z.boolean(),
-    errors: z.number(),
-    attempts: z.number().optional(),
-    successes: z.number().optional(),
-    note: z.string().optional(),
-  })).optional(),
-  enginesUsed: z.array(z.string()).optional(),
-  warnings: z.array(z.string()).optional(),
-  items: z.array(z.record(z.unknown())),
 }
 
 export const searchLayerInput = {

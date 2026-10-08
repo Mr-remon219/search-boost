@@ -706,7 +706,8 @@ assert('cursor skill name only', cursorHeader.includes('name: search-boost') && 
 const grokPrompt = await loadAgentPrompt('grok')
 assert('load grok inject', grokPrompt.includes('MCP server') && grokPrompt.includes('workflow extensions'))
 assert('load grok inject native browse', /native (Grok|browsing)/i.test(grokPrompt))
-assert('grok permission allows count', grokPermissionAllows().length === 7)
+assert('grok permission allows count', grokPermissionAllows().length === 6)
+assert('grok permission does not advertise retired X tool', !grokPermissionAllows().includes('MCPTool(search-boost__x_search)'))
 assert('grok permission allows community search but not backend writes', grokPermissionAllows().includes('MCPTool(search-boost__community_search)') && !grokPermissionAllows().includes('MCPTool(search-boost__community_backend)'))
 assert('grok permission toml block', grokPermissionTomlBlock().includes('[permission]'))
 

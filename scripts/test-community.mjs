@@ -8,7 +8,7 @@ import { communityConfigPath, communityCapabilities, communityRegistry } from '.
 import { communitySearch } from '../lib/community/service.mjs'
 import { COMMUNITY_SEARCH_INPUT, COMMUNITY_BACKEND_INPUT, COMMUNITY_DESCRIPTION, COMMUNITY_BACKEND_DESCRIPTION, communityZod } from '../lib/community/schemas.mjs'
 import { runCommunityBackend, collectRuntimeCapabilities } from '../lib/runtime.mjs'
-import { saveToolPreferences, toolState } from '../lib/tool-config.mjs'
+import { saveToolPreferences, toolState, toolsFilePath } from '../lib/tool-config.mjs'
 import { registerAll } from '../adapters/mcp/register.mjs'
 import piExtension from '../adapters/pi/index.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -64,7 +64,7 @@ assert.equal(partial.results, 1)
 const beforeInvalid = calls
 for (const args of [
   { engines: ['x', 'x'], query: 'fixture' }, { engines: ['x'], type: 'keyword' },
-  { engines: ['x', 'reddit'], type: 'thread', post_id: '1' },
+  { engines: ['reddit'], type: 'thread', post_id: '1' },
   { engines: ['x'], query: 'fixture', allowed_x_handles: ['a'], excluded_x_handles: ['b'] },
   { engines: ['x'], query: 'fixture', max_results: 31 },
   { engines: ['x'], query: 'fixture', from_date: 'not-a-date' },
@@ -84,12 +84,12 @@ assert.equal(collectRuntimeCapabilities().community.platforms.every(row => !row.
 assert.equal(communityCapabilities().error, 'Community configuration unreadable or invalid')
 writeFileSync(communityConfigPath(), original)
 
-saveToolPreferences({ x_search: false })
+writeFileSync(toolsFilePath(), JSON.stringify({ tools: { x_search: false } }))
 assert.equal(toolState('community_search').enabled, false, 'legacy explicit opt-out preserved')
 saveToolPreferences({ community_search: true })
 assert.equal(toolState('community_search').enabled, true)
-assert.equal(toolState('x_search').enabled, false)
-saveToolPreferences({ x_search: true })
+assert.throws(() => toolState('x_search'), /Unknown/)
+assert.throws(() => saveToolPreferences({ x_search: true }), /Invalid tool/)
 
 // Schema projections and actual native Pi registration; no X network calls.
 for (const [schema, input] of [[COMMUNITY_SEARCH_INPUT, { engines: ['x'], query: 'fixture' }], [COMMUNITY_BACKEND_INPUT, { action: 'list' }]]) {
@@ -126,6 +126,10 @@ try {
   const capabilities = JSON.parse(resource.contents[0].text)
   assert.equal(capabilities.platforms.find(row => row.platform === 'reddit').supported, true)
   assert.doesNotMatch(resource.contents[0].text, /SECRET|auth_token/)
+  const policy = await client.readResource({ uri: 'search-boost://policy' })
+  for (const row of capabilities.platforms) assert.ok(policy.contents[0].text.includes(row.platform))
+  assert.match(policy.contents[0].text, /another enabled, configuration-ready X instance/)
+  assert.doesNotMatch(policy.contents[0].text, /not-implemented|Only existing-x|still boolean|does not yet change/)
   saveToolPreferences({ community_backend: false })
   const blocked = await client.callTool({ name: 'community_backend', arguments: { action: 'list' } })
   assert.equal(blocked.isError, true)

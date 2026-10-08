@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import './isolate-tests.mjs'
 /**
- * BUG-003 public output contract regression (x_search diagnostics + community
+ * BUG-003 public output contract regression (community X diagnostics + community
  * fused rows) against the REAL DSH entry and the advertised MCP schemas.
  *
  * No network, credential or user configuration: engines, the hosted xAI tool
@@ -17,12 +17,12 @@ import {
 import * as z from 'zod'
 import { ENGINE_POOLS } from '../lib/search/routing.js'
 import {
-  cleanJsonValue, fusedHitToJson, invalidateSearchCaches, runFused, runXSearch,
+  cleanJsonValue, fusedHitToJson, invalidateSearchCaches, runFused, runXSearch, runCommunitySearch,
 } from '../lib/runtime.mjs'
 import { apply } from '../adapters/dsh/index.js'
 import { registerDshTool } from '../adapters/dsh/schema.js'
-import { xSearchStructured } from '../adapters/mcp/register.mjs'
-import { fusedSearchOutput, xSearchOutput } from '../adapters/mcp/schemas.mjs'
+import { COMMUNITY_OUTPUT, communityZod } from '../lib/community/schemas.mjs'
+import { fusedSearchOutput } from '../adapters/mcp/schemas.mjs'
 
 // Recent enough for a recency=day community run to keep the fixture posts.
 const CREATED_AT = new Date(Date.now() - 6 * 3600_000).toISOString()
@@ -114,21 +114,22 @@ try {
   apply(hostCtx)
 } finally { console.error = originalError }
 assert.deepEqual(startupErrors, [], 'DSH startup must not silently swallow registration failures')
-for (const name of ['x_search', 'fused_search']) {
+assert.ok(!tools.view().visible.has('x_search'))
+for (const name of ['community_search', 'fused_search']) {
   assertObjectJsonSchema(tools.get(name).parameters)
   assertSupportedJsonSchema(tools.get(name).output.schema)
 }
 // The delegation is widened, not opened: unknown output fields and unknown row
 // fields still fail both the host schema and the adapter's Ajv gate.
-const xSearchSchema = tools.get('x_search').output.schema
-assert.equal(xSearchSchema.additionalProperties, false)
-for (const field of ['engineStats', 'enginesUsed', 'warnings']) {
-  assert.ok(field in xSearchSchema.properties, `x_search output must declare ${field}`)
+const communitySchema = tools.get('community_search').output.schema
+assert.equal(communitySchema.additionalProperties, false)
+for (const field of ['engine_stats', 'engines_used', 'warnings']) {
+  assert.ok(field in communitySchema.properties.channels.items.properties, `community channel must declare ${field}`)
 }
 const fusedSchema = tools.get('fused_search').output.schema
 assert.equal(fusedSchema.additionalProperties, false)
 assert.equal(fusedSchema.properties.results.items.additionalProperties, false)
-console.log('ok: real DSH entry registers x_search/fused_search with the widened, still-closed schema')
+console.log('ok: real DSH entry registers community_search/fused_search with the widened, still-closed schema')
 
 // The adapter's own Ajv output gate runs inside execute(). Capture the
 // definitions it registered, then re-bind them with a stub payload so the real
@@ -145,16 +146,23 @@ const gateCtx = new Context()
 gateCtx.provide('systemPrompt'); gateCtx.set('systemPrompt', { tools() {}, section() {} })
 const gateTools = new ToolRuntime(gateCtx)
 let submitted
-for (const name of ['x_search', 'fused_search']) {
+for (const name of ['community_search', 'fused_search']) {
   registerDshTool(gateCtx, { ...captured.get(name), async execute() { return submitted } })
 }
 async function acceptThroughDsh(name, payload, args) {
+  // Legacy core fixture scenarios now validate the real community projection.
+  if (name === 'x_search') {
+    name = 'community_search'
+    payload = await projectX(payload)
+    args = { ...args, engines: ['x'] }
+  }
   submitted = payload
   const returned = await gateTools.get(name).execute(args, {}) // throws `invalid output` on any undeclared field
   assert.deepEqual(returned, payload)
   assert.deepEqual(validateJsonSchemaValue(tools.get(name).output.schema, payload), [], `${name}: host validator must accept the payload`)
 }
-const X_ARGS = { type: 'keyword', query: 'alpha beta' }
+const X_ARGS = { engines: ['x'], type: 'keyword', query: 'alpha beta' }
+const projectX = payload => runCommunitySearch(X_ARGS, { snapshot, xSearch: async () => payload })
 const X_ROW_FIELDS = ['created_at', 'bestIndividual', 'groupEvidence', 'votingEngines']
 
 function assertDiagnostics(payload) {
@@ -284,7 +292,8 @@ try {
 
   await test('unknown fields are still refused: no blanket additionalProperties', async () => {
     const payload = cleanJsonValue(await xRun())
-    await assert.rejects(() => acceptThroughDsh('x_search', { ...payload, surprise: 1 }, X_ARGS), /invalid output/)
+    const page = await projectX(payload)
+    await assert.rejects(() => acceptThroughDsh('community_search', { ...page, surprise: 1 }, X_ARGS), /invalid output/)
 
     resetFixture()
     const fused = cleanJsonValue(await runFused(
@@ -297,24 +306,22 @@ try {
     await assert.rejects(() => acceptThroughDsh('fused_search', leaked, { query: 'alpha beta' }), /invalid output/)
   })
 
-  await test('MCP x_search structured content keeps the diagnostics the schema advertises', async () => {
+  await test('MCP community X schema keeps channel diagnostics on success and failure', async () => {
     const payload = cleanJsonValue(await xRun())
     assertDiagnostics(payload)
-    const structured = xSearchStructured(payload)
-    const parsed = z.object(xSearchOutput).safeParse(structured)
-    assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues))
-    assert.deepEqual(parsed.data.engineStats, payload.engineStats)
-    assert.deepEqual(parsed.data.enginesUsed, payload.enginesUsed)
-    assert.deepEqual(parsed.data.warnings, payload.warnings)
-    assert.equal(parsed.data.engineStats.bing.used, true)
-    // A failed branch is returned as an MCP tool error, but the advertised
-    // diagnostics still describe the payload shape the core produced.
+    const parsed = communityZod(COMMUNITY_OUTPUT).parse(await projectX(payload))
+    assert.deepEqual(parsed.channels[0].engine_stats, payload.engineStats)
+    assert.deepEqual(parsed.channels[0].engines_used, payload.enginesUsed)
+    assert.deepEqual(parsed.channels[0].warnings, payload.warnings)
+    assert.equal(parsed.channels[0].engine_stats.bing.used, true)
     officialFailure = true
     fallbackFailure = true
     invalidateSearchCaches()
     const failed = cleanJsonValue(await xRun())
     assertDiagnostics(failed)
-    assert.equal(z.object(xSearchOutput).safeParse({ ...failed, items: [] }).success, true)
+    const page = communityZod(COMMUNITY_OUTPUT).parse(await projectX(failed))
+    assert.equal(page.channels[0].status, 'failed')
+    assert.deepEqual(page.channels[0].engine_stats, failed.engineStats)
   })
 
   await test('MCP fused schema accepts the projected community rows and strips nothing public', async () => {

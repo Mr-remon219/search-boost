@@ -3,7 +3,7 @@ import { registerDshTool } from './schema.js'
 import { COMMUNITY_SEARCH_INPUT, COMMUNITY_BACKEND_INPUT, COMMUNITY_OUTPUT, COMMUNITY_BACKEND_OUTPUT, COMMUNITY_DESCRIPTION, COMMUNITY_BACKEND_DESCRIPTION, formatCommunityResult } from '../../lib/community/schemas.mjs'
 import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/screening/input.js'
 import { ADAPTIVE_OUTPUT_SCHEMA } from '../../lib/search/screening/schema.js'
-import { FETCH_DESCRIPTION, X_DESCRIPTION, STATS_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
+import { FETCH_DESCRIPTION, STATS_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
 // DSH host adapter — DeepSeek Harness (Cordis) bundle plugin.
 //
@@ -11,7 +11,7 @@ import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/ro
 // one row mounts this plugin, one repoints the `web` seam's searchProvider /
 // fetchProvider at it, so the built-in `web_search` / `web_fetch` run on
 // SearchBoost Core while keeping the native citation cards. Beside the
-// providers we register fused_search / fetch_page / x_search /
+// providers we register fused_search / fetch_page / community_search /
 // research_parallel / search_stats, the proactive-search policy section, a
 // live status section, and the /web_change, /x-login, /x-logout commands.
 //
@@ -31,7 +31,6 @@ import {
   ENGINE_ORDER,
   allAttemptedEnginesFailed,
   LAYER_LABELS,
-  X_MODES,
   cacheSizes,
   cleanJsonValue,
   collectSearchStats,
@@ -44,7 +43,6 @@ import {
   runAdaptiveSearch,
   runFetchPage,
   runFused,
-  runXSearch,
   runCommunitySearch,
   runCommunityBackend,
   switchLayer,
@@ -95,7 +93,6 @@ export function apply(ctx, config = {}) {
   safe('fused_search', () => { if (config.fusedSearch !== false) registerFusedSearchTool(ctx) })
   safe('fetch_page', () => { if (config.fetchPage !== false) registerFetchPageTool(ctx) })
   safe('adaptive_search', () => { if (config.adaptiveSearch !== false) registerAdaptiveSearchTool(ctx) })
-  safe('x_search', () => { if (config.xSearch !== false) registerXSearchTool(ctx) })
   safe('community tools', () => registerCommunityTools(ctx, config))
   safe('research_parallel', () => { if (config.researchParallel !== false) registerParallelTool(ctx, config.researchProvider) })
   safe('search_stats', () => { if (config.searchStats !== false) registerStatsTool(ctx) })
@@ -175,7 +172,7 @@ function sourceOf(h) {
 // ---------- systemPrompt section: live search status ----------
 
 // One line the model sees in every assembly, so it natively knows the active
-// layer and whether x_search uses the official path or the fallback chain.
+// layer and whether community X uses the hosted path or the fallback chain.
 // Implemented as a DYNAMIC section (text as a function evaluated per
 // assembly): systemPrompt.variable() throws inside the real DSH host.
 function registerStatusSection(ctx) {
@@ -289,7 +286,7 @@ function registerFusedSearchTool(ctx) {
         excludeDomains: args.exclude_domains,
         recency: args.recency,
         complexity: args.complexity ?? 'medium',
-        minScore: args.min_score ?? 0, enginePool: args.engine_pool, ranking: args.ranking, engineWeights: args.engine_weights, community: args.community,
+        minScore: args.min_score ?? 0, enginePool: args.engine_pool, ranking: args.ranking, engineWeights: args.engine_weights, community: args.community, platform_options: args.platform_options,
         layer: args.layer ?? null,
         signal: exec?.signal,
       }))
@@ -443,136 +440,6 @@ function registerCommunityTools(ctx, config) {
   }
 }
 
-// ---------- x_search ----------
-
-function registerXSearchTool(ctx) {
-  return registerGuardedTool(ctx, {
-    name: 'x_search',
-    description: X_DESCRIPTION,
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        type: { type: 'string', enum: X_MODES, description: 'Which X search mode: keyword (X advanced syntax), semantic (natural language), user (accounts), thread (conversation by post id).' },
-        query: { type: 'string', description: 'The search query (keyword/semantic) or the target handle for user.' },
-        username: { type: 'string', description: 'Target account for type=user.' },
-        post_id: { type: 'string', description: 'Post id or x.com/.../status/<id> URL for type=thread.' },
-        max_results: { type: 'number', description: 'Max results (default 5, max 10).' },
-        from_date: { type: 'string', description: 'Inclusive start date, YYYY-MM-DD (UTC); user mode filters recent posts.' },
-        to_date: { type: 'string', description: 'Inclusive end date, YYYY-MM-DD (UTC); user mode filters recent posts.' },
-        allowed_x_handles: { type: 'array', items: { type: 'string' }, description: 'Author filter on all paths, including without login (max 20).' },
-        excluded_x_handles: { type: 'array', items: { type: 'string' }, description: 'Author exclusion on all paths (max 20, mutually exclusive with allowed).' },
-      },
-      required: [],
-    },
-    presentCall: (args) => {
-      const kind = X_MODES.includes(args?.type) ? args.type : 'keyword'
-      const subj = args?.query ?? args?.username ?? args?.post_id ?? ''
-      return { card: 'generic', title: `x_search ${kind}: "${String(subj).slice(0, 60)}"`, kind: 'search', rawInput: subj }
-    },
-    output: {
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          via: { type: 'string' },
-          results: { type: 'number' },
-          tookMs: { type: 'number' },
-          credential: { type: 'string' },
-          note: { type: 'string' },
-          error: { type: 'string' },
-          cacheHit: { type: 'boolean' },
-          inFlight: { type: 'boolean' },
-          xResults: { type: 'number' },
-          engineResults: { type: 'number' },
-          // Per-engine diagnostics the core always returns: declared so the host
-          // contract keeps them instead of rejecting the payload.
-          engineStats: {
-            type: 'object',
-            additionalProperties: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                used: { type: 'boolean' },
-                errors: { type: 'number' },
-                attempts: { type: 'number' },
-                successes: { type: 'number' },
-                note: { type: 'string' },
-              },
-            },
-          },
-          enginesUsed: { type: 'array', items: { type: 'string' } },
-          warnings: { type: 'array', items: { type: 'string' } },
-          items: { type: 'array', items: { type: 'object', additionalProperties: true } },
-        },
-        required: ['via'],
-      },
-      render: (_args, value) => [{ type: 'text', text: renderX(value) }],
-      presentationMeta: (_args, value) => {
-        const sources = []
-        for (const it of value.items ?? []) {
-          const posts = Array.isArray(it.recent_posts) ? it.recent_posts : [it]
-          for (const p of posts) {
-            const text = String(p.text ?? '')
-            const url = p.url ?? (p.id ? `https://x.com/i/status/${p.id}` : '')
-            if (!url) continue
-            sources.push({
-              url,
-              title: (p.author ? `${p.author}${p.username ? ` (@${p.username})` : ''}: ` : '') + text.slice(0, 120),
-              ...(text ? { snippet: text.slice(0, 300) } : {}),
-            })
-          }
-        }
-        return { sources, truncated: false }
-      },
-    },
-    presentResult: (_args, result) => {
-      const meta = result.meta
-      if (!meta || !Array.isArray(meta.sources)) return undefined
-      return {
-        card: 'web',
-        kind: 'search',
-        title: `x_search: ${meta.sources.length} posts`,
-        sources: meta.sources,
-        truncated: Boolean(meta.truncated),
-      }
-    },
-    // X official/fallback requests retain single-request protection only.
-    isConcurrencySafe: () => true,
-    async execute(args, exec) {
-      const kind = X_MODES.includes(args?.type) ? args.type : 'keyword'
-      const subj = args.query ?? args.username ?? args.post_id ?? ''
-      if (!subj) throw new Error('x_search: provide query (keyword/semantic/user) or post_id (thread).')
-      // note wording is DSH's ("primary failed: …"); Core reports "primary: …"
-      const out = await runXSearch({ ...args, type: kind }, { signal: exec?.signal })
-      if (out.note?.startsWith('primary: ')) out.note = `primary failed: ${out.note.slice('primary: '.length)}`
-      return cleanJsonValue(out)
-    },
-  })
-}
-
-function renderItem(item) {
-  if (Array.isArray(item.recent_posts)) {
-    const posts = item.recent_posts.slice(0, 3)
-    const followers = item.followers != null ? item.followers : '?'
-    return `${item.name} (@${item.username}) — followers ${followers}, verified ${item.verified ?? false}\n  bio: ${item.bio ?? ''}\n  recent: ${posts.map((p) => String(p.text).slice(0, 80)).join(' | ') || '(none)'}`
-  }
-  const author = item.author ? item.author + (item.username ? ` (@${item.username})` : '') + ': ' : ''
-  return `${author}${item.text || item.url}`
-}
-
-function renderX(value) {
-  const lines = []
-  lines.push(`**x_search** — via ${value.via}, ${value.results} result(s), ${value.tookMs}ms${value.cacheHit ? ' (cache hit)' : ''}`)
-  if (value.note) lines.push(`note: ${value.note}`)
-  if (value.error) {
-    lines.push(`ERROR: ${value.error}`)
-    return lines.join('\n')
-  }
-  for (const [i, item] of (value.items ?? []).entries()) lines.push(`${i + 1}. ${renderItem(item)}`)
-  return lines.join('\n')
-}
-
 // ---------- /x-login / /x-logout ----------
 
 function registerXLoginCommand(ctx) {
@@ -583,7 +450,7 @@ function registerXLoginCommand(ctx) {
   }
   return commands.register({
     name: 'x-login',
-    description: 'Enable the official hosted x_search path: /x-login (import your grok login from ~/.grok/auth.json), /x-login -k <XAI_API_KEY> (public api.x.ai), /x-login status. /x-logout disables it again.',
+    description: 'Enable the hosted community X path: /x-login (import your grok login from ~/.grok/auth.json), /x-login -k <XAI_API_KEY> (public api.x.ai), /x-login status. /x-logout disables it again.',
     input: { hint: '[-k <XAI_API_KEY> | status]' },
     // the API key lives in the state file, not the session log — never record
     // the raw input (DSH idiom: the domain event owns the payload)
@@ -597,12 +464,12 @@ function registerXLoginCommand(ctx) {
         }
         if (parts[0] === '-k') {
           xAuthCommands.setApiKey(parts[1] ?? '')
-          return { kind: 'success', text: `x-login: API key saved → ${xAuthCommands.path()} (public api.x.ai will be used for x_search)` }
+          return { kind: 'success', text: `x-login: API key saved → ${xAuthCommands.path()} (public api.x.ai will be used for community X)` }
         }
         const entry = xAuthCommands.importGrok()
         return {
           kind: 'success',
-          text: `x-login: grok login imported → ${xAuthCommands.path()} (${entry.email ?? entry.user_id ?? '?'}); official hosted x_search enabled. /x-logout disables it.`,
+          text: `x-login: grok login imported → ${xAuthCommands.path()} (${entry.email ?? entry.user_id ?? '?'}); hosted community X enabled. /x-logout disables it.`,
         }
       } catch (err) {
         return { kind: 'error', text: `x-login failed: ${err instanceof Error ? err.message : String(err)}` }
@@ -619,14 +486,14 @@ function registerXLogoutCommand(ctx) {
   }
   return commands.register({
     name: 'x-logout',
-    description: 'Remove the /x-login credentials: the official hosted x_search path is disabled and x_search uses only the multi-engine / guest-GraphQL / oEmbed fallback chain. grok CLI\'s own login is untouched. Usage: /x-logout',
+    description: 'Remove the /x-login credentials: the hosted community X path is disabled and community X uses only the multi-engine / guest-GraphQL / oEmbed fallback chain. grok CLI\'s own login is untouched. Usage: /x-logout',
     handler: () => {
       const removed = xAuthCommands.logout()
       return {
         kind: 'success',
         text: removed
-          ? 'x-logout: /x-login credentials removed — x_search now uses the multi-engine / guest-GraphQL / oEmbed fallback chain only.\nRun /x-login to re-enable the official hosted x_search path. (grok CLI\'s own login is untouched.)'
-          : 'x-logout: no /x-login credentials found — x_search is already on the fallback chain. Run /x-login to enable the official path.',
+          ? 'x-logout: /x-login credentials removed — community X now uses the multi-engine / guest-GraphQL / oEmbed fallback chain only.\nRun /x-login to re-enable the hosted community X path. (grok CLI\'s own login is untouched.)'
+          : 'x-logout: no /x-login credentials found — community X is already on the fallback chain. Run /x-login to enable the official path.',
       }
     },
   })
@@ -809,7 +676,7 @@ function registerStatsTool(ctx) {
           `cache: ${value.cacheHits} hits / ${value.cacheMisses} misses\n` +
           `tiers: ${JSON.stringify(value.tierCounts)}\n` +
           `engines: ${JSON.stringify(value.engines)}\n` +
-          `x_search: ${value.grok ? 'official path ready' : 'fallback chain only'} (${value.x?.source ?? '?'}${value.x?.official ? ', enabled' : ', disabled'})\n` +
+          `community X: ${value.grok ? 'official path ready' : 'fallback chain only'} (${value.x?.source ?? '?'}${value.x?.official ? ', enabled' : ', disabled'})\n` +
           `recent: ${(value.recent ?? []).map((r) => `"${r.query}"(${r.tookMs}ms,${r.results}r${r.cacheHit ? ',hit' : ''})`).join(' | ')}`,
       }],
       presentationMeta: (_args, value) => ({
@@ -824,7 +691,7 @@ function registerStatsTool(ctx) {
       if (!meta) return undefined
       return {
         card: 'generic',
-        title: `search stats: ${meta.cacheHits} cache hits / ${meta.cacheMisses} misses (${meta.layer}, x_search ${meta.xOfficial ? 'official' : 'fallback'})`,
+        title: `search stats: ${meta.cacheHits} cache hits / ${meta.cacheMisses} misses (${meta.layer}, community X ${meta.xOfficial ? 'official' : 'fallback'})`,
       }
     },
     timeoutMs: 10000,

@@ -37,7 +37,7 @@
 - `fused_search.community` 优先采用名称数组，`[]` 关闭，显式列举五个平台表示全开请求。用户最初提出的 0/1 位置数组仍是可选方案；如采用，顺序固定为 `[reddit, x, bilibili, zhihu, xiaohongshu]`，不能依资源中的可用项动态重排。
 - 单平台主要引导使用 `community_search`；“网页＋单个社区平台”仍是合理 fused 用法，不强制拒绝。
 - 后端管理倾向一个 `community_backend` 工具加 `action`，避免模型工具列表膨胀；也可拆为多个工具，最终按宿主 schema、权限表达和交互体验决定。
-- `x_search` 兼容期保留为同一核心上的薄入口。新提示词优先指向新工具，但不要在新工具尚不能承接全部 X 模式时提前移除旧入口。
+- 原决定：兼容期保留 `x_search` 薄入口。后续用户明确要求移除对外旧工具以避免混淆：现 MCP/Pi/DSH 只注册 community_search 承接 X 四模式，内部 X 核心保留；同步移除旧 schema/description/权限枚举并迁移提示词、示例与宿主测试。旧 false 偏好只读继承，子工具白名单不自动扩权。用户另明确保留 `/x-login`、`/x-logout`，Pi/DSH 注册和共享凭据管理未删除；离线登录/退出就绪切换已验证，最终全量 84 隔离入口通过。
 - 社区读取/评论能力先作为 provider 可选操作；是否公开独立 `community_read` 按搜索到读取的实际缺口判断，避免为了统一而将所有模式塞进一个工具。
 - 默认平台集合、平台专属 options、采集默认窗口/页数、缓存保留时间、管理 action 细节和新 schema 版本，属于待验证参数，不在本文伪装成已经实现的值。
 
@@ -271,6 +271,24 @@ Pi 注入刷新保留用户系统提示词，去除旧 capability 段避免累�
 实现、自审修复与最后完整门禁结束：80 个自动隔离入口全部通过，模拟用户状态/source tree 未变化；277 文件 syntax、CI policy 和新社区三套入口通过。依赖审计发现 SDK/proxy-addr 已有漏洞，核对官方 advisory 后仅更新这两个依赖：SDK floor ^1.31.0、lock 1.32.1；proxy-addr override ^2.0.8、lock 2.0.8。依赖审计为 0 vulnerabilities，更新后重新完整跑过门禁。生成资产核对通过。详细发现、修复、skip 和真实部署验收边界见 [community-search-self-review.md](community-search-self-review.md)。
 
 下一项不再是实现切片，而是用户代码审查与其已授权环境中的部署验收；未自动安装第三方平台工具/浏览器扩展、登录或改写用户全局权限。代码保持工作树未提交，版本未自动发布。
+
+### 2026-10-07：外部 C1–C7 反馈与修复节点
+
+用户授权在当前分支复现/修复 C1–C7，暂不整合更新的 v0.2.5 基线，不创建 PR。再次读取完整外部审查；隔离环境的固定 49ecd7c 源码替身复现了 Disable/隐藏卡片/scope 饥饿/X 10 cap/softDates 硬删和 policy 矛盾，C7 保持生命周期证据而非真实 Chrome 实测。
+
+本轮实现：浏览器可取消授权代次与恢复、可见 gate/卡片检查、跨调用持久 scope 轮转、community X cap/execution 与 candidateMode 解耦、非 X 软日期中性、现行 MCP policy 与资源一致性。新增 worker 与 review 两个隔离入口，扩充 bridge/MCP 测试，使用真实 X 编排而非替换整个 X runtime。目标回归和旧 X snapshot/prompt-contract 已通过；最终完整门禁 82 个隔离入口全部通过（模拟用户状态/source tree 未变）、279 文件语法和 CI policy 通过、依赖审计 0 vulnerabilities、生成资产/包交付回归通过；审查历史结论已在 [自审记录](community-search-self-review.md) 中明确撤回并区分历史证据。
+
+浏览器恢复账本使用 local 的唯一 URL fragment 标记，只清理可证明由扩展创建的 tab；标记消失/用户导航不猜测所有权。已提交给 Chrome 的 native 调用不能撤回，Disable 后丢弃其证据并清理；账号/实机/宿主和新基线仍是独立验收项。没有安装、登录、导出 cookie 或更改用户权限。本轮修复未提交/推送，仍为工作树变更；未创建 PR。
+
+### 平台独立处理与分页：滚动执行入口
+
+用户进一步澄清：不照搬 X 参数/返回，各平台分别做预处理和后处理，可有 null 默认和不同平台 payload，通过快照分页返回。轻量逻辑设计与动态决策落在 [community-platform-pipeline-spec.md](community-platform-pipeline-spec.md)，不是固定施工顺序。本轮按接口/测试关键点滚动执行，保留 C1–C7 修复，不合并新基线、不发 PR。
+
+现已接通 platform_options、日期/身份/内容分类与作者过滤、有版本 data、独立 c1 快照和显式私有跨进程恢复；候选核心不经过对外分页，旧 X 和 Adaptive 历史格式不改。新增 pipeline/pages 测试，真实 MCP/Pi/DSH 契约与源票验证通过。最终文案/生成资产同步后完整新执行：84 个隔离入口全部通过（模拟用户状态/source tree 未变）、284 文件语法/CI policy/生成资产/包交付通过、audit 0 vulnerabilities。保持已有 Windows skip 与真实部署边界；仍未提交/推送、不创建 PR。
+
+### Adaptive 经 fused 底座的滚动接入
+
+原调用链已复用 runFused，本轮不新建获取链。按 [adaptive-community-integration-spec.md](adaptive-community-integration-spec.md) 补齐 shared platform_options/纯预检、实际 X 模式、跨 Web 硬过滤、独立来源无 Web 时执行、类型化渠道/选中出处与保存读页，并同步真实 MCP/Pi/DSH。该文记录复现、修正及两次失败/中断门禁；最终重新执行全部 85 隔离入口通过，模拟用户状态/source tree 未改，288 文件语法、CI/generated/包交付与 diff 检查通过，audit 0。旧普通 fused 的 7+5 冻结回放保持原 hash，未重写 golden。未改变旧 X 移除/登录、授权或部署边界；本段不沿用前轮 84/284 为本轮验收，仍未提交/推送。后续独立自审 AR1–AR6/DOC1 见同一 SPEC：12 专项组复现/修复，最新代码重新全量 86 入口/289 文件通过，保留原 frozen hash、模拟状态/source tree 不变和真实连接边界。
 
 ## 参考与核对入口
 

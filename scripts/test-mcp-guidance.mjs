@@ -9,11 +9,12 @@ import { fileURLToPath } from 'node:url'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import * as z from 'zod'
-import { adaptiveSearchInput, fusedSearchInput, fetchPageInput, xSearchInput } from '../adapters/mcp/schemas.mjs'
+import { adaptiveSearchInput, fusedSearchInput, fetchPageInput } from '../adapters/mcp/schemas.mjs'
 import { ADAPTIVE_INPUT_SCHEMA } from '../lib/search/screening/input.js'
 import { ADAPTIVE_DESCRIPTION } from '../lib/search/screening/describe.js'
 import { FUSED_DESCRIPTION } from '../lib/search/routing.js'
-import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../lib/search/tool-descriptions.js'
+import { FETCH_DESCRIPTION } from '../lib/search/tool-descriptions.js'
+import { COMMUNITY_SEARCH_INPUT, communityZod } from '../lib/community/schemas.mjs'
 
 const home = mkdtempSync(join(tmpdir(), 'sb mcp guidance '))
 const client = new Client({ name: 'guidance-test', version: '1.0.0' })
@@ -32,29 +33,29 @@ try {
   const instructions = client.getInstructions()
   assert(instructions.includes('No skill, resource read, or routing prompt is required'))
   const { tools } = await client.listTools()
-  assert.equal(tools.length, 7)
+  assert.equal(tools.length, 6)
+  assert.ok(!tools.some(tool => tool.name === 'x_search'))
+  assert.equal((await client.callTool({ name: 'x_search', arguments: { query: 'retired' } })).isError, true)
   assert.ok(tools.some((tool) => tool.name === 'community_search'))
   assert.equal(tools.find((tool) => tool.name === 'community_backend').annotations.readOnlyHint, false)
   assert.ok(!tools.some((tool) => tool.name === 'adaptive_search'))
   const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]))
   for (const tool of tools) assert(tool.description?.length > 40)
   assert.equal(byName.fetch_page.description, FETCH_DESCRIPTION)
-  assert.equal(byName.x_search.description, X_DESCRIPTION)
   assert.ok(byName.fused_search.description.startsWith(FUSED_DESCRIPTION))
-  for (const name of ['fused_search', 'fetch_page', 'x_search', 'search_layer']) {
+  for (const name of ['fused_search', 'fetch_page', 'search_layer']) {
     for (const [field, schema] of Object.entries(byName[name].inputSchema.properties)) {
       assert(schema.description, `${name}.${field}: missing direct-call guidance`)
     }
   }
   assert.equal(byName.fused_search.inputSchema.properties.max_results.maximum, 10)
   assert.deepEqual(byName.fetch_page.inputSchema.required, ['url'])
-  assert.equal(byName.x_search.inputSchema.properties.allowed_x_handles.maxItems, 20)
-  assert.equal(byName.x_search.inputSchema.properties.excluded_x_handles.maxItems, 20)
-  // The advertised output schema carries the diagnostics the core returns on
-  // every x_search path; the payload is not silently narrowed to a summary.
-  for (const field of ['engineStats', 'enginesUsed', 'warnings']) {
-    assert.ok(field in byName.x_search.outputSchema.properties, `x_search output schema must advertise ${field}`)
+  assert.equal(byName.community_search.inputSchema.properties.allowed_x_handles.maxItems, 20)
+  assert.equal(byName.community_search.inputSchema.properties.excluded_x_handles.maxItems, 20)
+  for (const field of ['engine_stats', 'engines_used', 'warnings']) {
+    assert.ok(field in byName.community_search.outputSchema.properties.channels.items.properties)
   }
+  assert.doesNotMatch(instructions, /\bx_search\b/)
   // These calls work without first reading a resource, invoking a prompt, or loading any skill.
   const layer = await client.callTool({ name: 'search_layer', arguments: { layer: 'show' } })
   assert(!layer.isError)
@@ -136,6 +137,8 @@ try {
   console.log('ok: MCP tool switches and Jev lock refresh without restarting the server')
   const resource = await client.readResource({ uri: 'search-boost://policy' })
   const text = resource.contents[0].text
+  assert.doesNotMatch(text, /\bx_search\b/)
+  assert.ok(!(await capability()).tools.some(tool => tool.name === 'x_search'))
   const examples = [...text.matchAll(/```json\s*([\s\S]*?)```/g)]
   assert(examples.length >= 5)
   let adaptiveExamples = 0
@@ -150,8 +153,8 @@ try {
       assert.equal(parsed.community, undefined, 'the documented example lets the strategy request choose community')
       continue
     }
-    const schema = 'url' in value ? fetchPageInput : 'type' in value ? xSearchInput : fusedSearchInput
-    z.object(schema).strict().parse(value)
+    if ('engines' in value) communityZod(COMMUNITY_SEARCH_INPUT).parse(value)
+    else z.object('url' in value ? fetchPageInput : fusedSearchInput).strict().parse(value)
   }
   assert.ok(adaptiveExamples >= 1, 'the optional resource documents one adaptive_search example')
   const prompt = await client.getPrompt({ name: 'search_routing', arguments: { task: 'Compare two API versions' } })

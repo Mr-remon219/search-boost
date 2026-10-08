@@ -8,7 +8,7 @@ import { join } from 'node:path'
 const home = mkdtempSync(join(tmpdir(), 'sb-tools-'))
 process.env.SEARCH_BOOST_HOME = home
 process.env.PI_CODING_AGENT_DIR = join(home, 'pi')
-const { toolStates, toolState, toolsFilePath, saveToolPreferences, guardedTool, watchToolStates } = await import('../lib/tool-config.mjs')
+const { TOOL_CATALOG, toolStates, toolState, toolsFilePath, saveToolPreferences, guardedTool, watchToolStates } = await import('../lib/tool-config.mjs')
 const { saveJevConfig, clearJevConfig } = await import('../lib/jev-config.mjs')
 const { runToolsWizard } = await import('../lib/installer/tools-wizard.mjs')
 const { runtimeSnapshot, formatRuntimeCapabilities } = await import('../lib/search/capability.js')
@@ -18,21 +18,25 @@ const { apply: dshExtension } = await import('../adapters/dsh/index.js')
 const wait = (ms = 650) => new Promise((resolve) => setTimeout(resolve, ms))
 let stop, shutdown
 try {
+  const { grokPermissionAllows } = await import('../lib/mcp-entry.mjs')
+  assert.ok(!TOOL_CATALOG.some(tool => tool.name === 'x_search'))
+  assert.ok(!grokPermissionAllows().some(pattern => pattern.includes('x_search')))
+  assert.ok(grokPermissionAllows().some(pattern => pattern.includes('community_search')))
   assert.ok(toolState('fused_search').enabled)
   assert.ok(toolState('adaptive_search').locked)
   assert.throws(() => saveToolPreferences({ adaptive_search: true }), /Judgment model not configured/)
   assert.ok(!existsSync(toolsFilePath()))
   assert.throws(() => saveToolPreferences({ unknown: false }), /Invalid tool/)
-  assert.throws(() => saveToolPreferences({ x_search: 'false' }), /Invalid tool/)
+  assert.throws(() => saveToolPreferences({ community_search: 'false' }), /Invalid tool/)
   const initialFingerprint = runtimeSnapshot().fingerprint
-  saveToolPreferences({ 'search-parallel-subagent': false, x_search: false })
+  saveToolPreferences({ 'search-parallel-subagent': false, community_search: false })
   assert.equal(runtimeSnapshot().fingerprint, initialFingerprint, 'entry switches do not repartition engine caches')
   writeKeysFile({ baseUrls: { exa: 'https://gateway.example/prefix' } })
   assert.notEqual(runtimeSnapshot().fingerprint, initialFingerprint, 'custom bases still partition caches after switches integration')
   writeKeysFile({ baseUrls: { exa: null } })
   assert.equal(toolState('research_parallel').enabled, false)
   saveToolPreferences({ search_stats: false })
-  assert.equal(toolState('x_search').enabled, false, 'patch preserves unrelated preferences')
+  assert.equal(toolState('community_search').enabled, false, 'patch preserves unrelated preferences')
   saveJevConfig({ apiKey: 'fixture-jev' })
   assert.equal(toolState('adaptive_search').enabled, true)
   assert.match(formatRuntimeCapabilities(), /adaptive_search is available/)
@@ -67,7 +71,7 @@ try {
   }
   selection = cancel
   await runToolsWizard(clack)
-  assert.ok(!menu.options.some((row) => row.value === 'adaptive_search'))
+  assert.ok(!menu.options.some((row) => ['adaptive_search', 'x_search'].includes(row.value)))
   assert.ok(logs.some((text) => text.includes('\u001b[9madaptive_search\u001b[29m') && text.includes('[locked]')))
   assert.equal(menu.required, false)
   assert.equal(readFileSync(toolsFilePath(), 'utf8'), before)
@@ -97,7 +101,7 @@ try {
   // Pi session watcher owns only tools it removed, never adds unrelated or
   // initially excluded tools, and cleans up on shutdown.
   const handlers = new Map(), tools = new Map()
-  let active = ['read', 'fused_search', 'fetch_page', 'x_search', 'adaptive_search']
+  let active = ['read', 'fused_search', 'fetch_page', 'community_search', 'adaptive_search']
   piExtension({
     on: (event, handler) => handlers.set(event, handler),
     registerTool: (definition) => tools.set(definition.name, definition), registerCommand() {},
@@ -105,10 +109,13 @@ try {
   })
   shutdown = handlers.get('session_shutdown')
   await handlers.get('session_start')()
-  assert.ok(active.includes('read') && !active.includes('x_search') && !active.includes('adaptive_search'))
-  saveToolPreferences({ x_search: true, research_parallel: false })
+  assert.ok(active.includes('read') && !active.includes('community_search') && !active.includes('adaptive_search'))
+  saveToolPreferences({ community_search: true, research_parallel: false })
   await wait()
-  assert.ok(active.includes('x_search'))
+  assert.ok(active.includes('community_search'))
+  assert.ok(!tools.has('x_search'))
+  assert.throws(() => saveToolPreferences({ x_search: true }), /Invalid tool/)
+  assert.throws(() => toolState('x_search'), /Unknown/)
   saveToolPreferences({ research_parallel: true, fused_search: false })
   await wait()
   assert.ok(!active.includes('search-parallel-subagent'), 'never grant an initially excluded tool')
