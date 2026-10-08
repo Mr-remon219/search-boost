@@ -22,7 +22,7 @@ const test = async (name, fn) => { await fn(); tests++; console.log(`ok: ${name}
 await test('the shared input contract is one strict object with no schema default for community', () => {
   assert.equal(ADAPTIVE_INPUT_SCHEMA.additionalProperties, false)
   assert.deepEqual(Object.keys(ADAPTIVE_INPUT_SCHEMA.properties).sort(), [
-    'community', 'constraints', 'cursor', 'intent', 'max_results', 'page_size', 'preferences', 'questions', 'save_results', 'saved_result_id',
+    'community', 'constraints', 'cursor', 'intent', 'max_results', 'page_size', 'platform_options', 'preferences', 'questions', 'save_results', 'saved_result_id',
   ])
   assert.equal('keywords' in ADAPTIVE_INPUT_SCHEMA.properties, false)
   assert.equal(ADAPTIVE_INPUT_SCHEMA.properties.community.default, undefined)

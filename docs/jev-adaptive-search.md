@@ -13,10 +13,11 @@
 
 | 字段 | 契约 |
 | --- | --- |
-| `questions` | 恰好一个非空字符串，最长 400 字符。就是唯一检索 query，不做关键词规划或查询扩展。 |
+| `questions` | 恰好一个非空字符串，最长 400 字符。就是普通 Web 的原文 query，不做关键词规划或模型查询扩展；只有调用者明确给出的平台 query 可以覆盖对应社区支路。 |
 | `intent` | **必填**非空字符串，最长 2000 字符；不再由问题自动填补。 |
 | `preferences` | 可选 0-8 条非空软偏好，每条最长 300 字符；按键精确去重后等权平均，只加分。 |
-| `community` | 可选严格 boolean，无 schema 默认值。省略 = 由同一次策略请求选择 `enable`/`disable`/`unknown`；显式 true/false 覆盖且不再提问该题。 |
+| `community` | 可选严格 boolean 或唯一平台名数组（reddit/x/bilibili/zhihu/xiaohongshu），无 schema 默认值。省略 = 同一次策略请求决定 X-only；true=X-only、false/[]=off，显式数组只选列出的平台，覆盖且不再提问该题。 |
+| `platform_options` | 可选/null，复用直接社区入口各平台分区。非空分区只允许显式选择的平台；null 继承/默认，不清除硬条件、不隐式启用平台。支持 query/type/date、Reddit 范围/作者、X 四模式与条件、中文平台类别等；能力仍由 backend 决定。 |
 | `save_results` | 可选严格 boolean，默认 false。true 时私有保存**完整的最终选中集**与类型化元数据。 |
 | `max_results` | 保存/交付的目标条数，默认 10，范围 1-50。 |
 | `page_size` | 每页条数，默认 20，范围 1-50；不改变排序、selection、totalResults 或 targetMet。 |
@@ -38,7 +39,7 @@
 → cursor / saved_result_id 只读分支在此结束（不建判断客户端、不问策略、不检索、不判断）
 → 一次固定策略请求：选 ranking；community 省略时同一次选 enable/disable/unknown
 → 代码解析显式覆盖 / 模型选择 / unknown 与缺失回退，落实能力与域名限制
-→ 调用共享 runFused：query=原问题，medium，candidateSelection=snapshot，community=解析后的布尔值
+→ 调用共享 runFused：query=原问题，medium，candidateSelection=snapshot，community=解析后的布尔值/平台数组，platform_options=显式参数
 → 有界快照（目标 ≤10 时最多 32 条；更大目标为 ceil(max_results × 32 / 10)，最高 160；网页与社区行共用）按原融合分与稳定 key 全局排序后截取
 → prepareMaterial 校验/哈希并标记 pending → 分批固定选项 safety/value/source discount/preferences
 → 代码排除安全失败、基础分无效、不可判断、value 未建立与 value<3
@@ -51,11 +52,12 @@
 ## 3. 搜索前策略与 community 优先级
 
 - 策略请求只含 `strategy.ranking` 与（省略 community 时）`strategy.community`；criteria 由代码提供，判断模型只返回选项，不产生平台名、引擎、查询变体、预算或系数。
-- 优先级：显式 boolean（按字段是否存在识别，不被 truthy/默认值覆盖） > 模型选择 > 缺失/非法回退。`enable→true`、`disable→false`、`unknown→false`；缺失/坏形状/非法 option 同样 false，但状态记为 unavailable 并披露，不伪装成模型选择 disable。
-- 能力处理基于同一个 runtime capability snapshot：官方 X 不可用但既有 fallback 可用时按原机制执行；已知整条支路不可执行或被授权边界禁止时跳过并返回结构化 `unavailable`/`blocked`；普通路由无可用引擎时仍 `no_engines` 失败。
-- `run.community` 输出固定结构：`input`、`source`、`choice`、`requested`、`effective`、`outcome`、`cacheHit`、`reason`、`usage`；状态只来自共享核心的结构化执行记录，不解析 warnings 文案，也不从 `communityUsed` 推断成功。
-- 公开 `x_search` 入口开关只关闭公开入口，不是内部引擎授权表；searcher 对 fused_search/fetch_page 的依赖检查也不适用于本流程。
+- 优先级：显式 boolean/平台数组（按字段是否存在识别，不被 truthy/默认值覆盖） > 模型选择 > 缺失/非法回退。`enable→true`、`disable→false`、`unknown→false`；缺失/坏形状/非法 option 同样 false，但状态记为 unavailable 并披露，不伪装成模型选择 disable。
+- 能力处理基于同一个 runtime capability snapshot：官方 X 不可用但既有 fallback 可用时按原机制执行；已知整条支路不可执行或被授权边界禁止时跳过并返回结构化 `unavailable`/`blocked`；普通路由无可用引擎且没有显式社区来源/可配置 hosted X 时仍 `no_engines` 失败；显式 archive/hosted 来源经同一 fused 底座继续，未就绪/不支持/失败仍逐渠道披露，不制造可用来源。
+- `run.community` 输出固定结构：`input`、`source`、`choice`、`requested`、`effective`、`outcome`、`cacheHit`、`reason`、`usage`，并可附 `platforms` 与有类型 `channels`（backend/provider/retrieval_mode、覆盖/后处理诊断、原 engine stats 与复用事实）；状态只来自共享核心的结构化执行记录，不解析 warnings 文案，也不从 `communityUsed` 推断成功。
+- 公开 `community_search` 入口开关只关闭公开入口，不是内部引擎授权表；searcher 对 fused_search/fetch_page 的依赖检查也不适用于本流程。
 - 当前内置 snapshot 没有独立的 X 禁用/宿主权限配置，`fallback.available` 表示既有无需凭据入口可尝试，不是联网成功保证。`blocked` 仅在宿主明确提供 `capability.x.blocked` 时产生，不会把公开工具 OFF 当作内部禁令；配置不足、实际失败与无引擎分别按真实路径披露，不能仅凭官方不可用关闭 fallback。
+- `usage.engineRequests` 按本次真实派发计数；共享底座的 snapshot 专用 engineRequestsNow 将嵌套 cache/in-flight 的旧观察剔除，`run.engineStats`/渠道 engine_stats 仍可保留原执行观察。Reddit 自动发现 subreddit 的 Web 请求也纳入观察；archive 缓存命中但本次重新做了发现，不称整条通道 cache_hit。
 - `run.community.usage` 保留有限的 `officialAttempted` / `fallbackAttempted` / `dispatchedNow` / `inFlight` 布尔标记及计数。HTTP/账单 token 未观察到时为 null；共享缓存或 in-flight 复用的本次派发/请求计数为 0，原 `partial` 等执行状态仍保留，不重复计费式计数。
 
 ## 4. 判断、价值与来源
@@ -71,21 +73,33 @@
 
 beta.6 保留原先默认目标 10 / 容量 32 的筛选余量比例；12 条目标对应 39，50 条目标对应 160。该容量在一次检索前确定，并贯穿 engine 请求、共享快照截取、缓存键及 `run.limits.candidateLimit`。内部显式容量覆盖仍有权威性并校验整数 1–500；覆盖小于目标时仍披露 `targetExceedsReviewCap`。不追加检索，不因已够数量提前停止，也不保证上游能供足或筛选后必然足量。扩大目标会增加判断量；标准四条批次下，160 个实到候选需约 1 次策略 + 40 批 Jev 判断（长文本尺寸拆批、重试另计），默认 10 条目标仍为原容量。
 
-网页与 X/community 共用全局快照上限，不表示两条支路各自都能供满该容量：既有 X 支路最多返回 30 个候选，beta.6 扩大全局容量不改变它。若 160 条容量被填满，其余至少 130 条须来自网页；实际供应和筛选后数量仍不保证。
+网页与 community 共用全局快照上限，不表示各支路都能供满容量。直接社区入口最终 max_results 上限为 30；fused 的 candidateMode 会延后最终总限额，多平台候选可以超过 30，再与 Web 一起按原融合分进入声明的 32–160 快照。X 自身候选上限仍为 30，其他 provider 各有既有采集/响应容量（索引路径不会在最终硬过滤前按每域两条截断）。因此不能声称“填满 160 必须至少 130 来自普通 Web”；单次有界获取、实际供应和筛选后数量仍不保证。
 
 用量计量（`screening-metering-v3-no-cumulative-cap`）只记录发生过的调用与估算，并在 `usage` 中披露：`fusedCalls`、`engineRequests`（null=未知）、`jevCalls`、`jevHttpAttempts`、`jevRetries`、`jevInputTokensEstimated`、`jevTokensEstimatedReserved`、`jevInputTokens`/`jevOutputTokens`（未上报即 null）、`serverUsageCalls`、`unknownUsageCalls`，以及本层 `fetch*` 的真实 0。达到任何旧上限都不会拒绝后续请求，也不会中止已有效结果。
 
-真实单请求超时、有限重试、认证/限流/网络错误、SSRF/重定向与内容安全、显式取消继续生效；取消后不派发新请求，批次失败保留已有效材料。MCP/DSH 的 `adaptive_search`、`fused_search`、`x_search` 均不设置整次搜索总时限；SDK/宿主/提供商自身的外部硬限制仍可能存在，不能将它们描述为无限运行。`fetch_page` 的读取保护及研究子任务显式时限不因本补充取消。
+真实单请求超时、有限重试、认证/限流/网络错误、SSRF/重定向与内容安全、显式取消继续生效；取消后不派发新请求，批次失败保留已有效材料。MCP/DSH 的 `adaptive_search`、`fused_search`、`community_search` 均不设置整次搜索总时限；SDK/宿主/提供商自身的外部硬限制仍可能存在，不能将它们描述为无限运行。`fetch_page` 的读取保护及研究子任务显式时限不因本补充取消。
 
 ## 6. 返回、分页与持久化
 
 - 所有新研究直接 `schemaVersion=6`，`run.judgment` 记录真实 provider / requestedModel / resolvedModel / transport / adapterVersion；未知身份保持 null。`run.community.source` 为 judge 或 explicit，策略版本：`fused-screening-mix-v2-prototype`、`screening-judgement-v4-no-scope-no-language`、`screening-strategy-v2-community-no-language`、`no-scope-v1`、计量 `screening-metering-v3-no-cumulative-cap`。
+- v6 选中结果可附有类型 `provenance`：原 engine/rank、URL/标题/日期与 platform/provider/backend/retrieval_mode/content_type。不装原始 payload、会话或未审查的重复全文；单行最多 64 条，超出披露 `provenanceTruncated:true`。native/archive 使用 `community_excerpt` basis，web-index 仍为 `search_excerpt`；标签/来源数量不证明独立性或覆盖。旧 v5/v6 未含这些字段仍可读，不补造。`inputSummary` 可以保留明确的 platform_options，页面元数据过大时只省略本页 options 摘要并告警，私有保存原记录不改。
 - 结果行含 ID/rank、URL/标题/准确摘录、basis/日期/文本与分数版本、真实来源、`valueLevel`/`valueLabel`、分数组件、来源折扣与偏好匹配、有意义的 value/discount confidence。
 - `selection` 给出 `requested`/`returned`/`targetMet`/`stopReason`/`incomplete`；`diagnostics` 给出计数守恒与排除原因；`outsideReview`/`unreviewed` 统计尚未进入判断或快照之外的候选；已派发但判断不可用的候选另计入 `judgementUnavailable` / `assessmentUnavailable` / `safetyUnavailable`，因此 `unreviewed=0` 不代表全部判断有效。失败或取消批次的 `judgeFailures` 是派发失败计数，原因结合 `stopReason` 查看；不可用判断绝不当作低价值或不存在。`targetMet` 只表示数量。
 - 新响应不返回 `keywordProgress`、`retrievalSufficient`、`coverageComplete`、`scopeSummary`、`convergence`、`finalReview`、`tier`/`valueScore` 等旧字段，也不填假零/假 true。
 - 页面软容量为 96,000 UTF-8 字节（原先 45,000），元数据仍保留 16,000 字节预算；按三条 8,000 字符中文摘录（约 72,000 字节）及字段开销协调容量，避免常规长中文结果被迫每页一条。page_size 仍是条数上限，不保证装满；超软限单条仍完整交付并告警，绝不截改已审摘录。读取/完整保存集合的语义不变。合法长中文或 JSON 转义输入若使元数据超限，页面仅缩短 `inputSummary` 的 Unicode 完整前缀并告警；真实检索/判断输入、已审摘录、计数与使用量不变，显式保存成功时私有快照保留完整输入。历史 v1 元数据仍原样返回，不套用此缩短。
 - 分页：进程内共享 30 分钟 / 32 份页面池，`s6:` 对应新 v6 运行，`s5:` 对应原 v5、`h1:` 对应历史只读恢复；拒绝裸 UUID.offset、`s4:`、过期/驱逐/越界 cursor，且零网络。`clearAllCaches` 只清内存/检索缓存，不删除持久快照。
 - 持久化：新写入 `search-boost-research-v3` + `metadata.schemaVersion=6`；旧 v2/schema 5 保留原身份和 s5: 读取，不补造 run.judgment；读取按 `format` 分派，v3/v2 校验失败绝不降级其他格式。旧 v1 文件只读恢复，返回 `restoration={historical:true, originalFormat, originalSchemaVersion}` 与 `h1:` cursor，保留原结果与元数据、不伪造 v5 字段、不就地升级、不刷新 `savedAt`。存储保留 64MiB 上限、UUID 文件名单硬链接与 NOFOLLOW 校验、0700/0600 私有原子写入、递归白名单清洗、取消不返回成功 ID、CLI 离线 `research list`/`research export` 与 `wx` 不覆盖。
+
+- 多渠道说明文本过大时，分页仅在本页裁去 warning/note、必要时省略逐渠道 engine_stats 明细，并以 `details_truncated:true` 和页面告警披露；状态、usage、覆盖/后处理计数及全局 engineStats 保留，完整私有保存记录不改。旧历史 h1 不套用新裁剪。
+- 非 X 日期按观测精度验证：qualified instant 先投影到 UTC 日而非原文的本地日期前缀；无时区 ISO 不猜时区，缺日的月观察不猜每月 1 日。仅日日期代表整天，不冒充午夜；整天与精确硬窗口仅部分重叠则日期未能验证、排除并告警。跨索引/重复身份的日期或作者矛盾不 first-wins；native 精度补充仍需相容，X post ID 的 Snowflake 日期保持更强权威且不改写引擎原观察。平台硬条件也约束其域名下的未知内容路径，不让主页/账号页冒充符合类别的内容。
+
+### 使用同一 fused 社区底座
+
+```json
+{"questions":["What concrete Node.js migration failures have developers reported?"],"intent":"Find first-hand failures, reproduction steps and counterexamples.","community":["reddit","zhihu"],"platform_options":{"reddit":{"subreddits":["node"],"max_pages":2},"zhihu":{"content_type":"answer","query":"Node.js 升级失败"}},"max_results":10,"page_size":3}
+```
+
+Web 查询不改写；中文 query 只由调用者明确提供给知乎支路。社区与 Web 在最终硬作者/日期/类别/范围过滤后共享 fused 快照、原引擎票和判断，索引包装不增加独立社区票。不会调用分页 facade 或返回 c1 游标，保存/读取仍用 Adaptive s6/v3，并且零新检索/判断。架构与离线证据见 [滚动接入设计](adaptive-community-integration-spec.md)。
 
 ## 7. 失败语义
 

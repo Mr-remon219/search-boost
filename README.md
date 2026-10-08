@@ -41,7 +41,7 @@
   - [Tool Responsibilities & Boundaries](#tool-responsibilities--boundaries)
   - [1. `fused_search` Multi-Engine Search](#1-fused_search-multi-engine-search)
   - [2. `fetch_page` Smart Content Reader](#2-fetch_page-smart-content-reader)
-  - [3. `x_search` X (Twitter) Intelligence](#3-x_search-x-twitter-intelligence)
+  - [3. `community_search` X (Twitter) Intelligence](#3-community_search-x-twitter-intelligence)
   - [4. `adaptive_search` Jev / Laya Intent-Guided Search (Experimental)](#4-adaptive_search-jev--laya-intent-guided-search-experimental)
   - [Engine Pools & Scoring Presets](#engine-pools--scoring-presets)
 - [Parallel Multi-Agent Research Workflows](#parallel-multi-agent-research-workflows)
@@ -59,7 +59,7 @@
   Queries multiple search providers in parallel. Features an out-of-the-box **keyless free pool** (Bing, DuckDuckGo, Exa-free, AnySearch) and a keyed **API pool** (Tavily, Brave, Exa, AnySearch, TinyFish). Automatically performs cross-engine URL deduplication, domain routing, and relevance re-ranking.
 - **Clean Webpage Content Extractor (`fetch_page`)**  
   Fetches the origin first for low latency, with optional same-route curl compatibility fallback and Jina Reader backup. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
-- **X / Twitter Community Intelligence (`x_search`)**  
+- **X / Twitter Community Intelligence (`community_search`, `engines:["x"]`)**
   Retrieves public posts, user timelines, and discussion threads via official xAI API or an anonymous fallback channel. Derives UTC timestamps from verifiable Snowflake post IDs and applies author/date filters only when metadata can be verified. Coverage may be incomplete, stale or empty; a retrieved sample does not establish platform-wide sentiment.
 - **Jev / Laya Intent-Guided Search (`adaptive_search` · Experimental)**
   Supply one full question and a required research intent. One pre-search judgment strategy request selects the fixed ranking preset and (when community is omitted) whether to add the already-wired community branch; one bounded fused snapshot (32 candidates for targets up to 10; larger targets keep the same headroom ratio, at most 160) is then screened with fixed safety, prototype value 3/4/5 and source-discount options. No keyword planning, no constraints gate, no language check, no automatic page read, and no self-set cumulative budget stop; cursor and saved-result pagination only replay stored results. No claim of verified or complete answers.
@@ -191,13 +191,15 @@ The default **flat** home lists these actions in order:
 | :--- | :--- |
 | Setup wizard; Manage agent integrations; Status | Guided setup; install / scoped refresh / confirmed uninstall; read-only status |
 | Search engine configuration; Default search layer; Tool switches | Choose individual engines; `free` / `api`; shared MCP / Pi / DSH switches |
-| X credentials; judgment models (Jev / Laya) | Masked credential management |
+| Community configuration; judgment models (Jev / Laya) | Platform sources / enablement / X credentials; masked judgment credentials |
 | Native web search; Print MCP snippet | Explicit permission choices; read-only snippets |
 | TUI settings; Exit | Menu layout before display language; close the console |
 
 **TUI settings → Menu layout** offers flat / folder. Folder mode retains Installation & integrations, Search & tools, Services & credentials and Status. Completed actions return to the same flat home entry or their folder submenu. Escape cancels/navigates back; Ctrl+C exits. A layout switch immediately returns to the new home. Management returns to its own submenu; interactive uninstall and Grok cache reconstruction default to cancel. Partial failures are reported, not styled as success.
 
 Layout and language changes apply immediately and are saved in `~/.search-boost/config/tui.json` (or `$SEARCH_BOOST_HOME/config/tui.json`). Missing layout (including legacy language-only settings) defaults to flat. Without a saved language preference, Chinese system locales select Simplified Chinese; other locales select English. The preference also applies to standalone interactive setup/config commands, not non-interactive CLI output, search results or agent replies. Tool names, commands, paths, MCP snippets and raw upstream errors remain unchanged. Dry-run previews layout/language without saving; malformed settings are warned about, not overwritten. See [TUI navigation and language settings](docs/tui.md).
+
+**Community configuration** opens Reddit, X, Bilibili, Zhihu and Xiaohongshu directly. Each page shows a short setup status and only relevant actions: choose a search source, configure its required fields, or disable the platform. X credential actions are on the X page, not another wizard. Browser setup instructions appear when needed; connections are not probed. Source changes are previewed and saved atomically; cancellation and dry-run write nothing. `config x` and `/x-login` / `/x-logout` remain available.
 
 ### Tool switches
 
@@ -223,7 +225,7 @@ When integrated, agents automatically receive standard tool definitions and auto
 | :--- | :--- | :--- |
 | `fused_search` | Parallel multi-engine querying, deduplication, and diversity re-ranking | A single search step; follow-up decisions remain with the parent agent |
 | `fetch_page` | Reading clean content from public URLs with optional keyword focus | Not an authenticated browser; local network and proxy policy still apply |
-| `x_search` | Retrieving public X posts, author timelines, or discussion threads | Does not guarantee exhaustive comment threads or total sentiment sampling |
+| `community_search` (`engines:["x"]`) | Retrieving public X posts, author timelines, or discussion threads | Does not guarantee exhaustive comment threads or total sentiment sampling |
 | `adaptive_search` | **Experimental**: one bounded fused snapshot + fixed-option judgment screening for one question and a required intent | Selected URLs with reviewed extracts and value labels; targetMet is quantity only, not verified answers |
 | `search_stats` | Reading engine status, memory cache hits, and recent diagnostic stats | Read-only; configuration readiness does not guarantee active external network reachability |
 | `search_layer` | Viewing or switching compatibility search layer in MCP | `show` is read-only; changing layers mutates persistent configuration on disk |
@@ -249,7 +251,7 @@ Dispatches queries across engines concurrently, normalizes URLs, strips redirect
 - **`engine_pool`**: `free` (keyless Bing, DuckDuckGo, Exa-free, AnySearch), `api` (configured API engines), or `hybrid` (both pools). Unavailable or disabled engines are skipped. When omitted, the compatibility layer maps `free` to the free pool and `api` to hybrid.
 - **`ranking`**: Final engine-weight presets: `balanced` (default), `research`, or `fresh`. They do not change query variants, search depth or recency filters, and do not establish source authority or freshness.
 - **`complexity`**: `simple` (1 query variant), `medium` (up to 2 variants), `complex` (up to 3 deep variants).
-- **`community`**: Boolean (`false` by default). Set to `true` to blend real-time X developer discussions into the final result quota.
+- **`community`**: Platform-name array (e.g. `["reddit","x","zhihu"]`) or legacy boolean. `false`/`[]` disables; old `true` selects X only. Defaults false, shares the final quota, and never enables a backend.
 
 ---
 
@@ -274,13 +276,20 @@ Reads webpage content from search URLs. Reads and cleans the origin first; PDFs 
 
 ---
 
-### 3. `x_search` X (Twitter) Intelligence
+### Community Search (initial implementation)
+
+`community_search` and `community_backend` are available through MCP, Pi and DSH for Reddit, X, Bilibili, Zhihu and Xiaohongshu. X retains its four existing modes; Reddit uses bounded Arctic Shift acquisition/checkpoints and local retrieval; Chinese platforms have public web-index adapters and an optional SearchBoost-owned read-only browser bridge, plus an optional Bilibili public video API. Retrieval mode and coverage are disclosed. The separate `x_search` entry is removed; select `engines:["x"]` in `community_search`. Fused/Adaptive accept platform arrays; legacy `true` still means X only.
+
+Use `community_search` with `{"engines":["reddit","x","zhihu"],"query":"Node.js migration experiences"}`. Browser setup is manual via `search-boost community-browser` and the unpacked `browser/community-bridge/` extension; no automatic login, installation or cookie export. Backend `list`/`check` inspect configuration readiness without probing the network; `register`/`update`/`remove` modify local configuration only when authorized. Read `search-boost://community-capabilities` for supported platforms and backend state. Fused and Adaptive accept the same nullable `platform_options` for explicitly selected community channels, using one shared fused candidate core; Adaptive preserves typed routes/provenance and offline saved pages. See [Adaptive community integration](docs/adaptive-community-integration-spec.md). Use nullable `platform_options` for independent platform conditions; direct results retain typed platform `data` and return snapshot pages (`page_size`, `next_cursor`). Cursor reads add no network calls; `save_results:true` enables private persistence and `saved_result_id` restores historical evidence. See [current community usage and migration boundaries](docs/community-search.md), the [dynamic implementation plan](docs/community-search-plan.md), and the [rolling platform processing/pagination design](docs/community-platform-pipeline-spec.md).
+
+### 3. `community_search` X (Twitter) Intelligence
 
 Designed for real-time technical tracking and first-party developer updates. Supports keyword search, author timelines, and thread conversations.
 
 **Tool Arguments Example**:
 ```json
 {
+  "engines": ["x"],
   "query": "Claude 3.7 Sonnet hybrid reasoning from:AnthropicAI",
   "type": "keyword",
   "max_results": 5
@@ -300,7 +309,7 @@ Designed for real-time technical tracking and first-party developer updates. Sup
 
 **Laya support**: choose Change configuration → Laya and enter the self-hosted API prefix (without `/systemone`) and an optional API key. New configurations use `multilingual` and server-default token budgets; changes to an existing destination preserve its model and budgets. Leave the key empty to keep a stored key, or enter `-` to clear an optional Laya key. No empty Bearer is sent. Profile names are automatic; Existing configuration still supports switching and deletion. Missing diagnostics, truncation, collapsed options, abstention or absent offline head-capacity evidence make judgments unavailable, never model-approved residual choices. See [capacity evidence and migration](docs/v0.2.5-release.md). New runs identify the selected provider in `run.judgment`; historical records are never silently upgraded.
 
-Supply **one question** (`questions` has exactly one item) plus a **required research `intent`** and optional soft `preferences`. Write them in English as a caller instruction: the server never language-checks, rejects or translates them, and any language is searched exactly as written. The original question is the only query — there is no keyword planning and no query expansion. One pre-search judgment strategy request selects the fixed `balanced`/`research`/`fresh` ranking and, when `community` is omitted, `enable`/`disable`/`unknown` for the already-wired community (X) branch; an explicit `community` true/false overrides that choice and is never asked back. That single fused call collects a **bounded snapshot: 32 candidates for targets up to 10, ceil(max_results×32/10) for larger targets (at most 160)** (web and community rows share it), and every declared candidate is screened with fixed options: safety `clear`/`violation`/`unavailable`, prototype value levels 0-5, source discounts from real positive-contribution engines, and one match per preference. Only safe material with an established value 3/4/5 is delivered, ranked by the versioned screening formula; confidence is audit-only. There is no early stop at the first K acceptable links, no automatic page read, and no self-imposed cumulative cost, token, request-count or whole-run time budget — real single-request timeouts, limited retries, authentication/rate-limit failures, safety refusals and explicit cancellation still apply.
+Supply **one question** (`questions` has exactly one item) plus a **required research `intent`** and optional soft `preferences`. Write them in English as a caller instruction: the server never language-checks, rejects or translates them, and any language is searched exactly as written. The original question is the Web query — there is no keyword planning or model query expansion; only explicit caller-supplied platform queries may override their community leg. Shared nullable `platform_options` apply through the same fused base (not a second paged community call) and require matching explicit community selection. One pre-search judgment strategy request selects the fixed `balanced`/`research`/`fresh` ranking and, when `community` is omitted, `enable`/`disable`/`unknown` for the already-wired community (X) branch; an explicit `community` boolean or platform array overrides that choice and is never asked back; legacy true still selects X only and arrays never enable backends. That single fused call collects a **bounded snapshot: 32 candidates for targets up to 10, ceil(max_results×32/10) for larger targets (at most 160)** (web and community rows share it), and every declared candidate is screened with fixed options: safety `clear`/`violation`/`unavailable`, prototype value levels 0-5, source discounts from real positive-contribution engines, and one match per preference. Only safe material with an established value 3/4/5 is delivered, ranked by the versioned screening formula; confidence is audit-only. There is no early stop at the first K acceptable links, no automatic page read, and no self-imposed cumulative cost, token, request-count or whole-run time budget — real single-request timeouts, limited retries, authentication/rate-limit failures, safety refusals and explicit cancellation still apply.
 
 ```json
 {
@@ -328,7 +337,7 @@ Supply **one question** (`questions` has exactly one item) plus a **required res
 
 `engine_pool` selects engines, `ranking` selects shared cross-pool weights, and `complexity` controls query breadth and depth, not scoring weights. AnySearch is one logical engine: anonymous in free, key-required in api, and key-preferred in hybrid. Configure `ANYSEARCH_API_KEY` or `config keys --set anysearch=KEY`.
 
-TinyFish Search is a keyed API engine: configure `TINYFISH_API_KEY` or `config keys --set tinyfish=KEY`. It joins api/hybrid, not the default free pool (explicit `engines` still overrides pool membership). Search is zero-priced at a $0 wallet balance, with current limits of 30 requests/minute and 500/hour; each query variant counts as a request. No automatic pagination or inline Fetch is used. Requests default to the service's US/en locale. Yahoo has been removed; explicit Yahoo engine/weight inputs are rejected.
+TinyFish Search is a keyed API engine: use TUI → Search engine configuration → TinyFish Search (folder layout: Services & credentials → Search engine configuration), `TINYFISH_API_KEY`, or `config keys --set tinyfish=KEY`. The TUI supports key replacement/removal, custom/reset Base URLs and masked status; use Enable / disable engines to select `tinyfish` without silently expanding an existing whitelist. It joins api/hybrid, not the default free pool (explicit `engines` still overrides pool membership). Search is zero-priced at a $0 wallet balance, with current limits of 30 requests/minute and 500/hour; each query variant counts as a request. No automatic pagination or inline Fetch is used. Requests default to the service's US/en locale. Yahoo has been removed; explicit Yahoo engine/weight inputs are rejected.
 
 | Engine | balanced | research | fresh |
 | --- | ---: | ---: | ---: |

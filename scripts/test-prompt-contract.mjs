@@ -3,7 +3,8 @@ import './isolate-tests.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { FUSED_DESCRIPTION } from '../lib/search/routing.js'
-import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../lib/search/tool-descriptions.js'
+import { FETCH_DESCRIPTION } from '../lib/search/tool-descriptions.js'
+import { COMMUNITY_DESCRIPTION } from '../lib/community/schemas.mjs'
 import { ADAPTIVE_DESCRIPTION } from '../lib/search/screening/describe.js'
 import { ADAPTIVE_INPUT_SCHEMA, normalizeAdaptiveInput } from '../lib/search/screening/input.js'
 import { adaptiveCandidateLimit } from '../lib/search/snapshot-capacity.js'
@@ -46,7 +47,7 @@ dshExtension({ tools: { register: (tool) => dshTools.set(tool.name, tool) },
   web: { registerSearchProvider() {}, registerFetchProvider() {} },
   systemPrompt: { section: (section) => sections.push(section) }, get: () => ({ register() {} }) })
 for (const [name, description] of Object.entries({ fused_search: FUSED_DESCRIPTION,
-  fetch_page: FETCH_DESCRIPTION, x_search: X_DESCRIPTION, adaptive_search: ADAPTIVE_DESCRIPTION })) {
+  fetch_page: FETCH_DESCRIPTION, community_search: COMMUNITY_DESCRIPTION, adaptive_search: ADAPTIVE_DESCRIPTION })) {
   assert.equal(piTools.get(name).description, description)
   assert.equal(dshTools.get(name).description, description)
 }
@@ -84,7 +85,13 @@ assert.match(ADAPTIVE_DESCRIPTION, /quantity|数量/)
 assert.match(ADAPTIVE_DESCRIPTION, /whole|Every declared candidate/)
 assert.match(ADAPTIVE_DESCRIPTION, /no self-imposed cumulative/)
 assert.match(FETCH_DESCRIPTION, /focus miss/)
-assert.match(X_DESCRIPTION, /incomplete/)
+for (const tools of [piTools, dshTools]) {
+  assert.ok(tools.get('fused_search').parameters.properties.platform_options)
+  assert.ok(tools.get('adaptive_search').parameters.properties.platform_options)
+}
+assert.match(COMMUNITY_DESCRIPTION, /incomplete/)
+for (const text of [FUSED_DESCRIPTION, ADAPTIVE_DESCRIPTION, COMMUNITY_DESCRIPTION, MCP_POLICY_TEXT, injected.systemPrompt, policy]) assert.doesNotMatch(text, /\bx_search\b/)
+assert.ok(!piTools.has('x_search') && !dshTools.has('x_search'))
 for (const [name, field] of Object.entries(ADAPTIVE_INPUT_SCHEMA.properties)) {
   assert.ok(field.description, `${name} needs direct-call field guidance`)
 }

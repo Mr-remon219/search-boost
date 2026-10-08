@@ -35,7 +35,7 @@ try {
   console.error = logError
 }
 assert.deepEqual(errors, [], 'DSH startup must not silently swallow registration failures')
-const names = ['fused_search', 'fetch_page', 'adaptive_search', 'x_search', 'research_parallel', 'search_stats']
+const names = ['fused_search', 'fetch_page', 'adaptive_search', 'community_search', 'community_backend', 'research_parallel', 'search_stats']
 assert.deepEqual([...tools.view().visible.keys()].sort(), names.toSorted())
 for (const name of names) {
   const tool = tools.get(name)
@@ -48,8 +48,29 @@ for (const name of names) {
 }
 assert.equal(tools.schemas().length, names.length)
 assert.equal(tools.sdkSchemas().length, names.length)
-console.log('ok: all six tools register in real DSH and compile for native/TypeScript/Python presentation')
+console.log('ok: all seven tools register in real DSH and compile for native/TypeScript/Python presentation')
+const backendList = await tools.get('community_backend').execute({ action: 'list' }, {})
+assert.equal(backendList.changed, false)
+assert.deepEqual(validateJsonSchemaValue(tools.get('community_backend').output.schema, backendList), [])
+assert.equal(backendList.backends[0].provider, 'existing-x')
+await tools.get('community_backend').execute({ action: 'update', id: 'reddit-default', enabled: false }, {})
+const notImplemented = await tools.get('community_search').execute({ engines: ['reddit'], query: 'fixture' }, {})
+assert.equal(notImplemented.status, 'failed')
+assert.equal(notImplemented.channels[0].status, 'disabled')
+assert.deepEqual(validateJsonSchemaValue(tools.get('community_search').output.schema, notImplemented), [])
+await assert.rejects(() => tools.get('community_search').execute({ engines: ['x', 'x'], query: 'fixture' }, {}), /invalid arguments/)
+await assert.rejects(() => tools.get('community_backend').execute({ action: 'register', id: 'fixture', provider: 'existing-x', config: { token: 'not-accepted' } }, {}), /invalid arguments/)
 const cacheRuntime = process.argv[2] ? await import(new URL('../../lib/runtime.mjs', pathToFileURL(process.argv[2])).href) : await import('../lib/runtime.mjs')
+const communityPageRuntime = process.argv[2] ? await import(new URL('../../lib/community/pages.mjs', pathToFileURL(process.argv[2])).href) : await import('../lib/community/pages.mjs')
+const seededCommunity = communityPageRuntime.communityPages.save({ schema_version: 1, status: 'ok', results: 2,
+  items: [1, 2].map(id => ({ url: `https://www.zhihu.com/question/${id}`, platform: 'zhihu', provider: 'zhihu-web', backend: 'zhihu-default', retrieval_mode: 'web-index', content_type: 'question', data: { schema_version: 1, platform: 'zhihu', kind: 'question', question_id: String(id) } })),
+  channels: [], warnings: [], took_ms: 1,
+}, { pageSize: 1 })
+const nativeCommunityPage = await tools.get('community_search').execute({ cursor: seededCommunity.next_cursor, page_size: 1 }, {})
+assert.equal(nativeCommunityPage.page_results, 1)
+assert.equal(nativeCommunityPage.items[0].data.question_id, '2')
+assert.deepEqual(validateJsonSchemaValue(tools.get('community_search').output.schema, nativeCommunityPage), [])
+assert.deepEqual(validateJsonSchemaValue(tools.get('community_search').parameters, { engines: ['zhihu'], query: null, platform_options: { zhihu: { query: 'fixture', content_type: null } } }), [])
 cacheRuntime.PAGE_CACHE.set('page:https://example.test/legacy-cache', 'Historical cached document text. '.repeat(8))
 const legacyPage = await tools.get('fetch_page').execute({ url: 'https://example.test/legacy-cache' }, {})
 assert.equal(legacyPage.fetched_at, null)
@@ -101,11 +122,10 @@ const result = { query: 'fixture', effectiveWeights: { bing: 1 }, results: [{ ti
 assert.deepEqual(validateJsonSchemaValue(fused.output.schema, result), [])
 result.results[0].published = '2026-01-01'
 assert.deepEqual(validateJsonSchemaValue(fused.output.schema, result), [])
-// BUG-003: x_search always returns per-engine diagnostics; they must be part of
-// the host contract instead of failing `additionalProperties: false`.
-const xOut = tools.get('x_search').output.schema
-assert.equal(xOut.additionalProperties, false)
-for (const field of ['engineStats', 'enginesUsed', 'warnings']) assert.ok(field in xOut.properties, `x_search output must declare ${field}`)
+// X diagnostics now live in the selected community channel, not a duplicate tool.
+assert.ok(!tools.view().visible.has('x_search'))
+const channel = tools.get('community_search').output.schema.properties.channels.items
+for (const field of ['engine_stats', 'engines_used', 'warnings']) assert.ok(field in channel.properties)
 // BUG-003: a community (X) fused row keeps the public scoring/date/provenance
 // fields and never the internal scoring terms that select them.
 const communityRow = {
@@ -119,7 +139,7 @@ assert.deepEqual(validateJsonSchemaValue(fused.output.schema, { query: 'fixture'
 for (const internal of ['created_at', 'bestIndividual', 'groupEvidence', 'votingEngines']) {
   assert.notEqual(validateJsonSchemaValue(fused.output.schema, { query: 'fixture', results: [{ ...communityRow, [internal]: 1 }] }).length, 0, `${internal} must not be a public fused field`)
 }
-console.log('ok: x_search diagnostics are declared; community rows are public and still closed')
+console.log('ok: community channel diagnostics are declared; community rows are public and still closed')
 console.log('ok: nullable dates/cursors, engine maps, v5 and historical adaptive outputs all pass the real DSH validator')
 
 // The single-question contract must compile for DSH without weakening the

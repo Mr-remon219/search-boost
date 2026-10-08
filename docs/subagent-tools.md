@@ -25,7 +25,7 @@ without the owner's decision.
 contract and uses the configured Jev service; it is not a drop-in alias. Remove
 obsolete `deep_research` requirements and explicitly opt into `adaptive_search`
 only when that capability is wanted. Ordinary search uses `fused_search` and
-`fetch_page`; X search uses `x_search`.
+`fetch_page`; X-only search uses `community_search` with `engines:["x"]`; the retired `x_search` entry is not registered. Existing child allowlists are not automatically granted the replacement.
 
 ### Migration and diagnosis
 

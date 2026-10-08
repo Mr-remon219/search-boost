@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "SearchBoost Read-only Community Bridge",
+  "version": "0.1.0",
+  "description": "Explicitly enabled, fixed-platform search-card collection. No posting, cookie export, arbitrary scripts or login automation.",
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["http://127.0.0.1/*", "https://www.zhihu.com/*", "https://search.bilibili.com/*", "https://www.xiaohongshu.com/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_popup": "popup.html" }
+}

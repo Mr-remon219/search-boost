@@ -1,7 +1,7 @@
 {
   "name": "search-boost",
   "version": "0.2.5-beta1",
-  "description": "Multi-engine web search for coding agents — one SearchBoost core (fused search, fetch, X) with MCP (Cursor, Codex, Claude Code, Grok Build, Antigravity), pi extension, and DeepSeek Harness bundle adapters",
+  "description": "Multi-engine web search for coding agents — one SearchBoost core (fused search, fetch, five-platform community retrieval) with MCP (Cursor, Codex, Claude Code, Grok Build, Antigravity), pi extension, and DeepSeek Harness bundle adapters",
   "type": "module",
   "bin": {
     "search-boost": "./cli.mjs"
@@ -37,11 +37,13 @@
     "templates/",
     "docs/",
     "assets/",
+    "browser/",
     "README.md",
     "README_zh.md",
     "LICENSE",
     "scripts/build-plugin.mjs",
-    "scripts/sync-grok-plugin.mjs"
+    "scripts/sync-grok-plugin.mjs",
+    "scripts/community-browser-bridge.mjs"
   ],
   "scripts": {
     "start": "node cli.mjs serve",
@@ -64,6 +66,8 @@
     "check": "node scripts/check-syntax.mjs",
     "test:fusion": "node scripts/test-fused-baseline.mjs && node scripts/test-noff-community-snapshot.mjs && node scripts/test-fusion-errors.mjs && node scripts/test-fusion-scoring.mjs",
     "test:x": "node scripts/test-x-pipeline.mjs",
+    "test:community": "node scripts/test-community.mjs && node scripts/test-community-platforms.mjs && node scripts/test-community-bridge.mjs && node scripts/test-community-worker.mjs && node scripts/test-community-review.mjs && node scripts/test-community-pipeline.mjs && node scripts/test-community-pages.mjs && node scripts/test-adaptive-community.mjs && node scripts/test-adaptive-community-review.mjs",
+    "community:browser": "node scripts/community-browser-bridge.mjs",
     "test:engines": "node scripts/test-engine-requests.mjs && node scripts/test-engine-base-urls.mjs && node scripts/test-tinyfish.mjs",
     "test:xauth": "node scripts/test-xauth.mjs",
     "test:jev": "node scripts/test-jev.mjs",
@@ -71,7 +75,7 @@
     "test:adaptive": "node scripts/test-adaptive-capacity.mjs && node scripts/test-adaptive-search.mjs && node scripts/test-screening-hosts.mjs",
     "jev:probe": "node scripts/jev-probe.mjs",
     "test:cli": "node scripts/test-cli-surface.mjs",
-    "test:tui": "node scripts/test-tui.mjs && node scripts/test-manage-tui.mjs",
+    "test:tui": "node scripts/test-tui.mjs && node scripts/test-tui-flat-layout.mjs && node scripts/test-community-tui.mjs && node scripts/test-manage-tui.mjs",
     "test:feedback": "node scripts/test-user-feedback.mjs",
     "prepublishOnly": "npm run check && npm run check:ci && npm run audit:dependencies && npm run test:isolation",
     "test:search": "node scripts/test-search-routing.mjs",
@@ -100,6 +104,9 @@
     "ajv": "^8.20.0",
     "undici": "^6.28.1",
     "zod": "^3.25.76"
+  },
+  "overrides": {
+    "proxy-addr": "^2.0.8"
   },
   "optionalDependencies": {
     "pdfjs-dist": "6.2.108"
