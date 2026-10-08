@@ -1,13 +1,14 @@
 import { guardedTool, watchToolStates } from '../../lib/tool-config.mjs'
+import { COMMUNITY_SEARCH_INPUT, COMMUNITY_BACKEND_INPUT, COMMUNITY_OUTPUT, COMMUNITY_BACKEND_OUTPUT, COMMUNITY_DESCRIPTION, COMMUNITY_BACKEND_DESCRIPTION, formatCommunityResult } from '../../lib/community/schemas.mjs'
 import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/screening/input.js'
-import { FETCH_DESCRIPTION, X_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
+import { FETCH_DESCRIPTION } from '../../lib/search/tool-descriptions.js'
 import { FUSED_DESCRIPTION, FUSED_ROUTING_PROPERTIES } from '../../lib/search/routing.js'
 // pi host adapter — pi coding agent extension.
 //
 // Loaded by pi via package.json `pi.extensions` (pi install npm:search-boost),
 // by `pi -e <this file>`, or through the ~/.pi/agent/extensions shim written by
 // `search-boost install -t pi`. Registers the search tools (fused_search,
-// fetch_page, search-parallel-subagent, x_search), the TUI commands
+// fetch_page, search-parallel-subagent, community_search, community_backend), the TUI commands
 // (/web_change, /x-login, /x-logout, /search-cache, /search-audit) and injects
 // the <search_balance> policy (agents/pi/inject.md) into pi's system prompt.
 //
@@ -24,7 +25,6 @@ import {
   AuditLog,
   ENGINE_ORDER,
   LAYER_LABELS,
-  X_MODES,
   cacheSizes,
   clearAllCaches,
   countWords,
@@ -37,7 +37,8 @@ import {
   runAdaptiveSearch,
   runFetchPage,
   runFused,
-  runXSearch,
+  runCommunitySearch,
+  runCommunityBackend,
   switchLayer,
   tierName,
   xAuthCommands,
@@ -74,7 +75,7 @@ export default function searchBoostExtension(pi) {
   const registerTool = (definition) => pi.registerTool(definition.name === ADAPTIVE_TOOL_NAME ? definition : guardedTool(definition))
   let stopWatching
   let removedBySwitch = new Set()
-  const owned = ['fused_search', 'fetch_page', 'adaptive_search', 'search-parallel-subagent', 'x_search']
+  const owned = ['fused_search', 'fetch_page', 'adaptive_search', 'search-parallel-subagent', 'community_search', 'community_backend']
   pi.on('session_start', () => {
     stopWatching?.()
     removedBySwitch = new Set()
@@ -166,7 +167,7 @@ export default function searchBoostExtension(pi) {
         minScore: params.min_score ?? 0,
         depth: params.depth ?? null,
         complexity: params.complexity ?? 'medium',
-        enginePool: params.engine_pool, ranking: params.ranking, engineWeights: params.engine_weights, community: params.community,
+        enginePool: params.engine_pool, ranking: params.ranking, engineWeights: params.engine_weights, community: params.community, platform_options: params.platform_options,
         signal,
       })
       audit.write({
@@ -195,6 +196,7 @@ export default function searchBoostExtension(pi) {
         `Layer: ${res.layer} — ${LAYER_LABELS[res.layer]}`,
         `Tier: ${res.tier} — Queries used: ${(res.queriesUsed ?? []).join(' | ')}`,
         `Score: ${res.scoreVersion}; Pool: ${res.enginePool}; ranking: ${res.ranking}; enginesUsed: ${res.enginesUsed.join(', ')}; effectiveWeights: ${JSON.stringify(res.effectiveWeights)}; communityUsed: ${res.communityUsed}`,
+        ...(res.communityChannels?.length ? [`Community routes: ${res.communityChannels.map(c => `${c.platform}: ${c.status}/${c.retrieval_mode ?? 'unavailable'}${c.note ? ` — ${c.note}` : ''}`).join('; ')}`] : []),
         `Engines: ${stats}${res.cacheHit ? ' — cache hit' : ''} — ${res.tookMs}ms`,
         ...(res.warnings ?? []).map((w) => `WARNING: ${w}`),
         includeDomains.length > 0 ? `Include domains: ${includeDomains.join(', ')}` : '',
@@ -220,7 +222,7 @@ export default function searchBoostExtension(pi) {
       })
       return {
         content: [text(lines.join('\n').trim())],
-        details: { scoreVersion: res.scoreVersion, results: res.results, enginesUsed: res.enginesUsed, effectiveWeights: res.effectiveWeights, communityUsed: res.communityUsed, warnings: res.warnings, enginePool: res.enginePool, ranking: res.ranking, engineStats: res.engineStats, cacheHit: Boolean(res.cacheHit), tookMs: res.tookMs, layer: res.layer, tier: res.tier },
+        details: { scoreVersion: res.scoreVersion, results: res.results, enginesUsed: res.enginesUsed, effectiveWeights: res.effectiveWeights, communityUsed: res.communityUsed, communityPlatforms: res.communityPlatforms, communityChannels: res.communityChannels, warnings: res.warnings, enginePool: res.enginePool, ranking: res.ranking, engineStats: res.engineStats, cacheHit: Boolean(res.cacheHit), tookMs: res.tookMs, layer: res.layer, tier: res.tier },
       }
     },
   })
@@ -463,7 +465,7 @@ export default function searchBoostExtension(pi) {
             return `[${e.ts.slice(11, 19)}] fetch ${e.ok ? 'ok' : 'FAIL'} ${e.via} ${e.domain}${e.ok ? ` (${e.wordCount} words, ${e.tookMs}ms)` : `: ${e.error}`}`
           }
           if (e.type === 'xsearch') {
-            return `[${e.ts.slice(11, 19)}] x_search ${e.subtype} "${(e.query ?? e.postId ?? '').slice(0, 60)}" -> ${e.results} results${e.error ? ` ERROR: ${e.error.slice(0, 80)}` : ''}, ${e.tookMs}ms${e.cacheHit ? ' (cache)' : ''}`
+            return `[${e.ts.slice(11, 19)}] historical X ${e.subtype} "${(e.query ?? e.postId ?? '').slice(0, 60)}" -> ${e.results} results${e.error ? ` ERROR: ${e.error.slice(0, 80)}` : ''}, ${e.tookMs}ms${e.cacheHit ? ' (cache)' : ''}`
           }
           return `[${e.ts.slice(11, 19)}] research "${e.query.slice(0, 60)}" r${e.round ?? e.rounds ?? '?'} ${e.sources}s ${e.tookMs}ms`
         })
@@ -556,114 +558,32 @@ export default function searchBoostExtension(pi) {
     },
   })
 
-  /* ------------------------------ x_search ------------------------------ */
-
-  registerTool({
-    name: 'x_search',
-    label: 'X (Twitter) Search',
-    description: X_DESCRIPTION,
-    promptSnippet: 'Retrieve available X posts, account material or thread material',
-    promptGuidelines: ['A retrieved sample or incomplete thread does not establish overall sentiment, completeness or real-time availability.'],
-    parameters: {
-      type: 'object',
-      properties: {
-        type: { type: 'string', enum: X_MODES, description: 'Which X search mode: keyword (X advanced syntax), semantic (natural language), user (accounts), thread (conversation by post id)' },
-        query: { type: 'string', description: 'Search query (keyword: X advanced syntax; semantic: natural language)' },
-        username: { type: 'string', description: 'Account handle for type=user; keyword from: filters belong in query' },
-        post_id: { type: 'string', description: 'X post/status id or x.com/.../status/<id> URL (type=thread)' },
-        max_results: { type: 'integer', minimum: 1, maximum: 10, default: 5, description: 'Max results' },
-        from_date: { type: 'string', description: 'Inclusive start date, YYYY-MM-DD (UTC); in user mode filters recent posts' },
-        to_date: { type: 'string', description: 'Inclusive end date, YYYY-MM-DD (UTC); in user mode filters recent posts' },
-        allowed_x_handles: { type: 'array', items: { type: 'string' }, description: 'Only consider posts from these handles (max 20)' },
-        excluded_x_handles: { type: 'array', items: { type: 'string' }, description: 'Exclude posts from these handles (max 20; not with allowed_x_handles)' },
-        model: { type: 'string', description: 'Driving model (default grok-4.6)' },
-        reasoning_effort: { type: 'string', enum: ['minimal', 'low', 'medium', 'high', 'xhigh'], description: 'Reasoning effort for the hosted X model (default low); results and latency can differ' },
+  /* -------------------------- community entries ------------------------- */
+  for (const [name, description, parameters, outputSchema, run, readOnly] of [
+    ['community_search', COMMUNITY_DESCRIPTION, COMMUNITY_SEARCH_INPUT, COMMUNITY_OUTPUT, runCommunitySearch, true],
+    ['community_backend', COMMUNITY_BACKEND_DESCRIPTION, COMMUNITY_BACKEND_INPUT, COMMUNITY_BACKEND_OUTPUT, runCommunityBackend, false],
+  ]) {
+    registerTool({
+      name, label: name, description, parameters, outputSchema,
+      annotations: { readOnlyHint: readOnly, destructiveHint: !readOnly, openWorldHint: readOnly },
+      promptSnippet: readOnly ? 'Selected-platform evidence: Reddit, X, Bilibili, Zhihu, Xiaohongshu' : 'Inspect or explicitly manage local community backend configuration',
+      promptGuidelines: [readOnly
+        ? 'Community samples and incomplete threads do not establish complete coverage or platform-wide sentiment.'
+        : 'Backend configuration writes require user authorization; never register or enable a backend merely because search failed.'],
+      async execute(_id, args, signal, onUpdate) {
+        onUpdate?.({ content: [text(`${name}: ${readOnly ? 'retrieving' : args.action}…`)] })
+        const result = await run(args, { signal, audit })
+        return { content: [text(formatCommunityResult(result))], details: result, structuredContent: result,
+          ...(result.status === 'failed' ? { isError: true } : {}) }
       },
-      required: ['type'],
-    },
-    async execute(_toolCallId, params, signal, onUpdate) {
-      const progress = onProgress(onUpdate)
-      const started = Date.now()
-      const kind = X_MODES.includes(params.type) ? params.type : 'keyword'
-      const subj = kind === 'thread' ? params.post_id : params.query ?? params.username
-      const evt = {
-        type: 'xsearch',
-        ts: new Date().toISOString(),
-        subtype: kind,
-        query: kind === 'thread' ? undefined : subj,
-        postId: kind === 'thread' ? params.post_id : undefined,
-        results: 0,
-        cacheHit: false,
-        tookMs: 0,
-      }
-      if (!subj) {
-        evt.error = kind === 'thread' ? 'post_id required' : 'query or username required'
-        evt.tookMs = Date.now() - started
-        audit.write(evt)
-        return { content: [text(`x_search ${kind} failed: ${evt.error}`)], details: { error: evt.error } }
-      }
-      if (params.allowed_x_handles?.length && params.excluded_x_handles?.length) {
-        return {
-          content: [text('x_search failed: allowed_x_handles and excluded_x_handles are mutually exclusive — pass only one')],
-          details: { error: 'mutually_exclusive_handles' },
-        }
-      }
-      progress(`x_search: ${kind} "${subj}" — hosted x_search ∥ multi-engine…`)
-      try {
-        const out = await runXSearch({ ...params, type: kind }, { signal })
-        evt.tookMs = Date.now() - started
-        evt.results = out.results
-        evt.cacheHit = Boolean(out.cacheHit)
-        evt.credential = out.credential
-        if (out.via === 'error') {
-          evt.error = out.error
-          audit.write(evt)
-          return { content: [text(`x_search ${kind} failed: ${out.error}`)], details: { error: out.error } }
-        }
-        audit.write(evt)
-        const body = renderItems(out.items ?? [])
-        const header = out.cacheHit
-          ? `X search: ${kind} "${subj}" — CACHE HIT (${evt.tookMs}ms)`
-          : out.via.startsWith('fallback:')
-            ? `X search: ${kind} "${subj}" — FALLBACK (via ${out.via.slice('fallback:'.length)}) ${out.results} result(s) in ${evt.tookMs}ms\n(${out.note ?? ''})`
-            : `X search: ${kind} "${subj}" — ${out.results} result(s) in ${evt.tookMs}ms (${out.credential})`
-        return {
-          content: [text(`${header}\n\n${body}`)],
-          details: {
-            results: out.results,
-            tookMs: evt.tookMs,
-            credential: out.credential,
-            cacheHit: Boolean(out.cacheHit),
-            xResults: out.xResults,
-            engineResults: out.engineResults,
-          },
-        }
-      } catch (err) {
-        evt.tookMs = Date.now() - started
-        evt.error = err instanceof Error ? err.message.slice(0, 500) : String(err)
-        audit.write(evt)
-        return { content: [text(`x_search ${kind} failed: ${evt.error}`)], details: { error: evt.error } }
-      }
-    },
-  })
-
-  function renderItems(items) {
-    return items
-      .map((it) => {
-        if (Array.isArray(it.recent_posts)) {
-          const posts = it.recent_posts.slice(0, 3)
-          return `${it.name} (@${it.username}) — followers ${it.followers ?? '?'}, verified ${it.verified ?? false}\n  bio: ${it.bio ?? ''}\n  recent: ${posts.map((p) => `${p.text}`.slice(0, 80)).join(' | ') || '(none)'}`
-        }
-        return `${it.author ? it.author + (it.username ? ` (@${it.username})` : '') + ': ' : ''}${it.text || it.url}`
-      })
-      .join('\n')
+    })
   }
 
   /* ------------------------------ /x-login /x-logout /web_change ------------------------------ */
 
   pi.registerCommand('x-login', {
     description:
-      'Import xAI credentials for x_search: /x-login (from your grok login), /x-login -k <XAI_API_KEY>, /x-login status. No grok subprocess needed afterwards.',
+      'Import xAI credentials for the community X backend: /x-login (from your grok login), /x-login -k <XAI_API_KEY>, /x-login status. No grok subprocess needed afterwards.',
     handler: async (args, ctx) => {
       const cmd = (args ?? '').trim()
       try {
@@ -688,7 +608,7 @@ export default function searchBoostExtension(pi) {
             return
           }
           xAuthCommands.setApiKey(key)
-          ctx.ui.notify(`x-login: API key saved → ${xAuthCommands.path()} (public api.x.ai will be used for x_search)`, 'info')
+          ctx.ui.notify(`x-login: API key saved → ${xAuthCommands.path()} (public api.x.ai will be used for community X)`, 'info')
           return
         }
         ctx.ui.notify('usage: /x-login | /x-login -k <XAI_API_KEY> | /x-login status', 'info')
@@ -700,13 +620,13 @@ export default function searchBoostExtension(pi) {
 
   pi.registerCommand('x-logout', {
     description:
-      'Remove the local xAI credentials: the official hosted x_search path is disabled and x_search falls back to the multi-engine / guest-GraphQL / oEmbed chain. grok CLI\'s own login is untouched. Usage: /x-logout',
+      'Remove the local xAI credentials: the hosted community X path is disabled and community X falls back to the multi-engine / guest-GraphQL / oEmbed chain. grok CLI\'s own login is untouched. Usage: /x-logout',
     handler: async (_args, ctx) => {
       const removed = xAuthCommands.logout()
       ctx.ui.notify(
         removed
-          ? 'x-logout: local credentials removed — x_search now uses the multi-engine / guest-GraphQL / oEmbed fallback chain only.\nRun /x-login to re-enable the official hosted x_search path. (grok CLI\'s own login is untouched.)'
-          : 'x-logout: no local credentials found — x_search is already on the fallback chain. Run /x-login to enable the official path.',
+          ? 'x-logout: local credentials removed — community X now uses the multi-engine / guest-GraphQL / oEmbed fallback chain only.\nRun /x-login to re-enable the hosted community X path. (grok CLI\'s own login is untouched.)'
+          : 'x-logout: no local credentials found — community X is already on the fallback chain. Run /x-login to enable the official path.',
         'info',
       )
     },
@@ -737,7 +657,7 @@ export default function searchBoostExtension(pi) {
           [
             `web layer: ${info.layer} — ${info.label}`,
             `engines available in this layer: ${info.engines.join(', ') || '(none)'}`,
-            `x_search: ${info.xOfficial ? 'official path' : 'fallback chain'} (${info.xSource})`,
+            `community X: ${info.xOfficial ? 'official path' : 'fallback chain'} (${info.xSource})`,
             ...hints,
           ].join('\n'),
           'info',

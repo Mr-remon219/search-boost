@@ -344,12 +344,12 @@ try {
     const tools = new Map()
     const { default: extension, auditFilePath } = await import('../adapters/pi/index.js')
     extension({ registerTool: tool => tools.set(tool.name, tool), registerCommand() {}, on() {} })
-    const result = await tools.get('x_search').execute('credential-echo', params)
-    clean(result); assert.match(JSON.stringify(result), /http 401/)
-    const failedTool = await tools.get('x_search').execute('credential-echo-failed', { type: 'thread', post_id: first.url })
-    clean(failedTool); assert.match(JSON.stringify(failedTool), /http 401/)
+    const result = await tools.get('community_search').execute('credential-echo', { ...params, engines: ['x'] })
+    clean(result); assert.equal(result.isError, true); assert.equal(result.details.channels[0].status, 'failed')
+    const failedTool = await tools.get('community_search').execute('credential-echo-failed', { engines: ['x'], type: 'thread', post_id: first.url })
+    clean(failedTool); assert.equal(failedTool.isError, true); assert.equal(failedTool.details.channels[0].reason, 'retrieval_failed')
     const audit = readFileSync(auditFilePath(), 'utf8')
-    clean(audit); assert.match(audit, /http 401/)
+    clean(audit); assert.match(audit, /communitysearch/); assert.match(audit, /failed/)
     delete process.env.XAI_API_KEY
   })
   await test('rejected Grok session refresh cannot echo either bearer or refresh token', async () => {

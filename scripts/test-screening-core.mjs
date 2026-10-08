@@ -21,7 +21,7 @@ const source = (name) => readFileSync(`${screeningDir}${name}`, 'utf8')
 
 // ---- input contract ----
 assert.equal(ADAPTIVE_INPUT_SCHEMA.additionalProperties, false)
-assert.deepEqual(Object.keys(ADAPTIVE_INPUT_SCHEMA.properties).sort(), ['community', 'constraints', 'cursor', 'intent', 'max_results', 'page_size', 'preferences', 'questions', 'save_results', 'saved_result_id'])
+assert.deepEqual(Object.keys(ADAPTIVE_INPUT_SCHEMA.properties).sort(), ['community', 'constraints', 'cursor', 'intent', 'max_results', 'page_size', 'platform_options', 'preferences', 'questions', 'save_results', 'saved_result_id'])
 assert.match(ADAPTIVE_INPUT_SCHEMA.properties.constraints.description, /Retired material gate/)
 assert.match(ADAPTIVE_INPUT_SCHEMA.properties.community.description, /Omit for the selected judgment model to choose/)
 assert.match(ADAPTIVE_INPUT_SCHEMA.properties.questions.description, /English is requested/)
@@ -395,11 +395,11 @@ assert.throws(() => createScreeningBudget({ candidateLimit: 0 }), /Invalid scree
   const mcpAdaptive = between(workspace('adapters/mcp/register.mjs'), 'registerTool(ADAPTIVE_TOOL_NAME', "server.registerResource('search-capabilities'")
   assert.equal(/abortSignal|AbortSignal|setTimeout/.test(mcpAdaptive), false, 'the MCP adaptive tool must not set a whole-call deadline')
   assert.match(mcpAdaptive, /signal: extra\?\.signal/)
-  for (const [start, end] of [["registerTool('fused_search'", "registerTool('fetch_page'"], ["registerTool('x_search'", "registerTool('search_layer'"]]) {
+  for (const [start, end] of [["registerTool('fused_search'", "registerTool('fetch_page'"], ["for (const [name, description, input, output, run, readOnly]", "registerTool('search_layer'"]]) {
     assert.equal(/abortSignal|AbortSignal|setTimeout/.test(between(workspace('adapters/mcp/register.mjs'), start, end)), false,
       `${start}: all search channels must use the external signal, not a self-set total timeout`)
   }
-  const dshAdaptive = between(workspace('adapters/dsh/index.js'), 'function registerAdaptiveSearchTool(', '// ---------- x_search ----------')
+  const dshAdaptive = between(workspace('adapters/dsh/index.js'), 'function registerAdaptiveSearchTool(', 'function registerCommunityTools(')
   assert.equal(/timeoutMs/.test(dshAdaptive), false, 'the DSH adaptive tool must not keep a self-set whole-call timeout')
   assert.equal(workspace('adapters/pi/index.js').includes('follow the task budget'), false, 'the Pi note must observe usage, not instruct a self-set stop')
   assert.equal(workspace('adapters/pi/index.js').includes('[search budget]'), false)

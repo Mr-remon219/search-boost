@@ -41,7 +41,7 @@
   - [工具职责与边界](#工具职责与边界)
   - [1. `fused_search` 多引擎融合搜索](#1-fused_search-多引擎融合搜索)
   - [2. `fetch_page` 智能网页提炼](#2-fetch_page-智能网页提炼)
-  - [3. `x_search` X (Twitter) 动态检索](#3-x_search-x-twitter-动态检索)
+  - [3. `community_search` X (Twitter) 动态检索](#3-community_search-x-twitter-动态检索)
   - [4. `adaptive_search` Jev / Laya 意图导向搜索（实验功能）](#4-adaptive_search-jev--laya-意图导向搜索实验功能)
   - [引擎池与评分预设](#引擎池与评分预设)
 - [多智能体并行研究工作流](#多智能体并行研究工作流)
@@ -59,7 +59,7 @@
   同时聚合多个搜索引擎的实时结果。内置**免密钥免费池**（Bing、DuckDuckGo、Exa-free、AnySearch）与**API 池**（Tavily、Brave、Exa、AnySearch、TinyFish），自动执行跨引擎 URL 规范化去重、域名过滤与权重重排。
 - **高净度网页正文提取 (`fetch_page`)**  
   优先抓取原站降低等待；必要时使用同线路 curl 兼容兜底，Jina Reader 作为备用读取方式。自动剔除 CSS、JS 及广告噪音，支持 `focus` 关键词段落提炼，具备内存缓存与大体积熔断保护。
-- **X / Twitter 社区情报检索 (`x_search`)**  
+- **X / Twitter 社区情报检索 (`community_search`，`engines:["x"]`)**
   支持通过官方 xAI API 或免登录回退通道获取推文、作者动态与讨论串。根据可核验的 Snowflake ID 推导 UTC 发布时间，仅在元数据可核验时执行作者与日期过滤。覆盖可能不完整、过时或为空；检索样本不能代表全平台舆论。
 - **Jev / Laya 意图导向搜索 (`adaptive_search` · 实验功能)**
   提供一个完整问题与必填研究方向。检索前一次判断模型策略请求选择固定排序预设，并在省略 community 时决定是否追加既有社区支路；随后对有界 fused 快照（目标≤10 时最多 32 条，更大目标按原余量比例扩至最高 160 条）做固定选项筛选（安全、原型价值 3/4/5、来源折扣）。没有关键词规划、没有逐材料 constraints 门槛、没有语言校验、没有自动补读，也没有自设的累计预算停止；cursor 与 saved_result_id 只重放已保存结果。不宣称答案已核实或完整。
@@ -191,13 +191,15 @@ search-boost
 | :--- | :--- |
 | 首次配置向导；管理 Agent 接入；查看当前状态 | 连续首次配置；安装 / 按范围刷新 / 确认卸载；只读状态 |
 | 搜索引擎配置；默认搜索层；工具开关 | 任选引擎；`free` / `api`；MCP / Pi / DSH 共用开关 |
-| X 凭据；判断模型（Jev / Laya） | 脱敏凭据管理 |
+| Community 配置；判断模型（Jev / Laya） | 平台检索方式 / 启停 / X 凭据；判断模型凭据管理 |
 | 原生搜索替换；输出 MCP 配置片段 | 保留权限选择；只读片段 |
 | TUI 设置；退出 | 菜单布局位于显示语言之前；关闭控制台 |
 
 「TUI 设置 → 菜单布局」可选平铺 / 文件夹。文件夹模式保留安装与接入、搜索与工具、服务与凭据、状态分类。操作完成后，平铺模式返回首页原选中项，文件夹模式返回所属分类；Esc 取消 / 返回，Ctrl+C 退出。切换布局立即返回新首页。管理操作完成后返回管理子菜单；交互式卸载和 Grok 缓存重建默认取消，部分失败不会被显示成安装成功。
 
 布局和显示语言切换立即生效，保存于 `~/.search-boost/config/tui.json`（或 `$SEARCH_BOOST_HOME/config/tui.json`）。未保存布局（包括仅有语言的旧设置）默认平铺；未保存语言时，中文系统环境使用简体中文，其他环境使用 English。偏好同样适用于独立启动的交互式 setup/config 向导，不影响非交互 CLI 输出、搜索结果或 Agent 回复。工具名、命令、路径、MCP 配置片段与底层原始错误保持原样。dry-run 只预览布局 / 语言，不保存；设置损坏时告警且不覆盖。详见 [TUI 导航与语言设置](docs/tui.md)。
+
+**Community 配置**直接列出 Reddit、X、B站、知乎、小红书。平台页显示简短配置状态，只提供相关操作：更换检索方式、设置必要参数、停用平台。X 凭据直接在 X 页操作，不再套一层向导；浏览器接入步骤在需要时显示，不自动测试连接。检索方式变更预览后一次保存，取消及 dry-run 不写入。`config x`、`/x-login`、`/x-logout` 保持可用。
 
 ### 工具开关
 
@@ -223,7 +225,7 @@ search-boost
 | :--- | :--- | :--- |
 | `fused_search` | 多引擎多角度并行查询、结果合并与去重排序 | 仅完成单次搜索；后续是否需要继续检索由主 Agent 判断 |
 | `fetch_page` | 读取已知公开 URL 的完整正文或特定关注段落 | 不是带登录态的浏览器；仍遵守本机网络与代理策略 |
-| `x_search` | 检索 X 平台的公开推文、博主资料或单篇讨论串 | 不承诺完整抓取所有回复，无法代表全平台完整舆论倾向 |
+| `community_search`（`engines:["x"]`） | 检索 X 平台的公开推文、博主资料或单篇讨论串 | 不承诺完整抓取所有回复，无法代表全平台完整舆论倾向 |
 | `adaptive_search` | **实验功能**：对单个问题与必填研究方向进行单次快照筛选 | 返回选中 URL、审查摘录与价值标签；targetMet 只表示数量，不代表答案已核实 |
 | `search_stats` | 查看引擎就绪状态、内存缓存命中与近期活动诊断 | 本地配置就绪不代表此时此刻外部网络一定通畅 |
 | `search_layer` | 在 MCP 环境中查看或切换兼容搜索层模式 | 查看为只读；修改会持久化写入磁盘并需要用户授权 |
@@ -249,7 +251,7 @@ search-boost
 - **`engine_pool`**：`free`（免密钥免费池）、`api`（已配置的 API 引擎）、`hybrid`（两池合并）。不可用或已关闭的引擎会跳过。省略时按兼容层映射：`free` → 免费池，`api` → hybrid。
 - **`ranking`**：最终引擎权重预设：`balanced`（默认）、`research`、`fresh`。不改变查询变体、检索深度或时间过滤，也不证明来源权威性或时效性。
 - **`complexity`**：`simple`（1 组查询变体）、`medium`（最多 2 组变体）、`complex`（最多 3 组深度变体）。
-- **`community`**：布尔值（默认 `false`）。设为 `true` 时会将 X 社区一手开发者的讨论混入结果限额中。
+- **`community`**：平台名称数组（例如 `["reddit","x","zhihu"]`）或兼容布尔值。`false`/`[]` 关闭；旧 `true` 仍只选择 X。默认 false，共用最终结果限额，不自动启用后端。
 
 ---
 
@@ -274,13 +276,20 @@ search-boost
 
 ---
 
-### 3. `x_search` X (Twitter) 动态检索
+### 社区搜索（初始实现）
+
+MCP、Pi、DSH 已提供 `community_search` 和 `community_backend`，支持 Reddit、X、B站、知乎、小红书。X 保留四模式；Reddit 使用有界 Arctic Shift 采集、checkpoint 和本地检索；中文平台有公共网页索引 adapter 与可选的 SearchBoost 自有只读浏览器桥，B站另有可选公共视频 API。来源路线和覆盖限制明确披露。独立 `x_search` 入口已移除，只检索 X 时使用 `community_search` 的 `engines:["x"]`；fused／Adaptive 接受平台数组，旧 true 仍只选择 X。
+
+示例：`community_search` 传入 `{"engines":["reddit","x","zhihu"],"query":"Node.js 迁移体验"}`。浏览器路线由用户手动运行 `search-boost community-browser`、加载 `browser/community-bridge/` 扩展并启用；不自动安装、登录或导出 cookie。后端管理的 list／check 仅检查配置就绪状态，不探测网络；register／update／remove 只在用户授权时修改本地配置。`search-boost://community-capabilities` 显示已实现的平台和实例状态。fused 和 Adaptive 也接受明确选择平台的同一 nullable `platform_options`，经共享 fused 候选核心完成一次获取；Adaptive 保留类型化路线/出处和离线保存页，见 [Adaptive 社区接入](docs/adaptive-community-integration-spec.md)。`platform_options` 按平台定义独立参数，null 使用继承/默认值；直接结果保留类型化平台 `data` 并以快照分页返回（`page_size`、`next_cursor`）。cursor 读取不联网；`save_results:true` 显式私有保存，`saved_result_id` 恢复历史证据。详见[当前使用与迁移边界](docs/community-search.md)、[动态执行计划](docs/community-search-plan.md)及[平台处理与分页滚动设计](docs/community-platform-pipeline-spec.md)。
+
+### 3. `community_search` X (Twitter) 动态检索
 
 专为技术追踪与一手动态设计。支持关键字检索、用户时间线（User 模式）与推文讨论串（Thread 模式）。
 
 **调用参数范例**：
 ```json
 {
+  "engines": ["x"],
   "query": "Claude 3.7 Sonnet hybrid reasoning from:AnthropicAI",
   "type": "keyword",
   "max_results": 5
@@ -300,7 +309,7 @@ search-boost
 
 **Laya 接入**：选择“更改配置 → Laya”，填写自部署服务的 API 前缀（不含 `/systemone`），API Key 可留空；无 Key 时不发送空 Bearer。新配置自动使用 `multilingual`，预算沿用服务默认值；更改同一目的地时保留已有模型与预算，Key 留空保留原值、输入 `-` 清除。配置名称自动生成，现有配置中仍可切换或删除。诊断缺失、截断、选项坍缩、弃答或缺少离线题头容量证据时，判断保持不可用，不把残存选项当作通过。详见[容量证据与迁移](docs/v0.2.5-release.md)。新运行用 `run.judgment` 记录真实提供方，旧记录不静默升级。
 
-调用方提供**一个问题**（`questions` 恰好一项）、**必填的研究方向 `intent`** 以及 0-8 条可选软偏好 `preferences`。工具描述要求用英文书写，但这是给调用方的提示，服务端不做语言校验、拒绝或翻译，任何语言都按原文检索。原文问题就是唯一查询：不再规划关键词、不做查询扩展。检索前的一次判断模型策略请求选择固定 `balanced`/`research`/`fresh` 排序，并在省略 `community` 时决定是否启用既有社区（X）支路；显式 `community` true/false 覆盖该选择，且不重复提问。随后这次 fused 调用收集**有界快照：目标≤10 时最多 32 条，更大目标为 ceil(max_results×32/10)，最高 160 条**（网页与社区行共用），每条声明候选都以固定选项判断：安全 clear/violation/unavailable、原型价值 0-5、来自真实正贡献引擎的来源折扣，以及每条偏好一次匹配。只有安全且价值已建立为 3/4/5 的材料会被交付，并按版本化筛选公式排序；置信度仅用于审计。不会在凑够前若干条可接受链接后提前停止，没有自动补读，也没有自设的累计成本、token、请求次数或整次时限停止——真实单请求超时、有限重试、认证/限流失败、安全拒绝与显式取消照常生效。
+调用方提供**一个问题**（`questions` 恰好一项）、**必填的研究方向 `intent`** 以及 0-8 条可选软偏好 `preferences`。工具描述要求用英文书写，但这是给调用方的提示，服务端不做语言校验、拒绝或翻译，任何语言都按原文检索。原文问题就是 Web 查询：不再规划关键词、不由模型扩写；只有调用者明确给出的平台 query 能覆盖其社区支路。共享 nullable `platform_options` 经同一 fused 底座接入（不另调分页社区入口），且必须明确选择对应 community 平台。检索前的一次判断模型策略请求选择固定 `balanced`/`research`/`fresh` 排序，并在省略 `community` 时决定是否启用既有社区（X）支路；显式 `community` 布尔值/平台数组覆盖该选择，且不重复提问；true 仍仅 X，数组不会自动启用后端。随后这次 fused 调用收集**有界快照：目标≤10 时最多 32 条，更大目标为 ceil(max_results×32/10)，最高 160 条**（网页与社区行共用），每条声明候选都以固定选项判断：安全 clear/violation/unavailable、原型价值 0-5、来自真实正贡献引擎的来源折扣，以及每条偏好一次匹配。只有安全且价值已建立为 3/4/5 的材料会被交付，并按版本化筛选公式排序；置信度仅用于审计。不会在凑够前若干条可接受链接后提前停止，没有自动补读，也没有自设的累计成本、token、请求次数或整次时限停止——真实单请求超时、有限重试、认证/限流失败、安全拒绝与显式取消照常生效。
 
 ```json
 {

@@ -69,7 +69,14 @@ let failFreeEngines = false
 let usageOnWire = true
 const ALLOWED_HOSTS = new Set(['api.search.brave.com', 'api.typesafe.ai', 'publish.x.com', 'www.bing.com', 'html.duckduckgo.com', 'mcp.exa.ai'])
 const node = (d) => ({ title: d.title, url: d.url, description: d.description })
-const resultsFor = (query, count) => /x\.com|twitter\.com/.test(query) ? communityPosts(count) : webDocs(count)
+const resultsFor = (query, count) => {
+  const platform = /bilibili\.com/.test(query) ? 'bilibili' : /zhihu\.com/.test(query) ? 'zhihu' : /xiaohongshu\.com/.test(query) ? 'xiaohongshu' : null
+  if (platform) return [{
+    url: platform === 'bilibili' ? 'https://www.bilibili.com/video/BV1fixture' : platform === 'zhihu' ? 'https://www.zhihu.com/question/123/answer/456' : 'https://www.xiaohongshu.com/explore/abcdef',
+    title: 'Node.js fetch cancellation community implementation experience', description: 'First-hand Node.js fetch cancellation migration experience with concrete implementation and reproduction details.',
+  }]
+  return /x\.com|twitter\.com/.test(query) ? communityPosts(count) : webDocs(count)
+}
 const bingPage = (docs) => `<html><body>${docs.map((d) => `<li class="b_algo"><h2><a href="${d.url}">${d.title}</a></h2><p>${d.description}</p></li>`).join('')}</body></html>`
 const ddgPage = (docs) => `<html><body>${docs.map((d) => `<a class="result__a" href="${d.url}">${d.title}</a><a class="result__snippet">${d.description}</a>`).join('')}</body></html>`
 const exaText = (docs) => docs.map((d) => `Title: ${d.title}\nURL: ${d.url}\nHighlights: ${d.description}`).join('\n---\n')
@@ -156,7 +163,7 @@ try {
   assert.equal(listed.inputSchema.additionalProperties, false)
   assert.deepEqual(piTools.get('adaptive_search').parameters, ADAPTIVE_INPUT_SCHEMA)
   assert.deepEqual(Object.keys(dshTools.get('adaptive_search').parameters.properties).sort(), Object.keys(ADAPTIVE_INPUT_SCHEMA.properties).sort())
-  for (const name of ['adaptive_search', 'fused_search', 'x_search']) {
+  for (const name of ['adaptive_search', 'fused_search', 'community_search']) {
     assert.equal(dshTools.get(name).timeoutMs, undefined, `no self-imposed whole-call timeout survives on DSH ${name}`)
   }
   console.log('ok: MCP/Pi/DSH translate the same shared adaptive input schema')
@@ -230,6 +237,37 @@ try {
   assert.equal(autoValue.run.community.usage.inFlight, false)
   assert.equal(autoValue.diagnostics.snapshotCandidates, 32)
   console.log('ok: community is decided inside the same strategy request and its execution status is structured')
+
+  // ---- same platform contracts through real fused + Adaptive host entries ----
+  const platformOptions = { bilibili: { content_type: 'video' }, zhihu: { content_type: 'answer', from_date: null }, xiaohongshu: { content_type: 'note' } }
+  const platforms = ['bilibili', 'zhihu', 'xiaohongshu']
+  for (const host of ['mcp', 'pi', 'dsh']) {
+    clearAllCaches()
+    const before = requests.filter(request => request.startsWith('api.search.brave.com')).length
+    const value = structured(host, await call(host, { ...INPUT, community: platforms, platform_options: platformOptions, max_results: 30, page_size: 50 }))
+    assert.equal(validOutput(value), true, JSON.stringify(validOutput.errors))
+    assert.equal(value.usage.fusedCalls, 1)
+    assert.deepEqual(value.inputSummary.platform_options, platformOptions)
+    assert.deepEqual(value.run.community.channels.map(channel => channel.platform), platforms)
+    for (const platform of platforms) {
+      assert.equal(value.run.community.channels.find(channel => channel.platform === platform).retrieval_mode, 'web-index')
+      assert.ok(value.results.some(row => row.provenance?.some(source => source.platform === platform)), `${host}: ${platform}`)
+    }
+    assert.equal(requests.filter(request => request.startsWith('api.search.brave.com')).length - before, 4, 'one Web + three community index legs, not a separate Adaptive acquisition')
+    const bad = { ...INPUT, community: platforms, platform_options: { reddit: { max_pages: 1 } } }
+    if (host === 'mcp') assert.equal((await call(host, bad)).isError, true)
+    else await assert.rejects(() => call(host, bad), /platform_options/)
+    clearAllCaches()
+    const args = { query: INPUT.questions[0], community: platforms, platform_options: platformOptions, max_results: 10 }
+    const rawFused = host === 'mcp' ? await client.callTool({ name: 'fused_search', arguments: args })
+      : host === 'pi' ? await piTools.get('fused_search').execute('platform-fused', args)
+        : await dshTools.get('fused_search').execute(args, {})
+    const fused = host === 'mcp' ? rawFused.structuredContent : host === 'pi' ? rawFused.details : rawFused
+    assert.deepEqual(fused.communityPlatforms, platforms)
+    assert.ok(fused.communityChannels.every(channel => ['ok', 'partial'].includes(channel.status)), JSON.stringify(fused.communityChannels))
+    for (const row of fused.results.filter(row => row.domain === 'zhihu.com')) assert.ok(row.url.includes('/answer/'))
+  }
+  console.log('ok: actual MCP/Pi/DSH fused and Adaptive entries share platform options/routes; one acquisition and typed selected provenance')
 
   // unknown answer falls back to no community and stays disclosed
   communityAnswer = 'unknown'
