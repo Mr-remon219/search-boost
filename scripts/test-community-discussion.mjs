@@ -31,6 +31,33 @@ assert.equal(complete.status, 'complete'); assert.equal(complete.comments.length
 assert.equal(complete.comments.find(c => c.id === 'r2').parent_id, 'r1')
 assert.doesNotMatch(JSON.stringify(complete), /SIGNED|SECRET|xsec_token|cursor/)
 assert.deepEqual(projectDiscussion('xiaohongshu', complete, noteUrl), complete)
+const crossRoot = createDiscussion('xiaohongshu', noteUrl)
+crossRoot.seed({ note: { noteDetailMap: { [noteId]: { note: { interactInfo: { commentCount: 3 } } } } } })
+crossRoot.receive(xurl(), { comments: [
+  xcomment('c1', { sub_comment_count: 1, sub_comments: [xcomment('r1', { target_comment: { id: 'c2' } })] }),
+  xcomment('c2'),
+], has_more: false, cursor: '' })
+assert.equal(crossRoot.snapshot().status, 'partial', 'a reply cannot cross into another root thread')
+assert.equal(crossRoot.snapshot().stop_reason, 'identity_mismatch')
+assert.equal(crossRoot.snapshot().comments.length, 3, 'retain evidence while rejecting graph completeness')
+const cycleReplies = createDiscussion('xiaohongshu', noteUrl)
+cycleReplies.seed({ note: { noteDetailMap: { [noteId]: { note: { interactInfo: { commentCount: 3 } } } } } })
+cycleReplies.receive(xurl(), { comments: [xcomment('c1', { sub_comment_count: 2, sub_comments: [
+  xcomment('r1', { target_comment: { id: 'r2' } }), xcomment('r2', { target_comment: { id: 'r1' } }),
+] })], has_more: false, cursor: '' })
+assert.equal(cycleReplies.snapshot().stop_reason, 'identity_mismatch', 'cyclic replies never reach their root')
+for (const mutate of [
+  value => { value.comments.find(row => row.id === 'r1').parent_id = 'c2' },
+  value => { value.comments.find(row => row.id === 'r1').parent_id = 'r2' },
+  value => { value.comments.find(row => row.id === 'c1').root_id = 'c2' },
+  value => { value.comments.push({ ...value.comments[0] }) },
+]) {
+  const forged = structuredClone(complete); mutate(forged)
+  for (const comments of [forged.comments, [...forged.comments].sort((a, b) => Number(a.parent_id !== null) - Number(b.parent_id !== null))]) {
+    const projected = projectDiscussion('xiaohongshu', { ...forged, comments }, noteUrl)
+    assert.equal(projected.status, 'partial', 'projection revalidates root identity, cycles and duplicate IDs regardless of order')
+  }
+}
 const noReply = createDiscussion('xiaohongshu', noteUrl)
 noReply.receive(xurl(), { comments: [first], has_more: false, cursor: '' })
 assert.equal(noReply.snapshot().status, 'partial', 'root end does not prove replies end')

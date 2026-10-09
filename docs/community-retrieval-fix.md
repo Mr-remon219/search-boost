@@ -66,3 +66,9 @@
 父任务用 fixture 独立核对并修复：未知/近似计数不再允许 complete；稀疏状态不覆盖已验证正文或降低已知计数；每个回答在自身详情页确认正文；局部按钮缺失/超时只阻断该区段，仍保留其他回答可取内容；滚动遍历所有候选容器并保留窗口回退。网络拒绝、策略、容量、取消等全局边界保持失败停止。native discussion 的缓存契约更新，历史快照仍保持原样，不重读或升级旧材料。
 
 最终 `npm run test:community`（含新增完整性、控制失败与滚动反例）、真实 DSH schema 校验、`npm run check`（316 文件）、`npm run check:ci`、`git diff --check` 通过；最终完整隔离回归为 95 入口。日志见 `/tmp/sb-discussion-community-final.log`、`/tmp/sb-discussion-isolation-final.log`。上述均为离线验证；没有真实 Chromium/登录验收，也未切换真实后端或提交代码。
+
+### PR #36 合并前审查修正（2026-10-09）
+
+- 核对固定 Playwright 类型签名后修正两处 `waitForFunction`：选项是第三个参数，第二个参数是传给页面函数的输入。原代码的 15 秒等待限制并未按声明生效；新增调用级 fixture 先复现，再验证两条检索路径都正确传入超时。
+- 讨论计数和父 ID 存在不足以证明完整树。新增同实体 / 同主评论的根连通性校验，拒绝跨主评论父引用、循环回复、重复 ID 及不一致的根身份；实时累积与公共投影均校验，保留已取得材料但标为 partial。回归同时覆盖父评论先出现 / 后出现，避免校验依赖顺序。
+- 修复后的 `npm run test:community`、`npm run test:console`（47 项控制台测试）和 `npm run prepublishOnly` 均通过；完整隔离门禁仍为 95 个入口，依赖审计 0 vulnerabilities。没有运行真实登录或付费服务，离线成功不代表线上可读性验收。

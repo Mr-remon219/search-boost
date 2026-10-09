@@ -5,6 +5,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync, rmSync, existsSync,
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { xhsNote, xiaohongshuNativeProvider } from '../lib/community/providers/xiaohongshu-native.mjs'
+import { searchLinks } from '../lib/community/native-reader.mjs'
 import { zhihuDetail } from '../lib/community/providers/zhihu-native.mjs'
 import { bilibiliOpus } from '../lib/community/providers/bilibili-native.mjs'
 import { collectVideoBlock, publicVideoNote, publicNoteText, bilibiliLocalTime, projectVideoBlock } from '../lib/community/bilibili-block.mjs'
@@ -29,6 +30,23 @@ assert.equal(xhsNote(id, note).published, '2026-10-07T07:44:00.000Z')
 assert.equal(xhsNote(id, { ...note, noteId: '69cf0679000000001d01ad2f' }), null)
 assert.equal(xhsNote(id, { ...note, time: 0 }).published, null)
 assert.doesNotMatch(JSON.stringify(xhsNote(id, note)), /SIGNED|SECRET/)
+// Playwright's second waitForFunction argument is page-function input, not
+// options. Exercise both callers so a declared 15s wait cannot become 30s.
+let functionWaits = 0
+const waitPage = {
+  goto: async () => null,
+  evaluate: async () => [],
+  waitForFunction: async (_fn, arg, options) => {
+    functionWaits++
+    assert.equal(arg, undefined)
+    assert.equal(options?.timeout, 15000)
+  },
+}
+await searchLinks(waitPage, 'zhihu', 'https://www.zhihu.com/search?q=fixture')
+await xiaohongshuNativeProvider.search({ query: 'fixture', max_results: 1 }, {
+  nativeSession: async (_platform, callback) => callback({ newPage: async () => waitPage }),
+})
+assert.equal(functionWaits, 2)
 const zhUrl = 'https://www.zhihu.com/question/123/answer/456'
 const zhState = { initialState: { entities: { answers: { '789': { id: 789, content: '推荐答案' }, '456': { id: 456, content: '<p>目标回答正文</p>', created_time: pub, author: { name: '作者' }, question: { title: 'Claude 如何？' } } } } } }
 assert.equal(zhihuDetail(zhUrl, zhState).text, '目标回答正文')
