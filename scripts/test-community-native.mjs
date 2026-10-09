@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { xhsNote, xiaohongshuNativeProvider } from '../lib/community/providers/xiaohongshu-native.mjs'
 import { searchLinks } from '../lib/community/native-reader.mjs'
 import { zhihuDetail } from '../lib/community/providers/zhihu-native.mjs'
-import { bilibiliOpus } from '../lib/community/providers/bilibili-native.mjs'
+import { bilibiliOpus, bilibiliNativeProvider } from '../lib/community/providers/bilibili-native.mjs'
 import { collectVideoBlock, publicVideoNote, publicNoteText, bilibiliLocalTime, projectVideoBlock } from '../lib/community/bilibili-block.mjs'
 import { fulfillNativeRequest } from '../lib/community/native-transport.mjs'
 import { allowedNativeRequest, nativeHome, nativeSessionState, nativeAvailability, withNativeSession, initializeNativeSession } from '../lib/community/native-session.mjs'
@@ -15,7 +15,7 @@ import { communityRegistry, manageCommunityBackend, communityCacheIdentity } fro
 import { communitySearch } from '../lib/community/service.mjs'
 import { finishPlatformItems, normalizeCommunityInput } from '../lib/community/pipeline.mjs'
 import { mergePlatformResults } from '../lib/community/fusion.mjs'
-import { fusedHitToJson } from '../lib/runtime.mjs'
+import { fusedHitToJson, runCommunitySearch } from '../lib/runtime.mjs'
 import { COMMUNITY_OUTPUT, validateCommunity } from '../lib/community/schemas.mjs'
 import { createCommunityPages } from '../lib/community/pages.mjs'
 
@@ -118,6 +118,50 @@ const fused = mergePlatformResults([], [{ ...finished, platform: 'bilibili', pro
 assert(fused.results[0].content.endsWith(bvid))
 assert.deepEqual(fusedHitToJson(fused.results[0]).community_data.video_block, block)
 
+// Exercise Opus discovery through the real host adapter, not a snake_case mock.
+let discoveryOptions
+await bilibiliNativeProvider.search({ query: 'fixture', max_results: 8 }, {
+  filters: { contentType: 'post' }, nativeSession: async (_platform, work) => work({ newPage: async () => ({}) }),
+  webSearch: async options => { discoveryOptions = options; return { results: [] } },
+})
+assert.deepEqual(discoveryOptions.includeDomains, ['bilibili.com'])
+assert.equal(discoveryOptions.maxResults, 8)
+assert(discoveryOptions.signal instanceof AbortSignal, 'Opus discovery inherits the native timeout/cancel signal')
+const readyProvider = { ...bilibiliNativeProvider, describeAvailability: () => ({ ready: true }) }
+const fixtureRegistry = { list: () => [readyProvider], get: () => readyProvider }
+const fixtureConfig = { backends: [{ id: 'bili-native-fixture', provider: readyProvider.id, enabled: true, config: {} }] }
+let hostDiscovery
+const hostSnapshot = () => ({ capability: {}, engines: { bing: { available: () => true, nativeDomains: true,
+  search: async (query, count, options) => { hostDiscovery = { query, count, options }; return [] },
+} } })
+await runCommunitySearch({ engines: ['bilibili'], query: 'fixture', max_results: 8, platform_options: { bilibili: { content_type: 'post' } } }, {
+  registry: fixtureRegistry, config: fixtureConfig, snapshot: hostSnapshot,
+  nativeSession: async (_platform, work) => work({ newPage: async () => ({}) }),
+})
+assert.deepEqual(hostDiscovery.options.includeDomains, ['bilibili.com'], 'internal discovery must not default to X domains')
+assert.equal(hostDiscovery.count, 7, 'host candidate budget uses the requested maxResults')
+assert(hostDiscovery.options.signal instanceof AbortSignal, 'the host must not overwrite the native signal with undefined')
+// A provider deadline and outer user cancellation both reach the engine.
+for (const cancelOuter of [false, true]) {
+  const localAbort = new AbortController(), outerAbort = new AbortController()
+  let engineSignal
+  const cancellationProvider = { ...readyProvider, search: async (_args, context) => {
+    const pending = context.webSearch({ query: 'cancel fixture', includeDomains: ['bilibili.com'], signal: localAbort.signal })
+    ;(cancelOuter ? outerAbort : localAbort).abort()
+    await pending
+    return { items: [], warnings: [] }
+  } }
+  const pending = runCommunitySearch({ engines: ['bilibili'], query: 'cancel fixture' }, {
+    config: fixtureConfig, registry: { list: () => [cancellationProvider], get: () => cancellationProvider }, signal: outerAbort.signal,
+    snapshot: () => ({ capability: {}, engines: { bing: { available: () => true, nativeDomains: true,
+      search: async (_query, _count, options) => { engineSignal = options.signal; await new Promise(resolve => setImmediate(resolve)); engineSignal?.throwIfAborted(); return [] },
+    } } }),
+  })
+  if (cancelOuter) await assert.rejects(pending, { name: 'AbortError' })
+  else assert.equal((await pending).channels[0].status, 'failed', 'a provider deadline must cancel the delegated host request')
+  assert(engineSignal?.aborted)
+}
+
 assert(allowedNativeRequest('xiaohongshu', 'https://edith.xiaohongshu.com/api/sns/web/v1/feed', 'POST'))
 assert(!allowedNativeRequest('xiaohongshu', 'https://edith.xiaohongshu.com/api/sns/web/v1/note/like', 'POST'))
 assert(allowedNativeRequest('bilibili', 'https://api.bilibili.com/x/note/publish/info?cvid=1'))
@@ -167,6 +211,18 @@ await assert.rejects(() => withNativeSession('xiaohongshu', async () => {
   await withNativeSession('xiaohongshu', async () => {}, { chromium })
 }, { chromium }), { kind: 'session_busy' })
 assert(!existsSync(join(nativeHome('xiaohongshu'), 'browser.lock')))
+// Malformed/reused PID locks stay fail-closed for retrieval and re-login.
+// Manual fixture removal is safe here: all fake contexts have already closed.
+const lockPath = join(nativeHome('xiaohongshu'), 'browser.lock')
+for (const stale of ['', 'not-a-pid', String(process.pid)]) {
+  writeFileSync(lockPath, stale)
+  const busy = error => error.kind === 'session_busy' && /browser\.lock.*docs\/community-search\.md/.test(error.message)
+  await assert.rejects(() => withNativeSession('xiaohongshu', async () => 42, { chromium }), busy)
+  await assert.rejects(() => initializeNativeSession('xiaohongshu', async () => true, { chromium }), busy)
+  assert.equal(readFileSync(lockPath, 'utf8'), stale, 'uncertain lock ownership never triggers automatic deletion')
+  rmSync(lockPath)
+  assert.equal(await withNativeSession('xiaohongshu', async () => 42, { chromium }), 42)
+}
 await assert.rejects(() => withNativeSession('xiaohongshu', async () => { throw new Error('SIGNED SECRET') }, { chromium }), error => !/SIGNED|SECRET/.test(error.message))
 const aborted = new AbortController()
 await assert.rejects(() => withNativeSession('xiaohongshu', async () => { aborted.abort(); return 42 }, { chromium, signal: aborted.signal }), { name: 'AbortError' })

@@ -72,3 +72,13 @@
 - 核对固定 Playwright 类型签名后修正两处 `waitForFunction`：选项是第三个参数，第二个参数是传给页面函数的输入。原代码的 15 秒等待限制并未按声明生效；新增调用级 fixture 先复现，再验证两条检索路径都正确传入超时。
 - 讨论计数和父 ID 存在不足以证明完整树。新增同实体 / 同主评论的根连通性校验，拒绝跨主评论父引用、循环回复、重复 ID 及不一致的根身份；实时累积与公共投影均校验，保留已取得材料但标为 partial。回归同时覆盖父评论先出现 / 后出现，避免校验依赖顺序。
 - 修复后的 `npm run test:community`、`npm run test:console`（47 项控制台测试）和 `npm run prepublishOnly` 均通过；完整隔离门禁仍为 95 个入口，依赖审计 0 vulnerabilities。没有运行真实登录或付费服务，离线成功不代表线上可读性验收。
+
+### 原生会话/发现链路跟进
+
+独立安全子任务 `f969f43b-ca0d-4464-af13-59a9af906153` 返回了报告，但运行最终标记 failed：`Agent 'delegate' requested unavailable child tools: x_search`。审查目录为 `/home/mrremon/orca/workspaces/search-boost/fix-bug`，原 PR head 为 `355c9ca`，基点 `3849a75`；没有重新启动或更换执行机制，不把它作为成功的独立审查门禁。父任务根据报告线索直接核实并复现：
+
+- B站 Opus 发现遗漏取消信号；同时其参数误用公共工具的 snake_case，内部适配器实际需要 `includeDomains` / `maxResults`，否则会回退到 X 域名。已使用内部契约并传递 native 的取消/超时信号。
+- host 默认发现适配器会覆盖 provider 的信号。现在组合用户与 provider 信号，两者任一取消都终止引擎请求；通过实际 `runCommunitySearch` 默认适配器离线测试域名、候选预算、provider 取消和用户取消，而非只测宽松的 mock。
+- 空白/损坏/复用 PID 的 `browser.lock` 必须保持 fail closed。错误消息现在指向文档，文档说明仅确认所有宿主/专用 Chromium 已停止且 profile 无写入者后才人工改名备份锁；不引入强制重置。离线回归验证检索与重登录都拒绝不确定锁，不修改其内容。
+
+真实 Chromium、已登录平台及操作系统级出口行为仍未测试；上述修正不扩大请求/代理/所有权边界。

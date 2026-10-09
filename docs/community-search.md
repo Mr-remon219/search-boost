@@ -149,6 +149,16 @@ worker 载入、Reload/update、浏览器启动只恢复已保存的 enabled=tru
 
 profile 按平台保存在 `$SEARCH_BOOST_HOME/state/community/sessions/<platform>/profile`，由私有目录保护；没有环境覆盖时 home 为 `~/.search-boost`。初始化只确认用户保存了专用会话，不证明平台认证或覆盖。取消确认不启用来源，但用户刚刚手动登录时 Chromium 可能已把状态写入自己的专用 profile。一个平台同一时间只有一个 profile 写入者；冲突返回失败，不争用真实浏览器。已死进程的锁可恢复；异常退出残留的 Chromium singleton/非普通文件会被拒绝，需要先关闭该专用浏览器并人工处理，不能冒险复用。
 
+#### `browser.lock` 冲突与人工恢复
+
+锁文件位于 `$SEARCH_BOOST_HOME/state/community/sessions/<platform>/browser.lock`（默认 home 为 `~/.search-boost`）。正常并发会返回 `session_busy`；不要删除正在使用的锁。仅当锁内 PID 可被证明已退出时才自动恢复，不能因等待时间过长就强制解锁。
+
+异常退出可能留下空白/损坏的锁，或原 PID 已被其他程序复用；此时检索和 `community-login` 都会保守拒绝启动。人工恢复步骤：
+
+1. 先停止所有使用该平台会话的 SearchBoost 宿主和专用 Chromium；确认没有进程仍在使用上述 `profile`。不能确认时继续等待或排查，不要解锁。仅看到 PID 属于其他程序，不足以证明 profile 已无人使用。
+2. 在确认没有写入者后，可将该平台目录内的 `browser.lock` 改名备份，再重新运行 `community-login` 或检索。只处理此锁；不要删除 `profile-owner.json`、`session.json`，不要借用个人浏览器 profile。
+3. 若还有 Chromium singleton/非普通文件报错，先确认专用浏览器确已完全退出，再人工排查残留；不绕过所有权检查。会话目录包含登录凭据，不要上传或公开备份内容。
+
 ### 各平台实现与不同边界
 
 - **小红书**：研究参考 [xpzouying/xiaohongshu-mcp/search.go](https://github.com/xpzouying/xiaohongshu-mcp/blob/main/xiaohongshu/search.go)、[feed_detail.go](https://github.com/xpzouying/xiaohongshu-mcp/blob/main/xiaohongshu/feed_detail.go) 和 [MediaCrawler XHS client](https://github.com/NanmiCoder/MediaCrawler/blob/main/media_platform/xhs/client.py)。读取站内搜索状态的 ID/签名，详情只取对应 noteId 的正文、作者及 Unix 毫秒发布时间。签名只在这次详情读取内部消费，不进入证据/快照。日期请求尝试页面「最新」排序并验证刷新；不能确认排序则告知不足，最终仍按真实详情时间过滤，不伪造新日期。
