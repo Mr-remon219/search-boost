@@ -28,8 +28,8 @@
 
 ### Exa / AnySearch
 
-- [Exa Get API key usage](https://exa.ai/docs/reference/team-management/get-api-key-usage) 需要已开通 Team Management 的服务账号 Key 与查询 Key ID，返回指定周期消费，不是搜索 Key 可直接读取的剩余钱包。此版本不新增服务账号凭据存储，提示在 `https://dashboard.exa.ai` 查看。
-- [AnySearch authentication](https://anysearch.com/docs/auth) 说明 API Key 付费配额，但当前未核实可直接读取余额的公开协议。此版本展示手动查看提示与 `https://www.anysearch.com/console/api-keys`，不发起探测或爬取登录后台。
+- [Exa Get API key usage](https://exa.ai/docs/reference/team-management/get-api-key-usage) 需要已开通 Team Management 的服务账号 Key 与查询 Key ID，返回指定周期消费，不是搜索 Key 可直接读取的剩余钱包。此版本不新增服务账号凭据存储；界面只显示“不支持查询”，不保留额度详情 / 查询按钮或 U 快捷键。
+- [AnySearch authentication](https://anysearch.com/docs/auth) 说明 API Key 付费配额，但当前未核实可直接读取余额的公开协议。界面只显示“不支持查询”，不保留额度详情 / 查询按钮或 U 快捷键，不发起探测或爬取登录后台。
 - “未接入直接查询”不是断言供应商不存在任何额度 API。
 
 ## 安全与验证

@@ -1,6 +1,6 @@
 # Community Search：五平台检索与后端管理
 
-SearchBoost 自己实现社区路由、平台 adapter、证据归一化与融合，不调用第三方 CLI，也不把 Agent Reach 当运行时 SDK。所有 MCP、Pi、DSH 宿主使用同一核心。第三方项目仅作为策略/API 的研究参考，没有复制非商业许可代码。
+SearchBoost 自己实现社区路由、平台 adapter、证据归一化与融合，不调用第三方 CLI，也不把 Agent Reach 当运行时 SDK。所有 MCP、Pi、DSH 宿主使用同一核心。第三方项目作为策略/API 的研究参考，没有复制非商业许可代码；三个中文平台的 native adapter 在项目内部实现搜索与取数，使用可选 playwright-core 操作 SearchBoost 专用 Chromium 会话，不要求第三方 MCP 服务、额外端口或服务 token。
 
 ## 平台与路线
 
@@ -8,9 +8,9 @@ SearchBoost 自己实现社区路由、平台 adapter、证据归一化与融合
 |---|---|---|---|
 | X | `x-default` | `existing-x` | 复用既有关键词、语义、账号、线程、认证、过滤、缓存、single-flight 和 fallback；不保证完整线程或全平台舆论 |
 | Reddit | `reddit-default` | `reddit-arctic`, `reddit-web` | 显式/配置 subreddit 或有界网页发现 → Arctic Shift 有界采集 → 私有 checkpoint → 本地相关性检索；不是实时全 Reddit 搜索 |
-| Bilibili | `bilibili-default` | `bilibili-web`, `bilibili-public`, `bilibili-browser` | 默认索引片段；可选公开视频 API（可能被风控拒绝）或自有浏览器桥的可见搜索卡片；不是字幕/完整弹幕 |
-| Zhihu | `zhihu-default` | `zhihu-web`, `zhihu-browser` | 索引片段或用户现有会话下的可见搜索卡片；不自动登录或解验证码 |
-| Xiaohongshu | `xiaohongshu-default` | `xiaohongshu-web`, `xiaohongshu-browser` | 索引片段或可见笔记搜索卡片；不逆向生成签名、不导出 cookie，不声称获取完整笔记/评论 |
+| Bilibili | `bilibili-default` | `bilibili-web`, `bilibili-public`, `bilibili-browser`, `bilibili-native` | 默认索引片段；native 读取公开笔记、专栏和 Opus 文字；视频块以公开笔记为主体、评论样本为补充，不转录视频 |
+| Zhihu | `zhihu-default` | `zhihu-web`, `zhihu-browser`, `zhihu-native` | 默认索引片段；native 尝试完整问题、回答和评论/回复遍历，逐条报告完整性；不自动登录或解验证码 |
+| Xiaohongshu | `xiaohongshu-default` | `xiaohongshu-web`, `xiaohongshu-browser`, `xiaohongshu-native` | 默认索引片段；native 读取笔记正文/时间并尝试完整主评论及回复遍历，逐条报告完整性；签名仅内部消费，不导出 cookie，不读取 OCR/转录 |
 
 `archive/native/web-index/mixed` 在每个 channel/item 中披露。浏览器 adapter 的 `native` 表示在目标平台页面读取，不意味着官方 API、完整正文或实时完整覆盖。公开 Bilibili API 是独立可选路线，尚无真实平台可靠性承诺；拒绝/风控不会触发签名绕过、登录或其他实例的自动轮询。
 
@@ -50,7 +50,7 @@ Adaptive v6 记录类型化的 `run.community.channels` 和最终选中行 `prov
 |---|---|---|
 | x | query/type/from_date/to_date、username/post_id、allowed_x_handles/excluded_x_handles、model/reasoning_effort | 四模式；keyword username 可作为作者条件，与旧 X 核心兼容 |
 | reddit | query/type/from_date/to_date、subreddits/max_pages、allowed_authors/excluded_authors | keyword；作者条件按 Reddit username 验证，索引 display label 不能冒充身份 |
-| bilibili | query/type/from_date/to_date、content_type | video/article/post；public 与 browser 当前仅 video，web-index 支持允许 URL 的其他分类 |
+| bilibili | query/type/from_date/to_date、content_type、note_limit、comment_limit | video/article/post；public 与 browser 当前仅 video，web-index 支持允许 URL 的其他分类 |
 | zhihu | query/type/from_date/to_date、content_type | question/answer/article，按实际内容 URL 分类 |
 | xiaohongshu | query/type/from_date/to_date、content_type | note，保留笔记身份；不伪造未实现的账号/线程功能 |
 
@@ -134,6 +134,84 @@ bridge 有 bearer 认证、请求/响应大小界限、最多 8 个任务与单�
 worker 载入、Reload/update、浏览器启动只恢复已保存的 enabled=true，不把首次安装当授权。恢复时按创建前保存的唯一 URL fragment 标记清理中断遗留 tab；若站点去掉标记或用户导航导致无法确认所有权，保守保留该 tab（需用户自行检查），不猜测并关闭用户 tab。
 
 扩展仅请求 storage/scripting 和三个固定站点、本地 bridge 的 host permissions，不请求 cookies 或 all_urls。DOM 提取先识别可见登录/安全 gate，再校验卡片、链接及祖先的可见性，使用 innerText 而非包含隐藏文字的 textContent；普通卡片讨论验证码不会单凭关键词被当作 gate。固定 gate/卡片选择器不保证识别所有未来站点变更。DOM 无卡片可能是空结果、换版或 gate，返回 unavailable 而非假穷尽；publication/author 未验证时为 null。小红书签名/跟踪 URL 参数不会进入模型证据。目标平台改版、真实会话及 Chrome版本需部署者验证。
+
+## 项目内部原生读取：小红书、知乎、B站
+
+网页索引不是站内搜索。已观察到的错误页/欢迎页会从 index 和选中平台的 fused Web 支路排除；日期未知仍 fail closed，通道报告 partial，而不是声称近期无讨论。默认来源保持原样，代码更新不自动注册、切换后端或登录。
+
+内部来源为 `xiaohongshu-native`、`zhihu-native`、`bilibili-native`，配置均为 `{}`。它们不是外部 MCP 服务，也不调用第三方 CLI。
+
+### 会话和接入
+
+1. 显式准备兼容的 Chromium。可选 npm 依赖 `playwright-core` **不下载浏览器**；设置 `SEARCH_BOOST_BROWSER_EXECUTABLE` 指向浏览器可执行文件，或者自行安装与固定 Playwright 版本匹配的 Chromium。SearchBoost 不自动下载/安装浏览器。
+2. 在交互终端执行 `search-boost community-login xiaohongshu`（也可为 `zhihu`、`bilibili`）。打开 SearchBoost 专用、有界面的浏览器；本人完成登录/平台验证，再输入 `yes` 确认。不会读取个人 Chrome profile 或导入 Cookie。
+3. 重载 SearchBoost 宿主。在 Community 配置选择「站内正文 / Station content」。或通过管理工具显式注册 `{"action":"register","id":"xhs-native","provider":"xiaohongshu-native","config":{}}`，并明确停用该平台旧实例。TUI 的选择动作会只切换当前平台，不影响其他平台。
+
+profile 按平台保存在 `$SEARCH_BOOST_HOME/state/community/sessions/<platform>/profile`，由私有目录保护；没有环境覆盖时 home 为 `~/.search-boost`。初始化只确认用户保存了专用会话，不证明平台认证或覆盖。取消确认不启用来源，但用户刚刚手动登录时 Chromium 可能已把状态写入自己的专用 profile。一个平台同一时间只有一个 profile 写入者；冲突返回失败，不争用真实浏览器。已死进程的锁可恢复；异常退出残留的 Chromium singleton/非普通文件会被拒绝，需要先关闭该专用浏览器并人工处理，不能冒险复用。
+
+#### `browser.lock` 冲突与人工恢复
+
+锁文件位于 `$SEARCH_BOOST_HOME/state/community/sessions/<platform>/browser.lock`（默认 home 为 `~/.search-boost`）。正常并发会返回 `session_busy`；不要删除正在使用的锁。仅当锁内 PID 可被证明已退出时才自动恢复，不能因等待时间过长就强制解锁。
+
+异常退出可能留下空白/损坏的锁，或原 PID 已被其他程序复用；此时检索和 `community-login` 都会保守拒绝启动。人工恢复步骤：
+
+1. 先停止所有使用该平台会话的 SearchBoost 宿主和专用 Chromium；确认没有进程仍在使用上述 `profile`。不能确认时继续等待或排查，不要解锁。仅看到 PID 属于其他程序，不足以证明 profile 已无人使用。
+2. 在确认没有写入者后，可将该平台目录内的 `browser.lock` 改名备份，再重新运行 `community-login` 或检索。只处理此锁；不要删除 `profile-owner.json`、`session.json`，不要借用个人浏览器 profile。
+3. 若还有 Chromium singleton/非普通文件报错，先确认专用浏览器确已完全退出，再人工排查残留；不绕过所有权检查。会话目录包含登录凭据，不要上传或公开备份内容。
+
+### 各平台实现与不同边界
+
+- **小红书**：研究参考 [xpzouying/xiaohongshu-mcp/search.go](https://github.com/xpzouying/xiaohongshu-mcp/blob/main/xiaohongshu/search.go)、[feed_detail.go](https://github.com/xpzouying/xiaohongshu-mcp/blob/main/xiaohongshu/feed_detail.go) 和 [MediaCrawler XHS client](https://github.com/NanmiCoder/MediaCrawler/blob/main/media_platform/xhs/client.py)。读取站内搜索状态的 ID/签名，详情只取对应 noteId 的正文、作者及 Unix 毫秒发布时间。签名只在这次详情读取内部消费，不进入证据/快照。日期请求尝试页面「最新」排序并验证刷新；不能确认排序则告知不足，最终仍按真实详情时间过滤，不伪造新日期。
+- **知乎**：参考 [MediaCrawler Zhihu client](https://github.com/NanmiCoder/MediaCrawler/blob/main/media_platform/zhihu/client.py)、[help.py](https://github.com/NanmiCoder/MediaCrawler/blob/main/media_platform/zhihu/help.py)。从搜索页发现问题/回答/文章链接，读取 initialState 中与 URL **精确匹配**的 question/answer/article 实体，不使用任意第一条推荐。取 content 和 created_time/created，而非更新时间。没有目标实体则停止，不用欢迎页/推荐内容补位。问题和回答命中均扩展到所属问题的可读线程，每个回答在自身详情页核实正文；显式 question 类别将回答命中归到问题主条目，文章只扩展自己的评论。
+- **B站**：参考 [bilibili-api/article.py](https://github.com/fork-of-W1ndys/bilibili-api/blob/main/bilibili_api/article.py)、[note.json](https://github.com/fork-of-W1ndys/bilibili-api/blob/main/bilibili_api/data/api/note.json) 和 [Bilibili API collect 的笔记列表](https://github.com/pskdje/bilibili-API-collect/blob/main/docs/note/list.md)、[公开笔记详情](https://github.com/pskdje/bilibili-API-collect/blob/main/docs/note/info.md)。专栏与公开笔记分别解析；category 41/42 的公开笔记按 cvid 读取，Quill 图像/媒体嵌入不假装文字。Opus 使用动态详情文字/summary，当前不是展开全文保证；全局发现仍可依赖 index，明确标为混合覆盖。视频只作为笔记、评论的入口，不下载或转录视频。
+
+### 小红书完整评论与知乎完整线程
+
+两个 native 来源默认尝试遍历，而不是取固定数量的热门评论样本。小红书分别处理主评论页和每条主评论的回复页；知乎分别处理问题的回答列表、问题评论、每个回答的评论以及回复页，文章则处理自己的评论/回复。通过页面正常滚动、评论按钮和展开回复，监听当前目标的站点请求；没有复制签名算法或另开外部服务。知乎服务端改变分页 limit 不会单独导致失败，续页仍须保持同源、同端点并证明游标前进。
+
+直接结果的 `data.discussion`、融合结果的 `community_data.discussion` 及保存快照共用闭合结构：
+
+- `target_kind/target_id/target_url` 指定笔记、问题或文章；回答主条目的 discussion 指向所属问题，原主条目身份不变。
+- `entities` 保留问题详情、全部已获取回答或文章的完整可读文字、作者及各自创建时间；`comments` 保留正文、作者、时间及 `entity_kind/entity_id/root_id/parent_id`，可重建回复关系。未读正文不借用推荐内容或摘录补位。
+- `sections` 披露回答/评论/回复各段的完成状态、已取得数量、可验证的预期数量和局部中断原因；`pages` 是已观察分页数。不保存请求签名、原始响应、Cookie 或游标。
+- `status:complete` 只表示 `scope:accessible_to_current_session`：此时会话可访问内容的分页/计数和正文检查都完成，**不意味着隐藏、已删、付费或平台未开放的内容已经取得，也不是整个平台搜索完整覆盖**。显式零计数可以证明空集合，未知计数、缺少分页结束信号或回复缺口不能冒充完整。
+- `status:partial` 保留已获取正文和评论，`stop_reason` 说明未遍历完成、计数未知/不一致、验证/访问拒绝、游标异常、停滞或资源上限。`1.2万` 等近似显示不能换算成精确总数；`1,024` 等精确分组数字可以解析。根评论末页不能代替回复末页；达到上限不能标完整。后续稀疏状态不降低已知计数或覆盖已验证正文；单个评论按钮失效只标记对应区段，不阻断其他回答，真实访问拒绝/网络策略失败仍停止整个读取。
+
+现有安全边界保持：平台候选仍有界，查询总超时仍是 120 秒；单个讨论最多观察 200 页、最多使用 60 秒且服从查询剩余期限。完整正文不作 8k 展示截断：每个讨论的可保留正文/元数据预算最多约 512 KB，并按请求结果数分摊总计约 3 MB；超过即明确 partial，而非静默裁剪完整文本。固定 DOM/接口若改版同样报告 partial，不能把 fixture 通过当作真实站点恢复。
+
+日期/类别条件筛选**主条目**后才扩展讨论；完整上下文不按主条目日期裁掉旧回答/评论，所有上下文保留自己的真实时间，也不改变主条目的发布时间。B站仍按下一节原有笔记优先块及附件日期规则执行，不扩大为完整视频评论。
+
+### B站视频专用块
+
+```text
+# 视频标题
+
+## 公开笔记（主体）
+### 笔记标题
+笔记文字……
+作者、各自发布时间和笔记链接
+
+## 评论（补充）
+各个已取得的热门根评论样本……
+
+BV 号：BVxxxxxxxxxx
+```
+
+直接结果的 `data.video_block` 保留 `title/url/bvid/published/notes/comments` 与两类附件读取状态；每条笔记/评论都有自身作者、链接和发布时间。融合结果保留 `community_data.video_block` 和格式化 `content`，供后续报告复用。格式化块是有界展示，较长正文以结构化字段为准；BV 标识不会因文本裁剪丢失。
+
+`platform_options.bilibili.note_limit` 为 1–5（默认 3），`comment_limit` 为 0–20（默认 5；0 不请求评论）。只读取第一页公开笔记和热门根评论，不能据此声称全部笔记或完整评论区。没有笔记、读取受限和未请求是不同状态；失败会保留已取得的块，停止后续读取，不用简介或转录填充。
+
+日期条件的顶层视频时间仍是视频发布时间，**不拿新评论日期给旧视频换日期**；附件也按自身发布时间过滤；公开笔记列表的分钟时间标注 `published_precision:minute`，秒级窗口必须容纳整个分钟，不能伪造精确秒。检索近期笔记可选 article 类别，公开笔记包含在该类中。没有可靠时间的内容仍不会通过显式日期条件。
+
+### 读取和安全边界
+
+每个平台最多采样 30 个候选，最多接受 10 项；详情顺序、有界执行，查询总预算 120 秒。正常样本未达到数量时继续扫描有界候选，不因先遇到旧结果而停止。限流、验证、详情失败时停止，不自动重试、绕过登录或降级用索引摘要冒充正文。
+
+SearchBoost 内部接管请求：只允许固定平台及静态资源域名，搜索模式禁止写接口；只有显式手动登录模式允许识别出的认证请求。Cookies 从专用浏览器 store 取得（包括 HttpOnly），不导出给模型。关闭 service worker、WebSocket 及媒体取数，单请求有时间/体积限制。代理和 NO_PROXY 按已捕获的环境逐请求选择；直连解析/校验后钉住地址，代理保留目标 DNS，不自动从代理退回直连。
+
+**当前所有 3xx 跳转都失败即停止**，不会把重定向交还浏览器自动跟随，因为 Playwright 的路由拦截不再覆盖这条跳转。跳转至登录/验证页面或其他入口会使读取不完整，不应写成健康空结果。`aborted_by_policy/blocked_redirects` 是脱敏计数，不公开请求 URL 或凭据。
+
+ready 只验证浏览器文件和确认过的专用会话存在，不证明平台认证、连通性或近期正文已恢复。发布前还需本人登录后的实际检索和正文/时间人工抽查。固定模板、DOM 状态和站点接口可能改版；识别不到则报告不足。测试见 `scripts/test-community-native.mjs` 与 `scripts/test-community-discussion.mjs`，排查记录见 [本次修复](community-retrieval-fix.md)。
 
 ## 证据与状态
 

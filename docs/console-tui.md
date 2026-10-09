@@ -1,6 +1,6 @@
 # 独立全屏控制台 / Independent console TUI
 
-两套界面共用配置，但定位不同：默认 TUI 是**快速配置**，侧重直接修改；`tui` 是**控制台**，侧重查看当前状态和某份配置。快速配置 TUI 只调整新增的 Community 与判断模型选项，其他老选项的操作习惯保持不变；控制台使用独立的三栏焦点导航。**API 额度查询是控制台专属功能**，不加入快速配置 TUI。
+两套界面共用配置，但定位不同：默认 TUI 是**快速配置**，侧重直接修改；`tui` 是**控制台**，侧重查看当前状态和某份配置。快速配置 TUI 只调整新增的 Community 与判断模型选项，其他老选项的操作习惯保持不变；控制台使用独立的三栏焦点导航。API 额度查询位于引擎页。
 
 ```bash
 search-boost                 # 快速配置 TUI（保留 Clack 与原有入口）
@@ -19,11 +19,11 @@ search-boost tui --help
 - 顶部：品牌、包版本、当前分类与 dry-run 标记。
 - 固定侧栏：总览、搜索引擎、搜索层、工具开关、社区检索、判断模型、Agent 接入、界面设置。顺序不随配置状态变化。
 - 三栏分工：第一栏为分类导航，第二栏为该分类的条目列表，第三栏为选中条目的详情与操作；当前条目和键盘焦点分别高亮。
-- 宽终端（至少 112 列）：第二栏按 Enter 或 → **仅将焦点移到第三栏**，不弹出放大的操作菜单。第三栏用 ↑↓ 选择底部操作、Enter 执行，PgUp / PgDn 滚动上方详情。表单、选择和确认仍留在第三栏，第二栏不消失、不改宽。
+- 宽终端（至少 112 列）：第二栏按 Enter 直接打开单操作条目（如语言、主题、搜索层），多操作条目进入详情选择；→ 始终仅将焦点移到第三栏，不弹出放大的操作菜单。第三栏用 ↑↓ 选择底部操作、Enter 执行，PgUp / PgDn 滚动上方详情。表单、选择和确认仍留在第三栏，第二栏不消失、不改宽。
 - 窄终端：保留同样的三层焦点逻辑；列表先显示简短预览，进入详情后使用主区显示第三栏内容，← / Esc 返回原列表。缩放不改变当前焦点、选中项或表单草稿。
 - 底部：结果提示与上下文快捷键。按条目记忆详情滚动与操作选择；刷新按条目 ID 保留选择，避免判断配置重新排序后选中别的配置。操作消失后回到第一项，不误落到删除按钮。
 - 多步配置按 Esc 返回上一步；确认页的取消也返回原表单并保留本次会话草稿，不保存。关闭整个操作后恢复原先的栏焦点。确认默认选中取消。
-- 最小尺寸为 54 × 16；小于此尺寸提示调整大小，Q / Ctrl+C 仍可退出。窗口缩放自动重绘。中文和 emoji 按显示宽度裁切，内容不越栏。
+- 最小尺寸为 54 × 16；小于此尺寸提示调整大小，Q / Ctrl+C 仍可退出。窗口缩放自动重绘。小于最小尺寸时阻止不可见输入与确认，保留草稿；恢复尺寸后可继续，Esc 可取消，Q / Ctrl+C 可退出。中文和 emoji 按显示宽度裁切，内容不越栏。
 
 建议使用 UTF-8 的 Windows Terminal、PowerShell、现代 macOS / Linux 终端，尺寸 120 × 32 或更大。无 TTY 时明确报错，不自动启动另一套向导；使用 `--preview` 可查看无 ANSI 的只读快照。
 
@@ -36,13 +36,13 @@ search-boost tui --help
 | ← / → | 主界面切换相邻栏；只读 / 选择页的 ← 返回上一步；输入框内移动光标 |
 | 1–8 | 跳到对应分类 |
 | Home / End | 当前列表 / 操作首尾；只读详情首尾；输入框内移到开头 / 末尾 |
-| Enter | 列表进入第三栏；第三栏执行选中操作；表单下一项 / 继续确认 |
+| Enter | 单操作条目直接打开；多操作条目进入第三栏；表单下一项 / 继续确认 |
 | Space | 切换当前项支持的开关，仍需明确确认 |
 | E | 编辑当前项 |
 | U | 搜索引擎页查询当前引擎额度；额度总览中查询全部支持项（联网前确认） |
 | D | 删除当前项，默认取消 |
 | R | 重新读取配置、保留选中条目，不执行网络检测 |
-| L | 确认切换简体中文 / English |
+| L | 打开简体中文 / English 选择，选择后确认 |
 | ? | 完整帮助 |
 | Esc | 操作内返回上一步，不保存；主界面依次详情 → 列表 → 分类，不直接退出 |
 | Q / Ctrl+C | 退出；输入框中 Q 是普通文字 |
@@ -61,11 +61,12 @@ search-boost tui --help
 - **接入**：指定单个宿主安装 / 卸载，刷新时选择精确已有 scope / profile。安装不自动预授权工具、不替换原生搜索；已有接入建议刷新以保留选择。DSH 输入精确 profile，`desktop` 操作前完全退出 Desktop（含托盘）。Grok 仅管理 user-scope MCP / rule / skill，不安装、删除或重建原生插件；完整插件、项目级与复杂接入流程继续使用现有 CLI / 旧向导。失败不假定成功。
 - **总览 / 诊断**：只读配置统计与 quick doctor，不发起搜索或网络探测。配置状态不是实时连接、宿主加载版本或覆盖率的证明。
 - **语言**：共用 `config/tui.json` 的 language 字段，但保留旧 TUI layout；新界面不使用旧平铺 / 文件夹布局。
+- **表单**：长字段说明自动换行；超过 4096 长度的输入整次拒绝并提示，不静默截断 Key / 地址。已知并发配置变更明确提示按 R 刷新，未知错误仍不回显可能含凭据的原文。
 - **安全**：浏览不创建默认配置；修改显式确认；损坏配置展示修复提示而不是当作空配置覆盖。控制字符经过清理，任意底层错误不直接回显到界面。`--dry-run` 不保存任何配置或接入，包括显示语言与控制台主题。
 
-## 控制台专属：Theme / 主题
+## Theme / 主题
 
-按 **8 → 主题（控制台专属） → Enter → 切换主题**，选择并确认后立即生效：
+按 **8 → 主题 → Enter**，选择并确认后立即生效：
 
 - **Ayu Dark**（默认）：深色底、暖金强调，Logo 使用金色 / 橙色。
 - **TokyoNight Dark**：深蓝底、蓝紫强调，Logo 使用蓝色 / 紫色。
@@ -78,7 +79,7 @@ search-boost tui --help
 
 配色参考：[Ayu Dark 官方色板](https://github.com/ayu-theme/ayu-colors/blob/master/themes/dark.yaml)、[TokyoNight 官方色板](https://github.com/folke/tokyonight.nvim/tree/main/lua/tokyonight/colors)。终端角色映射对正文 / 次要文字的可读性做了适配。
 
-## 控制台专属：API 额度
+## API 额度
 
 额度不另设侧栏，也不改变五个引擎原有顺序。选中引擎后，详情区显示同配色的轻量额度卡片：剩余数值、余量条和查询时间；低余量为黄 / 红色，未查询或未知为中性色。原有 Key / 地址 / 路由操作顺序保留，新增额度操作追加在后。
 
@@ -92,16 +93,16 @@ search-boost tui --help
 | Tavily | 当前周期 Key、套餐、PAYGO 上限剩余 credits | 独立上限分别展示，不相加；Key 无上限不等于账户余额无限 |
 | Brave | 搜索响应头中的长周期剩余请求及周期 | 需要 1 次真实搜索，消耗配额且可能计费；非钱包余额 |
 | TinyFish | 账户共享钱包 USD 余额（含负余额） | 不是单个 Key 剩余搜索次数；不充值、不修改自动充值 |
-| Exa | 服务账号要求与官方后台地址 | 已核实用量接口需 Service Key 和 Key ID；当前搜索 Key 不足以直接查询 |
-| AnySearch | 手动查看与官方后台地址 | 尚无已核实的直接额度适配器，不猜测余额接口 |
+| Exa | 不支持查询 | 当前配置没有可用额度查询；不保留查看 / 查询按钮或 U 快捷键 |
+| AnySearch | 不支持查询 | 不保留查看 / 查询按钮或 U 快捷键，不猜测余额接口 |
 
 未配置、网关、认证失败、限流、超时、未开通钱包、返回格式变化都明确显示原因，不伪装为 0。接口与数据口径见 [额度适配器说明](engine-quota.md)。
 
 ## English summary
 
-`search-boost tui` is the status-first console; `search-boost` is the configuration-first quick TUI, retaining Clack and existing entry points. The new module owns rendering, navigation, inline forms and confirmation dialogs, sharing only backend services. The console has its own Ayu Dark / TokyoNight Dark theme setting (section 8), persisted separately from the quick TUI. The standard SearchBoost name and a compact terminal logo appear in the header; logo colors follow the theme. The sidebar has eight stable sections. Enter in the middle list moves focus to the right details pane without opening an enlarged menu. Forms and confirmations remain in the right pane, preserving the middle list and geometry. Smaller terminals show the same logical detail pane in the main area; Esc restores the list. Minimum size: 54 × 16; recommended: 120 × 32.
+`search-boost tui` is the status-first console; `search-boost` is the configuration-first quick TUI, retaining Clack and existing entry points. The new module owns rendering, navigation, inline forms and confirmation dialogs, sharing only backend services. The console has its own Ayu Dark / TokyoNight Dark theme setting (section 8), persisted separately from the quick TUI. The standard SearchBoost name and a compact terminal logo appear in the header; logo colors follow the theme. The sidebar has eight stable sections. Enter opens single-action entries directly; multi-action entries enter details. The right arrow always moves focus to details. Forms and confirmations remain in the right pane, preserving the middle list and geometry. Smaller terminals show the same logical detail pane in the main area; Esc restores the list. Minimum size: 54 × 16; recommended: 120 × 32.
 
-Use Tab / Shift+Tab to cycle the three panes, arrows or J/K to navigate, PgUp / PgDn to scroll details, 1–8 to jump sections, Enter to enter details or run the selected action, E to edit, Space to toggle, D to delete, R to reload, L for language, ? for help, Esc to cancel, and Q / Ctrl+C to exit. Esc steps back through dialogs and restores the previous focus. Confirmation defaults to cancel; cancel returns to the draft without saving. Passwords remain hidden. `--dry-run` makes no writes; `--preview` prints an offline snapshot without a TTY. Configuration readiness never claims live connectivity or host loading. Engine quota cards and the quota overview are console-only; U explicitly requests verified provider data after consent. Brave requires one potentially billable search; TinyFish reports an account wallet, not search counts. Exa/AnySearch currently direct users to their dashboards. Results remain in memory, refresh at most once per minute (longer on rate limits), and invalidate on key/URL changes. Browsing, R, preview and dry-run never query quotas.
+Use Tab / Shift+Tab to cycle the three panes, arrows or J/K to navigate, PgUp / PgDn to scroll details, 1–8 to jump sections, Enter to enter details or run the selected action, E to edit, Space to toggle, D to delete, R to reload, L for language, ? for help, Esc to cancel, and Q / Ctrl+C to exit. Esc steps back through dialogs and restores the previous focus. Confirmation defaults to cancel; cancel returns to the draft without saving. Passwords remain hidden. `--dry-run` makes no writes; `--preview` prints an offline snapshot without a TTY. Configuration readiness never claims live connectivity or host loading. Engine quota cards and the overview appear in the engine section; U explicitly requests verified provider data after consent. Brave requires one potentially billable search; TinyFish reports an account wallet, not search counts. Exa/AnySearch show “Query not supported” without query/detail buttons or a U shortcut. Results remain in memory, refresh at most once per minute (longer on rate limits), and invalidate on key/URL changes. Browsing, R, preview and dry-run never query quotas.
 
 Community and judgment put read-only actions first in the details pane. The console also edits Reddit scopes and browser settings, manages X credentials, selects Jev destinations and edits saved judgment profiles without activating them. A changed judgment URL never inherits its old key. Arbitrary community instance registration remains in `community_backend`. Full Grok native plugin management and complex host setup remain in the existing CLI/wizard. The new console does not jump into those older prompts during an operation.
 
