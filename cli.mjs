@@ -40,6 +40,12 @@ async function main() {
     case 'mcp':
       await import('./server.mjs')
       break
+    case 'community-login': {
+      if (argv.length !== 2 || !['xiaohongshu', 'zhihu', 'bilibili'].includes(argv[1])) throw new Error('Usage: search-boost community-login xiaohongshu|zhihu|bilibili')
+      const { runCommunityLogin } = await import('./lib/cli/community-login.mjs')
+      await runCommunityLogin(argv[1])
+      break
+    }
     case 'community-browser':
       if (argv.length !== 1) throw new Error('Usage: search-boost community-browser')
       await import('./scripts/community-browser-bridge.mjs')

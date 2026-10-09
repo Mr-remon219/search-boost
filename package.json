@@ -66,7 +66,7 @@
     "check": "node scripts/check-syntax.mjs",
     "test:fusion": "node scripts/test-fused-baseline.mjs && node scripts/test-noff-community-snapshot.mjs && node scripts/test-fusion-errors.mjs && node scripts/test-fusion-scoring.mjs",
     "test:x": "node scripts/test-x-pipeline.mjs",
-    "test:community": "node scripts/test-community.mjs && node scripts/test-community-platforms.mjs && node scripts/test-community-bridge.mjs && node scripts/test-community-worker.mjs && node scripts/test-community-review.mjs && node scripts/test-community-pipeline.mjs && node scripts/test-community-pages.mjs && node scripts/test-adaptive-community.mjs && node scripts/test-adaptive-community-review.mjs",
+    "test:community": "node scripts/test-community.mjs && node scripts/test-community-retrieval-quality.mjs && node scripts/test-community-native.mjs && node scripts/test-community-discussion.mjs && node scripts/test-community-platforms.mjs && node scripts/test-community-bridge.mjs && node scripts/test-community-worker.mjs && node scripts/test-community-review.mjs && node scripts/test-community-pipeline.mjs && node scripts/test-community-pages.mjs && node scripts/test-adaptive-community.mjs && node scripts/test-adaptive-community-review.mjs",
     "community:browser": "node scripts/community-browser-bridge.mjs",
     "test:engines": "node scripts/test-engine-requests.mjs && node scripts/test-engine-base-urls.mjs && node scripts/test-tinyfish.mjs",
     "test:xauth": "node scripts/test-xauth.mjs",
@@ -111,7 +111,8 @@
     "proxy-addr": "^2.0.8"
   },
   "optionalDependencies": {
-    "pdfjs-dist": "6.2.108"
+    "pdfjs-dist": "6.2.108",
+    "playwright-core": "1.64.0"
   },
   "engines": {
     "node": ">=22.13"

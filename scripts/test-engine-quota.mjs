@@ -151,6 +151,26 @@ await test('console alone exposes quota details/overview; browsing, default canc
   const quick = ['tui.mjs', 'keys-wizard.mjs'].map(name => readFileSync(new URL(`../lib/installer/${name}`, import.meta.url), 'utf8')).join('\n')
   assert.doesNotMatch(quick, /engine-quota|fetchEngineQuota|quota-overview/)
 }))
+await test('unsupported quota providers have only a status, no query/detail controls or U shortcut', () => modelFixture(async () => {
+  let calls = 0
+  for (const language of ['en', 'zh-CN']) {
+    const model = makeModel({ run: async () => { calls++; } }); model.language = language; model.reload(); model.navigate(1)
+    for (const name of ['exa', 'anysearch']) {
+      model.selection.engines = model.rows.findIndex(row => row.id === name)
+      assert.equal(model.current.quota.status, 'unsupported')
+      assert.equal(model.current.actions.some(a => ['quota', 'quota-view'].includes(a.id)), false)
+      const frame = renderConsole(model, { columns: 180, rows: 32, color: false })
+      assert.match(frame, language === 'en' ? /Query not supported/ : /不支持查询/)
+      assert.doesNotMatch(frame, /U quota|U 额度|Service key needed|Manual|控制台专属|Console only/)
+      key(model, 'u'); await tick()
+      assert.equal(model.modal, null)
+    }
+    model.requestQuota(['exa', 'anysearch']); assert.equal(model.modal, null)
+    assert.equal(calls, 0)
+    assert(model.rows.find(row => row.id === 'tavily').actions.some(a => a.id === 'quota'))
+  }
+  assert.equal(existsSync(searchBoostHome()), false)
+}))
 await test('an unrepresentable provider retry interval blocks further queries in this session', () => modelFixture(async () => {
   let calls = 0, time = 200000
   const model = makeModel({ now: () => time, run: async () => { calls++; return { status: 'rate_limited', metrics: [], retryAfterMs: Infinity } } })
