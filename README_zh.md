@@ -27,7 +27,7 @@
 
 ---
 
-> **v0.3.0-beta1 · npm `beta` 测试通道**：独立全屏控制台、Ayu / TokyoNight 主题与需确认联网的 API 额度卡片；五平台社区检索、显式来源与过滤、快照恢复；Jev / Laya 判断配置。使用 `search-boost@beta`，或固定 `search-boost@0.3.0-beta1` 安装。`@latest` 仍指向稳定版，不会自动安装本测试版。详见[发布说明](./docs/v0.3.0-beta1-release.md)。
+> **v0.3.0-beta2 · npm `beta` 测试通道**：小红书 / 知乎 / B站的专用 Chromium 原生正文读取、保守的讨论完整性判断与控制台交互修复；保留五平台检索、主题、额度卡片及 Jev / Laya 判断配置。使用 `search-boost@beta`，或固定 `search-boost@0.3.0-beta2` 安装。`@latest` 仍指向稳定版，不会自动安装本测试版。详见[发布说明](./docs/v0.3.0-beta2-release.md)。
 
 ## 目录
 
@@ -60,7 +60,7 @@
 - **高净度网页正文提取 (`fetch_page`)**  
   优先抓取原站降低等待；必要时使用同线路 curl 兼容兜底，Jina Reader 作为备用读取方式。自动剔除 CSS、JS 及广告噪音，支持 `focus` 关键词段落提炼，具备内存缓存与大体积熔断保护。
 - **五平台社区检索 (`community_search`)**
-  显式选择 Reddit、X、B站、知乎、小红书。支持有界 Reddit 归档、网页索引片段、可选公开视频元数据和手动启用的只读浏览器桥；X 保留关键词 / 语义 / 账号 / 线程模式。披露平台过滤、来源和失败状态，不承诺完整评论、全文或全平台舆论代表性。
+  显式选择 Reddit、X、B站、知乎、小红书。支持有界 Reddit 归档、网页索引片段、可选公开视频元数据、手动启用的只读浏览器桥，以及小红书 / 知乎 / B站的专用 Chromium 原生读取。原生来源须显式准备浏览器、本人登录并选择来源，默认配置不变。讨论完整性仅限当前会话可读线程，须有分页、精确计数、正文和身份依据，缺失时保持 `partial`；B站视频块以公开笔记为主体、评论为补充，不抓视频转录。X 保留关键词 / 语义 / 账号 / 线程模式。披露平台过滤、来源和失败状态，有界结果不代表全平台舆论。详见[会话接入与边界](docs/community-search.md#会话和接入)。
 - **Jev / Laya 意图导向搜索 (`adaptive_search` · 实验功能)**
   提供一个完整问题与必填研究方向。检索前一次判断模型策略请求选择固定排序预设，并在省略 community 时决定是否追加既有社区支路；随后对有界 fused 快照（目标≤10 时最多 32 条，更大目标按原余量比例扩至最高 160 条）做固定选项筛选（安全、原型价值 3/4/5、来源折扣）。没有关键词规划、没有逐材料 constraints 门槛、没有语言校验、没有自动补读，也没有自设的累计预算停止；cursor 与 saved_result_id 只重放已保存结果。不宣称答案已核实或完整。
 - **原生多智能体并行研究工作流**  
@@ -129,7 +129,7 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
 ```bash
 # 安装本测试版（不改变 npm 稳定通道）
 npm install -g search-boost@beta
-# 固定版本：npm install -g search-boost@0.3.0-beta1
+# 固定版本：npm install -g search-boost@0.3.0-beta2
 
 search-boost       # 快速配置 / 首次接入向导
 search-boost tui   # 独立全屏控制中心
@@ -446,7 +446,7 @@ API Key 存放在由 SearchBoost 自己管理的凭据文件中，不写入提�
 
 ## CLI 命令参考（自动化与进阶）
 
-以下 CLI 参考对应 **0.3.0-beta1**。控制台和五平台社区功能请安装 `search-boost@beta` 或固定版本；`@latest` 指向稳定版。
+以下 CLI 参考对应 **0.3.0-beta2**。控制台和五平台社区功能请安装 `search-boost@beta` 或固定版本；`@latest` 指向稳定版。
 
 **DeepSeek Harness Desktop**：交互安装选中 DSH 后，可选择 Desktop / CLI / All，再为 Desktop 选择 **自动安装（默认）** 或 **本地目录接入**。自动方式通过注册表（含自定义安装目录）、默认目录及 PATH 找到桌面版内置命令；先启动一次再完全退出（包括托盘）。本地方式在其他接入（包括 Grok）结束后，最后显示当前包的完整持久目录，由用户粘贴到运行中的 Desktop「插件 → 添加插件」；TUI 等待只读检测，稳定完成后结束，Esc / Ctrl+C 或超时则报告未完成并保留其他结果。检测到保存的安装不代表运行中的插件已加载；没有内置启动器时会明确提示运行时未验证。临时 `_npx` 缓存不能作为本地链接来源。也可直接在应用输入 `search-boost` 从 npm 安装。自动安装/更新仍验证宿主解析器，遮蔽副本不能报成功；禁用状态保留，`--enable-dsh-bundle` 明确要求启用（本地方式由用户在 Desktop 启用）。所有权与验证限制见 [Desktop 接入说明](docs/dsh-desktop.md)。
 
@@ -485,6 +485,7 @@ search-boost config keys --set tinyfish=KEY   # 配置 TinyFish Search（TINYFIS
 search-boost config layer                   # 切换默认搜索层 (free / api)
 search-boost config x --import-grok         # 从本机 Grok 客户端快速导入 X 凭据
 search-boost config jev                     # 配置 Jev 认知引擎端点与 Token
+search-boost community-login xiaohongshu    # 显式登录专用浏览器；也支持 zhihu / bilibili
 
 # ----------------- 健康检查与诊断 -----------------
 search-boost doctor                         # 离线健康检查
@@ -514,7 +515,7 @@ search-boost uninstall -t cursor,claude -y  # 移除指定宿主的集成与注�
 # 1. 克隆仓库
 git clone https://github.com/Mr-remon219/search-boost.git
 cd search-boost
-git checkout v0.3.0-beta1  # 开发可使用 v0.3.0 分支
+git checkout v0.3.0-beta2  # 开发可使用 v0.3.0 分支
 
 # 2. 按 CI 的方式安装依赖
 npm ci

@@ -27,7 +27,7 @@
 
 ---
 
-> **v0.3.0-beta1 · npm `beta` channel**: independent full-screen console with Ayu / TokyoNight themes and consent-based API quota cards; five-platform community retrieval with explicit sources, filters and snapshot recovery; Jev / Laya judgment profiles. Install with `search-boost@beta` or pin `search-boost@0.3.0-beta1`. `@latest` remains the stable channel and does not opt into this beta. See [release notes](./docs/v0.3.0-beta1-release.md).
+> **v0.3.0-beta2 · npm `beta` channel**: native Xiaohongshu / Zhihu / Bilibili text retrieval through explicitly initialized dedicated Chromium sessions, conservative discussion completeness, and console interaction fixes; retains five-platform retrieval, themes, quota cards and Jev / Laya profiles. Install with `search-boost@beta` or pin `search-boost@0.3.0-beta2`. `@latest` remains the stable channel and does not opt into this beta. See [release notes](./docs/v0.3.0-beta2-release.md).
 
 ## Table of Contents
 
@@ -60,7 +60,7 @@
 - **Clean Webpage Content Extractor (`fetch_page`)**  
   Fetches the origin first for low latency, with optional same-route curl compatibility fallback and Jina Reader backup. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
 - **Five-Platform Community Retrieval (`community_search`)**
-  Explicitly select Reddit, X, Bilibili, Zhihu or Xiaohongshu. Routes include bounded Reddit archives, web-index snippets, optional public video metadata and a manually enabled read-only browser bridge; X retains keyword / semantic / user / thread modes. Per-platform filters, provenance and failure states stay visible. These are not exhaustive comments, full content or a representative sentiment sample.
+  Explicitly select Reddit, X, Bilibili, Zhihu or Xiaohongshu. Routes include bounded Reddit archives, web-index snippets, optional public video metadata, a manually enabled read-only browser bridge, and dedicated Chromium native readers for Xiaohongshu / Zhihu / Bilibili. Native sessions require explicit browser preparation, manual login and source selection; defaults are unchanged. Discussion completeness is limited to the current session's readable thread and requires pagination, exact counts, body and identity evidence; missing evidence stays `partial`. Bilibili video blocks use public notes as the body and comments as supplements, not video transcripts. X retains keyword / semantic / user / thread modes. Per-platform filters, provenance and failure states stay visible; bounded results are not a representative sentiment sample. See [native setup and limits](docs/community-search.md#会话和接入).
 - **Jev / Laya Intent-Guided Search (`adaptive_search` · Experimental)**
   Supply one full question and a required research intent. One pre-search judgment strategy request selects the fixed ranking preset and (when community is omitted) whether to add the already-wired community branch; one bounded fused snapshot (32 candidates for targets up to 10; larger targets keep the same headroom ratio, at most 160) is then screened with fixed safety, prototype value 3/4/5 and source-discount options. No keyword planning, no constraints gate, no language check, no automatic page read, and no self-set cumulative budget stop; cursor and saved-result pagination only replay stored results. No claim of verified or complete answers.
 - **Native Multi-Agent Parallel Research**  
@@ -129,7 +129,7 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
 ```bash
 # Install this beta (does not change the npm stable channel)
 npm install -g search-boost@beta
-# Reproducible alternative: npm install -g search-boost@0.3.0-beta1
+# Reproducible alternative: npm install -g search-boost@0.3.0-beta2
 
 search-boost       # Quick setup / configuration wizard
 search-boost tui   # Independent full-screen control center
@@ -446,7 +446,7 @@ API keys use a credential store this tool owns. They are not written into prompt
 
 ## CLI Command Reference (Headless & CI)
 
-This CLI reference describes **0.3.0-beta1**. Install `search-boost@beta` (or the exact version) for the console and five-platform community features; `@latest` selects the stable release.
+This CLI reference describes **0.3.0-beta2**. Install `search-boost@beta` (or the exact version) for the console and five-platform community features; `@latest` selects the stable release.
 
 **DeepSeek Harness Desktop:** interactive installation offers Desktop / CLI / All, then **Automatic (default)** or **Local directory** for Desktop. Automatic setup retains bundled-command discovery through Windows installer registry metadata (including custom destinations), default directories and PATH; launch Desktop once, then fully quit it including its tray. Local setup runs last, after all other integrations including Grok, and displays the current durable package directory to paste into the running app's Plugins → Add plugin dialog. The TUI observes saved installation read-only and finishes after stable verification; Escape / Ctrl+C or timeout marks Desktop unfinished while retaining earlier results. Saved installation is not proof of live activation; missing bundled launchers explicitly leave runtime verification unknown. Temporary `_npx` paths are refused as persistent local links. The app also accepts `search-boost` for a registry install. Automatic install/update still verifies the owning resolver and rejects shadow copies. Disabled bundles stay disabled unless explicitly requested; local setup with `--enable-dsh-bundle` waits for the user to enable it in Desktop. See [Desktop integration](docs/dsh-desktop.md) for ownership and validation limits.
 
@@ -485,6 +485,7 @@ search-boost config keys --set tinyfish=KEY   # Configure TinyFish Search (TINYF
 search-boost config layer                   # Switch default layer (free / api)
 search-boost config x --import-grok         # Import X credentials from local Grok login
 search-boost config jev                     # Configure Jev endpoint and token
+search-boost community-login xiaohongshu    # Explicit dedicated browser login; also zhihu / bilibili
 
 # ----------------- Diagnostics & Health -----------------
 search-boost doctor                         # Run offline diagnostic checks
@@ -514,7 +515,7 @@ Use this path to contribute to SearchBoost, or to test code that is not in a pub
 # 1. Clone the repository
 git clone https://github.com/Mr-remon219/search-boost.git
 cd search-boost
-git checkout v0.3.0-beta1  # Or v0.3.0 for development
+git checkout v0.3.0-beta2  # Or v0.3.0 for development
 
 # 2. Install dependencies exactly as CI does
 npm ci
