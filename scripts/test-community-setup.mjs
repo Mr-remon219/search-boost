@@ -2,6 +2,7 @@
 import './isolate-tests.mjs'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
+import { spawnSync } from 'node:child_process'
 import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, sep } from 'node:path'
@@ -260,6 +261,22 @@ assert.throws(() => removeNativeSession('bilibili'), { kind: 'session_busy' })
 assert.equal(existsSync(nativeProfilePath('bilibili')), true, 'a refused removal deletes nothing')
 assert.equal(readFileSync(nativeSessionLockPath('bilibili'), 'utf8'), String(process.pid))
 rmSync(nativeHome('bilibili'), { recursive: true })
+
+// A provably dead PID left by a crash is recoverable on disconnect too.
+const deadProcess = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' })
+assert.equal(deadProcess.status, 0)
+mkdirSync(nativeProfilePath('bilibili'), { recursive: true })
+writeFileSync(nativeSessionLockPath('bilibili'), String(deadProcess.pid))
+assert.deepEqual(removeNativeSession('bilibili'), { removed: true })
+assert.equal(existsSync(nativeHome('bilibili')), false)
+// Malformed/blank locks are not evidence that a process has exited.
+for (const value of ['', 'not-a-pid', '0']) {
+  mkdirSync(nativeProfilePath('bilibili'), { recursive: true })
+  writeFileSync(nativeSessionLockPath('bilibili'), value)
+  assert.throws(() => removeNativeSession('bilibili'), { kind: 'session_busy' })
+  assert.equal(readFileSync(nativeSessionLockPath('bilibili'), 'utf8'), value)
+  rmSync(nativeHome('bilibili'), { recursive: true })
+}
 
 // Symlinked profiles, unsupported markers and shared caches are refused/kept.
 const personal = join(root, 'personal-profile')

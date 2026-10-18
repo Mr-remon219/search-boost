@@ -144,10 +144,11 @@ await test('onboarding is optional, last, and never runs for --yes / install-onl
   const p = prompter([['multiselect', ['zhihu', 'bilibili']]])
   await context(() => runCommunityStep(p.clack, {}, { services })); p.done(); assert.equal(enabled('zhihu').length, 1)
   // Full installer, with no agent selected, must still present community as the last prompt.
-  const full = prompter([['confirm', false], ['select', 'free'], ['multiselect', []], ['multiselect', [], prompt => assert.match(prompt.message, /Connect community accounts/)]])
+  const full = prompter([['confirm', false], ['multiselect', []], ['multiselect', [], prompt => assert.match(prompt.message, /Connect community accounts/)]])
   await context(() => runInstallerWithOptions({ clack: full.clack, skipXAuth: true, skipJudgment: true }, { executeOperations: async () => [] }))
   full.done()
   assert.match(full.records.at(-1).message, /Connect community accounts/)
+  assert(full.logs.some(text => /automatic|automatically/i.test(text)), 'automatic search selection is explained without a layer prompt')
 
 })
 await test('console lifecycle cards are bilingual, bounded and the first action is direct setup', async () => {

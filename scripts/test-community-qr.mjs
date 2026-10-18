@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import './isolate-tests.mjs'
 import assert from 'node:assert/strict'
-import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, rmSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
@@ -49,7 +49,17 @@ await openQrPng(first.path, { platform: 'darwin', spawnImpl: (command, args, opt
 assert.deepEqual(opening.args, [first.path]); assert.equal(opening.command, '/usr/bin/open'); assert.equal(opening.options.shell, false)
 await assert.rejects(openQrPng(first.path, { platform: 'linux', env: { WSL_DISTRO_NAME: 'test' } }), /host image viewer/)
 artifact.remove(); assert(!existsSync(first.path)); await assert.rejects(openQrPng(first.path), /no longer available/)
-console.log('ok: bounded private PNGs, lossless terminal modules, owned-file links and shell-free opening')
+// Simulate a crashed login: only UUID PNGs owned by this platform are pruned.
+const crashed = createQrArtifact('zhihu'), leftover = crashed.update(png)
+const otherPlatform = createQrArtifact('bilibili'), otherQr = otherPlatform.update(png)
+const note = join(leftover.path, '..', 'keep.txt')
+writeFileSync(note, 'not a QR artifact')
+const next = createQrArtifact('zhihu')
+assert.equal(existsSync(leftover.path), false, 'a new QR attempt cleans a crashed login PNG')
+assert.equal(existsSync(otherQr.path), true, 'other platforms are untouched')
+assert.equal(readFileSync(note, 'utf8'), 'not a QR artifact', 'unknown files are not deleted')
+next.remove(); crashed.remove(); otherPlatform.remove(); rmSync(note)
+console.log('ok: bounded private PNGs, crash recovery, lossless terminal modules, owned-file links and shell-free opening')
 
 function loginFixture({ verifiedAfter = 2, controller, failure, captureImage = png } = {}) {
   let clock = 0, verifies = 0, saved = 0, closed = 0, options, emitted

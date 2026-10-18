@@ -53,8 +53,8 @@ const writeManagedTree = () => {
   mkdirSync(dirname(executable), { recursive: true })
   writeFileSync(executable, 'fake chromium', { mode: 0o700 })
   writeFileSync(join(managedRegistryPath(), managedBrowserManifest().directoryName, 'INSTALLATION_COMPLETE'), 'installed')
-  // The real CLI also installs multi-hyphen artifact directories.
-  mkdirSync(join(managedRegistryPath(), 'chromium-headless-shell-1248'), { recursive: true })
+  // Pinned Playwright converts browser-name dashes to underscores on disk.
+  mkdirSync(join(managedRegistryPath(), 'chromium_headless_shell-1248'), { recursive: true })
   mkdirSync(join(managedRegistryPath(), 'ffmpeg-1011'), { recursive: true })
 }
 const installManagedBrowser = async () => {
@@ -202,6 +202,13 @@ assert.equal(readFileSync(nativeBrowserPreferencePath(), 'utf8'), '{ not json')
 rmSync(nativeBrowserPreferencePath())
 
 // --- Owned install: isolated registry, manifest-based path -------------------
+// A competing remover/installer owns setup.lock; never claim ownership outside it.
+mkdirSync(managedBrowserRoot(), { recursive: true })
+writeFileSync(managedBrowserLockPath(), String(process.pid))
+await assert.rejects(installPlaywrightChromium({ env: {}, spawnImpl: () => { throw new Error('must not spawn') } }), { kind: 'browser_busy' })
+assert.equal(existsSync(managedBrowserOwnerPath()), false)
+rmSync(managedBrowserLockPath())
+rmSync(managedBrowserRoot(), { recursive: true })
 const manifest = managedBrowserManifest()
 assert.equal(manifest.available, true)
 assert(managedBrowserExecutablePath().startsWith(managedRegistryPath() + sep), 'the executable resolves inside the owned registry')
@@ -220,6 +227,7 @@ await installPlaywrightChromium({
 assert.equal(spawnedEnv.PLAYWRIGHT_BROWSERS_PATH, managedRegistryPath(), 'the CLI child receives the owned registry, not the shared cache')
 assert.equal(spawnedEnv.KEEP, '1', 'unrelated caller environment is preserved')
 assert.equal(process.env.PLAYWRIGHT_BROWSERS_PATH, undefined, 'the process environment is never mutated')
+assert(existsSync(join(managedRegistryPath(), 'chromium_headless_shell-1248')), 'fixture matches the real headless-shell directory name')
 assert.equal(readFileSync(join(sharedCache, 'chromium-1248', 'chrome'), 'utf8'), 'shared binary', 'the shared Playwright cache is never written')
 assert.equal(JSON.parse(readFileSync(managedBrowserOwnerPath(), 'utf8')).kind, 'search-boost-managed-browser')
 assert.equal(existsSync(managedBrowserLockPath()), false, 'the setup lock is released after install')
