@@ -60,7 +60,7 @@
 - **Clean Webpage Content Extractor (`fetch_page`)**  
   Fetches the origin first for low latency, with optional same-route curl compatibility fallback and Jina Reader backup. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
 - **Five-Platform Community Retrieval (`community_search`)**
-  Explicitly select Reddit, X, Bilibili, Zhihu or Xiaohongshu. Routes include bounded Reddit archives, web-index snippets, optional public video metadata, a manually enabled read-only browser bridge, and dedicated Chromium native readers for Xiaohongshu / Zhihu / Bilibili. Native sessions require explicit browser preparation, manual login and source selection; defaults are unchanged. Discussion completeness is limited to the current session's readable thread and requires pagination, exact counts, body and identity evidence; missing evidence stays `partial`. Bilibili video blocks use public notes as the body and comments as supplements, not video transcripts. X retains keyword / semantic / user / thread modes. Per-platform filters, provenance and failure states stay visible; bounded results are not a representative sentiment sample. See [native setup and limits](docs/community-search.md#会话和接入).
+  Explicitly select Reddit, X, Bilibili, Zhihu or Xiaohongshu. Each platform has one free integration in the TUI: Reddit archives, X basic retrieval, and built-in native readers for the three Chinese platforms. No separate MCP, Docker or browser bridge deployment. Optional community installation is the last onboarding step: choose local Chrome / Chromium or a removable SearchBoost-owned download; scan its private QR PNG in the app, then account verification and session storage are automatic. Community supports enablement, re-login and uninstall. Legacy index / bridge records remain compatible but are not multiple free source choices. Discussion completeness is bounded by verifiable current-session evidence; Bilibili focuses public notes with sampled comments, not video transcripts. Setup never guarantees platform access or full coverage. See [session setup and boundaries](docs/community-search.md#会话和接入).
 - **Jev / Laya Intent-Guided Search (`adaptive_search` · Experimental)**
   Supply one full question and a required research intent. One pre-search judgment strategy request selects the fixed ranking preset and (when community is omitted) whether to add the already-wired community branch; one bounded fused snapshot (32 candidates for targets up to 10; larger targets keep the same headroom ratio, at most 160) is then screened with fixed safety, prototype value 3/4/5 and source-discount options. No keyword planning, no constraints gate, no language check, no automatic page read, and no self-set cumulative budget stop; cursor and saved-result pagination only replay stored results. No claim of verified or complete answers.
 - **Native Multi-Agent Parallel Research**  
@@ -200,7 +200,7 @@ The default **flat** home lists these actions in order:
 | :--- | :--- |
 | Setup wizard; Manage agent integrations; Status | Guided setup; install / scoped refresh / confirmed uninstall; read-only status |
 | Search engine configuration; Default search layer; Tool switches | Choose individual engines; `free` / `api`; shared MCP / Pi / DSH switches |
-| Community configuration; judgment models (Jev / Laya) | Platform sources / enablement / X credentials; masked judgment credentials |
+| Community configuration; judgment models (Jev / Laya) | One free integration per platform: install / log in / enable / uninstall; judgment credentials |
 | Native web search; Print MCP snippet | Explicit permission choices; read-only snippets |
 | TUI settings; Exit | Menu layout before display language; close the console |
 
@@ -208,7 +208,7 @@ The default **flat** home lists these actions in order:
 
 Layout and language changes apply immediately and are saved in `~/.search-boost/config/tui.json` (or `$SEARCH_BOOST_HOME/config/tui.json`). Missing layout (including legacy language-only settings) defaults to flat. Without a saved language preference, Chinese system locales select Simplified Chinese; other locales select English. The preference also applies to standalone interactive setup/config commands, not non-interactive CLI output, search results or agent replies. Tool names, commands, paths, MCP snippets and raw upstream errors remain unchanged. Dry-run previews layout/language without saving; malformed settings are warned about, not overwritten. See [TUI navigation and language settings](docs/tui.md).
 
-**Community configuration** opens Reddit, X, Bilibili, Zhihu and Xiaohongshu directly. Each page shows setup status and relevant actions: choose a source, edit current or saved source settings, view saved configuration, or disable the platform. Judgment configuration also supports viewing, editing, activating and deleting named profiles; editing preserves the active selection and a new destination never inherits an old key. X credential actions are on the X page, not another wizard. Browser setup instructions appear when needed; connections are not probed. Source changes are previewed and saved atomically; cancellation and dry-run write nothing. `config x` and `/x-login` / `/x-logout` remain available.
+**Community configuration** opens the five platforms directly, with one free integration per platform rather than a source picker. Install, log in, enable/disable and uninstall Xiaohongshu / Zhihu / Bilibili here; choose a local browser program or an isolated, removable SearchBoost download. Optional community installation is the last setup step. The console shows lifecycle cards and a full QR when it fits; otherwise use the PNG link or O/Enter. The quick TUI provides the PNG path. Ctrl+click is handled where the terminal reports it; macOS native links may use Cmd+click. Platform uninstall removes native configuration and owned login data; separate browser uninstall removes only SearchBoost’s download, keeping local browsers, shared caches and account sessions; it does not enable another source. Reddit scopes, X credentials and judgment profiles remain manageable. Cancel and dry-run do not download, launch browsers or write configuration.
 
 ### Tool switches
 
@@ -288,7 +288,7 @@ Reads webpage content from search URLs. Reads and cleans the origin first; PDFs 
 
 ### 3. `community_search` Five-Platform Retrieval
 
-Choose platforms explicitly; configure their sources in either TUI. Selection does not enable a disabled backend or install a browser bridge. The former public `x_search` entry is retired; use `community_search` with `engines:["x"]`. CLI X credentials and Pi / DSH `/x-login` / `/x-logout` remain available.
+Choose platforms explicitly; install / enable each platform’s one free integration in either TUI. Selection does not enable a disabled backend or install a browser. The former public `x_search` entry is retired; use `community_search` with `engines:["x"]`. CLI X credentials and Pi / DSH `/x-login` / `/x-logout` remain available.
 
 ```json
 {
@@ -307,15 +307,15 @@ Choose platforms explicitly; configure their sources in either TUI. Selection do
 | :--- | :--- | :--- |
 | Reddit | Bounded Arctic Shift archive collection; web index | Scoped / cached corpus, not real-time all-Reddit search or complete comments |
 | X | Existing hosted xAI / Grok search and best-effort fallback | Keyword, semantic, user, thread; metadata filters require verification; threads may be partial |
-| Bilibili | Web index; optional public video API / browser cards | Metadata or visible cards, not subtitles / full bullet comments; public API can reject requests |
-| Zhihu | Web index / optional browser cards | Snippets / visible cards, not full answers or complete discussions |
-| Xiaohongshu | Web index / optional browser cards | Visible notes, not full notes / comments; no signature generation or cookie export |
+| Bilibili | Built-in free native integration | Public notes, articles, Opus and bounded comments; no video transcription |
+| Zhihu | Built-in free native integration | Current-session accessible questions, answers and discussion; explicit completeness |
+| Xiaohongshu | Built-in free native integration | Current-session notes and discussion; no cookie export, OCR or transcription |
 
 - `engines` is required for a new direct search. Per-platform options include query/date overrides and supported content / author / scope filters. Unknown dates or authors cannot satisfy hard filters.
 - Items expose provenance, route and typed platform data; channels distinguish unavailable, excluded, empty, failed and partial results. A sample cannot establish platform-wide sentiment or completeness.
 - `cursor` replays the captured result set; `save_results:true` opts into private persistence and `saved_result_id` recovery. Reads are zero-network and retain the original capture date; they do not refresh evidence.
 - In `fused_search` / `adaptive_search`, use `community:["reddit","x"]` to opt into platforms. Legacy `true` means X only; `false` / `[]` disables. Omitted fused community stays off; omitted Adaptive community lets its strategy decide X only.
-- Browser sources require a manually enabled local bridge, extension and token environment variable. They do not log in, export cookies, bypass gates or modify platform content. Source registration/update/removal uses `community_backend` and requires user authorization.
+- Three-platform setup uses a background isolated browser and app QR scan; no manual bridge deployment. See [QR, browser isolation and uninstall](docs/community-browser-login.md). Legacy bridge / index records remain compatible for read-only inspection or explicit removal. Searching never installs, logs in or changes configuration, bypasses gates or modifies platform content.
 
 See [community sources, setup and evidence boundaries](docs/community-search.md).
 

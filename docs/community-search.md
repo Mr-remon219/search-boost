@@ -2,17 +2,23 @@
 
 SearchBoost 自己实现社区路由、平台 adapter、证据归一化与融合，不调用第三方 CLI，也不把 Agent Reach 当运行时 SDK。所有 MCP、Pi、DSH 宿主使用同一核心。第三方项目作为策略/API 的研究参考，没有复制非商业许可代码；三个中文平台的 native adapter 在项目内部实现搜索与取数，使用可选 playwright-core 操作 SearchBoost 专用 Chromium 会话，不要求第三方 MCP 服务、额外端口或服务 token。
 
-## 平台与路线
+## 平台与接入
 
-| 平台 | 默认实例 | 已实现的可注册 provider | 实际材料/限制 |
-|---|---|---|---|
-| X | `x-default` | `existing-x` | 复用既有关键词、语义、账号、线程、认证、过滤、缓存、single-flight 和 fallback；不保证完整线程或全平台舆论 |
-| Reddit | `reddit-default` | `reddit-arctic`, `reddit-web` | 显式/配置 subreddit 或有界网页发现 → Arctic Shift 有界采集 → 私有 checkpoint → 本地相关性检索；不是实时全 Reddit 搜索 |
-| Bilibili | `bilibili-default` | `bilibili-web`, `bilibili-public`, `bilibili-browser`, `bilibili-native` | 默认索引片段；native 读取公开笔记、专栏和 Opus 文字；视频块以公开笔记为主体、评论样本为补充，不转录视频 |
-| Zhihu | `zhihu-default` | `zhihu-web`, `zhihu-browser`, `zhihu-native` | 默认索引片段；native 尝试完整问题、回答和评论/回复遍历，逐条报告完整性；不自动登录或解验证码 |
-| Xiaohongshu | `xiaohongshu-default` | `xiaohongshu-web`, `xiaohongshu-browser`, `xiaohongshu-native` | 默认索引片段；native 读取笔记正文/时间并尝试完整主评论及回复遍历，逐条报告完整性；签名仅内部消费，不导出 cookie，不读取 OCR/转录 |
+普通 TUI **每个平台只提供一个免费接入**，不再提供网页索引 / 公共 API / 浏览器桥 / 站内正文的多选菜单：
 
-`archive/native/web-index/mixed` 在每个 channel/item 中披露。浏览器 adapter 的 `native` 表示在目标平台页面读取，不意味着官方 API、完整正文或实时完整覆盖。公开 Bilibili API 是独立可选路线，尚无真实平台可靠性承诺；拒绝/风控不会触发签名绕过、登录或其他实例的自动轮询。
+| 平台 | 免费接入 | 实际材料 / 限制 |
+|---|---|---|
+| X | 既有 X 检索 | 免凭据尽力回退；可选 xAI / Grok 托管凭据；不保证完整线程 |
+| Reddit | 内置归档检索 | 有界 Arctic Shift 采集与私有本地检索；可设置默认 subreddit，不是实时全 Reddit 搜索 |
+| B站 | 内置原生接入 | 公开笔记、专栏、Opus 文字；视频块以公开笔记为主体、评论样本为补充，不转录视频 |
+| 知乎 | 内置原生接入 | 当前专用会话可读的问题、回答、评论 / 回复；逐条报告讨论完整性 |
+| 小红书 | 内置原生接入 | 当前专用会话可读的笔记正文、时间、评论 / 回复；不导出 Cookie，不做 OCR / 视频转录 |
+
+三平台无需部署外部 MCP、Docker 服务或浏览器桥。初始化时优先复用本机 Chrome / Chromium；缺失时经明确确认下载固定版本 Playwright 对应的 Chromium，再由本人通过 App 扫码确认。
+
+**旧配置兼容**：现有 `*-web`、`*-browser`、`bilibili-public` 记录仍可读取，既有默认索引配置不会因浏览界面被改写；它们不再是普通 TUI 的免费接口候选。安装并确认原生接入后，只启用该平台的一个原生实例，停用其余实例。已有自定义配置可只读查看或明确删除。卸载原生接入不会自动启用旧索引或其他来源。
+
+`archive/native/web-index/mixed` 仍在每个 channel/item 中披露，不把索引片段冒充原生正文。拒绝 / 风控不触发绕过验证、自动登录或旧接口轮询。
 
 ## 工具与平台选择
 
@@ -143,9 +149,13 @@ worker 载入、Reload/update、浏览器启动只恢复已保存的 enabled=tru
 
 ### 会话和接入
 
-1. 显式准备兼容的 Chromium。可选 npm 依赖 `playwright-core` **不下载浏览器**；设置 `SEARCH_BOOST_BROWSER_EXECUTABLE` 指向浏览器可执行文件，或者自行安装与固定 Playwright 版本匹配的 Chromium。SearchBoost 不自动下载/安装浏览器。
-2. 在交互终端执行 `search-boost community-login xiaohongshu`（也可为 `zhihu`、`bilibili`）。打开 SearchBoost 专用、有界面的浏览器；本人完成登录/平台验证，再输入 `yes` 确认。不会读取个人 Chrome profile 或导入 Cookie。
-3. 重载 SearchBoost 宿主。在 Community 配置选择「站内正文 / Station content」。或通过管理工具显式注册 `{"action":"register","id":"xhs-native","provider":"xiaohongshu-native","config":{}}`，并明确停用该平台旧实例。TUI 的选择动作会只切换当前平台，不影响其他平台。
+1. `search-boost` → 首次配置的最后一步，或 **Community → 平台 → 安装 / 登录**；全屏控制台使用 `search-boost tui` → 社区检索。
+2. 选择本机 Chrome / Chromium 或 **SearchBoost 独立下载**。前者只复用程序、不读取个人 profile / Cookie / 扩展；后者仅下载到 SearchBoost 专用目录，不使用共享 Playwright 缓存。浏览器程序供三平台共用，账号会话按平台隔离。Windows 的 App Paths / 注册表视图、macOS Applications / Spotlight 和 Linux PATH 发现均有界。
+3. 确认后，后台隔离浏览器取得登录二维码。快速配置打印私有 PNG 完整路径；控制台优先完整显示二维码，空间不足或无颜色时回退 PNG。支持终端文件超链接，以及控制台 Ctrl+左击 / O / Enter 打开图片。macOS 原生超链接常用 Cmd+单击；终端若不支持鼠标 / 文件链接，保留路径与 O 键兼容方案。
+4. 用平台 App 扫码确认，程序检查账号身份后自动保存并启用，不再让用户手动声明登录成功。有效已有会话可直接验证复用。取消 / 超时 / 失败不启用；PNG 在本次流程结束后自动移除，不绕过验证码或网络策略。
+5. **平台卸载**只删除其原生配置与专用会话。**社区浏览器 → 卸载 SearchBoost 独立浏览器**只删除独立下载，保留本机浏览器、共享缓存和各平台登录数据。活动会话 / 租约或不明所有权阻止卸载；明确的来源选择不会暗中切换。
+
+`--yes`、仅安装 Agent 和 dry-run 不下载、不生成二维码；浏览界面也不安装。高级 `community-login <platform>` 仍保留旧的专用浏览器手动初始化方式。详见[二维码登录、扫描和两种卸载](community-browser-login.md)。
 
 profile 按平台保存在 `$SEARCH_BOOST_HOME/state/community/sessions/<platform>/profile`，由私有目录保护；没有环境覆盖时 home 为 `~/.search-boost`。初始化只确认用户保存了专用会话，不证明平台认证或覆盖。取消确认不启用来源，但用户刚刚手动登录时 Chromium 可能已把状态写入自己的专用 profile。一个平台同一时间只有一个 profile 写入者；冲突返回失败，不争用真实浏览器。已死进程的锁可恢复；异常退出残留的 Chromium singleton/非普通文件会被拒绝，需要先关闭该专用浏览器并人工处理，不能冒险复用。
 
