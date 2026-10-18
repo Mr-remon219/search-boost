@@ -9,7 +9,7 @@ import { EventEmitter } from 'node:events'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, isAbsolute, join } from 'node:path'
+import { dirname, isAbsolute, join, posix, sep } from 'node:path'
 import {
   acquireManagedBrowserLease, ensureNativeBrowser, installPlaywrightChromium, managedBrowserExecutablePath,
   managedBrowserLeaseDir, managedBrowserLockPath, managedBrowserManifest, managedBrowserOwnerPath,
@@ -104,9 +104,9 @@ assert(registryCalls.some(call => call.args.includes('/reg:32')) && registryCall
 assert(registryCalls.some(call => call.args[1].startsWith('HKCU')) && registryCalls.some(call => call.args[1].startsWith('HKLM')))
 
 const macAllowed = new Set([
-  join('/Applications', 'Google Chrome Beta.app', 'Contents', 'MacOS', 'Google Chrome'),
-  join('/Users/tester', 'Applications', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
-  join('/Volumes/External', 'Google Chrome Dev.app', 'Contents', 'MacOS', 'Google Chrome'),
+  posix.join('/Applications', 'Google Chrome Beta.app', 'Contents', 'MacOS', 'Google Chrome'),
+  posix.join('/Users/tester', 'Applications', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+  posix.join('/Volumes/External', 'Google Chrome Dev.app', 'Contents', 'MacOS', 'Google Chrome'),
 ])
 const spotlightCalls = []
 const mac = scanNativeBrowsers({
@@ -128,37 +128,51 @@ assert(mac.every(entry => entry.source === 'system' && idsUnique(mac)))
 assert.equal(spotlightCalls.length, 2, 'Spotlight lookup is bounded to the Chrome and Chromium bundle ids')
 assert(spotlightCalls.every(call => call.command === '/usr/bin/mdfind' && call.args.includes('-onlyin') && call.args.includes('/Applications')))
 
-const linux = scanNativeBrowsers({ platform: 'linux', env: { PATH: `${bin}:${bin}:/nonexistent-path` }, homeDir: root, cache: false })
-assert.equal(linux.filter(entry => entry.path.startsWith(bin)).length, 2, 'PATH candidates are deduplicated per directory')
-assert.equal(linux.find(entry => entry.path === join(bin, 'chromium'))?.label, 'Chromium')
-assert.equal(linux.find(entry => entry.path === join(bin, 'google-chrome-beta'))?.label, 'Google Chrome Beta')
-assert(linux.every(entry => isAbsolute(entry.path) && entry.source === 'system'))
+// Virtual POSIX probes must not discover the runner's preinstalled browsers or
+// depend on the host's path syntax (this suite also runs on Windows/macOS).
+const linuxBin = '/fixture/chromium-bin'
+const linuxExecutables = new Set([`${linuxBin}/chromium`, `${linuxBin}/google-chrome-beta`])
+const linuxProbes = { isExecutable: path => linuxExecutables.has(path) }
+const linux = scanNativeBrowsers({ platform: 'linux', env: { PATH: `${linuxBin}:${linuxBin}:/nonexistent-path` }, homeDir: '/fixture', cache: false, probes: linuxProbes })
+assert.equal(linux.length, 2, 'PATH candidates are deduplicated and host executables are excluded')
+assert.equal(linux.find(entry => entry.path === `${linuxBin}/chromium`)?.label, 'Chromium')
+assert.equal(linux.find(entry => entry.path === `${linuxBin}/google-chrome-beta`)?.label, 'Google Chrome Beta')
+assert(linux.every(entry => entry.path.startsWith('/') && entry.source === 'system'))
 
-process.env.SEARCH_BOOST_BROWSER_EXECUTABLE = join(bin, 'chromium')
-const deduped = scanNativeBrowsers({ platform: 'linux', env: { ...process.env, PATH: bin }, homeDir: root, cache: false })
-assert.equal(deduped.find(entry => entry.path === join(bin, 'chromium'))?.source, 'system', 'a path discovered locally keeps its system source')
+const deduped = scanNativeBrowsers({ platform: 'linux', env: { PATH: linuxBin, SEARCH_BOOST_BROWSER_EXECUTABLE: `${linuxBin}/chromium` }, homeDir: '/fixture', cache: false, probes: linuxProbes })
+assert.equal(deduped.find(entry => entry.path === `${linuxBin}/chromium`)?.source, 'system', 'a path discovered locally keeps its system source')
 assert.equal(deduped.some(entry => entry.source === 'env'), false, 'the override adds nothing when it resolves to an already discovered browser')
-process.env.SEARCH_BOOST_BROWSER_EXECUTABLE = join(fixture, 'env-only-chromium')
-writeFileSync(process.env.SEARCH_BOOST_BROWSER_EXECUTABLE, 'fixture only', { mode: 0o700 })
-const envOnly = scanNativeBrowsers({ platform: 'linux', env: { ...process.env, PATH: '' }, homeDir: root, cache: false })
+const envOnlyPath = '/fixture/env-only-chromium'
+const envOnly = scanNativeBrowsers({ platform: 'linux', env: { PATH: '', SEARCH_BOOST_BROWSER_EXECUTABLE: envOnlyPath }, homeDir: '/fixture', cache: false, probes: { isExecutable: path => path === envOnlyPath } })
 assert.deepEqual(envOnly, [{
   id: 'env',
   label: 'Chrome / Chromium (SEARCH_BOOST_BROWSER_EXECUTABLE)',
-  path: process.env.SEARCH_BOOST_BROWSER_EXECUTABLE,
+  path: envOnlyPath,
   source: 'env',
 }])
-delete process.env.SEARCH_BOOST_BROWSER_EXECUTABLE
 
 const realScan = scanNativeBrowsers()
 assert(Array.isArray(realScan) && realScan.every(entry => isAbsolute(entry.path) && ['system', 'env'].includes(entry.source)))
 
 // --- Preference: validated writes, no silent source switching ----------------
-const scanOptions = { platform: 'linux', env: { ...process.env, PATH: bin }, homeDir: root, cache: false }
+const localPreferenceFixture = process.platform === 'win32'
+  ? join(root, 'local', 'Google', 'Chrome', 'Application', 'chrome.exe')
+  : process.platform === 'darwin'
+    ? join(root, 'Applications', 'Chromium.app', 'Contents', 'MacOS', 'Chromium')
+    : join(bin, 'chromium')
+mkdirSync(dirname(localPreferenceFixture), { recursive: true })
+writeFileSync(localPreferenceFixture, 'fixture only', { mode: 0o700 })
+// Preference/managed lifecycle tests use the real host platform. Overriding it
+// to Linux would resolve Linux managed executables on Windows/macOS.
+const scanOptions = {
+  env: { ...process.env, PATH: bin, LOCALAPPDATA: join(root, 'local') }, homeDir: root, cache: false,
+  probes: { isExecutable: path => path === localPreferenceFixture && existsSync(path), execFileSync: () => '' },
+}
 assert.deepEqual(readNativeBrowserPreference(), { source: 'auto' })
 assert.deepEqual(resolveNativeBrowser(scanOptions).source, 'system', 'auto discovers the local fixture')
-assert.deepEqual(selectNativeBrowser({ source: 'system', path: join(bin, 'chromium') }, scanOptions), { source: 'system', path: join(bin, 'chromium') })
-assert.deepEqual(readNativeBrowserPreference(), { source: 'system', path: join(bin, 'chromium') })
-assert.deepEqual(resolveNativeBrowser(scanOptions), { ready: true, source: 'system', path: join(bin, 'chromium') })
+assert.deepEqual(selectNativeBrowser({ source: 'system', path: localPreferenceFixture }, scanOptions), { source: 'system', path: localPreferenceFixture })
+assert.deepEqual(readNativeBrowserPreference(), { source: 'system', path: localPreferenceFixture })
+assert.deepEqual(resolveNativeBrowser(scanOptions), { ready: true, source: 'system', path: localPreferenceFixture })
 const preferenceState = nativeSetupState('zhihu', scanOptions)
 assert.equal(preferenceState.preference.source, 'system')
 assert.equal(preferenceState.browser.source, 'system')
@@ -166,9 +180,9 @@ assert(Array.isArray(preferenceState.localBrowsers) && typeof preferenceState.se
 assert.equal(preferenceState.managedBrowser.source, 'managed')
 
 // The stored choice is authoritative even when the selected executable vanished.
-rmSync(join(bin, 'chromium'))
+rmSync(localPreferenceFixture)
 assert.deepEqual(resolveNativeBrowser({ ...scanOptions, candidates: [localFixture] }), {
-  ready: false, source: 'system', path: join(bin, 'chromium'), reason: 'The selected local browser is not an executable file',
+  ready: false, source: 'system', path: localPreferenceFixture, reason: 'The selected local browser is not an executable file',
 }, 'a missing stored local browser is reported, never replaced by another one')
 let downloads = 0
 await assert.rejects(ensureNativeBrowser({ ...scanOptions, install: async () => { downloads++ } }), { kind: 'browser_unavailable' })
@@ -190,7 +204,7 @@ rmSync(nativeBrowserPreferencePath())
 // --- Owned install: isolated registry, manifest-based path -------------------
 const manifest = managedBrowserManifest()
 assert.equal(manifest.available, true)
-assert(managedBrowserExecutablePath().startsWith(managedRegistryPath() + '/'), 'the executable resolves inside the owned registry')
+assert(managedBrowserExecutablePath().startsWith(managedRegistryPath() + sep), 'the executable resolves inside the owned registry')
 const sharedCache = join(root, 'shared-cache')
 mkdirSync(join(sharedCache, 'chromium-1248'), { recursive: true })
 writeFileSync(join(sharedCache, 'chromium-1248', 'chrome'), 'shared binary', { mode: 0o700 })
