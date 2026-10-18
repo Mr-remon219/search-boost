@@ -257,7 +257,7 @@ try {
   assert(walk.logs.some(line => line.includes('Automatic search:')))
   const toolsNote = walk.logs.find((l) => l.includes('Tool switches — shared by MCP / Pi / DSH'))
   assert(toolsNote && toolsNote.includes('fused_search'), 'Tool switches is the real wizard with real tool names')
-  assert.deepEqual(walk.records.find((r) => r.message === 'Community configuration').options.map((o) => o.value), ['reddit', 'x', 'bilibili', 'zhihu', 'xiaohongshu', 'back'])
+  assert.deepEqual(walk.records.find((r) => r.message === 'Community configuration').options.map((o) => o.value), ['reddit', 'x', 'bilibili', 'zhihu', 'xiaohongshu', 'browser-source', 'back'])
   assert.equal(walk.records.find((r) => r.message.startsWith('X —')).options.map((o) => o.value).join(','), 'set-key,disable,view,back', 'X actions are direct; unavailable credential actions are absent')
   assert.equal(walk.records.find((r) => r.message.startsWith('Judgment model configuration')).options.map((o) => o.value).join(','), 'change,home')
   assert(walk.logs.some((l) => l.includes('Built-in web search')), 'Native web search prints the real per-agent state')
@@ -497,6 +497,7 @@ try {
     reply('multiselect', ['tavily']),
     reply('confirm', false),
     reply('multiselect', []),
+    reply('multiselect', []),
     'exit',
   ])
   assert(setup.records[1].message.includes('Configure API keys now?'), 'Setup asks before credentials')
@@ -509,6 +510,7 @@ try {
   assert(setup.logs.some(line => line.includes('Search routing is automatic')))
   assert(setup.records.some((r) => r.message.startsWith('Configure a judgment model?') && r.initialValue === false), 'Setup offers optional judgments, skipped by default')
   assert.equal(setup.logs.filter((l) => l.includes('Skipped API keys')).length, 0, 'Setup does not skip credentials')
+  assert(setup.records.at(-2).message.startsWith('Connect community accounts'), 'Community installation is offered last')
   assert(setup.logs.some((l) => l.includes('No agents selected')), 'Setup reached the agent selection step')
   assert.equal(keysDoc().tavily, 'tvly-setup-fixture-key-1234', 'Setup keeps existing credentials')
   assert.equal(keysDoc().jev.apiKey, 'jev-setup-key', 'Setup keeps unrelated stored credentials')

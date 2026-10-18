@@ -145,18 +145,15 @@ await test('tools use real lock/readiness state and persist after confirmation',
   key(model, 'space'); await confirm(model)
   assert.equal(toolStates().find(t => t.name === 'fused_search').enabled, false)
 })
-await test('community selection changes only selected platform atomically', async () => {
+await test('one free Reddit integration enables only the selected platform', async () => {
   const model = new ConsoleModel({ language: 'en' })
+  model.communityChange('reddit', { action: 'disable' }); await settle()
   const before = readCommunityConfig().backends.filter(b => !b.id.startsWith('reddit'))
-  model.chooseCommunity('reddit')
-  assert.equal(model.modal.kind, 'select')
-  const web = model.modal.options.findIndex(o => o.backend.provider === 'reddit-web')
-  assert.ok(web >= 0); model.modal.index = web
-  key(model, 'return'); await settle(); await confirm(model)
+  model.enableCommunity('reddit'); await settle()
   const after = readCommunityConfig().backends
   assert.deepEqual(after.filter(b => !b.id.startsWith('reddit')), before)
-  assert.equal(after.find(b => b.provider === 'reddit-web').enabled, true)
-  assert.equal(after.find(b => b.provider === 'reddit-arctic').enabled, false)
+  assert.equal(after.find(b => b.provider === 'reddit-arctic').enabled, true)
+  assert.equal(after.some(b => b.provider === 'reddit-web' && b.enabled), false)
 })
 await test('new judgment profile validates, hides key and saves with explicit consent', async () => {
   const model = new ConsoleModel({ language: 'en' })
@@ -249,6 +246,15 @@ await test('TTY restores raw mode, cursor, alternate screen and listeners on qui
   assert.match(written, /\x1b\[\?1049h/)
   assert.ok(written.endsWith('\x1b[0m\x1b[?25h\x1b[?1049l'))
 })
+await test('TTY quit restores an initially non-flowing stdin so the CLI can exit', async () => {
+  const input = new PassThrough(); input.isTTY = true; input.setRawMode = raw => { input.isRaw = raw }
+  const output = new PassThrough(); output.isTTY = true; output.columns = 100; output.rows = 30
+  assert.equal(input.readableFlowing, null)
+  const running = runConsoleTui([], { input, output, model: new ConsoleModel({ language: 'en' }) })
+  input.emit('keypress', 'q', { name: 'q' }); await running
+  assert.equal(input.isPaused(), true)
+  assert.equal(input.listenerCount('keypress'), 0)
+})
 await test('TTY cleanup on EOF and asynchronous output error', async () => {
   for (const error of [false, true]) {
     const input = new PassThrough(); input.isTTY = true; input.setRawMode = raw => { input.isRaw = raw }
@@ -295,11 +301,11 @@ await test('new sections default to read-only details and use real runtime commu
     authStatus: () => ({ source: 'env' }),
   } })
   model.navigate(4)
-  assert.equal(model.rows.find(r => r.id === 'zhihu').status, 'Enabled', 'web readiness must use available engines, not an empty context')
+  assert.equal(model.rows.find(r => r.id === 'zhihu').status, 'Not connected', 'native setup must not imply that index readiness means a logged-in integration')
   assert.match(model.rows.find(r => r.id === 'x').details.join('\n'), /Auth: env/)
   assert.match(model.current.details.join('\n'), /community/)
   key(model, 'return'); assert.equal(model.focus, 'detail'); assert.equal(model.modal, null)
-  assert.equal(model.current.actions[model.detailView.actionIndex].id, 'view')
+  model.detailView.actionIndex = model.current.actions.findIndex(action => action.id === 'view')
   key(model, 'return'); await settle(); assert.equal(model.modal.kind, 'text')
   key(model, 'escape'); model.navigate(5)
   assert.equal(model.current.id, 'status'); assert.match(model.current.details.join('\n'), /No active profile/)
@@ -311,45 +317,33 @@ await test('Reddit scopes validate, cancel without writes and preserve all other
   const backend = before.backends.find(b => b.provider === 'reddit-arctic')
   model.configureCommunity('reddit', backend)
   await submit(model, ['a,b,c,d,e,f']); assert.equal(model.modal.kind, 'form'); assert.ok(model.modal.error)
-  await submit(model, ['r/node， LocalLLaMA']); assert.equal(model.modal.kind, 'select')
-  key(model, 'return'); await settle(); assert.equal(existsSync(communityConfigPath()), false)
+  model.modal.values = ['r/node， LocalLLaMA']; key(model, 'escape'); await settle(); assert.equal(existsSync(communityConfigPath()), false)
   model.configureCommunity('reddit', backend)
-  await submit(model, ['r/node， LocalLLaMA']); await confirm(model)
+  await submit(model, ['r/node， LocalLLaMA']); assert.equal(model.modal, null)
   const after = readCommunityConfig()
   assert.deepEqual(after.backends.find(b => b.id === backend.id).config.subreddits, ['node', 'localllama'])
   assert.deepEqual(after.backends.filter(b => b.id !== backend.id), before.backends.filter(b => b.id !== backend.id))
   model.navigate(4); assert.match(model.rows.find(r => r.id === 'reddit').details.join('\n'), /node, localllama/)
 }))
-await test('browser setup validates origins, saves unready settings without switching, and supports enable/delete/dry-run', () => freshConsole(async () => {
+await test('community has one free install entry and hides obsolete browser bridge setup', () => freshConsole(async () => {
   const model = new ConsoleModel({ language: 'en' })
-  model.chooseCommunity('zhihu')
-  model.modal.index = model.modal.options.findIndex(o => o.backend.provider === 'zhihu-browser')
-  key(model, 'return'); await settle()
-  assert.equal(model.modal.kind, 'form'); assert.match(model.modal.description, /community-browser/)
-  await submit(model, ['https://remote.example', 'CONSOLE_TEST_BROWSER_TOKEN']); assert.equal(model.modal.kind, 'form')
-  await submit(model, ['http://127.0.0.1:19826', 'CONSOLE_TEST_BROWSER_TOKEN'])
-  assert.match(model.modal.description, /settings only/); await confirm(model)
-  let doc = readCommunityConfig(), browser = doc.backends.find(b => b.provider === 'zhihu-browser')
-  assert.equal(browser.enabled, false); assert.equal(doc.backends.find(b => b.provider === 'zhihu-web').enabled, true)
-  process.env.CONSOLE_TEST_BROWSER_TOKEN = 'hidden-browser-fixture'
-  model.chooseCommunity('zhihu'); model.modal.index = model.modal.options.findIndex(o => o.backend.provider === 'zhihu-browser')
-  key(model, 'return'); await settle(); await confirm(model)
-  assert.equal(readCommunityConfig().backends.find(b => b.id === browser.id).enabled, true)
-  const bytes = readFileSync(communityConfigPath(), 'utf8')
-  const dry = new ConsoleModel({ language: 'en', dryRun: true })
-  dry.configureCommunity('zhihu', browser); await submit(dry, ['http://localhost:19827', 'CONSOLE_TEST_BROWSER_TOKEN']); await confirm(dry)
-  assert.equal(readFileSync(communityConfigPath(), 'utf8'), bytes)
   model.navigate(4)
-  const row = model.rows.find(r => r.id === 'zhihu')
-  assert.match(row.details.join('\n'), /Token env: CONSOLE_TEST_BROWSER_TOKEN/)
-  assert.doesNotMatch(renderConsole(model), /hidden-browser-fixture/)
-  row.actions.find(a => a.id === `remove:${browser.id}`).run(); await confirm(model)
-  assert.equal(readCommunityConfig().backends.some(b => b.id === browser.id), false)
+  for (const platform of ['zhihu', 'xiaohongshu', 'bilibili']) {
+    const row = model.rows.find(r => r.id === platform)
+    assert.equal(row.actions.filter(a => a.id === 'install').length, 1)
+    assert(!row.actions.some(a => a.id.startsWith('configure:') || a.id.startsWith('source')))
+    assert.match(row.details.join('\n'), /community search/)
+  }
+  void model.chooseBrowserSource(() => {}); await settle(); assert.equal(model.modal.kind, 'select')
+  assert.match(model.modal.description, /personal data/)
+  assert(model.modal.options.some(option => option.choice?.source === 'managed'))
+  key(model, 'escape'); await settle()
+  assert.equal(existsSync(communityConfigPath()), false)
 }))
 await test('community form rejects a stale snapshot before showing confirmation', () => freshConsole(async () => {
   const model = new ConsoleModel({ language: 'en' }), backend = readCommunityConfig().backends.find(b => b.provider === 'reddit-arctic')
   model.configureCommunity('reddit', backend)
-  const other = new ConsoleModel({ language: 'en' }); other.communityChange('x', { action: 'disable' }); await confirm(other)
+  const other = new ConsoleModel({ language: 'en' }); other.communityChange('x', { action: 'disable' }); await settle()
   const bytes = readFileSync(communityConfigPath(), 'utf8')
   await submit(model, ['node'])
   assert.match(model.notice, /failed/); assert.equal(model.modal, null)
@@ -540,7 +534,7 @@ await test('refresh/activation keeps the selected profile identity and avoids la
   key(model, 'return'); await settle(); await confirm(model)
   assert.equal(readJudgmentProfiles().activeProfile, 'second')
   assert.equal(model.current.id, 'profile:second'); assert.equal(model.focus, 'detail')
-  assert.equal(model.current.actions[model.detailView.actionIndex].id, 'view')
+  model.detailView.actionIndex = model.current.actions.findIndex(action => action.id === 'view')
   key(model, 'r'); assert.equal(model.current.id, 'profile:second')
 }))
 await test('completed operations replace Working, restore original focus and never return to a stale busy dialog', () => freshConsole(async () => {
