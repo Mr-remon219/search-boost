@@ -56,7 +56,7 @@
 ## 核心特性
 
 - **多引擎并行检索与去重 (`fused_search`)**  
-  同时聚合多个搜索引擎的实时结果。内置**免密钥免费池**（Bing、DuckDuckGo、Exa-free、AnySearch）与**API 池**（Tavily、Brave、Exa、AnySearch、TinyFish），自动执行跨引擎 URL 规范化去重、域名过滤与权重重排。
+  同时聚合多个搜索引擎的实时结果。内置**免密钥免费池**（Bing、DuckDuckGo、Exa-free、AnySearch）与**API 池**（Tavily、Brave、Exa、AnySearch、TinyFish、DeepSeek Search），自动执行跨引擎 URL 规范化去重、域名过滤与权重重排。
 - **高净度网页正文提取 (`fetch_page`)**  
   优先抓取原站降低等待；必要时使用同线路 curl 兼容兜底，Jina Reader 作为备用读取方式。自动剔除 CSS、JS 及广告噪音，支持 `focus` 关键词段落提炼，具备内存缓存与大体积熔断保护。
 - **五平台社区检索 (`community_search`)**
@@ -199,7 +199,7 @@ search-boost
 | 首页入口 | 行为 |
 | :--- | :--- |
 | 首次配置向导；管理 Agent 接入；查看当前状态 | 连续首次配置；安装 / 按范围刷新 / 确认卸载；只读状态 |
-| 搜索引擎配置；默认搜索层；工具开关 | 任选引擎；`free` / `api`；MCP / Pi / DSH 共用开关 |
+| 搜索引擎配置；默认搜索（自动选择）；工具开关 | 配置 Key 和引擎开关（一个 API 即可）；只读展示自动选择；MCP / Pi / DSH 共用开关 |
 | Community 配置；判断模型（Jev / Laya） | 平台检索方式 / 启停 / X 凭据；判断模型凭据管理 |
 | 原生搜索替换；输出 MCP 配置片段 | 保留权限选择；只读片段 |
 | TUI 设置；退出 | 菜单布局位于显示语言之前；关闭控制台 |
@@ -355,7 +355,11 @@ search-boost
 
 ### 引擎池与评分预设
 
+**默认自动选择：**只需配置并启用任意一个 API，引擎默认集合就是已启用 API；没有启用的 API 时使用免 Key 引擎。不必切换免费/API 模式，也不必配齐全部 Key。两个 TUI 均支持引擎启停及单引擎使用。显式 `engine_pool=free/api/hybrid` 语义不变；API 请求失败不偷偷换成免 Key 引擎。旧 layer 文件和环境变量不再决定隐式搜索默认值。
+
 `engine_pool` 选择调用集合，`ranking` 选择跨池共享权重；`complexity` 控制查询广度与深度，不改变评分权重。AnySearch 是单一逻辑引擎：free 匿名、api 要求 key、hybrid 优先用已配置 key。使用 `ANYSEARCH_API_KEY` 或 `config keys --set anysearch=KEY` 配置。
+
+DeepSeek Search（`deepseek-search`）通过 Anthropic 兼容 API 调用原生联网搜索，不启动外部 CLI。使用 `DEEPSEEK_API_KEY` 或 `search-boost config keys --set deepseek-search=KEY` 配置；已有显式白名单时需在引擎配置中启用。默认加入 api/hybrid，不加入 free。三个排序预设权重均为 **1.0**，支持 `engine_weights: {"deepseek-search": 0.8}` 单次覆盖；零权重仍会调用。每个查询变体使用一次可能计费的 `deepseek-v4-flash` 模型请求，最多调用一次原生搜索，只采纳结构化搜索结果和引用摘录。Base URL 独立于聊天配置，自动追加 `/messages`。详见[接入说明与验证边界](docs/deepseek-search.md)。
 
 TinyFish Search 是需要 key 的 API 引擎：在 TUI → 搜索引擎配置 → TinyFish Search（文件夹模式：服务与凭据 → 搜索引擎配置）中配置，或使用 `TINYFISH_API_KEY`、`config keys --set tinyfish=KEY`。TUI 支持更换 / 删除 Key、自定义 / 恢复 Base URL 和脱敏状态；在“引擎启用 / 停用”中选择 `tinyfish`，不会因保存 Key 静默扩张已有白名单。TinyFish 默认加入 api/hybrid，不加入 free 池（显式 `engines` 仍可覆盖池选择）。服务价格与限额可能变化，钱包余额不等于剩余搜索次数；每个查询变体各计一次；不自动翻页或启用内嵌 Fetch。请求沿用服务默认 US/en 地区/语言。Yahoo 已移除，显式 Yahoo 引擎/权重输入会被拒绝。
 
@@ -369,6 +373,7 @@ TinyFish Search 是需要 key 的 API 引擎：在 TUI → 搜索引擎配置 �
 | exa | 1.049 | 1.146 | 1.063 |
 | anysearch | 1.004 | 1.042 | 0.951 |
 | tinyfish | 1.000 | 1.000 | 1.000 |
+| deepseek-search | 1.000 | 1.000 | 1.000 |
 
 权重是未经实测标注校准的冷启动默认值。DDG 使用此前权重的 60%，TinyFish 从中性权重开始，其他默认值保持不变，不重新归一化。`consensus-v2.1` 使用原始排名、相关来源组折扣和 max+log 共识，元数据修正最多 20%；质量分与列表选择分分离。零权重不投票，旧 `min_score` 阈值需重新校准。详见 [评分设计与迁移](docs/fusion-scoring.md) 和 [引擎池](docs/search-routing.md)。
 
@@ -432,6 +437,7 @@ search-boost config keys --reset-base-url exa
 | Brave | `https://api.search.brave.com/res/v1` | `/web/search` |
 | AnySearch | `https://api.anysearch.com/v1` | `/search` |
 | TinyFish Search | `https://api.search.tinyfish.ai` | `/` |
+| DeepSeek Search | `https://api.deepseek.com/anthropic/v1` | `/messages` |
 
 填写 API 基础地址，**不要填写完整搜索端点**；网关路径前缀会保留。地址存放在 keys 文件的 `engines.<name>.baseUrl`，兼容现有密钥字符串和路由开关。请仅使用可信、兼容对应引擎 API 的网关：搜索词与已配置密钥会发送到该地址（AnySearch 在 free 池仍不发送密钥）。推荐 HTTPS，也支持本地网关的 HTTP；拒绝包含用户名密码、查询参数或片段的地址。不影响 Exa-free；地址变更后不会复用旧地址的搜索缓存。
 
@@ -482,7 +488,7 @@ search-boost install -t cursor --dry-run    # 仅演练安装过程，不写磁�
 search-boost config keys                    # 命令行配置/查看搜索引擎 Keys
 search-boost config keys --set anysearch=KEY  # 配置 AnySearch 密钥（ANYSEARCH_API_KEY）
 search-boost config keys --set tinyfish=KEY   # 配置 TinyFish Search（TINYFISH_API_KEY）
-search-boost config layer                   # 切换默认搜索层 (free / api)
+search-boost config layer                   # 查看自动路由（旧层偏好不影响默认选择）
 search-boost config x --import-grok         # 从本机 Grok 客户端快速导入 X 凭据
 search-boost config jev                     # 配置 Jev 认知引擎端点与 Token
 search-boost community-login xiaohongshu    # 显式登录专用浏览器；也支持 zhihu / bilibili

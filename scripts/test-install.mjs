@@ -538,15 +538,15 @@ writeKeysFile({ tavily: undefined, brave: undefined, exa: undefined })
 delete process.env.TAVILY_API_KEY
 delete process.env.BRAVE_API_KEY
 delete process.env.EXA_API_KEY
-assert('layer api no keys warning', layerApiNoKeysWarning()?.includes('no API keys configured'))
+assert('layer api no keys warning', layerApiNoKeysWarning() === null)
 setLayer('free')
 assert('layer free no warning', layerApiNoKeysWarning() === null)
 writeKeysFile({ tavily: 'tvly-test-key-12345678' })
 setLayer('api')
 assert('layer api with keys no warning', layerApiNoKeysWarning() === null)
 const partialKeyLines = formatKeyStatusLines()
-assert('formatKeyStatusLines partial pool count', partialKeyLines.some((l) => l.includes('Keyed pool: 1/5')))
-assert('formatKeyStatusLines partial recommendation', partialKeyLines.some((l) => l.includes(RECOMMEND_ALL_KEYED_ENGINES)))
+assert('formatKeyStatusLines partial pool count', partialKeyLines.some((l) => l.includes(`Keyed pool: 1/${KEY_NAMES.length}`)))
+assert('single engine is a complete setup without recommendation warning', !partialKeyLines.some((l) => l.includes(RECOMMEND_ALL_KEYED_ENGINES)))
 writeKeysFile({ tavily: 'tvly-test-key-12345678', brave: 'brave-test-key-12345678', exa: 'exa-test-key-1234567890', anysearch: 'as-test-key-1234567890', tinyfish: 'tf-test-key-1234567890' })
 const fullKeyLines = formatKeyStatusLines()
 assert('formatKeyStatusLines no recommendation when all five', !fullKeyLines.some((l) => l.includes(RECOMMEND_ALL_KEYED_ENGINES)))
@@ -563,7 +563,7 @@ assert('anysearch env name', ENV_MAP.anysearch === 'ANYSEARCH_API_KEY')
 setKey('anysearch', 'anysearch-test-key-123456')
 assert('anysearch stored and masked', readKeysFile().anysearch === 'anysearch-test-key-123456' && keyStatus().anysearch.masked === 'anys****3456')
 assert('anysearch joins keyed routing', readKeysRouting().enabledNames.includes('anysearch'))
-assert('anysearch keyed pool count', readKeysRouting().summary.configured === 1 && readKeysRouting().summary.total === 5)
+assert('anysearch keyed pool count', readKeysRouting().summary.configured === 1 && readKeysRouting().summary.total === KEY_NAMES.length)
 assert('anysearch registry wired', engineRegistry(readKeys(), null).anysearch.availableForPool('api'))
 assert('anysearch is a runnable key', hasAnyKey() && hasStoredKey())
 const layerBeforePendingKey = getLayer()
@@ -574,7 +574,7 @@ assert('anysearch key and routing names accepted', assertKeySlotNames(['anysearc
 setEnabledEngines(['anysearch'])
 assert('anysearch can be selected', readEngineRouting().enabledEngines.join() === 'anysearch')
 const anysearchLines = formatKeyStatusLines()
-assert('anysearch status shows enabled keyed pool', anysearchLines.some((l) => l.includes('Keyed pool: 1/5')) && !anysearchLines.some((l) => l.includes('stored only')))
+assert('anysearch status shows enabled keyed pool', anysearchLines.some((l) => l.includes(`Keyed pool: 1/${KEY_NAMES.length}`)) && !anysearchLines.some((l) => l.includes('stored only')))
 
 // An unrelated write must never discard the stored pending key.
 writeKeysFile({ tavily: 'tvly-mixed-key-12345678' })
@@ -613,8 +613,8 @@ async function runKeysWizardScenario({ seed = {}, actions, passwords = [] }) {
   return { selects, logs }
 }
 
-const pendingWizard = await runKeysWizardScenario({ seed: {}, actions: ['keep', 'keep', 'keep', 'keep', 'keep'] })
-assert('wizard prompts for all five key slots', pendingWizard.selects.length === 5)
+const pendingWizard = await runKeysWizardScenario({ seed: {}, actions: CONFIG_KEY_NAMES.map(() => 'keep') })
+assert('wizard prompts for all five key slots', pendingWizard.selects.length === CONFIG_KEY_NAMES.length)
 assert('wizard prompts for anysearch', pendingWizard.selects[3].message.includes('anysearch'))
 assert('wizard prompts for tinyfish last', pendingWizard.selects[4].message.includes('tinyfish'))
 assert(
@@ -625,26 +625,26 @@ assert('wizard anysearch is no longer pending', !pendingWizard.selects[3].messag
 assert('wizard explains AnySearch auth modes', pendingWizard.logs.some((l) => l.includes('ANYSEARCH_API_KEY') && l.includes('also work')) && pendingWizard.logs.some((l) => l.includes('anonymous quota')))
 assert(
   'wizard asks no keyed routing question without keys',
-  !pendingWizard.selects.some((s) => /api layer/.test(s.message)),
+  !pendingWizard.selects.some((s) => /Which API engines/.test(s.message)),
 )
 assert('anysearch-only wizard run persists no routing decision', readEngineRouting().enabledEngines === undefined)
 
 const routedWizard = await runKeysWizardScenario({
   seed: { tavily: 'tvly-seed-key-12345678' },
-  actions: ['keep', 'keep', 'keep', 'set', 'keep', ['tavily']],
+  actions: ['keep', 'keep', 'keep', 'set', 'keep', 'keep', ['tavily']],
   passwords: ['as-wizard-key-123456'],
 })
-const routingPrompt = routedWizard.selects.find((s) => /api layer/.test(s.message))
+const routingPrompt = routedWizard.selects.find((s) => /Which API engines/.test(s.message))
 assert('wizard asks the routing question when a runnable key exists', Boolean(routingPrompt))
 assert(
   'routing question offers exactly the runnable engines',
-  routingPrompt?.options.map((o) => o.value).join(',') === KEY_NAMES.join(','),
+  routingPrompt?.options.map((o) => o.value).join(',') === 'tavily,anysearch',
 )
 assert('wizard stores the anysearch key it was given', readKeysFile().anysearch === 'as-wizard-key-123456')
 assert('wizard routing stays limited to tavily', JSON.stringify(readEngineRouting().enabledEngines) === JSON.stringify(['tavily']))
 assert(
   'wizard offers configured anysearch for routing',
-  routingPrompt.options.find((o) => o.value === 'anysearch').disabled === false,
+  routingPrompt.options.some((o) => o.value === 'anysearch'),
 )
 writeKeysFile({ tavily: undefined, brave: undefined, exa: undefined, anysearch: undefined, enabledEngines: null })
 

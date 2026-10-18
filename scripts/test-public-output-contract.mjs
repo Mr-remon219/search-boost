@@ -80,7 +80,8 @@ const fakeFallback = async (args) => {
   return { type: 'keyword', data: await args.webSearch(args.query, args.limit), via: 'engines' }
 }
 const injectedXSearch = (args, opts) => runXSearch(args, { ...opts, snapshot, officialSearch: fakeOfficial, fallbackSearch: fakeFallback })
-const xRun = (args = {}) => runXSearch({ type: 'keyword', query: 'alpha beta', max_results: 10, ...args },
+// This diagnostic fixture deliberately exercises both keyless and API engines.
+const xRun = (args = {}) => runXSearch({ type: 'keyword', query: 'alpha beta', max_results: 10, enginePool: 'hybrid', ...args },
   { snapshot, officialSearch: fakeOfficial, fallbackSearch: fakeFallback })
 
 function resetFixture() {

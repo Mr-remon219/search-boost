@@ -56,7 +56,7 @@
 ## Key Features
 
 - **Multi-Engine Parallel Fusion (`fused_search`)**  
-  Queries multiple search providers in parallel. Features an out-of-the-box **keyless free pool** (Bing, DuckDuckGo, Exa-free, AnySearch) and a keyed **API pool** (Tavily, Brave, Exa, AnySearch, TinyFish). Automatically performs cross-engine URL deduplication, domain routing, and relevance re-ranking.
+  Queries multiple search providers in parallel. Features an out-of-the-box **keyless free pool** (Bing, DuckDuckGo, Exa-free, AnySearch) and a keyed **API pool** (Tavily, Brave, Exa, AnySearch, TinyFish, DeepSeek Search). Automatically performs cross-engine URL deduplication, domain routing, and relevance re-ranking.
 - **Clean Webpage Content Extractor (`fetch_page`)**  
   Fetches the origin first for low latency, with optional same-route curl compatibility fallback and Jina Reader backup. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
 - **Five-Platform Community Retrieval (`community_search`)**
@@ -199,7 +199,7 @@ The default **flat** home lists these actions in order:
 | Home entries | Behavior |
 | :--- | :--- |
 | Setup wizard; Manage agent integrations; Status | Guided setup; install / scoped refresh / confirmed uninstall; read-only status |
-| Search engine configuration; Default search layer; Tool switches | Choose individual engines; `free` / `api`; shared MCP / Pi / DSH switches |
+| Search engine configuration; Search defaults (automatic); Tool switches | Configure keys and engine switches (one API is enough); read-only automatic selection; shared MCP / Pi / DSH switches |
 | Community configuration; judgment models (Jev / Laya) | Platform sources / enablement / X credentials; masked judgment credentials |
 | Native web search; Print MCP snippet | Explicit permission choices; read-only snippets |
 | TUI settings; Exit | Menu layout before display language; close the console |
@@ -238,7 +238,7 @@ When integrated, agents automatically receive standard tool definitions and auto
 | `community_backend` | List/check or explicitly register/update/remove a platform source | List/check are offline readiness checks; mutations require user authorization, not just a tool parameter |
 | `adaptive_search` | **Experimental**: one bounded fused snapshot + fixed-option judgment screening for one question and a required intent | Selected URLs with reviewed extracts and value labels; targetMet is quantity only, not verified answers |
 | `search_stats` | Reading engine status, memory cache hits, and recent diagnostic stats | Read-only; configuration readiness does not guarantee active external network reachability |
-| `search_layer` | Viewing or switching compatibility search layer in MCP | `show` is read-only; changing layers mutates persistent configuration on disk |
+| `search_layer` | Inspecting automatic routing and legacy preference in MCP | `show` is read-only; legacy writes do not change automatic engine selection |
 
 ---
 
@@ -355,7 +355,11 @@ Supply **one question** (`questions` has exactly one item) plus a **required res
 
 ### Engine Pools & Scoring Presets
 
+**Defaults are automatic:** configure and enable any one API engine and default searches use only the enabled APIs; with none enabled, searches use keyless engines. No free/API mode switch or complete set of keys is required. Both TUIs support engine switches and single-engine use. Explicit `engine_pool=free/api/hybrid` keeps its original meaning; API failures do not silently fall back to keyless engines. Legacy layer files/env no longer control implicit searches.
+
 `engine_pool` selects engines, `ranking` selects shared cross-pool weights, and `complexity` controls query breadth and depth, not scoring weights. AnySearch is one logical engine: anonymous in free, key-required in api, and key-preferred in hybrid. Configure `ANYSEARCH_API_KEY` or `config keys --set anysearch=KEY`.
+
+DeepSeek Search (`deepseek-search`) uses the native Anthropic-compatible web search API, not a CLI subprocess. Configure `DEEPSEEK_API_KEY` or `search-boost config keys --set deepseek-search=KEY`, then enable it in the engine configuration if you already have an explicit whitelist. It joins api/hybrid, not default free. All three ranking presets start at weight **1.0**; override with `engine_weights: {"deepseek-search": 0.8}`. Zero weight still calls the engine. Each query variant uses a potentially billable `deepseek-v4-flash` model turn with at most one native search; only structured search results and citation excerpts are used as evidence. Base URL is independent of chat configuration; `/messages` is appended. See [integration details and validation limits](docs/deepseek-search.md).
 
 TinyFish Search is a keyed API engine: use TUI → Search engine configuration → TinyFish Search (folder layout: Services & credentials → Search engine configuration), `TINYFISH_API_KEY`, or `config keys --set tinyfish=KEY`. The TUI supports key replacement/removal, custom/reset Base URLs and masked status; use Enable / disable engines to select `tinyfish` without silently expanding an existing whitelist. It joins api/hybrid, not the default free pool (explicit `engines` still overrides pool membership). Service pricing and limits can change; a wallet balance is not a count of searches remaining. Each query variant counts as a request. No automatic pagination or inline Fetch is used. Requests default to the service's US/en locale. Yahoo has been removed; explicit Yahoo engine/weight inputs are rejected.
 
@@ -369,6 +373,7 @@ TinyFish Search is a keyed API engine: use TUI → Search engine configuration �
 | exa | 1.049 | 1.146 | 1.063 |
 | anysearch | 1.004 | 1.042 | 0.951 |
 | tinyfish | 1.000 | 1.000 | 1.000 |
+| deepseek-search | 1.000 | 1.000 | 1.000 |
 
 These are uncalibrated cold-start defaults, not measured quality rankings. DDG uses 60% of its previous weights; TinyFish starts neutral, and other defaults are unchanged without re-normalization. `consensus-v2.1` combines original ranks, related-provider discounts and max+log consensus, with metadata adjustments capped at 20%. Quality and list-selection scores stay separate; zero-weight sources cannot vote. Recalibrate old `min_score` thresholds. See [scoring and migration](docs/fusion-scoring.md) and [pool routing](docs/search-routing.md).
 
@@ -432,6 +437,7 @@ search-boost config keys --reset-base-url exa
 | Brave | `https://api.search.brave.com/res/v1` | `/web/search` |
 | AnySearch | `https://api.anysearch.com/v1` | `/search` |
 | TinyFish Search | `https://api.search.tinyfish.ai` | `/` |
+| DeepSeek Search | `https://api.deepseek.com/anthropic/v1` | `/messages` |
 
 Supply an API base, **not a full search endpoint**; gateway prefixes are preserved. Overrides live in `engines.<name>.baseUrl` in the keys file; existing key strings and routing flags are unchanged. Use only trusted API-compatible gateways: queries and configured keys are sent there (AnySearch remains anonymous in the free pool). Prefer HTTPS; HTTP is supported for local gateways. Credentials, query strings and fragments in URLs are rejected. Exa-free is unaffected. Changing a base invalidates the search cache partition.
 
@@ -482,7 +488,7 @@ search-boost install -t cursor --dry-run    # Preview installation without writi
 search-boost config keys                    # Manage API keys from CLI
 search-boost config keys --set anysearch=KEY  # Configure the AnySearch key (ANYSEARCH_API_KEY)
 search-boost config keys --set tinyfish=KEY   # Configure TinyFish Search (TINYFISH_API_KEY)
-search-boost config layer                   # Switch default layer (free / api)
+search-boost config layer                   # Inspect automatic routing (legacy layer writes do not affect it)
 search-boost config x --import-grok         # Import X credentials from local Grok login
 search-boost config jev                     # Configure Jev endpoint and token
 search-boost community-login xiaohongshu    # Explicit dedicated browser login; also zhihu / bilibili

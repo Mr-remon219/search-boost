@@ -125,9 +125,9 @@ assert(
 
 const partialSummary = keyedPoolSummary(tavilyOnlyKeys, emptyRouting)
 const poolWarn = partialKeyedPoolWarning(partialSummary)
-assert('partialKeyedPoolWarning when 1 of 5', poolWarn?.includes('1/5 keyed engine') && poolWarn?.includes('tavily'))
-assert('partialKeyedPoolWarning null when all five', partialKeyedPoolWarning(keyedPoolSummary(
-  { tavily: 'a', brave: 'b', exa: 'c', anysearch: 'd', tinyfish: 'e' },
+assert('single API configuration needs no warning', poolWarn === null)
+assert('partialKeyedPoolWarning null when all enabled', partialKeyedPoolWarning(keyedPoolSummary(
+  Object.fromEntries(KEY_NAMES.map(n => [n, 'fixture-key'])),
   emptyRouting,
 )) === null)
 assert('partialKeyedPoolWarning null when none enabled', partialKeyedPoolWarning(keyedPoolSummary(

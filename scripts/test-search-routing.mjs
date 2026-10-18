@@ -74,7 +74,7 @@ try {
       // explicitly remove Yahoo, reduce DDG and add neutral TinyFish.
       const gm = Math.exp(Object.values(prior).reduce((sum, w) => sum + Math.log(w), 0) / 8)
       const wanted = Object.fromEntries(ENGINE_POOLS[pool].map((name) => [name,
-        name === 'tinyfish' ? 1 : Math.sqrt(prior[name] / gm) * (name === 'ddg' ? .6 : 1)]))
+        ['tinyfish', 'deepseek-search'].includes(name) ? 1 : Math.sqrt(prior[name] / gm) * (name === 'ddg' ? .6 : 1)]))
       for (const name of ENGINE_POOLS[pool]) assert.ok(Math.abs(RANKING_WEIGHTS[pool][ranking][name] - wanted[name]) < 1e-12)
       assert.deepEqual(out.effectiveWeights, RANKING_WEIGHTS[pool][ranking])
       assert.deepEqual(out.enginesUsed, ENGINE_POOLS[pool])
@@ -280,7 +280,7 @@ try {
     assert.equal(cap.defaultEnginePool, 'free'); assert.ok(!cap.availableEngines.includes('tavily'))
     process.env.TAVILY_API_KEY = 'fixture-secret-tavily'; process.env.XAI_API_KEY = 'xai-fixture-secret-xai'
     cap = runtime.collectRuntimeCapabilities()
-    assert.ok(cap.availableEngines.includes('tavily')); assert.equal(cap.x.official.available, true)
+    assert.ok(cap.availableEngines.includes('tavily')); assert.equal(cap.defaultEnginePool, 'api'); assert.equal(cap.x.official.available, true)
     assert.ok(!JSON.stringify(cap).includes('fixture-secret'))
     const before = runtimeSnapshot().fingerprint
     process.env.TAVILY_API_KEY = 'different-fixture-secret'
@@ -288,7 +288,7 @@ try {
     writeFileSync(process.env.SEARCH_BOOST_KEYS_FILE, JSON.stringify({enabledEngines:[]}))
     assert.ok(!runtime.collectRuntimeCapabilities().availableEngines.includes('tavily'))
     runtime.switchLayer('api')
-    assert.equal(runtime.collectRuntimeCapabilities().defaultEnginePool, 'hybrid')
+    assert.equal(runtime.collectRuntimeCapabilities().defaultEnginePool, 'free', 'legacy layer cannot bypass disabled APIs')
   })
   await test('pre-aborted requests never execute or return a cached success', async () => {
     const controller = new AbortController(); controller.abort()

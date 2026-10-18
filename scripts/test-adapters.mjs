@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { assertObjectJsonSchema, assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
 import Ajv from 'ajv'
+import { KEYED_ENGINE_COUNT } from '../lib/keys.mjs'
 
 // ---- isolate every state path before importing anything that reads env ----
 const TMP = mkdtempSync(join(tmpdir(), 'sb-adapters-'))
@@ -353,10 +354,10 @@ for (const fn of ['runFused', 'runFetchPage', 'runXSearch', 'describeLayer', 'sw
   assert(`runtime exports ${fn}`, fn in runtime)
 }
 const info = runtime.describeLayer()
-assert('describeLayer shape', info.layer === 'free' && Array.isArray(info.engines) && typeof info.xOfficial === 'boolean' && info.keyedEngines.total === 5)
-const k1 = runtime.xSearchCacheKey('keyword', { query: 'a' }, 5)
+assert('describeLayer shape', info.layer === 'free' && Array.isArray(info.engines) && typeof info.xOfficial === 'boolean' && info.keyedEngines.total === KEYED_ENGINE_COUNT)
+const k1 = runtime.xSearchCacheKey('keyword', { query: 'a', layer: 'free' }, 5)
 runtime.switchLayer('api')
-const k2 = runtime.xSearchCacheKey('keyword', { query: 'a' }, 5)
+const k2 = runtime.xSearchCacheKey('keyword', { query: 'a', layer: 'api' }, 5)
 runtime.switchLayer('free')
 assert('x cache key embeds layer', k1 !== k2 && k1.includes('"auth":"none"'))
 runtime.X_CACHE.keyword.set('probe', { via: 'x' })
@@ -420,12 +421,12 @@ function mockDshCtx() {
   const policy = m.sections.find((s) => s.name === 'search:policy')
   const status = m.sections.find((s) => s.name === 'search:status')
   assert('dsh policy section order 115 with text', policy?.order === 115 && policy.text.includes('工具路由'))
-  assert('dsh status section is dynamic and reflects layer', status?.order === 116 && typeof status.text === 'function' && status.text().includes('layer: free'))
+  assert('dsh status section is dynamic and reflects layer', status?.order === 116 && typeof status.text === 'function' && status.text().includes('engine_pool: free'))
   const show = m.commands.get('web_change').handler({ rawInput: 'show' })
   assert('/web_change show', show.kind === 'success' && /current layer: \*\*free\*\*/.test(show.text))
   const toApi = m.commands.get('web_change').handler({ rawInput: 'api' })
   assert('/web_change api persists via Core', toApi.kind === 'success' && runtime.getLayer() === 'api')
-  assert('dsh capability re-evaluates on every assembly', status.text().includes('default engine_pool: hybrid'))
+  assert('dsh capability re-evaluates on every assembly', status.text().includes('engine_pool: free'))
   m.commands.get('web_change').handler({ rawInput: 'free' })
   assert('/web_change bad arg', m.commands.get('web_change').handler({ rawInput: 'nope' }).kind === 'error')
   assert('/x-login status', /x-login status — none/.test(m.commands.get('x-login').handler({ rawInput: 'status' }).text))
@@ -525,7 +526,7 @@ function mockDshCtx() {
   assert('pi injects policy once and refreshes capability even with existing policy', injected.systemPrompt.startsWith('BASE\n<search_balance>') && (reinjected.systemPrompt.match(/<search_balance>/g) ?? []).length === 1 && (reinjected.systemPrompt.match(/<search_capabilities>/g) ?? []).length === 1)
   runtime.switchLayer('api')
   const changed = await handlers.get('before_agent_start')({ systemPrompt: reinjected.systemPrompt })
-  assert('pi capability is dynamic on the next agent start', changed.systemPrompt.includes('default engine_pool: hybrid'))
+  assert('pi capability is dynamic on the next agent start', changed.systemPrompt.includes('engine_pool: free'))
   runtime.switchLayer('free')
   const notes = []
   const ctx = { ui: { notify: (m) => notes.push(m) } }

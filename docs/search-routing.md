@@ -34,12 +34,24 @@ MCP / Pi / DSH community_search (engines:["x"])
 
 本次不改安装、全局 npm 迁移或宿主注册流程。
 
+## 默认选择：配置和开关决定，不再手动分层
+
+省略 `engine_pool` 和单次旧 `layer` 参数时，至少一个 API 引擎已配置且启用，就默认**只调用已启用的 API 引擎**；否则使用可用免 Key 引擎。无需全部供应商的 Key，也无需切换“免费层 / API 层”。只启用一个 API 是完整支持的模式，不产生“引擎未配齐”告警。
+
+- 显式 `engine_pool=free/api/hybrid` 仍按原集合选取；`complexity` 和 `ranking` 不变。
+- `engines` 继续覆盖调用集合；所有入口均尊重缺 Key、白名单和停用状态。
+- 默认自动选择只请求可用子集，不把其他供应商未配置当作异常；显式指定池或引擎仍保留不可用警告。
+- API 请求失败不会偷偷改用免 Key 引擎；明确 API 池没有可用 Key 时仍返回空集合与 warnings。
+- AnySearch 匿名模式不算“已配置 API”；配置并启用 AnySearch Key 后可单独成为默认 API。
+- 轻量 TUI 按引擎提供就地启停，也保留集中多选；完整控制台提供每个引擎的确认式开关，并在“默认搜索”只读展示实时选择。
+- 开关变化在下一次搜索读取并影响缓存身份，关闭全部 API 后默认改用免 Key 引擎。AnySearch 的停用仍约束匿名路径。
+
 ## 参数正交性
 
 | 参数 | 默认 | 唯一职责 |
 | --- | --- | --- |
 | `complexity` | `medium` | `simple / medium / complex` 控制预算、至多 1/2/3 个 variants 和默认 basic/basic/advanced depth |
-| `engine_pool` | 从兼容 layer 映射 | `free / api / hybrid` 选择默认调用集合 |
+| `engine_pool` | 自动：有已启用 API 则 api，否则 free | `free / api / hybrid` 选择默认调用集合 |
 | `ranking` | `balanced` | `balanced / research / fresh` 只选择最终 engine-weight preset |
 | `engines` | 省略 | 显式覆盖本次调用集合，可跨 pool；不绕过缺 key 或禁用状态 |
 | `engine_weights` | 省略 | 覆盖指定引擎的评分权重；不增加或移除任何调用 |
@@ -62,12 +74,17 @@ MCP / Pi / DSH community_search (engines:["x"])
 | exa | 1.049 | 1.146 | 1.063 |
 | anysearch | 1.004 | 1.042 | 0.951 |
 | tinyfish | 1.000 | 1.000 | 1.000 |
+| deepseek-search | 1.000 | 1.000 | 1.000 |
 
-同一引擎、同一策略的权重跨池共享。原有先验采用固定集合的对数收缩冷启动尺度；本次删除 Yahoo，DDG 乘 0.60，TinyFish 以 1.0 加入，其他数值不变，因此当前表不再承诺几何均值为 1。权重不是实测质量排名；完整精度在 routing.js。free 为 bing/ddg/exa-free/anysearch；api 为 tavily/brave/exa/anysearch/tinyfish；hybrid 为去重并集。不可按本次成功/可用引擎重新归一化。后续离线标注评估须包含全 1 权重 neutral baseline。
+同一引擎、同一策略的权重跨池共享。原有先验采用固定集合的对数收缩冷启动尺度；本次删除 Yahoo，DDG 乘 0.60，TinyFish 以 1.0 加入，其他数值不变，因此当前表不再承诺几何均值为 1。权重不是实测质量排名；完整精度在 routing.js。free 为 bing/ddg/exa-free/anysearch；api 为 tavily/brave/exa/anysearch/tinyfish/deepseek-search；hybrid 为去重并集。不可按本次成功/可用引擎重新归一化。后续离线标注评估须包含全 1 权重 neutral baseline。
 
 池成员固定，实际可用性动态读取。API-only 池没有可用 key 时返回空集合与 warnings，不偷偷启用免费池。
 
 `anysearch` 同时属于 free/api 池，hybrid 去重后只调用一次；`ANYSEARCH_API_KEY` 或 keys.json 的 `anysearch` 保存密钥。free 匿名调用，api 要求 key，hybrid 有 key 时用 key、否则匿名。显式禁用/白名单也作用于匿名路径，不降级绕过禁用。匿名限额和网络错误正常报告，不从错误正文自动注册或保存凭据。
+
+### DeepSeek Search
+
+`deepseek-search` 为 keyed API 引擎，默认 api/hybrid，三个预设权重均为 1.0。支持已有 Key、Base URL、启停和权重覆盖契约；详见 [接入说明](deepseek-search.md)。
 
 ### TinyFish Search 与 Yahoo 移除
 
@@ -81,7 +98,7 @@ Yahoo 不再有运行时或公开枚举入口，显式引擎/权重输入拒绝�
 
 ## 兼容方案
 
-- 保留原 layer 配置、环境变量、`search_layer` 与 `/web_change`：旧 `free → free`，旧 `api → hybrid`。这是保留旧 api layer 原本包含免费引擎的语义，不是新 API-only 池的定义。
+- 原 layer 文件和 `SEARCH_BOOST_LAYER` 不再决定隐式搜索默认值，也不自动重写用户旧文件。旧 `config layer`、`search_layer`、`/web_change` 仅保留兼容偏好的读写，并明确提示其不影响自动选择。首次配置不再询问或创建层配置。显式单次 `layer=free/api` 仍映射 `free/hybrid`，推荐改用 engine_pool。
 - 显式 `engine_pool` 优先于 layer；MCP/DSH 保留废弃的单次 `layer` alias。
 - Core 暂时接受 `complexity=auto`，仍用旧 heuristic，但返回弃用 warning。公开工具 schema 仅列 simple/medium/complex；旧客户端应刷新 schema。
 - 保留返回值中的 `layer`、`tier`、`engineStats` 等现有字段，增加 pool、ranking 和实际执行诊断。
