@@ -113,12 +113,11 @@ try {
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'browsing menus is read-only')
 
   fresh()
-  out = await scenario(['settings', 'language', 'zh-CN', 'back', 'layer', 'free', 'exit'])
+  out = await scenario(['settings', 'language', 'zh-CN', 'back', 'layer', 'exit'])
   assert.equal(out.records[3].message, 'TUI 设置', 'switch applies before the next menu')
   assert.equal(out.records[4].options[0].label, '首次配置向导')
-  assert.equal(out.records[5].message, '默认搜索层？')
-  assert(out.records[5].options[0].label.includes('无需 Key'))
-  assert(out.logs.some((line) => line.includes('搜索层已设为 free')))
+  assert(out.logs.some((line) => line.includes('自动搜索：免 Key 引擎')))
+  assert(!out.records.some(record => record.message === '默认搜索层？'))
   assert.equal(readTuiLanguage(), 'zh-CN')
   out = await scenario(['settings', 'language', 'en', 'back', 'exit'])
   assert.equal(out.records[0].options.find((o) => o.value === 'settings').label, 'TUI 设置', 'restart follows saved language')
@@ -134,14 +133,11 @@ try {
   console.log('ok: English and Chinese tool-switch help describe the single snapshot and no automatic page reads')
 
   fresh()
-  out = await scenario(['layer', cancel, 'community', cancel, 'jev', cancel, 'keys', cancel, 'print', cancel, 'manage', 'install', reply('multiselect', cancel), 'back', 'exit'])
-  assert.equal(out.records[1].message, 'Default search layer?')
-  assert.equal(out.records[3].message, 'Community configuration')
-  assert.match(out.records[5].message, /^Judgment model configuration\nNo active profile/)
-  assert.equal(out.records[7].message, 'Engine configuration')
-  assert.equal(out.records[9].message, 'Print MCP snippet for which agent?')
-  assert.equal(out.records[12].message, 'Which agents should search-boost configure?')
-  assert.equal(out.records[13].message, 'Manage agent integrations', 'cancelled wizards return to the flat home')
+  out = await scenario(['layer', 'community', cancel, 'jev', cancel, 'keys', cancel, 'print', cancel, 'manage', 'install', reply('multiselect', cancel), 'back', 'exit'])
+  assert(out.logs.some(line => line.includes('Automatic search:')))
+  for (const message of ['Community configuration', 'Engine configuration', 'Print MCP snippet for which agent?', 'Which agents should search-boost configure?']) assert(out.records.some(record => record.message === message))
+  assert.match(out.records.find(record => record.message.startsWith('Judgment model configuration')).message, /^Judgment model configuration\nNo active profile/)
+  assert.equal(out.records.at(-2).message, 'Manage agent integrations', 'cancelled wizards return to the flat home')
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'cancelled wizards do not write configuration')
   out = await scenario(['settings', cancel, 'exit'])
   assert.equal(out.records[2].message, 'What do you want to do?', 'submenu Escape returns home')
@@ -150,7 +146,7 @@ try {
   out = await scenario(['tools', { method: 'multiselect', value: cancel, interrupt: true }])
   assert(out.logs.includes('Done.'), 'Ctrl+C exits even inside a wizard with its own catch')
   assert.equal(process.stdin.listenerCount('keypress'), 0, 'prompt listeners are cleaned up')
-  out = await scenario([{ method: 'select', value: 'layer', interrupt: true }, cancel, 'exit'])
+  out = await scenario([{ method: 'select', value: 'keys', interrupt: true }, cancel, 'exit'])
   assert.equal(out.records[2].message, 'What do you want to do?', 'a stray Ctrl+C in a resolved prompt cannot poison a later Escape')
   out = await scenario(['manage', 'install', reply('multiselect', ['codex']), reply('confirm', cancel), 'back', 'exit'])
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'cancelling later install-only choices cannot initialize a layer')
@@ -165,9 +161,9 @@ try {
   fresh()
 
   fresh()
-  out = await scenario(['settings', 'language', 'zh-CN', 'back', 'layer', 'api', 'tools', reply('multiselect', []), reply('confirm', true, (options) => {
+  out = await scenario(['settings', 'language', 'zh-CN', 'back', 'layer', 'tools', reply('multiselect', []), reply('confirm', true, (options) => {
     assert.equal(options.active, '是'); assert.equal(options.inactive, '否')
-  }), 'setup', 'free', reply('multiselect', []), 'manage', 'install', reply('multiselect', []), 'uninstall', reply('multiselect', []), 'back', 'search', reply('multiselect', []), 'community', 'x', 'set-key', reply('password', 'xai-dry-run-sentinel', (options) => {
+  }), 'setup', reply('multiselect', []), 'manage', 'install', reply('multiselect', []), 'uninstall', reply('multiselect', []), 'back', 'search', reply('multiselect', []), 'community', 'x', 'set-key', reply('password', 'xai-dry-run-sentinel', (options) => {
     assert.equal(options.validate('bad'), '必须以 xai- 开头（可在 console.x.ai 获取）。')
   }), 'back', 'back', 'jev', 'change', 'jev', 'typesafe', reply('password', 'jev-dry-run-sentinel'), reply('confirm', true), 'exit'], { dryRun: true })
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'dry-run remains entirely read-only, including language preference')
@@ -185,11 +181,11 @@ try {
   assert(!engineMenu.options.some((o) => /tvly|brave|exa|anysearch/i.test(o.hint ?? '') && /[A-Za-z0-9]{12}/.test(o.hint)), 'engine hints stay masked')
   assert(out.logs.some((line) => line.includes('API 引擎池') || line.includes('API Keys')))
   assert(out.logs.some((line) => line.includes('X 凭据（community_search）')))
-  assert(out.logs.some((line) => line.includes('搜索层：')))
+  assert(out.logs.some((line) => line.includes('搜索路由：自动')))
   assert(out.logs.some((line) => line.includes('已管理 / 旧版接入')))
   assert(!out.logs.some((line) => /no credentials|not set|not configured/.test(line)), 'owned status text is localized')
   const cli = execFileSync(process.execPath, [fileURLToPath(new URL('../cli.mjs', import.meta.url)), 'status'], { env: process.env, encoding: 'utf8' })
-  assert(cli.includes('Layer:'), 'saved TUI language does not change non-interactive CLI output')
+  assert(cli.includes('Search routing: auto'), 'saved TUI language does not change non-interactive CLI output')
 
   for (const language of ['en', 'zh-CN']) {
     saveTuiLanguage(language)

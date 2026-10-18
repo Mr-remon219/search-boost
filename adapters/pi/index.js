@@ -633,26 +633,21 @@ export default function searchBoostExtension(pi) {
   })
 
   pi.registerCommand('web_change', {
-    description: 'Inspect the compatibility layer with /web_change show. Authorized free/api changes persist future defaults (free→free pool, api→hybrid); use fused_search.engine_pool for one request.',
+    description: 'Inspect the compatibility layer with /web_change show. Default engine selection is automatic. Legacy free/api values are stored for compatibility only; use fused_search.engine_pool for one request.',
     handler: async (args, ctx) => {
       const cmd = (args ?? '').trim().toLowerCase()
       const current = getLayer()
       if (cmd === 'free' || cmd === 'api') {
         switchLayer(cmd)
-        ctx.ui.notify(`web layer: ${current} → ${cmd} — ${LAYER_LABELS[cmd]}. Future fused_search calls use this layer.`, 'info')
+        ctx.ui.notify(`web layer: ${current} → ${cmd} — ${LAYER_LABELS[cmd]}. Legacy preference saved; implicit searches stay automatic. Use engine_pool for a one-call override.`, 'info')
         return
       }
       if (cmd === 'show' || cmd === '') {
         const info = describeLayer()
         const hints = []
-        if (info.layer === 'api' && info.keyedEngines.enabled === 0) {
-          hints.push('no API keys configured — the api layer currently runs the keyless engines only; add keys with `search-boost config keys`, or run /web_change free')
-        } else if (info.layer === 'api' && info.keyedEngines.enabled < info.keyedEngines.total) {
-          hints.push(`keyed engines: ${info.keyedEngines.enabledNames.join(', ')} — configure additional engines (tavily, brave, exa, anysearch, tinyfish) via \`search-boost config keys\` for the fullest fusion`)
-        }
-        if (info.layer === 'free') {
-          hints.push('keyless mode — run /web_change api after configuring keys (`search-boost config keys`) to add tavily/brave/exa/anysearch/tinyfish to the fusion')
-        }
+        hints.push(info.keyedEngines.enabled
+          ? `Automatic API selection: ${info.keyedEngines.enabledNames.join(', ')}; one engine is enough. Toggle engines in the TUI.`
+          : 'Automatic keyless search. Configure and enable any one API in the TUI (`search-boost config keys`) to use it; no layer switch is required.')
         ctx.ui.notify(
           [
             `web layer: ${info.layer} — ${info.label}`,

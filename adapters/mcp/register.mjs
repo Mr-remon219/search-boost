@@ -166,7 +166,7 @@ function summarizeAdaptive(result) {
 
   registerTool('search_layer', {
     title: 'Search Layer',
-    description: `Inspect the current search layer with layer=show (default, no change). layer=free or api persists a new default: only change it when authorized. free = ${LAYER_LABELS.free}. api = ${LAYER_LABELS.api}. For a single search, use fused_search.engine_pool instead; legacy api maps to hybrid, not the strict api pool.`,
+    description: `Inspect the current search layer with layer=show (default, no change). layer=free or api stores a legacy preference only: implicit searches remain automatic. Only change it when authorized. free = ${LAYER_LABELS.free}. api = ${LAYER_LABELS.api}. For a single search, use fused_search.engine_pool instead; legacy api maps to hybrid, not the strict api pool.`,
     inputSchema: searchLayerInput,
     annotations: { ...ANNOTATIONS.config, title: 'Configure search layer' },
   }, async (args) => {

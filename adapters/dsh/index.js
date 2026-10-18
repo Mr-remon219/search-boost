@@ -625,14 +625,14 @@ function registerWebChangeCommand(ctx) {
   }
   return commands.register({
     name: 'web_change',
-    description: 'Inspect the compatibility layer with /web_change show. Authorized free/api changes persist future defaults (free→free pool, api→hybrid); use fused_search.engine_pool for one request.',
+    description: 'Inspect the compatibility layer with /web_change show. Default engine selection is automatic. Legacy free/api values are stored for compatibility only; use fused_search.engine_pool for one request.',
     input: { hint: 'free | api | show' },
     handler: ({ rawInput }) => {
       const cmd = String(rawInput ?? '').trim().toLowerCase()
       try {
         if (cmd === 'free' || cmd === 'api') {
           switchLayer(cmd)
-          return { kind: 'success', text: `web layer → **${cmd}** — ${LAYER_LABELS[cmd]}. Future searches use this layer.` }
+          return { kind: 'success', text: `web layer → **${cmd}** — ${LAYER_LABELS[cmd]}. Legacy preference saved; implicit searches stay automatic. Use engine_pool for a one-call override.` }
         }
         if (cmd === 'show' || cmd === '') {
           return { kind: 'success', text: show() }

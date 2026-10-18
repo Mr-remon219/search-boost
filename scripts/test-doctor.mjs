@@ -111,8 +111,8 @@ await withIsolatedHome(async (home) => {
     env: noKeyEnv,
   })
   const check = findCheck(report, 'layer_keys_coherence')
-  assert('layer_keys_coherence warn on api without keys', check?.status === 'warn')
-  assert('layer_keys_coherence warn exit 2', exitCode === 2)
+  assert('automatic keyless routing is valid without keys', check?.status === 'pass')
+  assert('automatic keyless routing needs no warning exit', exitCode === 0)
 })
 
 // layer_keys_coherence warn (api with single key)
@@ -135,8 +135,8 @@ await withIsolatedHome(async (home) => {
     },
   })
   const check = findCheck(report, 'layer_keys_coherence')
-  assert('layer_keys_coherence warn on api with single key', check?.status === 'warn')
-  assert('layer_keys_coherence single key mentions 1/5', check?.message?.includes('1/5'))
+  assert('one configured API is valid', check?.status === 'pass')
+  assert('single API default names enabled engine', check?.message?.includes('tavily'))
 })
 
 // layer_keys_coherence pass (api with five keys)
@@ -188,8 +188,8 @@ await withIsolatedHome(async (home) => {
     },
   })
   const check = findCheck(report, 'api_keyed_pool')
-  assert('api_keyed_pool warn on single enabled engine', check?.status === 'warn')
-  assert('api_keyed_pool single engine OK message', check?.message?.includes('single engine OK'))
+  assert('api_keyed_pool passes with one enabled engine', check?.status === 'pass')
+  assert('api_keyed_pool single engine OK message', check?.message?.includes('one engine is enough'))
 })
 
 // api_keyed_pool pass with all five keys
@@ -236,7 +236,7 @@ await withIsolatedHome(async (home) => {
 
 // exit strict (warn + --strict → 1)
 await withIsolatedHome(async (home) => {
-  writeFileSync(join(home, '.search-boost-layer.json'), `${JSON.stringify({ layer: 'api' })}\n`, 'utf8')
+  writeFileSync(join(home, '.search-boost-layer.json'), '{}\n', 'utf8')
   writeFileSync(join(home, '.search-boost-keys.json'), '{}\n', 'utf8')
   const { exitCode } = await runDoctor({
     homeDir: home,

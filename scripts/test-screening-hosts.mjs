@@ -65,9 +65,9 @@ let communityAnswer = 'disable'
 let expectedQuestion = INPUT.questions[0]
 let expectedIntent = INPUT.intent
 let failAllEngines = false
-let failFreeEngines = false
+let failSecondaryEngines = false
 let usageOnWire = true
-const ALLOWED_HOSTS = new Set(['api.search.brave.com', 'api.typesafe.ai', 'publish.x.com', 'www.bing.com', 'html.duckduckgo.com', 'mcp.exa.ai'])
+const ALLOWED_HOSTS = new Set(['api.tavily.com', 'api.search.brave.com', 'api.typesafe.ai', 'publish.x.com', 'www.bing.com', 'html.duckduckgo.com', 'mcp.exa.ai'])
 const node = (d) => ({ title: d.title, url: d.url, description: d.description })
 const resultsFor = (query, count) => {
   const platform = /bilibili\.com/.test(query) ? 'bilibili' : /zhihu\.com/.test(query) ? 'zhihu' : /xiaohongshu\.com/.test(query) ? 'xiaohongshu' : null
@@ -88,8 +88,12 @@ globalThis.fetch = async (raw, init) => {
     unexpectedHosts.push(url.href)
     throw new TypeError('fetch failed', { cause: Object.assign(new Error('fixture'), { code: 'ENOTFOUND' }) })
   }
-  if (url.hostname !== 'api.typesafe.ai' && (failAllEngines || (failFreeEngines && url.hostname !== 'api.search.brave.com'))) {
+  if (url.hostname !== 'api.typesafe.ai' && (failAllEngines || (failSecondaryEngines && url.hostname !== 'api.search.brave.com'))) {
     throw new TypeError('fetch failed', { cause: Object.assign(new Error('fixture'), { code: 'ENOTFOUND' }) })
+  }
+  if (url.hostname === 'api.tavily.com') {
+    const body = JSON.parse(init.body)
+    return Response.json({ results: resultsFor(body.query, body.max_results).map(r => ({ ...node(r), content: r.description })) })
   }
   if (url.hostname === 'api.search.brave.com') {
     return Response.json({ web: { results: resultsFor(queryOf(url), Number(url.searchParams.get('count') ?? 10)).map(node) } })
@@ -410,9 +414,12 @@ try {
 
   // A successful empty result (domain filtering) and a mixed failure with one
   // successful empty response are BOTH ordinary zero-hit searches, not outages.
+  // Automatic defaults use APIs only: add a second keyed fixture so partial
+  // failures remain tested without relying on the removed implicit hybrid mode.
+  writeKeysFile({ tavily: 'secondary-engine-fixture', enabledEngines: ['brave', 'tavily'] })
   expectedQuestion = 'fixture empty search site:nomatch.example'
   for (const partial of [false, true]) {
-    failFreeEngines = partial
+    failSecondaryEngines = partial
     for (const host of ['mcp', 'pi', 'dsh']) {
       clearAllCaches()
       const response = await call(host, { ...INPUT, questions: [expectedQuestion], community: false })
@@ -430,7 +437,7 @@ try {
     clearAllCaches()
     const direct = await dshTools.get('fused_search').execute({ query: expectedQuestion, community: false }, {})
     assert.deepEqual(direct.results, [])
-    assert.equal(Object.values(direct.engineStats).filter(stat => stat.successes > 0).length, partial ? 1 : 4)
+    assert.equal(Object.values(direct.engineStats).filter(stat => stat.successes > 0).length, partial ? 1 : 2)
     clearAllCaches()
     const native = await nativeSearchProvider.search({ query: expectedQuestion, maxResults: 6 })
     assert.deepEqual(native.sources, [])
@@ -443,7 +450,7 @@ try {
   assert.equal(partial.results.length > 0, true)
   assert.equal(partial.run.halted, null)
   assert.equal(partial.error, undefined)
-  failFreeEngines = false
+  failSecondaryEngines = false
   console.log('ok: all-failed, successful-empty and partial-success states agree across hosts and DSH native provider')
   assert.deepEqual(unexpectedHosts, [], 'no host outside the fixture set was contacted')
   console.log('ok: locked/disabled entries and real engine failures stay honest at the host boundary')

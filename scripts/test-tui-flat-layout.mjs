@@ -160,10 +160,10 @@ try {
   assert(existsSync(unreadable), 'an unreadable store is not removed')
   fresh()
   const healthyFree = await runScenario(['exit'])
-  assert.equal(healthyFree.records[0].options.find(o => o.value === 'layer').hint, 'current: free')
+  assert.equal(healthyFree.records[0].options.find(o => o.value === 'layer').hint, 'auto: keyless engines')
   writeKeysFile({ tavily: 'healthy-fixture-key' })
   const healthyApi = await runScenario(['exit'])
-  assert.equal(healthyApi.records[0].options.find(o => o.value === 'layer').hint, 'current: api')
+  assert.equal(healthyApi.records[0].options.find(o => o.value === 'layer').hint, 'auto: tavily')
   assert.equal(process.exitCode, undefined)
   console.log('ok: corrupt/unreadable keys show a localized hint without blocking flat/folder menus; actual config stays strict')
 
@@ -224,11 +224,11 @@ try {
   // ---------------------------------------------------------------------------
   fresh()
   const walk = await runScenario([
-    'setup', 'free', reply('multiselect', []),
+    'setup', reply('multiselect', []),
     'manage', 'install', reply('multiselect', []), 'back',
     'status',
     'keys', 'back',
-    'layer', 'free',
+    'layer',
     'tools', reply('multiselect', []), reply('confirm', false),
     'community', 'x', 'back', 'back',
     'jev', cancel,
@@ -248,12 +248,13 @@ try {
     'a completed flat operation returns to the home menu with its entry selected',
   )
   assert(walk.logs.some((l) => l.includes('dry-run: would offer API key setup')), 'Setup still offers the credential step')
-  assert(walk.logs.some((l) => l.includes('Skipped API keys, layer, and X credentials (install-only)')), 'Install keeps the install-only scope')
+  assert(walk.logs.some((l) => l.includes('Skipped API keys, engine switches, and X credentials (install-only)')), 'Install keeps the install-only scope')
   assert(!walk.records.some(menu => menu.options?.some(option => option.value === 'upgrade')), 'software updater is absent from every layout')
   assert(walk.logs.some((l) => l.startsWith('Status\n') && l.includes('Agents')), 'Status prints the real read-only status')
   const engineMenu = walk.records.find((r) => r.message === 'Engine configuration')
   assert.deepEqual(engineMenu.options.map((o) => o.value), [...CONFIG_KEY_NAMES, 'routing', 'back'], 'the engine entry lists every credential slot plus routing')
-  assert.equal(walk.records.find((r) => r.message === 'Default search layer?').options.map((o) => o.value).join(','), 'free,api')
+  assert(!walk.records.some(r => r.message === 'Default search layer?'))
+  assert(walk.logs.some(line => line.includes('Automatic search:')))
   const toolsNote = walk.logs.find((l) => l.includes('Tool switches — shared by MCP / Pi / DSH'))
   assert(toolsNote && toolsNote.includes('fused_search'), 'Tool switches is the real wizard with real tool names')
   assert.deepEqual(walk.records.find((r) => r.message === 'Community configuration').options.map((o) => o.value), ['reddit', 'x', 'bilibili', 'zhihu', 'xiaohongshu', 'back'])
@@ -275,7 +276,7 @@ try {
   const englishHome = await runScenario(['exit'])
   assert.deepEqual(englishHome.records[0].options.map((o) => o.label), [
     'Setup wizard', 'Manage agent integrations', 'Status',
-    'Search engine configuration', 'Default search layer', 'Tool switches', 'Community configuration',
+    'Search engine configuration', 'Search defaults (automatic)', 'Tool switches', 'Community configuration',
     'Judgment models (Jev / Laya)', 'Native web search', 'Print MCP snippet',
     'TUI settings', 'Exit',
   ])
@@ -283,7 +284,7 @@ try {
   const zhHome = await runScenario(['exit'])
   assert.deepEqual(zhHome.records[0].options.map((o) => o.label), [
     '首次配置向导', '管理 Agent 接入', '查看当前状态', '搜索引擎配置',
-    '默认搜索层', '工具开关', 'Community 配置', '判断模型（Jev / Laya）', '原生搜索替换', '输出 MCP 配置片段',
+    '默认搜索（自动选择）', '工具开关', 'Community 配置', '判断模型（Jev / Laya）', '原生搜索替换', '输出 MCP 配置片段',
     'TUI 设置', '退出',
   ])
   assert.equal(zhHome.records[0].message, '请选择操作')
@@ -318,14 +319,14 @@ try {
     const folderWalk = await runScenario([section, 'back', 'exit'])
     assert.deepEqual(folderWalk.records[1].options.map((o) => o.value), values, `folder section ${section}`)
   }
-  const folderOps = await runScenario(['search-tools', 'layer', 'free', 'back', 'credentials', 'keys', 'back', 'back', 'exit'])
-  assert.equal(folderOps.records[3].message, 'Search & tools', 'a completed folder operation stays in its section')
-  assert.equal(folderOps.records[3].initialValue, 'layer', 'and keeps its entry selected')
-  assert.equal(folderOps.records[6].options.find(o => o.value === 'back').label, 'Back', 'engine return label is layout-neutral')
-  assert.equal(folderOps.records[7].message, 'Services & credentials', 'the engine entry returns to its section')
-  assert.equal(folderOps.records[7].initialValue, 'keys')
-  assert.equal(folderOps.records[8].message, 'What do you want to do?', 'Esc in a section returns home')
-  assert.equal(folderOps.records[8].initialValue, 'credentials')
+  const folderOps = await runScenario(['search-tools', 'layer', 'back', 'credentials', 'keys', 'back', 'back', 'exit'])
+  assert.equal(folderOps.records[2].message, 'Search & tools', 'a completed folder operation stays in its section')
+  assert.equal(folderOps.records[2].initialValue, 'layer', 'and keeps its entry selected')
+  assert.equal(folderOps.records[5].options.find(o => o.value === 'back').label, 'Back', 'engine return label is layout-neutral')
+  assert.equal(folderOps.records[6].message, 'Services & credentials', 'the engine entry returns to its section')
+  assert.equal(folderOps.records[6].initialValue, 'keys')
+  assert.equal(folderOps.records[7].message, 'What do you want to do?', 'Esc in a section returns home')
+  assert.equal(folderOps.records[7].initialValue, 'credentials')
   const folderManage = await runScenario(['integration', 'manage', 'back', 'back', 'exit'], { dryRun: true })
   assert.deepEqual(folderManage.records[2].options.map(o => o.value), ['install', 'refresh', 'uninstall', 'back'])
   assert.equal(folderManage.records[3].message, 'Installation & integrations', 'Back returns to the owning folder, not directly home')
@@ -494,25 +495,25 @@ try {
     reply('confirm', true),
     ...CONFIG_KEY_NAMES.map(() => 'keep'),
     reply('multiselect', ['tavily']),
-    'free',
     reply('confirm', false),
     reply('multiselect', []),
     'exit',
   ])
   assert(setup.records[1].message.includes('Configure API keys now?'), 'Setup asks before credentials')
   assert.deepEqual(
-    setup.records.slice(2, 2 + CONFIG_KEY_NAMES.length).map((r) => r.message.match(/^(\w+)/)[1]),
+    setup.records.slice(2, 2 + CONFIG_KEY_NAMES.length).map((r) => r.message.match(/^([\w-]+)/)[1]),
     CONFIG_KEY_NAMES,
     'Setup still guides every credential slot',
   )
-  assert(setup.records.some((r) => r.message === 'Default search layer?'), 'Setup still sets the search layer')
+  assert(!setup.records.some((r) => r.message === 'Default search layer?'), 'Setup no longer asks for a layer')
+  assert(setup.logs.some(line => line.includes('Search routing is automatic')))
   assert(setup.records.some((r) => r.message.startsWith('Configure a judgment model?') && r.initialValue === false), 'Setup offers optional judgments, skipped by default')
   assert.equal(setup.logs.filter((l) => l.includes('Skipped API keys')).length, 0, 'Setup does not skip credentials')
   assert(setup.logs.some((l) => l.includes('No agents selected')), 'Setup reached the agent selection step')
   assert.equal(keysDoc().tavily, 'tvly-setup-fixture-key-1234', 'Setup keeps existing credentials')
   assert.equal(keysDoc().jev.apiKey, 'jev-setup-key', 'Setup keeps unrelated stored credentials')
   assert.deepEqual(readEngineRouting().enabledEngines, ['tavily'], 'Setup does not reset existing routing')
-  console.log('ok: Setup still walks credentials → layer → agents and preserves stored credentials and routing')
+  console.log('ok: Setup walks credentials → automatic routing → agents and preserves stored credentials and routing')
 } finally {
   process.exitCode = savedExit
 }

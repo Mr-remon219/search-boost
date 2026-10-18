@@ -708,9 +708,9 @@ await test('single-action entries open directly and language/theme pickers cance
     model.navigate(1); key(model, 'return')
     assert.equal(model.focus, 'detail'); assert.equal(model.modal, null, 'multiple-action entries retain the details chooser')
     model.navigate(2); key(model, 'return'); await settle()
-    assert.equal(model.modal.kind, 'select', 'single-action search layer opens confirmation directly')
-    assert.equal(model.modal.index, 0, 'writes still default to cancel')
-    key(model, 'escape'); assert.equal(model.focus, 'list')
+    assert.equal(model.sectionId, 'engines', 'automatic defaults action opens engine switches, not a layer mutation')
+    assert.equal(model.modal, null)
+    assert.equal(existsSync(searchBoostHome()), false)
   }
 }))
 await test('resize-only frames block invisible confirmation/input and resume without losing drafts', () => freshConsole(async () => {
