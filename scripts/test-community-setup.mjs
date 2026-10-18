@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { isAbsolute, join, relative } from 'node:path'
+import { isAbsolute, join, relative, sep } from 'node:path'
 import {
   ensureNativeBrowser, installPlaywrightChromium, managedBrowserExecutablePath, managedBrowserRoot,
   managedBrowserStatus, managedRegistryPath, nativeHome, nativeProfileOwnerPath, nativeProfilePath,
@@ -69,7 +69,7 @@ assert.equal(resolveNativeBrowser({ candidates: [], source: 'managed' }).ready, 
 assert.equal(resolveNativeBrowser({ candidates: [], manifest: { available: false } }).source, 'none')
 const managedExecutable = managedBrowserExecutablePath()
 assert.ok(isAbsolute(managedExecutable ?? ''), 'the pinned playwright-core manifest yields an absolute owned browser path')
-assert.ok(managedExecutable.startsWith(managedBrowserRoot() + '/'), 'the owned browser lives inside the SearchBoost-owned root')
+assert.ok(managedExecutable.startsWith(managedBrowserRoot() + sep), 'the owned browser lives inside the SearchBoost-owned root')
 assert.equal(managedBrowserStatus().installed, false, 'no owned browser is installed in a clean home')
 assert.deepEqual(tree(root), before, 'discovery never writes')
 
