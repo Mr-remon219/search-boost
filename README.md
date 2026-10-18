@@ -27,7 +27,7 @@
 
 ---
 
-> **v0.3.0-beta2 · npm `beta` channel**: native Xiaohongshu / Zhihu / Bilibili text retrieval through explicitly initialized dedicated Chromium sessions, conservative discussion completeness, and console interaction fixes; retains five-platform retrieval, themes, quota cards and Jev / Laya profiles. Install with `search-boost@beta` or pin `search-boost@0.3.0-beta2`. `@latest` remains the stable channel and does not opt into this beta. See [release notes](./docs/v0.3.0-beta2-release.md).
+> **v0.3.0-beta3 · npm `beta` channel**: DeepSeek native search, automatic API selection (one enabled API is enough), and streamlined community setup with reusable isolated browsers, QR login, progress and recovery controls; retains conservative discussion completeness, themes, quota cards and Jev / Laya profiles. Install with `search-boost@beta` or pin `search-boost@0.3.0-beta3`. `@latest` remains the stable channel and does not opt into this beta. See [release notes](./docs/v0.3.0-beta3-release.md).
 
 ## Table of Contents
 
@@ -129,7 +129,7 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
 ```bash
 # Install this beta (does not change the npm stable channel)
 npm install -g search-boost@beta
-# Reproducible alternative: npm install -g search-boost@0.3.0-beta2
+# Reproducible alternative: npm install -g search-boost@0.3.0-beta3
 
 search-boost       # Quick setup / configuration wizard
 search-boost tui   # Independent full-screen control center
@@ -452,7 +452,7 @@ API keys use a credential store this tool owns. They are not written into prompt
 
 ## CLI Command Reference (Headless & CI)
 
-This CLI reference describes **0.3.0-beta2**. Install `search-boost@beta` (or the exact version) for the console and five-platform community features; `@latest` selects the stable release.
+This CLI reference describes **0.3.0-beta3**. Install `search-boost@beta` (or the exact version) for the console and five-platform community features; `@latest` selects the stable release.
 
 **DeepSeek Harness Desktop:** interactive installation offers Desktop / CLI / All, then **Automatic (default)** or **Local directory** for Desktop. Automatic setup retains bundled-command discovery through Windows installer registry metadata (including custom destinations), default directories and PATH; launch Desktop once, then fully quit it including its tray. Local setup runs last, after all other integrations including Grok, and displays the current durable package directory to paste into the running app's Plugins → Add plugin dialog. The TUI observes saved installation read-only and finishes after stable verification; Escape / Ctrl+C or timeout marks Desktop unfinished while retaining earlier results. Saved installation is not proof of live activation; missing bundled launchers explicitly leave runtime verification unknown. Temporary `_npx` paths are refused as persistent local links. The app also accepts `search-boost` for a registry install. Automatic install/update still verifies the owning resolver and rejects shadow copies. Disabled bundles stay disabled unless explicitly requested; local setup with `--enable-dsh-bundle` waits for the user to enable it in Desktop. See [Desktop integration](docs/dsh-desktop.md) for ownership and validation limits.
 
@@ -521,7 +521,7 @@ Use this path to contribute to SearchBoost, or to test code that is not in a pub
 # 1. Clone the repository
 git clone https://github.com/Mr-remon219/search-boost.git
 cd search-boost
-git checkout v0.3.0-beta2  # Or v0.3.0 for development
+git checkout v0.3.0-beta3  # Or v0.3.0 for development
 
 # 2. Install dependencies exactly as CI does
 npm ci

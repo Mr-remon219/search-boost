@@ -27,7 +27,7 @@
 
 ---
 
-> **v0.3.0-beta2 · npm `beta` 测试通道**：小红书 / 知乎 / B站的专用 Chromium 原生正文读取、保守的讨论完整性判断与控制台交互修复；保留五平台检索、主题、额度卡片及 Jev / Laya 判断配置。使用 `search-boost@beta`，或固定 `search-boost@0.3.0-beta2` 安装。`@latest` 仍指向稳定版，不会自动安装本测试版。详见[发布说明](./docs/v0.3.0-beta2-release.md)。
+> **v0.3.0-beta3 · npm `beta` 测试通道**：新增 DeepSeek 原生联网搜索与自动 API 选择（启用一个 API 即可）；简化社区浏览器配置与扫码登录，复用隔离会话，提供进度、重发和恢复操作；保留保守的讨论完整性判断、主题、额度卡片及 Jev / Laya 判断配置。使用 `search-boost@beta`，或固定 `search-boost@0.3.0-beta3` 安装。`@latest` 仍指向稳定版，不会自动安装本测试版。详见[发布说明](./docs/v0.3.0-beta3-release.md)。
 
 ## 目录
 
@@ -129,7 +129,7 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
 ```bash
 # 安装本测试版（不改变 npm 稳定通道）
 npm install -g search-boost@beta
-# 固定版本：npm install -g search-boost@0.3.0-beta2
+# 固定版本：npm install -g search-boost@0.3.0-beta3
 
 search-boost       # 快速配置 / 首次接入向导
 search-boost tui   # 独立全屏控制中心
@@ -452,7 +452,7 @@ API Key 存放在由 SearchBoost 自己管理的凭据文件中，不写入提�
 
 ## CLI 命令参考（自动化与进阶）
 
-以下 CLI 参考对应 **0.3.0-beta2**。控制台和五平台社区功能请安装 `search-boost@beta` 或固定版本；`@latest` 指向稳定版。
+以下 CLI 参考对应 **0.3.0-beta3**。控制台和五平台社区功能请安装 `search-boost@beta` 或固定版本；`@latest` 指向稳定版。
 
 **DeepSeek Harness Desktop**：交互安装选中 DSH 后，可选择 Desktop / CLI / All，再为 Desktop 选择 **自动安装（默认）** 或 **本地目录接入**。自动方式通过注册表（含自定义安装目录）、默认目录及 PATH 找到桌面版内置命令；先启动一次再完全退出（包括托盘）。本地方式在其他接入（包括 Grok）结束后，最后显示当前包的完整持久目录，由用户粘贴到运行中的 Desktop「插件 → 添加插件」；TUI 等待只读检测，稳定完成后结束，Esc / Ctrl+C 或超时则报告未完成并保留其他结果。检测到保存的安装不代表运行中的插件已加载；没有内置启动器时会明确提示运行时未验证。临时 `_npx` 缓存不能作为本地链接来源。也可直接在应用输入 `search-boost` 从 npm 安装。自动安装/更新仍验证宿主解析器，遮蔽副本不能报成功；禁用状态保留，`--enable-dsh-bundle` 明确要求启用（本地方式由用户在 Desktop 启用）。所有权与验证限制见 [Desktop 接入说明](docs/dsh-desktop.md)。
 
@@ -521,7 +521,7 @@ search-boost uninstall -t cursor,claude -y  # 移除指定宿主的集成与注�
 # 1. 克隆仓库
 git clone https://github.com/Mr-remon219/search-boost.git
 cd search-boost
-git checkout v0.3.0-beta2  # 开发可使用 v0.3.0 分支
+git checkout v0.3.0-beta3  # 开发可使用 v0.3.0 分支
 
 # 2. 按 CI 的方式安装依赖
 npm ci
