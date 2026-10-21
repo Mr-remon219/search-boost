@@ -454,7 +454,9 @@ await test('narrow terminals preserve logical detail focus and restore the list 
     for (const line of frame.split('\n')) assert.ok(displayWidth(line) <= columns - 1)
     key(model, 'escape'); assert.equal(model.focus, 'detail')
     key(model, 'left'); assert.equal(model.focus, 'list'); assert.equal(model.current.id, id)
-    assert.match(renderConsole(model, { columns, rows: 24, color: false }), /API quota overview/)
+    // The quota-overview row is last; with eight engines it scrolls out of the
+    // narrow viewport. Assert the engines list itself renders with the selection.
+    assert.match(renderConsole(model, { columns, rows: 24, color: false }), /brave/)
   }
   key(model, 'return'); renderConsole(model, { columns: 120, rows: 24 })
   renderConsole(model, { columns: 80, rows: 24 }); assert.equal(model.focus, 'detail')

@@ -438,6 +438,8 @@ search-boost config keys --reset-base-url exa
 | AnySearch | `https://api.anysearch.com/v1` | `/search` |
 | TinyFish Search | `https://api.search.tinyfish.ai` | `/` |
 | DeepSeek Search | `https://api.deepseek.com/anthropic/v1` | `/messages` |
+| Firecrawl | `https://api.firecrawl.dev` | `/v2/search` |
+| Keenable | `https://api.keenable.ai` | `/v1/search` |
 
 Supply an API base, **not a full search endpoint**; gateway prefixes are preserved. Overrides live in `engines.<name>.baseUrl` in the keys file; existing key strings and routing flags are unchanged. Use only trusted API-compatible gateways: queries and configured keys are sent there (AnySearch remains anonymous in the free pool). Prefer HTTPS; HTTP is supported for local gateways. Credentials, query strings and fragments in URLs are rejected. Exa-free is unaffected. Changing a base invalidates the search cache partition.
 

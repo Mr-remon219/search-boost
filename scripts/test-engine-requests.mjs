@@ -27,15 +27,18 @@ try {
   const engines = engineRegistry({ exa: 'fixture-key', tavily: 'fixture-key', brave: 'fixture-key' })
 
   await test('custom API bases preserve prefixes, request auth and AnySearch free mode', async () => {
-    const names = ['tavily', 'exa', 'brave', 'anysearch']
+    const names = ['tavily', 'exa', 'brave', 'anysearch', 'firecrawl', 'keenable']
     const bases = Object.fromEntries(names.map((name) => [name, `https://gateway.example/${name}/v1/`]))
     const custom = engineRegistry(Object.fromEntries(names.map((name) => [name, 'fixture-key'])), null, bases)
+    const searchPath = { brave: 'web/search', firecrawl: 'v2/search', keenable: 'v1/search' }
     for (const name of names) {
       await custom[name].search('a & b', 3, { enginePool: 'api' })
-      assert.equal(lastCall().url.pathname, `/${name}/v1/${name === 'brave' ? 'web/search' : 'search'}`)
+      assert.equal(lastCall().url.pathname, `/${name}/v1/${searchPath[name] ?? 'search'}`)
       assert.equal(lastCall().url.hostname, 'gateway.example')
       if (name === 'tavily') assert.equal(lastCall().body.api_key, 'fixture-key')
       if (name === 'exa') assert.equal(lastCall().headers['x-api-key'], 'fixture-key')
+      if (name === 'firecrawl') assert.equal(lastCall().headers.authorization, 'Bearer fixture-key')
+      if (name === 'keenable') assert.equal(lastCall().headers['x-api-key'], 'fixture-key')
       if (name === 'brave') {
         assert.equal(lastCall().headers['x-subscription-token'], 'fixture-key')
         assert.equal(lastCall().url.searchParams.get('q'), 'a & b')
