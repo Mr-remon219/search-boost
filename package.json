@@ -68,7 +68,7 @@
     "test:x": "node scripts/test-x-pipeline.mjs",
     "test:community": "node scripts/test-community.mjs && node scripts/test-community-retrieval-quality.mjs && node scripts/test-community-native.mjs && node scripts/test-community-setup.mjs && node scripts/test-community-browser-lifecycle.mjs && node scripts/test-community-qr.mjs && node scripts/test-community-discussion.mjs && node scripts/test-community-platforms.mjs && node scripts/test-community-bridge.mjs && node scripts/test-community-worker.mjs && node scripts/test-community-review.mjs && node scripts/test-community-pipeline.mjs && node scripts/test-community-pages.mjs && node scripts/test-adaptive-community.mjs && node scripts/test-adaptive-community-review.mjs",
     "community:browser": "node scripts/community-browser-bridge.mjs",
-    "test:engines": "node scripts/test-engine-requests.mjs && node scripts/test-engine-base-urls.mjs && node scripts/test-tinyfish.mjs && node scripts/test-deepseek-search.mjs",
+    "test:engines": "node scripts/test-engine-requests.mjs && node scripts/test-engine-base-urls.mjs && node scripts/test-tinyfish.mjs && node scripts/test-deepseek-search.mjs && node scripts/test-firecrawl.mjs && node scripts/test-keenable.mjs",
     "test:xauth": "node scripts/test-xauth.mjs",
     "test:jev": "node scripts/test-jev.mjs",
     "test:jev-client": "node scripts/test-jev-client.mjs",

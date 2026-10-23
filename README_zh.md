@@ -374,6 +374,8 @@ TinyFish Search 是需要 key 的 API 引擎：在 TUI → 搜索引擎配置 �
 | anysearch | 1.004 | 1.042 | 0.951 |
 | tinyfish | 1.000 | 1.000 | 1.000 |
 | deepseek-search | 1.000 | 1.000 | 1.000 |
+| firecrawl | 1.000 | 1.000 | 1.000 |
+| keenable | 1.000 | 1.000 | 1.000 |
 
 权重是未经实测标注校准的冷启动默认值。DDG 使用此前权重的 60%，TinyFish 从中性权重开始，其他默认值保持不变，不重新归一化。`consensus-v2.1` 使用原始排名、相关来源组折扣和 max+log 共识，元数据修正最多 20%；质量分与列表选择分分离。零权重不投票，旧 `min_score` 阈值需重新校准。详见 [评分设计与迁移](docs/fusion-scoring.md) 和 [引擎池](docs/search-routing.md)。
 
@@ -490,6 +492,8 @@ search-boost install -t cursor --dry-run    # 仅演练安装过程，不写磁�
 search-boost config keys                    # 命令行配置/查看搜索引擎 Keys
 search-boost config keys --set anysearch=KEY  # 配置 AnySearch 密钥（ANYSEARCH_API_KEY）
 search-boost config keys --set tinyfish=KEY   # 配置 TinyFish Search（TINYFISH_API_KEY）
+search-boost config keys --set firecrawl=KEY  # 配置 Firecrawl（FIRECRAWL_API_KEY）
+search-boost config keys --set keenable=KEY   # 配置 Keenable（KEENABLE_API_KEY）
 search-boost config layer                   # 查看自动路由（旧层偏好不影响默认选择）
 search-boost config x --import-grok         # 从本机 Grok 客户端快速导入 X 凭据
 search-boost config jev                     # 配置 Jev 认知引擎端点与 Token

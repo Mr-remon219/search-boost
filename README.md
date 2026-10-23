@@ -374,6 +374,8 @@ TinyFish Search is a keyed API engine: use TUI â†’ Search engine configuration â
 | anysearch | 1.004 | 1.042 | 0.951 |
 | tinyfish | 1.000 | 1.000 | 1.000 |
 | deepseek-search | 1.000 | 1.000 | 1.000 |
+| firecrawl | 1.000 | 1.000 | 1.000 |
+| keenable | 1.000 | 1.000 | 1.000 |
 
 These are uncalibrated cold-start defaults, not measured quality rankings. DDG uses 60% of its previous weights; TinyFish starts neutral, and other defaults are unchanged without re-normalization. `consensus-v2.1` combines original ranks, related-provider discounts and max+log consensus, with metadata adjustments capped at 20%. Quality and list-selection scores stay separate; zero-weight sources cannot vote. Recalibrate old `min_score` thresholds. See [scoring and migration](docs/fusion-scoring.md) and [pool routing](docs/search-routing.md).
 
@@ -490,6 +492,8 @@ search-boost install -t cursor --dry-run    # Preview installation without writi
 search-boost config keys                    # Manage API keys from CLI
 search-boost config keys --set anysearch=KEY  # Configure the AnySearch key (ANYSEARCH_API_KEY)
 search-boost config keys --set tinyfish=KEY   # Configure TinyFish Search (TINYFISH_API_KEY)
+search-boost config keys --set firecrawl=KEY  # Configure Firecrawl (FIRECRAWL_API_KEY)
+search-boost config keys --set keenable=KEY   # Configure Keenable (KEENABLE_API_KEY)
 search-boost config layer                   # Inspect automatic routing (legacy layer writes do not affect it)
 search-boost config x --import-grok         # Import X credentials from local Grok login
 search-boost config jev                     # Configure Jev endpoint and token
