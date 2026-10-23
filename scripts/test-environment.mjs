@@ -74,6 +74,7 @@ try {
     // Fake credentials/settings must neither affect tests nor reach child commands.
     TAVILY_API_KEY: secret, BRAVE_API_KEY: secret, EXA_API_KEY: secret, ANYSEARCH_API_KEY: secret,
     XAI_API_KEY: `xai-${secret}`, TYPESAFE_API_KEY: secret, AI_GATEWAY_API_KEY: secret, DEEPSEEK_API_KEY: secret,
+    FIRECRAWL_API_KEY: secret, KEENABLE_API_KEY: secret,
     PI_SEARCH_TAVILY_KEY: secret, NPM_TOKEN: secret, GITHUB_TOKEN: secret,
     SEARCH_BOOST_LAYER: 'api', SEARCH_BOOST_UPGRADE_CWD: project, SEARCH_BOOST_UPGRADE_HANDOFF: 'sentinel-lock',
     SEARCH_BOOST_FUTURE_SETTING: 'sentinel', PI_SESSION_FILE: join(user, 'session.jsonl'),
@@ -125,7 +126,7 @@ import { readKeysFile } from ${JSON.stringify(new URL('../lib/keys.mjs', import.
 import { readJevConfig } from ${JSON.stringify(new URL('../lib/jev-config.mjs', import.meta.url).href)};
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-for (const key of ['SEARCH_BOOST_HOME','SEARCH_BOOST_KEYS_FILE','SEARCH_BOOST_FUTURE_SETTING','PI_CODING_AGENT_DIR','DSH_HOME','CODEX_HOME','CLAUDE_CONFIG_DIR','TAVILY_API_KEY','XAI_API_KEY','TYPESAFE_API_KEY','AI_GATEWAY_API_KEY','DEEPSEEK_API_KEY','NPM_TOKEN','GITHUB_TOKEN','HTTPS_PROXY','https_proxy']) assert.equal(process.env[key], undefined, key);
+for (const key of ['SEARCH_BOOST_HOME','SEARCH_BOOST_KEYS_FILE','SEARCH_BOOST_FUTURE_SETTING','PI_CODING_AGENT_DIR','DSH_HOME','CODEX_HOME','CLAUDE_CONFIG_DIR','TAVILY_API_KEY','XAI_API_KEY','TYPESAFE_API_KEY','AI_GATEWAY_API_KEY','DEEPSEEK_API_KEY','FIRECRAWL_API_KEY','KEENABLE_API_KEY','NPM_TOKEN','GITHUB_TOKEN','HTTPS_PROXY','https_proxy']) assert.equal(process.env[key], undefined, key);
 assert.equal(readKeysFile().tavily, undefined);
 assert.ok(!readJevConfig().apiKey);
 for (const command of ['grok','dsh','pi','claude','codex','cursor','antigravity']) {

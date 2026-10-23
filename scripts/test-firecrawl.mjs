@@ -71,10 +71,10 @@ try {
     assert.equal(lastCall().url.hostname, 'gateway.example')
   })
 
-  await test('documented v2 shape maps data.web rows and preserves provider positions', async () => {
+  await test('documented v2 shape maps data.web rows in provider order', async () => {
     respond = () => web(
-      { url: 'https://a.example/1', title: '  First   title ', description: 'first description', position: 1 },
-      { url: 'https://a.example/2', title: 'Second', description: 'second description', position: 2 },
+      { url: 'https://a.example/1', title: '  First   title ', description: 'first description' },
+      { url: 'https://a.example/2', title: 'Second', description: 'second description' },
     )
     const rows = await engine().search('alpha', 5)
     assert.deepEqual(rows, [
@@ -109,7 +109,7 @@ try {
     assert.deepEqual(rows.map((r) => r.url), ['https://d.example/1', 'https://d.example/2'])
   })
 
-  await test('published falls back to the news-style date field', async () => {
+  await test('published falls back from publishedDate to the provider relative date field', async () => {
     respond = () => web(
       { url: 'https://e.example/1', publishedDate: '2026-01-02T00:00:00Z' },
       { url: 'https://e.example/2', date: '2 days ago' },
