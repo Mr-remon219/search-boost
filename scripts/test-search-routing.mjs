@@ -60,12 +60,15 @@ globalThis.fetch = async (raw) => {
   return p ? Response.json({ author_name: 'Fixture author', author_url: p.url.split('/status/')[0], html: '<blockquote>alpha beta full developer community evidence</blockquote>' }) : new Response('', { status: 404 })
 }
 try {
-  await test('all nine exact ranking presets; no ranking-dependent engine selection', async () => {
+  await test('every ranking preset keeps its exact weights; no ranking-dependent engine selection', async () => {
     const priors = {
       balanced: { bing: 1, ddg: 1.05, yahoo: 1, 'exa-free': 1.1, tavily: 1.2, brave: 1.1, exa: 1.2, anysearch: 1.1 },
       research: { bing: .95, ddg: .9, yahoo: .85, 'exa-free': 1.3, tavily: 1.35, brave: 1, exa: 1.45, anysearch: 1.2 },
       fresh: { bing: 1.15, ddg: .95, yahoo: .9, 'exa-free': 1, tavily: 1.3, brave: 1.4, exa: 1.25, anysearch: 1 },
     }
+    // Engines added after the original priors are uncalibrated cold-start
+    // additions: neutral weight 1.0, excluded from the prior-derived check below.
+    const UNCALIBRATED = new Set(['tinyfish', 'deepseek-search', 'firecrawl', 'keenable'])
     for (const pool of Object.keys(ENGINE_POOLS)) for (const ranking of ['balanced','research','fresh']) {
       calls = []
       const out = await fused({ enginePool: pool, ranking })
@@ -74,7 +77,7 @@ try {
       // explicitly remove Yahoo, reduce DDG and add neutral TinyFish.
       const gm = Math.exp(Object.values(prior).reduce((sum, w) => sum + Math.log(w), 0) / 8)
       const wanted = Object.fromEntries(ENGINE_POOLS[pool].map((name) => [name,
-        ['tinyfish', 'deepseek-search'].includes(name) ? 1 : Math.sqrt(prior[name] / gm) * (name === 'ddg' ? .6 : 1)]))
+        UNCALIBRATED.has(name) ? 1 : Math.sqrt(prior[name] / gm) * (name === 'ddg' ? .6 : 1)]))
       for (const name of ENGINE_POOLS[pool]) assert.ok(Math.abs(RANKING_WEIGHTS[pool][ranking][name] - wanted[name]) < 1e-12)
       assert.deepEqual(out.effectiveWeights, RANKING_WEIGHTS[pool][ranking])
       assert.deepEqual(out.enginesUsed, ENGINE_POOLS[pool])

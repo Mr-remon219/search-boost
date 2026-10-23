@@ -56,7 +56,7 @@
 ## 核心特性
 
 - **多引擎并行检索与去重 (`fused_search`)**  
-  同时聚合多个搜索引擎的实时结果。内置**免密钥免费池**（Bing、DuckDuckGo、Exa-free、AnySearch）与**API 池**（Tavily、Brave、Exa、AnySearch、TinyFish、DeepSeek Search），自动执行跨引擎 URL 规范化去重、域名过滤与权重重排。
+  同时聚合多个搜索引擎的实时结果。内置**免密钥免费池**（Bing、DuckDuckGo、Exa-free、AnySearch）与**API 池**（Tavily、Brave、Exa、AnySearch、TinyFish、DeepSeek Search、Firecrawl、Keenable），自动执行跨引擎 URL 规范化去重、域名过滤与权重重排。
 - **高净度网页正文提取 (`fetch_page`)**  
   优先抓取原站降低等待；必要时使用同线路 curl 兼容兜底，Jina Reader 作为备用读取方式。自动剔除 CSS、JS 及广告噪音，支持 `focus` 关键词段落提炼，具备内存缓存与大体积熔断保护。
 - **五平台社区检索 (`community_search`)**
@@ -363,6 +363,8 @@ DeepSeek Search（`deepseek-search`）通过 Anthropic 兼容 API 调用原生�
 
 TinyFish Search 是需要 key 的 API 引擎：在 TUI → 搜索引擎配置 → TinyFish Search（文件夹模式：服务与凭据 → 搜索引擎配置）中配置，或使用 `TINYFISH_API_KEY`、`config keys --set tinyfish=KEY`。TUI 支持更换 / 删除 Key、自定义 / 恢复 Base URL 和脱敏状态；在“引擎启用 / 停用”中选择 `tinyfish`，不会因保存 Key 静默扩张已有白名单。TinyFish 默认加入 api/hybrid，不加入 free 池（显式 `engines` 仍可覆盖池选择）。服务价格与限额可能变化，钱包余额不等于剩余搜索次数；每个查询变体各计一次；不自动翻页或启用内嵌 Fetch。请求沿用服务默认 US/en 地区/语言。Yahoo 已移除，显式 Yahoo 引擎/权重输入会被拒绝。
 
+Firecrawl 与 Keenable 是需要 key 的 API 引擎：使用 `FIRECRAWL_API_KEY` / `KEENABLE_API_KEY`，或 `config keys --set firecrawl=KEY` / `--set keenable=KEY` 配置；已有显式白名单时需在引擎配置中启用。两者默认加入 api/hybrid，不加入 free 池，三个排序预设权重均为中性值 **1.0**，可用 `engine_weights` 单次覆盖。Firecrawl 使用 `POST /v2/search`（Bearer）并读取 `data.web[]`；Keenable 使用 `POST /v1/search`（`X-API-Key`）并发送文档规定的 `max_results`（1–50）。两者均按次计费。二者都不把 `recency` 转成服务端时间过滤，也未声明原生域名过滤，因此 `include_domains` 走 `site:` 提示加客户端过滤。Firecrawl 结果默认不带发布时间（除非网关启用抓取），故其 freshness 打分恒中立；Keenable 返回 ISO 8601 的 `published_at`，可正常参与 freshness。两者都不提供额度查询，控制台显示为不支持。返回 200 但结构异常或业务失败时按引擎失败上报，绝不当作空结果。
+
 | 引擎 | balanced | research | fresh |
 | --- | ---: | ---: | ---: |
 | bing | 0.957 | 0.927 | 1.020 |
@@ -374,6 +376,8 @@ TinyFish Search 是需要 key 的 API 引擎：在 TUI → 搜索引擎配置 �
 | anysearch | 1.004 | 1.042 | 0.951 |
 | tinyfish | 1.000 | 1.000 | 1.000 |
 | deepseek-search | 1.000 | 1.000 | 1.000 |
+| firecrawl | 1.000 | 1.000 | 1.000 |
+| keenable | 1.000 | 1.000 | 1.000 |
 
 权重是未经实测标注校准的冷启动默认值。DDG 使用此前权重的 60%，TinyFish 从中性权重开始，其他默认值保持不变，不重新归一化。`consensus-v2.1` 使用原始排名、相关来源组折扣和 max+log 共识，元数据修正最多 20%；质量分与列表选择分分离。零权重不投票，旧 `min_score` 阈值需重新校准。详见 [评分设计与迁移](docs/fusion-scoring.md) 和 [引擎池](docs/search-routing.md)。
 
@@ -438,6 +442,8 @@ search-boost config keys --reset-base-url exa
 | AnySearch | `https://api.anysearch.com/v1` | `/search` |
 | TinyFish Search | `https://api.search.tinyfish.ai` | `/` |
 | DeepSeek Search | `https://api.deepseek.com/anthropic/v1` | `/messages` |
+| Firecrawl | `https://api.firecrawl.dev` | `/v2/search` |
+| Keenable | `https://api.keenable.ai` | `/v1/search` |
 
 填写 API 基础地址，**不要填写完整搜索端点**；网关路径前缀会保留。地址存放在 keys 文件的 `engines.<name>.baseUrl`，兼容现有密钥字符串和路由开关。请仅使用可信、兼容对应引擎 API 的网关：搜索词与已配置密钥会发送到该地址（AnySearch 在 free 池仍不发送密钥）。推荐 HTTPS，也支持本地网关的 HTTP；拒绝包含用户名密码、查询参数或片段的地址。不影响 Exa-free；地址变更后不会复用旧地址的搜索缓存。
 
@@ -488,6 +494,8 @@ search-boost install -t cursor --dry-run    # 仅演练安装过程，不写磁�
 search-boost config keys                    # 命令行配置/查看搜索引擎 Keys
 search-boost config keys --set anysearch=KEY  # 配置 AnySearch 密钥（ANYSEARCH_API_KEY）
 search-boost config keys --set tinyfish=KEY   # 配置 TinyFish Search（TINYFISH_API_KEY）
+search-boost config keys --set firecrawl=KEY  # 配置 Firecrawl（FIRECRAWL_API_KEY）
+search-boost config keys --set keenable=KEY   # 配置 Keenable（KEENABLE_API_KEY）
 search-boost config layer                   # 查看自动路由（旧层偏好不影响默认选择）
 search-boost config x --import-grok         # 从本机 Grok 客户端快速导入 X 凭据
 search-boost config jev                     # 配置 Jev 认知引擎端点与 Token
