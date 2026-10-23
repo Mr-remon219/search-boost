@@ -136,6 +136,37 @@ try {
     })
   })
 
+  await test('a success envelope without a usable data shape is a failure, not an empty result', async () => {
+    // A provider/gateway that answers 200 but omits the result container must not
+    // be counted as a successful empty retrieval. Legitimate empty shapes stay empty.
+    for (const payload of [
+      { success: true },
+      { success: true, data: null },
+      { success: true, data: 'not-an-array' },
+      { success: true, data: { news: [{ url: 'https://n.example/1' }] } },
+      {},
+    ]) {
+      respond = () => Response.json(payload)
+      await assert.rejects(engine().search('alpha', 3), (err) => {
+        assert.equal(err.message, 'firecrawl: invalid or unsuccessful response', `payload ${JSON.stringify(payload)}`)
+        return true
+      })
+    }
+    for (const payload of [{ success: true, data: [] }, { success: true, data: { web: [] } }]) {
+      respond = () => Response.json(payload)
+      assert.deepEqual(await engine().search('alpha', 3), [], `payload ${JSON.stringify(payload)} stays a valid empty result`)
+    }
+  })
+
+  await test('a malformed success envelope reaches fused_search as a provider error', async () => {
+    writeKeysFile({ firecrawl: 'fixture-key' })
+    respond = () => Response.json({ success: true })
+    const failed = await runFused({ query: 'alpha', enginePool: 'api', engineList: ['firecrawl'], complexity: 'simple' })
+    assert.equal(failed.engineStats.firecrawl.errors, 1)
+    assert.equal(failed.engineStats.firecrawl.successes, 0)
+    assert.match(failed.warnings.join(' '), /firecrawl: 1\/1 attempts failed/)
+  })
+
   await test('HTTP errors and malformed JSON stay safe and never echo bodies', async () => {
     for (const status of [400, 401, 403, 429, 500]) {
       respond = () => new Response('SECRET error body', { status })

@@ -14,7 +14,12 @@ __setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...a
 const calls = []
 globalThis.fetch = async (input, init = {}) => {
   calls.push({ url: new URL(String(input)), body: init.body ? JSON.parse(init.body) : null, headers: init.headers })
-  return new Response(JSON.stringify({ results: [], web: { results: [] }, code: 0, data: { results: [{ title: '', url: 'https://example.org/doc', snippet: 'summary', content: 'body' }] } }), {
+  // One body must satisfy every adapter shape under test: AnySearch reads
+  // data.results, Firecrawl reads data.web.
+  return new Response(JSON.stringify({ results: [], web: { results: [] }, code: 0, data: {
+    results: [{ title: '', url: 'https://example.org/doc', snippet: 'summary', content: 'body' }],
+    web: [{ title: 'Firecrawl row', url: 'https://firecrawl.example/1', description: 'fixture' }],
+  } }), {
     status: 200,
     headers: { 'content-type': 'application/json' },
   })

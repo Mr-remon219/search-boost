@@ -363,6 +363,8 @@ DeepSeek Search（`deepseek-search`）通过 Anthropic 兼容 API 调用原生�
 
 TinyFish Search 是需要 key 的 API 引擎：在 TUI → 搜索引擎配置 → TinyFish Search（文件夹模式：服务与凭据 → 搜索引擎配置）中配置，或使用 `TINYFISH_API_KEY`、`config keys --set tinyfish=KEY`。TUI 支持更换 / 删除 Key、自定义 / 恢复 Base URL 和脱敏状态；在“引擎启用 / 停用”中选择 `tinyfish`，不会因保存 Key 静默扩张已有白名单。TinyFish 默认加入 api/hybrid，不加入 free 池（显式 `engines` 仍可覆盖池选择）。服务价格与限额可能变化，钱包余额不等于剩余搜索次数；每个查询变体各计一次；不自动翻页或启用内嵌 Fetch。请求沿用服务默认 US/en 地区/语言。Yahoo 已移除，显式 Yahoo 引擎/权重输入会被拒绝。
 
+Firecrawl 与 Keenable 是需要 key 的 API 引擎：使用 `FIRECRAWL_API_KEY` / `KEENABLE_API_KEY`，或 `config keys --set firecrawl=KEY` / `--set keenable=KEY` 配置；已有显式白名单时需在引擎配置中启用。两者默认加入 api/hybrid，不加入 free 池，三个排序预设权重均为中性值 **1.0**，可用 `engine_weights` 单次覆盖。Firecrawl 使用 `POST /v2/search`（Bearer）并读取 `data.web[]`；Keenable 使用 `POST /v1/search`（`X-API-Key`）并发送文档规定的 `max_results`（1–50）。两者均按次计费。二者都不把 `recency` 转成服务端时间过滤，也未声明原生域名过滤，因此 `include_domains` 走 `site:` 提示加客户端过滤。Firecrawl 结果默认不带发布时间（除非网关启用抓取），故其 freshness 打分恒中立；Keenable 返回 ISO 8601 的 `published_at`，可正常参与 freshness。两者都不提供额度查询，控制台显示为不支持。返回 200 但结构异常或业务失败时按引擎失败上报，绝不当作空结果。
+
 | 引擎 | balanced | research | fresh |
 | --- | ---: | ---: | ---: |
 | bing | 0.957 | 0.927 | 1.020 |
