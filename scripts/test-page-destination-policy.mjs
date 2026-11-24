@@ -19,7 +19,7 @@ try {
   }), error => error.kind === 'blocked_address')
   assert.equal(requests, 0)
   await assert.rejects(guardedFetch(`http://rebind.invalid:${port}/`, {
-    env: { http_proxy: `http://127.0.0.1:${port}` },
+    env: { SEARCH_BOOST_TRUSTED_PROXY: '1', SEARCH_BOOST_PROXY_DIRECT_FALLBACK: '1', http_proxy: `http://127.0.0.1:${port}` },
     lookupImpl: (_host, _opts, cb) => cb(null, [{ address: '127.0.0.1', family: 4 }]),
   }), error => error.kind === 'blocked_address')
   assert.equal(proxyAttempts, 5, 'retry budget exhausted before validated direct fallback')
