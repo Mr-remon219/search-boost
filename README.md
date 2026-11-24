@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.0--beta1-orange?style=flat-square" alt="version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.0--beta3-orange?style=flat-square" alt="version"></a>
   <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm version"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
@@ -70,7 +70,7 @@
 - **Unified Core Across All Host Ecosystems**  
   A single, host-neutral core runtime powering standard Model Context Protocol (MCP) servers, alongside native extensions for Pi and Cordis plugin bundles for DeepSeek Harness (DSH).
 - **Zero-Config Onboarding & Strict Security**  
-  **Requires zero API keys to start** using the free engine pool. Sensitive credentials are stored as plaintext in local private configs with restricted file permissions (POSIX `0600`); this is not encryption at rest. Uses local networking and proxy DNS, with bounded requests and explicit fallback. Configured credentials are kept out of model prompts and diagnostic output.
+  **Requires zero API keys to start** using the free engine pool. Sensitive credentials are stored as plaintext in local private configs with restricted file permissions (POSIX `0600`); this is not encryption at rest. Page fetches block local/private targets and pin validated direct DNS; configured proxies are trusted to enforce remote-DNS destination policy. Requests remain bounded with explicit fallback. Configured credentials are kept out of model prompts and diagnostic output.
 
 ---
 
@@ -578,3 +578,7 @@ Regression suites use isolated state, loopback fixtures and process doubles; no 
 ## License
 
 This project is licensed under the [MIT License](./LICENSE).
+
+### Configuration trust
+
+API keys and custom engine endpoints are read only from user configuration or explicit environment overrides. Workspace `.search-boost-keys.json` files are not auto-loaded. To intentionally trust one, set `SEARCH_BOOST_KEYS_FILE` to its path; this authorizes both its keys and endpoints. Review the file first.

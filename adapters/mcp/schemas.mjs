@@ -8,6 +8,7 @@ import {
   ADAPTIVE_OUTPUT_SCHEMA,
   ADAPTIVE_V5_OUTPUT_SCHEMA, ADAPTIVE_V6_OUTPUT_SCHEMA,
 } from '../../lib/search/screening/schema.js'
+import { PLATFORM_DATA_SCHEMA } from '../../lib/community/result-schema.mjs'
 import { FUSED_PLATFORM_OPTIONS_SCHEMA } from '../../lib/community/fused-input.mjs'
 import { jsonSchemaToZod, projectObjectUnion } from '../../lib/search/screening/zod-schema.js'
 
@@ -43,11 +44,11 @@ export const fusedSearchOutput = {
   enginesUsed: z.array(z.string()).optional(),
   enginePool: z.enum(['free', 'api', 'hybrid']),
   ranking: z.enum(['balanced', 'research', 'fresh']),
-  effectiveWeights: z.record(z.number()),
+  effectiveWeights: z.record(z.string(), z.number()),
   communityUsed: z.boolean(),
   communityPlatforms: z.array(z.string()).optional(),
   communityChannels: z.array(z.object({}).passthrough()).optional(),
-  engineStats: z.record(z.object({
+  engineStats: z.record(z.string(), z.object({
     used: z.boolean(),
     errors: z.number(),
     attempts: z.number().optional(),
@@ -60,11 +61,13 @@ export const fusedSearchOutput = {
     url: z.string(),
     domain: z.string(),
     snippet: z.string(),
+    content: z.string().optional(),
+    community_data: jsonSchemaToZod(PLATFORM_DATA_SCHEMA).optional(),
     score: z.number(),
     scoreVersion: z.string(),
     rankScore: z.number(), evidenceScore: z.number(), consensusBoost: z.number(),
     metadataDelta: z.number(), selectionScore: z.number().optional(),
-    engineRanks: z.record(z.number()), contributions: z.record(z.number()),
+    engineRanks: z.record(z.string(), z.number()), contributions: z.record(z.string(), z.number()),
     provenance: z.array(z.object({ engine: z.string(), rank: z.number(), variant: z.string().optional(), url: z.string(), title: z.string().optional(), snippet: z.string().optional(), published: z.string().nullable().optional(), platform: z.string().optional(), provider: z.string().optional(), backend: z.string().optional(), retrieval_mode: z.string().optional(), content_type: z.string().optional() })),
     dateStatus: z.enum(['known', 'unknown', 'conflicting']),
     engines: z.array(z.string()),
@@ -106,17 +109,17 @@ export const searchStatsOutput = {
   layer: z.string(),
   cacheHits: z.number(),
   cacheMisses: z.number(),
-  tierCounts: z.record(z.number()),
+  tierCounts: z.record(z.string(), z.number()),
   keyedEngines: z.object({
     configured: z.number(),
     enabled: z.number(),
     total: z.number(),
     enabledNames: z.array(z.string()),
   }),
-  engines: z.record(z.boolean()),
+  engines: z.record(z.string(), z.boolean()),
   xOfficial: z.boolean(),
   xSource: z.string(),
-  recent: z.array(z.record(z.unknown())),
+  recent: z.array(z.record(z.string(), z.unknown())),
 }
 
 /**

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import piExtension from '../adapters/pi/index.js'
 import { clearAllCaches, runXSearch, invalidateSearchCaches } from '../lib/runtime.mjs'
+import { __setFixtureAllowlistForTests } from '../lib/search/ssrf.js'
 import { fetchPage, makePageCache } from '../lib/search/fetch.js'
 import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
 
@@ -10,6 +11,7 @@ const tools = new Map()
 piExtension({ registerTool: t => tools.set(t.name, t), registerCommand() {}, on() {} })
 const originalFetch = globalThis.fetch, OriginalDate = globalThis.Date
 const undici = await import('undici')
+__setFixtureAllowlistForTests(['127.0.0.1'])
 let server
 try {
   process.env.XAI_API_KEY = 'xai-fixture-not-a-real-secret'

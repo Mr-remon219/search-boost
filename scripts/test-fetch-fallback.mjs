@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fetchPage, makePageCache } from '../lib/search/fetch.js'
-import { guardedFetch } from '../lib/search/ssrf.js'
+import { guardedFetch, __setFixtureAllowlistForTests } from '../lib/search/ssrf.js'
 import { curlPageFetch, __setCurlSpawnForTests } from '../lib/search/curl-fetch.mjs'
 import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
 import { NET_ERROR_KINDS } from '../lib/search/net-policy.mjs'
@@ -20,6 +20,7 @@ import { NET_ERROR_KINDS } from '../lib/search/net-policy.mjs'
 const envNames = Object.keys(process.env).filter((k) => /^(http|https|all|no)_proxy$/i.test(k))
 const env = Object.fromEntries(envNames.map((k) => [k, process.env[k]]))
 for (const k of envNames) delete process.env[k]
+__setFixtureAllowlistForTests(['127.0.0.1'])
 const undici = await import('undici')
 const direct = { route: 'direct', proxyUrl: null }
 const prose = 'Useful documentation with enough substance for extraction. '.repeat(20)

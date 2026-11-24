@@ -243,27 +243,27 @@ try {
   // -------------------------------------------------------------------------
 
   await test('IPv4-mapped IPv6 literals are judged by their IPv4 value', () => {
-    // Legacy classification remains available, but normal page URL checks no longer block IPs.
+    // Static and DNS checks use the same private-address policy.
     __setFixtureAllowlistForTests(null)
     try {
       assert.equal(isBlockedIp('::ffff:127.0.0.1'), true)
       assert.equal(isBlockedIp('::ffff:10.0.0.1'), true)
       assert.equal(isBlockedIp('::ffff:169.254.169.254'), true)
       assert.equal(isBlockedIp('::ffff:93.184.216.34'), false)
-      assert.ok(assertStaticHttpUrl('http://[::ffff:127.0.0.1]/'))
-      assert.ok(assertStaticHttpUrl('http://127.0.0.1/'))
-      assert.ok(assertStaticHttpUrl('http://[::1]/'))
+      assert.throws(() => assertStaticHttpUrl('http://[::ffff:127.0.0.1]/'))
+      assert.throws(() => assertStaticHttpUrl('http://127.0.0.1/'))
+      assert.throws(() => assertStaticHttpUrl('http://[::1]/'))
     } finally {
       __setFixtureAllowlistForTests(['127.0.0.1', '::1'])
     }
   })
 
-  await test('URL checks reject credentials and non-HTTP schemes, not internal destinations', () => {
+  await test('URL checks reject credentials, non-HTTP schemes and internal destinations', () => {
     assert.throws(() => assertStaticHttpUrl('http://user:pass@example.com/'), /credentials/)
     assert.throws(() => assertStaticHttpUrl('file:///etc/passwd'), /http\(s\)/)
-    assert.ok(assertStaticHttpUrl('http://localhost/'))
-    assert.ok(assertStaticHttpUrl('http://metadata.google.internal/'))
-    assert.ok(assertStaticHttpUrl('http://svc.internal/'))
+    assert.throws(() => assertStaticHttpUrl('http://localhost/'))
+    assert.throws(() => assertStaticHttpUrl('http://metadata.google.internal/'))
+    assert.throws(() => assertStaticHttpUrl('http://svc.internal/'))
     // A normal public name passes the static check with no DNS involved: a lookup
     // for `.invalid` could never succeed, so passing proves none was attempted.
     assert.ok(assertStaticHttpUrl('http://this-name-cannot-resolve.invalid/'), 'static checks must not need DNS')
@@ -281,8 +281,8 @@ try {
     assert.deepEqual(allowed, [{ address: '198.18.0.5', family: 4 }])
     assert.equal(trustedTunMode({ SEARCH_BOOST_TRUSTED_TUN: '1' }), true)
     assert.equal(trustedTunMode({}), false)
-    // The page URL policy delegates fake-IP routing to the local network as well.
-    assert.ok(assertStaticHttpUrl('http://198.18.0.5/'))
+    // A literal synthetic address is never treated as verified public DNS.
+    assert.throws(() => assertStaticHttpUrl('http://198.18.0.5/'))
   })
 
   // -------------------------------------------------------------------------
@@ -664,14 +664,14 @@ try {
     }
   })
 
-  await test('page fetching permits loopback without a fixture allowlist or DNS pre-check', async () => {
+  await test('page fetching rejects loopback without a fixture allowlist', async () => {
     const origin = await startRecorder()
     __setFixtureAllowlistForTests(null)
     try {
-      const res = await guardedFetch(`http://127.0.0.1:${origin.port}/`, {
+      await assert.rejects(guardedFetch(`http://127.0.0.1:${origin.port}/`, {
         env: {}, lookupImpl: () => { throw new Error('no target pre-check') },
-      })
-      assert.match(await res.text(), /fixture body/)
+      }), err => err.kind === NET_ERROR_KINDS.blockedAddress)
+      assert.equal(origin.requests.length, 0)
     } finally { __setFixtureAllowlistForTests(['127.0.0.1', '::1']); await origin.close() }
   })
 
@@ -743,13 +743,13 @@ try {
     }
     try {
       const cache = makePageCache()
-      // `.invalid` can never resolve: succeeding proves no local lookup happened.
-      const res = await fetchPage('http://reader-only.invalid/page', undefined, cache)
+      // A public literal needs no DNS; the injected transport never opens a socket.
+      const res = await fetchPage('http://93.184.216.34/page', undefined, cache)
       assert.equal(seen.length, 2)
-      assert.equal(seen[0], 'http://reader-only.invalid/page')
+      assert.equal(seen[0], 'http://93.184.216.34/page')
       assert.match(seen[1], /^https:\/\/r\.jina\.ai\//, 'the request goes to the reader service')
       assert.ok(
-        seen[1].includes(encodeURIComponent('http://reader-only.invalid/page')),
+        seen[1].includes(encodeURIComponent('http://93.184.216.34/page')),
         `the reader must receive the target URL: ${seen[0]}`,
       )
       assert.equal(res.via, 'jina')

@@ -43,7 +43,8 @@
     "LICENSE",
     "scripts/build-plugin.mjs",
     "scripts/sync-grok-plugin.mjs",
-    "scripts/community-browser-bridge.mjs"
+    "scripts/community-browser-bridge.mjs",
+    "SECURITY.md"
   ],
   "scripts": {
     "start": "node cli.mjs serve",
@@ -107,8 +108,8 @@
     "jsqr": "1.4.0",
     "pngjs": "7.0.0",
     "qrcode": "1.5.4",
-    "undici": "^6.28.1",
-    "zod": "^3.25.76"
+    "undici": "^6.29.1",
+    "zod": "^4.6.7"
   },
   "overrides": {
     "proxy-addr": "^2.0.8"

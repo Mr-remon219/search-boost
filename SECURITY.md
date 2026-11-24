@@ -13,3 +13,9 @@ Include the exact package version/commit, OS/Node/host versions, affected compon
 The active development branch/package line is maintained on a best-effort basis; no response-time SLA or historical-version support is implied. Security fixes require review, relevant regression evidence and the actual package gate before an explicitly authorized release. CI does not publish automatically.
 
 The exact dependency lock is audited at moderate severity and above. Audit/tool/network failures are not passing security results. Exceptions require a separately reviewed advisory/version-specific rationale, reachability evidence, compensating controls, owner and expiry; there are no blanket ignored advisories. Review pinned action versions monthly and immediately on relevant security notices. See [the CI/CD engineering standard](docs/ci-cd-standard.md) for permissions, artifact retention and verification limits.
+
+## Network and configuration boundaries
+
+Page URL checks reject local hostnames and private/loopback/link-local literals on every hop. Direct page requests validate all DNS answers and pin the connection to that snapshot, including proxy-to-direct fallback and curl. Explicit trusted-TUN mode delegates synthetic-address routing to the local TUN. An explicitly configured HTTP(S) proxy resolves remote names itself and must enforce destination policy there; local pre-resolution cannot prove a proxy's eventual destination. API/judgment service endpoints are user-authorized configuration, not arbitrary page URLs.
+
+Workspace key/endpoint files are not discovered automatically. `SEARCH_BOOST_KEYS_FILE` explicitly trusts the selected file, including custom destinations; environment API keys can be sent to those destinations. Review any selected file and use only trusted configuration.
