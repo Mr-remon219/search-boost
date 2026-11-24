@@ -263,7 +263,10 @@ try {
   assert(walk.logs.some((l) => l.includes('Built-in web search')), 'Native web search prints the real per-agent state')
   assert(walk.printed.some((line) => line.includes('search-boost') && line.includes('mcpServers')), 'Print MCP snippet writes a real snippet')
   const targetPrompts = walk.records.filter((r) => r.message === 'Which agents should search-boost configure?')
-  assert.equal(targetPrompts.length, 3, 'Setup, Install and Uninstall each reach the real target selection')
+  const uninstallPrompts = walk.records.filter((r) => r.message === 'Which host integrations do you want to uninstall?')
+  assert.equal(targetPrompts.length, 2, 'Setup and Install retain the configure target selection')
+  assert.equal(uninstallPrompts.length, 1, 'Uninstall reaches its distinct removal target selection')
+  assert.deepEqual(uninstallPrompts[0].options.map(o => o.value), targetPrompts[0].options.map(o => o.value), 'changing the removal title does not change target choices')
   assert(targetPrompts[0].options.some((o) => o.value === 'cursor') && targetPrompts[0].options.some((o) => o.value === 'dsh'))
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'the whole dry-run walk stays read-only')
 
