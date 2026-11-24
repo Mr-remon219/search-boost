@@ -8,8 +8,8 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.0--beta3-orange?style=flat-square" alt="version"></a>
-  <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.0%20prepared-orange?style=flat-square" alt="0.3.0 prepared, not published"></a>
+  <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm package"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/architecture-unified%20core-8a2be2?style=flat-square" alt="Architecture"></a>
@@ -27,7 +27,7 @@
 
 ---
 
-> **v0.3.0-beta3 · npm `beta` channel**: DeepSeek native search, automatic API selection (one enabled API is enough), and streamlined community setup with reusable isolated browsers, QR login, progress and recovery controls; retains conservative discussion completeness, themes, quota cards and Jev / Laya profiles. Install with `search-boost@beta` or pin `search-boost@0.3.0-beta3`. `@latest` remains the stable channel and does not opt into this beta. See [release notes](./docs/v0.3.0-beta3-release.md).
+> **0.3.0 prepared locally, not published**: Includes Firecrawl/Keenable, the MCP community output fix, dependency updates, and safer network defaults. The checkout and tarball use version 0.3.0. This does not claim npm availability or a changed registry tag. Use the local tarball before publication. Historical beta notes remain unchanged. See [0.3.0 preparation notes](./docs/v0.3.0-release.md).
 
 ## Table of Contents
 
@@ -127,9 +127,10 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
 ### 1. Install & Launch the Dashboard
 
 ```bash
-# Install this beta (does not change the npm stable channel)
-npm install -g search-boost@beta
-# Reproducible alternative: npm install -g search-boost@0.3.0-beta3
+# From the prepared source checkout; this version is not published yet
+npm pack
+npm install -g ./search-boost-0.3.0.tgz
+# Only after publication: npm install -g search-boost@0.3.0
 
 search-boost       # Quick setup / configuration wizard
 search-boost tui   # Independent full-screen control center
@@ -158,10 +159,10 @@ The switches are independent and also accept `true`. Set accepted values in your
 
 ### 1. Routine Updates: npm First, Then Refresh Integrations
 
-Use `@beta` to follow this prerelease series, or `@latest` to return to the stable release. Installing either channel replaces your local global executable; the registry channels remain independent. Use npm to update the package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
+Use the local tarball below for this 0.3.0 preparation. `@beta` and `@latest` select already-published prerelease and stable channels, not this unpublished candidate. Installation replaces your local global executable. Use npm to update the package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
 
 ```bash
-npm install -g search-boost@beta --prefer-online
+npm install -g ./search-boost-0.3.0.tgz
 search-boost
 # → Manage agent integrations → Refresh existing integrations → select scopes
 # Or refresh all existing integrations:
@@ -471,7 +472,7 @@ API keys use a credential store this tool owns. They are not written into prompt
 
 ## CLI Command Reference (Headless & CI)
 
-This CLI reference describes **0.3.0-beta3**. Install `search-boost@beta` (or the exact version) for the console and five-platform community features; `@latest` selects the stable release.
+This CLI reference describes the prepared **0.3.0** package. Use its local tarball before publication. `@latest` selects an already-published stable release, not necessarily this candidate.
 
 **DeepSeek Harness Desktop:** interactive installation offers Desktop / CLI / All, then **Automatic (default)** or **Local directory** for Desktop. Automatic setup retains bundled-command discovery through Windows installer registry metadata (including custom destinations), default directories and PATH; launch Desktop once, then fully quit it including its tray. Local setup runs last, after all other integrations including Grok, and displays the current durable package directory to paste into the running app's Plugins → Add plugin dialog. The TUI observes saved installation read-only and finishes after stable verification; Escape / Ctrl+C or timeout marks Desktop unfinished while retaining earlier results. Saved installation is not proof of live activation; missing bundled launchers explicitly leave runtime verification unknown. Temporary `_npx` paths are refused as persistent local links. The app also accepts `search-boost` for a registry install. Automatic install/update still verifies the owning resolver and rejects shadow copies. Disabled bundles stay disabled unless explicitly requested; local setup with `--enable-dsh-bundle` waits for the user to enable it in Desktop. See [Desktop integration](docs/dsh-desktop.md) for ownership and validation limits.
 
@@ -500,7 +501,7 @@ search-boost install -t dsh --profile web   # Connect to DeepSeek Harness CLI we
 search-boost install -t dsh --dsh-surface desktop -y # Desktop bundled command + local package
 search-boost install -t dsh --dsh-surface all -y     # Manage Desktop and CLI independently
 # No global search-boost / dsh / pnpm required (Windows, Linux, macOS):
-npx --yes search-boost@beta install -t dsh --profile web -y
+npx --yes --package ./search-boost-0.3.0.tgz search-boost install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # Preview installation without writing files
 
 # ----------------- Configuration Management -----------------
@@ -542,7 +543,7 @@ Use this path to contribute to SearchBoost, or to test code that is not in a pub
 # 1. Clone the repository
 git clone https://github.com/Mr-remon219/search-boost.git
 cd search-boost
-git checkout v0.3.0-beta3  # Or v0.3.0 for development
+git checkout v0.3.0  # Development branch, not a 0.3.0 release tag
 
 # 2. Install dependencies exactly as CI does
 npm ci

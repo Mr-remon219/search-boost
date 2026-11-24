@@ -8,8 +8,8 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.0--beta3-orange?style=flat-square" alt="version"></a>
-  <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.0%20prepared-orange?style=flat-square" alt="0.3.0 prepared, not published"></a>
+  <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm package"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/architecture-unified%20core-8a2be2?style=flat-square" alt="Architecture"></a>
@@ -27,7 +27,7 @@
 
 ---
 
-> **v0.3.0-beta3 · npm `beta` 测试通道**：新增 DeepSeek 原生联网搜索与自动 API 选择（启用一个 API 即可）；简化社区浏览器配置与扫码登录，复用隔离会话，提供进度、重发和恢复操作；保留保守的讨论完整性判断、主题、额度卡片及 Jev / Laya 判断配置。使用 `search-boost@beta`，或固定 `search-boost@0.3.0-beta3` 安装。`@latest` 仍指向稳定版，不会自动安装本测试版。详见[发布说明](./docs/v0.3.0-beta3-release.md)。
+> **0.3.0 本地正式版准备，尚未发布**：包含 Firecrawl/Keenable、MCP 社区输出兼容、依赖与网络默认修复。当前 checkout 和 tarball 的版本为 0.3.0，不代表 npm 上已存在该版本或任何 tag 已改变。发布前请使用本地 tarball；历史 beta 文档保留原事实。详见[0.3.0 准备说明](./docs/v0.3.0-release.md)。
 
 ## 目录
 
@@ -127,9 +127,10 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
 ### 1. 全局安装与启动控制台
 
 ```bash
-# 安装本测试版（不改变 npm 稳定通道）
-npm install -g search-boost@beta
-# 固定版本：npm install -g search-boost@0.3.0-beta3
+# 从已准备的源码 checkout 打包；当前尚未发布到 npm
+npm pack
+npm install -g ./search-boost-0.3.0.tgz
+# 仅在实际发布后可用：npm install -g search-boost@0.3.0
 
 search-boost       # 快速配置 / 首次接入向导
 search-boost tui   # 独立全屏控制中心
@@ -158,10 +159,10 @@ search-boost tui   # 独立全屏控制中心
 
 ### 1. 日常更新：npm 更新软件包，再刷新接入
 
-使用 `@beta` 跟进本测试系列，使用 `@latest` 返回稳定版。两者安装会替换本机全局命令，但 npm 的两个发布通道相互独立。软件包由 npm 更新；TUI 不自行更新 SearchBoost。安装、刷新与移除位于「管理 Agent 接入」（文件夹模式：安装与接入 → 管理 Agent 接入）。
+当前 0.3.0 为本地发布准备，请安装下方本地 tarball。`@beta` 与 `@latest` 分别选择 registry 已发布的测试/稳定通道，不代表本候选已上线。安装会替换本机全局命令。软件包由 npm 更新；TUI 不自行更新 SearchBoost。安装、刷新与移除位于「管理 Agent 接入」（文件夹模式：安装与接入 → 管理 Agent 接入）。
 
 ```bash
-npm install -g search-boost@beta --prefer-online
+npm install -g ./search-boost-0.3.0.tgz
 search-boost
 # → 管理 Agent 接入 → 刷新已有接入 → 选择实际范围
 # 或刷新全部已有接入：
@@ -195,7 +196,7 @@ search-boost
 
 ## 交互式控制台 (TUI)
 
-**两套界面并行**：`search-boost` 是侧重直接修改的快速配置 TUI（保留原有 Clack）；`search-boost tui` 是侧重状态与配置详情的独立全屏控制台（固定侧栏、配置列表、宽屏详情区、原地表单与确认）。支持 `--dry-run`、`--no-color` 和只读 `--preview`。Tab / Shift+Tab 切换三栏、方向键导航、1–8 跳分类、Enter 从列表进入详情（再执行选中操作）、PgUp / PgDn 滚动详情、E 编辑、Space 开关、? 帮助、Q 退出。详见 [独立全屏控制台](docs/console-tui.md)。控制台在本测试版中可用；不带参数的 `search-boost` 仍保留原有快速配置 TUI。
+**两套界面并行**：`search-boost` 是侧重直接修改的快速配置 TUI（保留原有 Clack）；`search-boost tui` 是侧重状态与配置详情的独立全屏控制台（固定侧栏、配置列表、宽屏详情区、原地表单与确认）。支持 `--dry-run`、`--no-color` 和只读 `--preview`。Tab / Shift+Tab 切换三栏、方向键导航、1–8 跳分类、Enter 从列表进入详情（再执行选中操作）、PgUp / PgDn 滚动详情、E 编辑、Space 开关、? 帮助、Q 退出。详见 [独立全屏控制台](docs/console-tui.md)。控制台在此版本中可用；不带参数的 `search-boost` 仍保留原有快速配置 TUI。
 
 **控制台专属：API 额度**。引擎详情内显示额度卡片，列表末尾提供额度总览；按 U 确认后主动查询，浏览不联网。Tavily 查询 credits，Brave 用一次可能计费的搜索读取请求配额，TinyFish 查询账户钱包；Exa / AnySearch 暂提供原因与官方后台入口，不编造余额。详见 [额度接口与安全边界](docs/engine-quota.md)。
 
@@ -471,7 +472,7 @@ API Key 存放在由 SearchBoost 自己管理的凭据文件中，不写入提�
 
 ## CLI 命令参考（自动化与进阶）
 
-以下 CLI 参考对应 **0.3.0-beta3**。控制台和五平台社区功能请安装 `search-boost@beta` 或固定版本；`@latest` 指向稳定版。
+以下 CLI 参考对应本地准备的 **0.3.0**。发布前使用本地 tarball。`@latest` 只选择已发布稳定版，不保证包含当前候选。
 
 **DeepSeek Harness Desktop**：交互安装选中 DSH 后，可选择 Desktop / CLI / All，再为 Desktop 选择 **自动安装（默认）** 或 **本地目录接入**。自动方式通过注册表（含自定义安装目录）、默认目录及 PATH 找到桌面版内置命令；先启动一次再完全退出（包括托盘）。本地方式在其他接入（包括 Grok）结束后，最后显示当前包的完整持久目录，由用户粘贴到运行中的 Desktop「插件 → 添加插件」；TUI 等待只读检测，稳定完成后结束，Esc / Ctrl+C 或超时则报告未完成并保留其他结果。检测到保存的安装不代表运行中的插件已加载；没有内置启动器时会明确提示运行时未验证。临时 `_npx` 缓存不能作为本地链接来源。也可直接在应用输入 `search-boost` 从 npm 安装。自动安装/更新仍验证宿主解析器，遮蔽副本不能报成功；禁用状态保留，`--enable-dsh-bundle` 明确要求启用（本地方式由用户在 Desktop 启用）。所有权与验证限制见 [Desktop 接入说明](docs/dsh-desktop.md)。
 
@@ -500,7 +501,7 @@ search-boost install -t dsh --profile web   # 为 DeepSeek Harness CLI 接入 we
 search-boost install -t dsh --dsh-surface desktop -y # Desktop 原生命令 + 本地包接入
 search-boost install -t dsh --dsh-surface all -y     # Desktop 与 CLI 分别安装
 # 无需全局安装 search-boost / dsh / pnpm（Windows、Linux、macOS）：
-npx --yes search-boost@beta install -t dsh --profile web -y
+npx --yes --package ./search-boost-0.3.0.tgz search-boost install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # 仅演练安装过程，不写磁盘
 
 # ----------------- 凭据与配置管理 -----------------
@@ -542,7 +543,7 @@ search-boost uninstall -t cursor,claude -y  # 移除指定宿主的集成与注�
 # 1. 克隆仓库
 git clone https://github.com/Mr-remon219/search-boost.git
 cd search-boost
-git checkout v0.3.0-beta3  # 开发可使用 v0.3.0 分支
+git checkout v0.3.0  # 开发分支，不是正式 0.3.0 发布 tag
 
 # 2. 按 CI 的方式安装依赖
 npm ci

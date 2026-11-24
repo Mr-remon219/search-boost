@@ -1,6 +1,6 @@
 {
   "name": "search-boost",
-  "version": "0.3.0-beta3",
+  "version": "0.3.0",
   "description": "Multi-engine web search for coding agents — one SearchBoost core (fused search, fetch, five-platform community retrieval) with MCP (Cursor, Codex, Claude Code, Grok Build, Antigravity), pi extension, and DeepSeek Harness bundle adapters",
   "type": "module",
   "bin": {
@@ -65,7 +65,8 @@
     "scripts/build-plugin.mjs",
     "scripts/sync-grok-plugin.mjs",
     "scripts/community-browser-bridge.mjs",
-    "SECURITY.md"
+    "SECURITY.md",
+    "docs/v0.3.0-release.md"
   ],
   "scripts": {
     "start": "node cli.mjs serve",
