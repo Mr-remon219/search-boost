@@ -84,6 +84,17 @@ for (const language of ['en', 'zh-CN']) {
   dry.useOnlyEngine('brave'); await dry.modal.options[1].run()
   assert.equal(bytes(), snapshot)
 }
+for (const language of ['en', 'zh-CN']) {
+  for (const engine of ['firecrawl', 'keenable']) {
+    const before = bytes()
+    const { logs } = await lightweight(language, [engine, 'back', 'back'])
+    const disclosure = logs.find(text => text.startsWith(engine === 'firecrawl' ? 'Firecrawl ' : 'Keenable '))
+    assert.ok(disclosure, `${engine}: opening configuration explains its behavior`)
+    assert.match(disclosure, language === 'en' ? /May incur charges; check with the provider/ : /可能产生费用，以服务商为准/)
+    assert.doesNotMatch(disclosure, /bills per search|billed per search|按次计费/)
+    assert.equal(bytes(), before, 'reading the fee disclosure does not change credentials or routing')
+  }
+}
 seed()
 await assert.rejects(lightweight('en', ['tavily', 'only'], { confirm: () => {
   writeKeysFile({ brave: 'concurrent-brave-fixture' })

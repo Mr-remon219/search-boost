@@ -121,6 +121,17 @@ try {
   await context(() => runInstallerWithOptions({ target: 'grok', uninstall: true, scope: 'project', skipGrokPlugin: true, clack: skippedNative.clack }))
   assert(!skippedNative.notes.some(note => /Grok native plugin.*host-global/.test(note.body)))
 
+  for (const language of ['en', 'zh-CN']) {
+    const p = prompts(false)
+    let selection
+    p.clack.multiselect = async options => { selection = options; return [] }
+    await withTuiContext(() => runInstallerWithOptions({ uninstall: true, clack: p.clack }), { language })
+    assert.equal(selection.message, language === 'en' ? 'Which host integrations do you want to uninstall?' : '要卸载哪些宿主接入？')
+    assert.ok(p.logs.some(text => text.includes(language === 'en' ? 'selected hosts' : '所选宿主')))
+    assert.ok(p.logs.some(text => text.includes(language === 'en' ? 'does not uninstall the npm package' : '不会卸载 npm 包')))
+    assert.equal(p.confirms.length, 0, 'empty target selection cannot reach removal consent')
+  }
+
   console.log('ok: uninstall previews and freezes targets/profiles/workspaces, discloses global Grok removal, defaults to cancel and preserves navigation/dry-run')
 } finally {
   AGENTS.cursor.uninstall = originals.cursor

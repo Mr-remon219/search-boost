@@ -39,6 +39,27 @@ for (const args of [['--help'], ['help']]) {
   })
 }
 
+test('help explains immediate explicit-target uninstall and interactive preview', () => {
+  const { code, out } = runCli(['--help'])
+  assert.equal(code, 0)
+  assert.match(out, /explicit --target runs immediately without confirmation, even without -y/)
+  assert.match(out, /Without --target or -y, uninstall previews Removal scope and asks for confirmation/)
+})
+test('both new API engines disclose possible provider charges without asserting a tariff', () => {
+  const { out } = runCli(['--help'])
+  for (const name of ['firecrawl', 'keenable']) {
+    const line = out.split('\n').find(line => line.includes(`--set ${name}=KEY`))
+    assert.ok(line)
+    assert.match(line, /May incur charges; check with the provider/)
+    assert.doesNotMatch(line, /billed per search|bills per search/)
+  }
+  for (const [file, wording] of [['README.md', 'May incur charges; check with the provider.'], ['README_zh.md', '可能产生费用，以服务商为准。']]) {
+    const text = readFileSync(join(root, file), 'utf8')
+    assert.ok(text.includes(wording), `${file}: cautious cost disclosure is available to users`)
+    assert.doesNotMatch(text, /Both bill per search|两者均按次计费/)
+  }
+})
+
 test('cli with no arguments starts without crashing', () => {
   const { code, out } = runCli([])
   assert.equal(code, 0, `exit ${code}:\n${out.slice(0, 400)}`)
