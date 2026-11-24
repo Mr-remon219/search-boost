@@ -147,6 +147,15 @@ search-boost tui   # Independent full-screen control center
 
 ## Upgrade & Migration Guide
 
+### Page proxy migration
+
+Existing HTTP(S) proxy settings no longer authorize arbitrary page fetching:
+
+- `proxy_trust_required` (`proxy trust is required`): set `SEARCH_BOOST_TRUSTED_PROXY=1` only after you trust the proxy's remote DNS and destination ACLs.
+- `proxy_fallback_disabled` (`direct fallback is disabled`): repair the proxy first. Separately set `SEARCH_BOOST_PROXY_DIRECT_FALLBACK=1` only if you accept direct egress and possible exposure of your local egress IP.
+
+The switches are independent and also accept `true`. Set accepted values in your MCP server environment, then restart the server. Do not enable both just to restore connectivity. Fixed API gateways do not require page-proxy trust. See [network policy and migration](docs/network-policy.md) for direct routing, redirects, and TUN limits.
+
 ### 1. Routine Updates: npm First, Then Refresh Integrations
 
 Use `@beta` to follow this prerelease series, or `@latest` to return to the stable release. Installing either channel replaces your local global executable; the registry channels remain independent. Use npm to update the package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
@@ -424,6 +433,10 @@ For Pi/DSH child-tool loading, stale `pi-search-boost` references, and the retir
 ---
 
 ## Security
+
+### Page proxies and direct fallback
+
+`proxy_trust_required` requires a separate choice to trust remote DNS and destination ACLs through `SEARCH_BOOST_TRUSTED_PROXY=1`. `proxy_fallback_disabled` leaves direct egress off unless you separately accept its privacy cost with `SEARCH_BOOST_PROXY_DIRECT_FALLBACK=1`. Neither switch enables the other. These choices do not prove the proxy's final destination public. System-invisible TUN routing has no physical public-only guarantee. Read the [network trust boundaries and migration steps](docs/network-policy.md) before you opt in.
 
 ### Custom search API bases
 

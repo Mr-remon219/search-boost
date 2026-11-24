@@ -147,6 +147,15 @@ search-boost tui   # 独立全屏控制中心
 
 ## 升级与迁移指南
 
+### 页面代理迁移
+
+已有 HTTP(S) 代理配置不再自动授权任意页面抓取：
+
+- `proxy_trust_required`，报错包含 `proxy trust is required`：只有确认信任代理的远程 DNS 和目标 ACL 后，才设置 `SEARCH_BOOST_TRUSTED_PROXY=1`。
+- `proxy_fallback_disabled`，报错包含 `direct fallback is disabled`：先修复代理。只有另行接受直连出口及本机出口 IP 暴露代价后，才设置 `SEARCH_BOOST_PROXY_DIRECT_FALLBACK=1`。
+
+两个开关互不替代，也接受 `true`。将接受的配置写入 MCP 服务端进程环境，再重启服务。不要为了恢复连通性盲目同时打开两个开关。固定 API 网关不需要页面代理信任开关。直连、重定向与 TUN 限制见[网络策略与迁移说明](docs/network-policy.md)。
+
 ### 1. 日常更新：npm 更新软件包，再刷新接入
 
 使用 `@beta` 跟进本测试系列，使用 `@latest` 返回稳定版。两者安装会替换本机全局命令，但 npm 的两个发布通道相互独立。软件包由 npm 更新；TUI 不自行更新 SearchBoost。安装、刷新与移除位于「管理 Agent 接入」（文件夹模式：安装与接入 → 管理 Agent 接入）。
@@ -424,6 +433,10 @@ Pi/DSH 子代理工具加载、旧 `pi-search-boost` 路径与已移除的 `deep
 ---
 
 ## 安全
+
+### 页面代理与直连回退
+
+`proxy_trust_required` 要求通过 `SEARCH_BOOST_TRUSTED_PROXY=1` 单独选择信任代理的远程 DNS 和目标 ACL。`proxy_fallback_disabled` 默认不允许直连出口，只有另行接受隐私代价后才设置 `SEARCH_BOOST_PROXY_DIRECT_FALLBACK=1`。两个开关互不替代，也不证明代理最终目的地址是公开地址。系统不可见 TUN 不提供物理目标 public-only 保证。选择前先阅读[网络信任边界与迁移步骤](docs/network-policy.md)。
 
 ### 自定义搜索 API 地址
 
