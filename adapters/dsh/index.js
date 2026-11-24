@@ -222,7 +222,7 @@ function registerFusedSearchTool(ctx) {
           tier: { type: 'string' },
           depth: { type: 'string' },
           layer: { type: 'string' },
-          enginePool: { type: 'string' }, ranking: { type: 'string' }, routeExplanation: { type: 'string' }, effectiveWeights: { type: 'object', additionalProperties: { type: 'number' } }, communityUsed: { type: 'boolean' },
+          enginePool: { type: 'string' }, ranking: { type: 'string' }, routeExplanation: { type: 'string' }, outcome: { type: 'string', enum: ['results', 'partial', 'empty_success', 'unavailable', 'failed'] }, effectiveWeights: { type: 'object', additionalProperties: { type: 'number' } }, communityUsed: { type: 'boolean' },
           communityPlatforms: { type: 'array', items: { type: 'string' } },
           communityChannels: { type: 'array', items: { type: 'object' } },
           enginesRequested: { type: 'array', items: { type: 'string' } },

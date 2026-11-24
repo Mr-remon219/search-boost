@@ -300,6 +300,10 @@ const report = [
 assert.equal(report.includes(secret), false)
 assert.equal(report.includes('stale-beta2-value'), false)
 assert.equal(report.includes('newer-concurrent-value'), false)
-const out = join(root, 'docs/v0.3.1-beta2-ui-after.txt')
-writeFileSync(out, report + '\n')
-console.log('beta.2 UI gate passed; wrote', out)
+if (process.argv.includes('--write-evidence')) {
+  const out = join(root, 'docs/v0.3.1-beta2-ui-after.txt')
+  writeFileSync(out, report + '\n')
+  console.log('beta.2 UI gate passed; wrote', out)
+} else {
+  console.log('beta.2 UI gate passed')
+}
