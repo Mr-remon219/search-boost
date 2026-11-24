@@ -6,8 +6,10 @@ import { ENGINE_ORDER } from '../../lib/runtime.mjs'
 import { ADAPTIVE_INPUT_SCHEMA } from '../../lib/search/screening/input.js'
 import {
   ADAPTIVE_OUTPUT_SCHEMA,
-  ADAPTIVE_V5_OUTPUT_SCHEMA,
+  ADAPTIVE_V5_OUTPUT_SCHEMA, ADAPTIVE_V6_OUTPUT_SCHEMA,
 } from '../../lib/search/screening/schema.js'
+import { PLATFORM_DATA_SCHEMA } from '../../lib/community/result-schema.mjs'
+import { FUSED_PLATFORM_OPTIONS_SCHEMA } from '../../lib/community/fused-input.mjs'
 import { jsonSchemaToZod, projectObjectUnion } from '../../lib/search/screening/zod-schema.js'
 
 const engineEnum = z.enum(ENGINE_ORDER)
@@ -21,11 +23,12 @@ export const fusedSearchInput = {
   exclude_domains: z.array(z.string()).optional().describe('Exclude these hostnames from results'),
   recency: z.enum(['day', 'week', 'month', 'year']).optional().describe('Favor recent dated results; omit for historical or version-pinned documentation'),
   complexity: z.enum(['simple', 'medium', 'complex']).optional().describe('Budget, query variants and depth only; default medium'),
-  engine_pool: z.enum(['free', 'api', 'hybrid']).optional().describe('Which engines to search. Omitted: compatibility layer free→free, api→hybrid'),
+  engine_pool: z.enum(['free', 'api', 'hybrid']).optional().describe('Which engines to search. Omitted: enabled keyed APIs if any, otherwise keyless engines'),
   ranking: z.enum(['balanced', 'research', 'fresh']).optional().describe('Final engine-weight preset only; default balanced'),
   engine_weights: z.object(Object.fromEntries(ENGINE_ORDER.map((name) => [name, z.number().finite().min(0).optional()]))).strict().optional().describe('Override preset engine weights; zero still calls the engine. Never enables or selects engines'),
   min_score: z.number().finite().min(0).optional().describe('Minimum consensus-v2 quality score; old thresholds need recalibration, default 0'),
-  community: z.boolean().optional().describe('Add X developer/community voices when relevant; default false; shares final max_results'),
+  community: z.union([z.boolean(), z.array(z.enum(['reddit', 'x', 'bilibili', 'zhihu', 'xiaohongshu'])).max(5)]).optional().describe('Selected community platforms. false/[] disables; legacy true means X only. Shares final max_results; never enables backends.'),
+  platform_options: jsonSchemaToZod(FUSED_PLATFORM_OPTIONS_SCHEMA).optional(),
   layer: z.enum(['free', 'api']).optional().describe('Deprecated compatibility alias: free→free pool, api→hybrid pool; engine_pool takes precedence; not persisted'),
 }
 
@@ -41,9 +44,11 @@ export const fusedSearchOutput = {
   enginesUsed: z.array(z.string()).optional(),
   enginePool: z.enum(['free', 'api', 'hybrid']),
   ranking: z.enum(['balanced', 'research', 'fresh']),
-  effectiveWeights: z.record(z.number()),
+  effectiveWeights: z.record(z.string(), z.number()),
   communityUsed: z.boolean(),
-  engineStats: z.record(z.object({
+  communityPlatforms: z.array(z.string()).optional(),
+  communityChannels: z.array(z.object({}).passthrough()).optional(),
+  engineStats: z.record(z.string(), z.object({
     used: z.boolean(),
     errors: z.number(),
     attempts: z.number().optional(),
@@ -56,12 +61,14 @@ export const fusedSearchOutput = {
     url: z.string(),
     domain: z.string(),
     snippet: z.string(),
+    content: z.string().optional(),
+    community_data: jsonSchemaToZod(PLATFORM_DATA_SCHEMA).optional(),
     score: z.number(),
     scoreVersion: z.string(),
     rankScore: z.number(), evidenceScore: z.number(), consensusBoost: z.number(),
     metadataDelta: z.number(), selectionScore: z.number().optional(),
-    engineRanks: z.record(z.number()), contributions: z.record(z.number()),
-    provenance: z.array(z.object({ engine: z.string(), rank: z.number(), variant: z.string().optional(), url: z.string(), title: z.string(), snippet: z.string(), published: z.string().nullable() })),
+    engineRanks: z.record(z.string(), z.number()), contributions: z.record(z.string(), z.number()),
+    provenance: z.array(z.object({ engine: z.string(), rank: z.number(), variant: z.string().optional(), url: z.string(), title: z.string().optional(), snippet: z.string().optional(), published: z.string().nullable().optional(), platform: z.string().optional(), provider: z.string().optional(), backend: z.string().optional(), retrieval_mode: z.string().optional(), content_type: z.string().optional() })),
     dateStatus: z.enum(['known', 'unknown', 'conflicting']),
     engines: z.array(z.string()),
     published: z.string().nullable(),
@@ -93,39 +100,6 @@ export const fetchPageOutput = {
   content: z.string(),
 }
 
-export const xSearchInput = {
-  type: z.enum(['keyword', 'semantic', 'user', 'thread']).optional().describe('Mode: keyword (default) or semantic uses query; user uses username; thread uses post_id'),
-  query: z.string().optional().describe('Search terms and X filters (e.g. from:OpenAI), or a natural-language topic for semantic mode'),
-  username: z.string().optional().describe('X account handle for type=user'),
-  post_id: z.string().optional().describe('Real X post ID or status URL for type=thread'),
-  max_results: z.number().int().min(1).max(10).optional().describe('Requested result limit, 1–10'),
-  from_date: z.string().optional().describe('Inclusive start date, YYYY-MM-DD (UTC)'),
-  to_date: z.string().optional().describe('Inclusive end date, YYYY-MM-DD (UTC)'),
-  allowed_x_handles: z.array(z.string()).max(20).optional().describe('Only these authors; mutually exclusive with excluded_x_handles'),
-  excluded_x_handles: z.array(z.string()).max(20).optional().describe('Exclude these authors; mutually exclusive with allowed_x_handles'),
-}
-
-export const xSearchOutput = {
-  via: z.string(),
-  note: z.string().optional(),
-  results: z.number(),
-  tookMs: z.number(),
-  cacheHit: z.boolean().optional(),
-  inFlight: z.boolean().optional(),
-  // Diagnostics the core returns on every path (success, empty, failure, cache,
-  // single-flight join): advertised, not silently dropped by the host contract.
-  engineStats: z.record(z.object({
-    used: z.boolean(),
-    errors: z.number(),
-    attempts: z.number().optional(),
-    successes: z.number().optional(),
-    note: z.string().optional(),
-  })).optional(),
-  enginesUsed: z.array(z.string()).optional(),
-  warnings: z.array(z.string()).optional(),
-  items: z.array(z.record(z.unknown())),
-}
-
 export const searchLayerInput = {
   layer: z.enum(['free', 'api', 'show']).optional().describe('show (default) reads current state; free/api persist a new default and require authorization'),
 }
@@ -135,17 +109,17 @@ export const searchStatsOutput = {
   layer: z.string(),
   cacheHits: z.number(),
   cacheMisses: z.number(),
-  tierCounts: z.record(z.number()),
+  tierCounts: z.record(z.string(), z.number()),
   keyedEngines: z.object({
     configured: z.number(),
     enabled: z.number(),
     total: z.number(),
     enabledNames: z.array(z.string()),
   }),
-  engines: z.record(z.boolean()),
+  engines: z.record(z.string(), z.boolean()),
   xOfficial: z.boolean(),
   xSource: z.string(),
-  recent: z.array(z.record(z.unknown())),
+  recent: z.array(z.record(z.string(), z.unknown())),
 }
 
 /**
@@ -154,8 +128,8 @@ export const searchStatsOutput = {
  * is refused before the handler runs instead of being stripped and executed.
  */
 export const adaptiveSearchInput = jsonSchemaToZod(ADAPTIVE_INPUT_SCHEMA)
-/** v5 run and read-only historical restore: the shared exact-one union projected
- * to one strict object so the SDK can validate either branch. */
+/** v6 runs, unchanged v5 runs and historical restores: the shared exact-one
+ * union projected to a strict object for SDK discovery. */
 export const adaptiveSearchOutput = jsonSchemaToZod(projectObjectUnion(ADAPTIVE_OUTPUT_SCHEMA))
 // The SDK requires an object-shaped discovery schema. Validate the complete
 // disjoint union separately before returning a response; projection alone would
@@ -167,7 +141,8 @@ export function validateAdaptiveSearchOutput(value) {
   }
   return value
 }
-/** The v5 branch alone, for callers that need the strict new-run contract. */
+/** The v6 branch for new runs; v5 remains available for old snapshots. */
+export const adaptiveSearchV6Output = jsonSchemaToZod(ADAPTIVE_V6_OUTPUT_SCHEMA)
 export const adaptiveSearchV5Output = jsonSchemaToZod(ADAPTIVE_V5_OUTPUT_SCHEMA)
 export { ADAPTIVE_INPUT_SCHEMA }
 

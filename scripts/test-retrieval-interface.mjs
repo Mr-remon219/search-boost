@@ -22,7 +22,7 @@ const test = async (name, fn) => { await fn(); tests++; console.log(`ok: ${name}
 await test('the shared input contract is one strict object with no schema default for community', () => {
   assert.equal(ADAPTIVE_INPUT_SCHEMA.additionalProperties, false)
   assert.deepEqual(Object.keys(ADAPTIVE_INPUT_SCHEMA.properties).sort(), [
-    'community', 'constraints', 'cursor', 'intent', 'max_results', 'page_size', 'preferences', 'questions', 'save_results', 'saved_result_id',
+    'community', 'constraints', 'cursor', 'intent', 'max_results', 'page_size', 'platform_options', 'preferences', 'questions', 'save_results', 'saved_result_id',
   ])
   assert.equal('keywords' in ADAPTIVE_INPUT_SCHEMA.properties, false)
   assert.equal(ADAPTIVE_INPUT_SCHEMA.properties.community.default, undefined)
@@ -51,7 +51,7 @@ await test('MCP translates the shared contracts instead of re-declaring them', (
 
 await test('the DSH translation accepts the union, the v5 branch and the v5 metadata shape', () => {
   const union = toDshSchema(ADAPTIVE_OUTPUT_SCHEMA)
-  assert.equal(union.oneOf.length, 2)
+  assert.equal(union.oneOf.length, 3)
   const v5 = toDshSchema(ADAPTIVE_V5_OUTPUT_SCHEMA)
   assert.equal(v5.type, 'object')
   const metadata = toDshSchema(ADAPTIVE_V5_METADATA_SCHEMA)

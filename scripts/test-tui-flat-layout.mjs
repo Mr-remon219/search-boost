@@ -21,7 +21,7 @@ import {
 } from '../lib/installer/i18n.mjs'
 import {
   CONFIG_KEY_NAMES, KEY_NAMES, keyStatus, keysFilePath, readEngineBaseUrls,
-  readEngineRouting, readKeys, writeKeysFile,
+  readEngineRouting, readKeys, readKeysRouting, writeKeysFile,
 } from '../lib/keys.mjs'
 import { ENGINE_BASE_URLS } from '../lib/engine-endpoints.mjs'
 import { getLayer } from '../lib/layer-config.mjs'
@@ -38,13 +38,13 @@ const cancel = Symbol('fixture cancel')
 const reply = (method, value, check) => ({ method, value, check })
 
 /** Flat home order approved for BUG-004. */
-const FLAT_VALUES = ['setup', 'manage', 'status', 'keys', 'layer', 'tools', 'x', 'jev', 'search', 'print', 'settings', 'exit']
+const FLAT_VALUES = ['setup', 'manage', 'status', 'keys', 'layer', 'tools', 'community', 'jev', 'search', 'print', 'settings', 'exit']
 const FOLDER_HOME = ['integration', 'search-tools', 'credentials', 'maintenance', 'settings', 'exit']
 const CATEGORY_VALUES = ['integration', 'search-tools', 'credentials', 'maintenance']
 const SECTIONS = {
   integration: ['setup', 'manage', 'search', 'print', 'back'],
   'search-tools': ['layer', 'tools', 'back'],
-  credentials: ['keys', 'x', 'jev', 'back'],
+  credentials: ['keys', 'community', 'jev', 'back'],
   maintenance: ['status', 'back'],
   settings: ['layout', 'language', 'back'],
 }
@@ -160,10 +160,10 @@ try {
   assert(existsSync(unreadable), 'an unreadable store is not removed')
   fresh()
   const healthyFree = await runScenario(['exit'])
-  assert.equal(healthyFree.records[0].options.find(o => o.value === 'layer').hint, 'current: free')
+  assert.equal(healthyFree.records[0].options.find(o => o.value === 'layer').hint, 'auto: keyless engines')
   writeKeysFile({ tavily: 'healthy-fixture-key' })
   const healthyApi = await runScenario(['exit'])
-  assert.equal(healthyApi.records[0].options.find(o => o.value === 'layer').hint, 'current: api')
+  assert.equal(healthyApi.records[0].options.find(o => o.value === 'layer').hint, 'auto: tavily')
   assert.equal(process.exitCode, undefined)
   console.log('ok: corrupt/unreadable keys show a localized hint without blocking flat/folder menus; actual config stays strict')
 
@@ -224,14 +224,14 @@ try {
   // ---------------------------------------------------------------------------
   fresh()
   const walk = await runScenario([
-    'setup', 'free', reply('multiselect', []),
+    'setup', reply('multiselect', []),
     'manage', 'install', reply('multiselect', []), 'back',
     'status',
     'keys', 'back',
-    'layer', 'free',
+    'layer',
     'tools', reply('multiselect', []), reply('confirm', false),
-    'x', 'keep',
-    'jev', 'keep',
+    'community', 'x', 'back', 'back',
+    'jev', cancel,
     'search', reply('multiselect', []),
     'print', 'cursor', reply('confirm', false), reply('confirm', true),
     'manage', 'uninstall', reply('multiselect', []), 'back',
@@ -244,24 +244,29 @@ try {
   assert(homes[0].options.every((o) => o.label && !/^\s*$/.test(o.label)), 'no blank spacer row occupies a selection')
   assert.deepEqual(
     homes.map((h) => h.initialValue),
-    [undefined, 'setup', 'manage', 'status', 'keys', 'layer', 'tools', 'x', 'jev', 'search', 'print', 'manage', 'settings'],
+    [undefined, 'setup', 'manage', 'status', 'keys', 'layer', 'tools', 'community', 'community', 'search', 'print', 'manage', 'settings'],
     'a completed flat operation returns to the home menu with its entry selected',
   )
   assert(walk.logs.some((l) => l.includes('dry-run: would offer API key setup')), 'Setup still offers the credential step')
-  assert(walk.logs.some((l) => l.includes('Skipped API keys, layer, and X credentials (install-only)')), 'Install keeps the install-only scope')
+  assert(walk.logs.some((l) => l.includes('Skipped API keys, engine switches, and X credentials (install-only)')), 'Install keeps the install-only scope')
   assert(!walk.records.some(menu => menu.options?.some(option => option.value === 'upgrade')), 'software updater is absent from every layout')
   assert(walk.logs.some((l) => l.startsWith('Status\n') && l.includes('Agents')), 'Status prints the real read-only status')
   const engineMenu = walk.records.find((r) => r.message === 'Engine configuration')
   assert.deepEqual(engineMenu.options.map((o) => o.value), [...CONFIG_KEY_NAMES, 'routing', 'back'], 'the engine entry lists every credential slot plus routing')
-  assert.equal(walk.records.find((r) => r.message === 'Default search layer?').options.map((o) => o.value).join(','), 'free,api')
+  assert(!walk.records.some(r => r.message === 'Default search layer?'))
+  assert(walk.logs.some(line => line.includes('Automatic search:')))
   const toolsNote = walk.logs.find((l) => l.includes('Tool switches — shared by MCP / Pi / DSH'))
   assert(toolsNote && toolsNote.includes('fused_search'), 'Tool switches is the real wizard with real tool names')
-  assert.equal(walk.records.find((r) => r.message === 'X credentials').options.map((o) => o.value).join(','), 'keep,import-grok,set-key,remove')
-  assert.equal(walk.records.find((r) => r.message === 'Jev credentials (experimental)').options.map((o) => o.value).join(','), 'keep,set,remove')
+  assert.deepEqual(walk.records.find((r) => r.message === 'Community configuration').options.map((o) => o.value), ['reddit', 'x', 'bilibili', 'zhihu', 'xiaohongshu', 'browser-source', 'back'])
+  assert.equal(walk.records.find((r) => r.message.startsWith('X —')).options.map((o) => o.value).join(','), 'set-key,disable,view,back', 'X actions are direct; unavailable credential actions are absent')
+  assert.equal(walk.records.find((r) => r.message.startsWith('Judgment model configuration')).options.map((o) => o.value).join(','), 'change,home')
   assert(walk.logs.some((l) => l.includes('Built-in web search')), 'Native web search prints the real per-agent state')
   assert(walk.printed.some((line) => line.includes('search-boost') && line.includes('mcpServers')), 'Print MCP snippet writes a real snippet')
   const targetPrompts = walk.records.filter((r) => r.message === 'Which agents should search-boost configure?')
-  assert.equal(targetPrompts.length, 3, 'Setup, Install and Uninstall each reach the real target selection')
+  const uninstallPrompts = walk.records.filter((r) => r.message === 'Which host integrations do you want to uninstall?')
+  assert.equal(targetPrompts.length, 2, 'Setup and Install retain the configure target selection')
+  assert.equal(uninstallPrompts.length, 1, 'Uninstall reaches its distinct removal target selection')
+  assert.deepEqual(uninstallPrompts[0].options.map(o => o.value), targetPrompts[0].options.map(o => o.value), 'changing the removal title does not change target choices')
   assert(targetPrompts[0].options.some((o) => o.value === 'cursor') && targetPrompts[0].options.some((o) => o.value === 'dsh'))
   assert(!existsSync(process.env.SEARCH_BOOST_HOME), 'the whole dry-run walk stays read-only')
 
@@ -274,15 +279,15 @@ try {
   const englishHome = await runScenario(['exit'])
   assert.deepEqual(englishHome.records[0].options.map((o) => o.label), [
     'Setup wizard', 'Manage agent integrations', 'Status',
-    'Search engine configuration', 'Default search layer', 'Tool switches', 'X credentials',
-    'Jev configuration (experimental)', 'Native web search', 'Print MCP snippet',
+    'Search engine configuration', 'Search defaults (automatic)', 'Tool switches', 'Community configuration',
+    'Judgment models (Jev / Laya)', 'Native web search', 'Print MCP snippet',
     'TUI settings', 'Exit',
   ])
   saveTuiLanguage('zh-CN')
   const zhHome = await runScenario(['exit'])
   assert.deepEqual(zhHome.records[0].options.map((o) => o.label), [
     '首次配置向导', '管理 Agent 接入', '查看当前状态', '搜索引擎配置',
-    '默认搜索层', '工具开关', 'X 凭据', 'Jev 配置', '原生搜索替换', '输出 MCP 配置片段',
+    '默认搜索（自动选择）', '工具开关', 'Community 配置', '判断模型（Jev / Laya）', '原生搜索替换', '输出 MCP 配置片段',
     'TUI 设置', '退出',
   ])
   assert.equal(zhHome.records[0].message, '请选择操作')
@@ -317,14 +322,14 @@ try {
     const folderWalk = await runScenario([section, 'back', 'exit'])
     assert.deepEqual(folderWalk.records[1].options.map((o) => o.value), values, `folder section ${section}`)
   }
-  const folderOps = await runScenario(['search-tools', 'layer', 'free', 'back', 'credentials', 'keys', 'back', 'back', 'exit'])
-  assert.equal(folderOps.records[3].message, 'Search & tools', 'a completed folder operation stays in its section')
-  assert.equal(folderOps.records[3].initialValue, 'layer', 'and keeps its entry selected')
-  assert.equal(folderOps.records[6].options.find(o => o.value === 'back').label, 'Back', 'engine return label is layout-neutral')
-  assert.equal(folderOps.records[7].message, 'Services & credentials', 'the engine entry returns to its section')
-  assert.equal(folderOps.records[7].initialValue, 'keys')
-  assert.equal(folderOps.records[8].message, 'What do you want to do?', 'Esc in a section returns home')
-  assert.equal(folderOps.records[8].initialValue, 'credentials')
+  const folderOps = await runScenario(['search-tools', 'layer', 'back', 'credentials', 'keys', 'back', 'back', 'exit'])
+  assert.equal(folderOps.records[2].message, 'Search & tools', 'a completed folder operation stays in its section')
+  assert.equal(folderOps.records[2].initialValue, 'layer', 'and keeps its entry selected')
+  assert.equal(folderOps.records[5].options.find(o => o.value === 'back').label, 'Back', 'engine return label is layout-neutral')
+  assert.equal(folderOps.records[6].message, 'Services & credentials', 'the engine entry returns to its section')
+  assert.equal(folderOps.records[6].initialValue, 'keys')
+  assert.equal(folderOps.records[7].message, 'What do you want to do?', 'Esc in a section returns home')
+  assert.equal(folderOps.records[7].initialValue, 'credentials')
   const folderManage = await runScenario(['integration', 'manage', 'back', 'back', 'exit'], { dryRun: true })
   assert.deepEqual(folderManage.records[2].options.map(o => o.value), ['install', 'refresh', 'uninstall', 'back'])
   assert.equal(folderManage.records[3].message, 'Installation & integrations', 'Back returns to the owning folder, not directly home')
@@ -422,6 +427,73 @@ try {
   assert(!engineCredentialRows().some((row) => row.storedOnly), 'no stored-only slot ships today; the rule is still enforced')
   console.log('ok: engine configuration is engine-first, writes only what changed and keeps stored-only slots unroutable')
 
+  // TinyFish must be reachable through both real TUI layouts, not just CLI
+  // configuration. Keep refactor's navigation and judgment profiles intact.
+  for (const language of ['en', 'zh-CN']) {
+    for (const layout of ['flat', 'folder']) {
+      fresh()
+      saveTuiLanguage(language)
+      saveTuiLayout(layout)
+      writeKeysFile({ tavily: 'unrelated-fixture-key', enabledEngines: ['tavily'], jev: { apiKey: 'unrelated-jev-key' } })
+      const secret = 'tinyfish-private-tui-fixture-123456'
+      const prefix = layout === 'folder' ? ['credentials'] : []
+      const suffix = layout === 'folder' ? ['back', 'exit'] : ['exit']
+      const open = steps => runScenario([...prefix, 'keys', ...steps, ...suffix])
+      const edited = await open([
+        'tinyfish', 'url', reply('text', 'https://gateway.example/tinyfish/'),
+        'set', reply('password', secret), 'back', 'back',
+      ])
+      const menus = edited.records.filter(record => record.options?.some(option => option.value === 'tinyfish'))
+      assert.equal(menus[0].options.find(option => option.value === 'tinyfish').label, 'TinyFish Search')
+      const hint = menus.at(-1).options.find(option => option.value === 'tinyfish').hint
+      assert(hint.includes('api/hybrid'))
+      assert(hint.includes(language === 'en' ? 'disabled' : '已停用'))
+      assert(hint.includes('****') && !hint.includes(secret))
+      // Newly added keyed engines must keep their friendly label and pool hint.
+      for (const [name, label] of [['firecrawl', 'Firecrawl'], ['keenable', 'Keenable']]) {
+        const row = menus[0].options.find(option => option.value === name)
+        assert.equal(row?.label, label, `${name} keeps its friendly label`)
+        assert(row.hint.includes('api/hybrid'), `${name} keeps its api/hybrid hint`)
+      }
+      assert(edited.logs.some(line => line.includes('TINYFISH_API_KEY') && line.includes('api/hybrid')))
+      assert(edited.logs.some(line => line.includes('https://gateway.example/tinyfish/')), 'root search path preserves the gateway prefix')
+      assert(!JSON.stringify({ records: edited.records, logs: edited.logs }).includes(secret), 'TUI never echoes the entered key')
+      assert.equal(readKeys().tinyfish, secret)
+      assert.equal(readEngineBaseUrls().tinyfish, 'https://gateway.example/tinyfish')
+      assert.deepEqual(readKeysRouting().enabledNames, ['tavily'], 'saving TinyFish never expands an existing whitelist')
+
+      await open(['routing', reply('multiselect', ['tavily', 'tinyfish'], prompt => {
+        assert.deepEqual(prompt.options.map(option => option.value), ['tavily', 'tinyfish'])
+        assert.deepEqual(prompt.initialValues, ['tavily'])
+      }), 'back'])
+      assert.deepEqual(readKeysRouting().enabledNames, ['tavily', 'tinyfish'])
+      await open(['routing', reply('multiselect', ['tavily']), 'back'])
+      assert.deepEqual(readKeysRouting().enabledNames, ['tavily'])
+      const before = readFileSync(keysFilePath(), 'utf8')
+      await open(['tinyfish', 'set', reply('password', cancel), 'back'])
+      assert.equal(readFileSync(keysFilePath(), 'utf8'), before, 'cancelled TinyFish password writes nothing')
+      await runScenario([...prefix, 'keys', 'tinyfish', 'url', reply('text', 'https://dry.example/'),
+        'set', reply('password', 'dry-fixture-key'), 'reset-url', 'remove', 'back', 'back', ...suffix], { dryRun: true })
+      assert.equal(readFileSync(keysFilePath(), 'utf8'), before, 'all TinyFish dry-run mutations remain read-only')
+      await open(['tinyfish', 'reset-url', 'remove', 'back', 'back'])
+      assert.equal(readEngineBaseUrls().tinyfish, ENGINE_BASE_URLS.tinyfish)
+      assert.equal(readKeys().tinyfish, undefined)
+      assert.equal(keysDoc().tavily, 'unrelated-fixture-key')
+      assert.equal(keysDoc().jev.apiKey, 'unrelated-jev-key')
+      assert.deepEqual(readEngineRouting().enabledEngines, ['tavily'])
+
+      process.env.TINYFISH_API_KEY = secret
+      try {
+        const environment = await open(['tinyfish', 'back', 'back'])
+        const entry = environment.records.find(record => record.message.startsWith('tinyfish —'))
+        assert(entry.message.includes(language === 'en' ? 'from env' : '来自环境变量'))
+        assert(!entry.options.some(option => option.value === 'remove'), 'an environment-only TinyFish key cannot be removed from the file')
+        assert(!JSON.stringify(environment.logs).includes(secret))
+      } finally { delete process.env.TINYFISH_API_KEY }
+    }
+  }
+  console.log('ok: TinyFish TUI works in both languages/layouts: key, gateway, routing, reset/remove, env masking, cancel and dry-run')
+
   // ---------------------------------------------------------------------------
   // Setup keeps guiding the full initial configuration
   // ---------------------------------------------------------------------------
@@ -430,25 +502,29 @@ try {
   const setup = await runScenario([
     'setup',
     reply('confirm', true),
-    'keep', 'keep', 'keep', 'keep',
+    ...CONFIG_KEY_NAMES.map(() => 'keep'),
     reply('multiselect', ['tavily']),
-    'free',
+    reply('confirm', false),
+    reply('multiselect', []),
     reply('multiselect', []),
     'exit',
   ])
   assert(setup.records[1].message.includes('Configure API keys now?'), 'Setup asks before credentials')
   assert.deepEqual(
-    setup.records.slice(2, 6).map((r) => r.message.match(/^(\w+)/)[1]),
+    setup.records.slice(2, 2 + CONFIG_KEY_NAMES.length).map((r) => r.message.match(/^([\w-]+)/)[1]),
     CONFIG_KEY_NAMES,
     'Setup still guides every credential slot',
   )
-  assert(setup.records.some((r) => r.message === 'Default search layer?'), 'Setup still sets the search layer')
+  assert(!setup.records.some((r) => r.message === 'Default search layer?'), 'Setup no longer asks for a layer')
+  assert(setup.logs.some(line => line.includes('Search routing is automatic')))
+  assert(setup.records.some((r) => r.message.startsWith('Configure a judgment model?') && r.initialValue === false), 'Setup offers optional judgments, skipped by default')
   assert.equal(setup.logs.filter((l) => l.includes('Skipped API keys')).length, 0, 'Setup does not skip credentials')
+  assert(setup.records.at(-2).message.startsWith('Connect community accounts'), 'Community installation is offered last')
   assert(setup.logs.some((l) => l.includes('No agents selected')), 'Setup reached the agent selection step')
   assert.equal(keysDoc().tavily, 'tvly-setup-fixture-key-1234', 'Setup keeps existing credentials')
   assert.equal(keysDoc().jev.apiKey, 'jev-setup-key', 'Setup keeps unrelated stored credentials')
   assert.deepEqual(readEngineRouting().enabledEngines, ['tavily'], 'Setup does not reset existing routing')
-  console.log('ok: Setup still walks credentials → layer → agents and preserves stored credentials and routing')
+  console.log('ok: Setup walks credentials → automatic routing → agents and preserves stored credentials and routing')
 } finally {
   process.exitCode = savedExit
 }

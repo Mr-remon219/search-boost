@@ -161,7 +161,7 @@ try {
   await test('an unavailable transport is a tool failure, never an empty successful page', async () => {
     __setUndiciLoaderForTests(async () => { throw new Error('missing dependency') })
     __setCurlSpawnForTests(() => { throw new Error('curl also unavailable in fixture') })
-    await assert.rejects(fetchPage('https://reader-only.invalid/', undefined, makePageCache()), (err) => err.kind === NET_ERROR_KINDS.transportUnavailable)
+    await assert.rejects(fetchPage('https://93.184.216.34/', undefined, makePageCache()), (err) => err.kind === NET_ERROR_KINDS.transportUnavailable)
   })
   await test('a no-engine adaptive call releases the host abort listener and reports zero network reads', async () => {
     const controller = new AbortController()

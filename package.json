@@ -1,7 +1,7 @@
 {
   "name": "search-boost",
-  "version": "0.2.4",
-  "description": "Multi-engine web search for coding agents — one SearchBoost core (fused search, fetch, X) with MCP (Cursor, Codex, Claude Code, Grok Build, Antigravity), pi extension, and DeepSeek Harness bundle adapters",
+  "version": "0.3.0",
+  "description": "Multi-engine web search for coding agents — one SearchBoost core (fused search, fetch, five-platform community retrieval) with MCP (Cursor, Codex, Claude Code, Grok Build, Antigravity), pi extension, and DeepSeek Harness bundle adapters",
   "type": "module",
   "bin": {
     "search-boost": "./cli.mjs"
@@ -35,13 +35,38 @@
     "agents/",
     "grok-plugin/",
     "templates/",
-    "docs/",
+    "docs/network-policy.md",
+    "docs/migration.md",
+    "docs/community-search.md",
+    "docs/community-browser-login.md",
+    "docs/console-tui.md",
+    "docs/tui.md",
+    "docs/host-upgrades.md",
+    "docs/deepseek-search.md",
+    "docs/dsh-compatibility.md",
+    "docs/dsh-desktop.md",
+    "docs/engine-quota.md",
+    "docs/fusion-scoring.md",
+    "docs/search-routing.md",
+    "docs/subagent-tools.md",
+    "docs/jev-adaptive-search.md",
+    "docs/v0.2.2-release.md",
+    "docs/v0.2.3-release.md",
+    "docs/v0.2.4-release.md",
+    "docs/v0.2.5-release.md",
+    "docs/v0.3.0-beta1-release.md",
+    "docs/v0.3.0-beta2-release.md",
+    "docs/v0.3.0-beta3-release.md",
     "assets/",
+    "browser/",
     "README.md",
     "README_zh.md",
     "LICENSE",
     "scripts/build-plugin.mjs",
-    "scripts/sync-grok-plugin.mjs"
+    "scripts/sync-grok-plugin.mjs",
+    "scripts/community-browser-bridge.mjs",
+    "SECURITY.md",
+    "docs/v0.3.0-release.md"
   ],
   "scripts": {
     "start": "node cli.mjs serve",
@@ -64,19 +89,24 @@
     "check": "node scripts/check-syntax.mjs",
     "test:fusion": "node scripts/test-fused-baseline.mjs && node scripts/test-noff-community-snapshot.mjs && node scripts/test-fusion-errors.mjs && node scripts/test-fusion-scoring.mjs",
     "test:x": "node scripts/test-x-pipeline.mjs",
-    "test:engines": "node scripts/test-engine-requests.mjs && node scripts/test-engine-base-urls.mjs",
+    "test:community": "node scripts/test-community.mjs && node scripts/test-community-retrieval-quality.mjs && node scripts/test-community-native.mjs && node scripts/test-community-setup.mjs && node scripts/test-community-browser-lifecycle.mjs && node scripts/test-community-qr.mjs && node scripts/test-community-discussion.mjs && node scripts/test-community-platforms.mjs && node scripts/test-community-bridge.mjs && node scripts/test-community-worker.mjs && node scripts/test-community-review.mjs && node scripts/test-community-pipeline.mjs && node scripts/test-community-pages.mjs && node scripts/test-adaptive-community.mjs && node scripts/test-adaptive-community-review.mjs",
+    "community:browser": "node scripts/community-browser-bridge.mjs",
+    "test:engines": "node scripts/test-engine-requests.mjs && node scripts/test-engine-base-urls.mjs && node scripts/test-tinyfish.mjs && node scripts/test-deepseek-search.mjs && node scripts/test-firecrawl.mjs && node scripts/test-keenable.mjs",
     "test:xauth": "node scripts/test-xauth.mjs",
     "test:jev": "node scripts/test-jev.mjs",
     "test:jev-client": "node scripts/test-jev-client.mjs",
     "test:adaptive": "node scripts/test-adaptive-capacity.mjs && node scripts/test-adaptive-search.mjs && node scripts/test-screening-hosts.mjs",
     "jev:probe": "node scripts/jev-probe.mjs",
     "test:cli": "node scripts/test-cli-surface.mjs",
-    "test:tui": "node scripts/test-tui.mjs && node scripts/test-manage-tui.mjs",
+    "test:tui": "node scripts/test-tui.mjs && node scripts/test-tui-flat-layout.mjs && node scripts/test-community-tui.mjs && node scripts/test-community-onboarding.mjs && node scripts/test-community-ux.mjs && node scripts/test-manage-tui.mjs && node scripts/test-engine-quota.mjs && node scripts/test-console-tui.mjs && node scripts/test-engine-usability.mjs",
+    "test:console": "node scripts/test-engine-quota.mjs && node scripts/test-console-tui.mjs && node scripts/test-engine-usability.mjs",
+    "test:quota": "node scripts/test-engine-quota.mjs",
+    "test:feedback": "node scripts/test-user-feedback.mjs",
     "prepublishOnly": "npm run check && npm run check:ci && npm run audit:dependencies && npm run test:isolation",
-    "test:search": "node scripts/test-search-routing.mjs",
+    "test:search": "node scripts/test-search-routing.mjs && node scripts/test-auto-routing.mjs",
     "test:keys-authority": "node scripts/test-keys-authority.mjs",
     "test:dry-run": "node scripts/test-dry-run.mjs",
-    "test:network": "node scripts/test-network-safety.mjs && node scripts/test-audit-regressions.mjs && node scripts/test-fetch-fallback.mjs && node scripts/test-fetch-pdf.mjs",
+    "test:network": "node scripts/test-proxy-defaults.mjs && node scripts/test-network-safety.mjs && node scripts/test-audit-regressions.mjs && node scripts/test-fetch-fallback.mjs && node scripts/test-fetch-pdf.mjs",
     "test:v021": "node scripts/test-v021.mjs && node scripts/test-review-regressions.mjs",
     "test:screening": "node scripts/test-screening.mjs && node scripts/test-screening-core.mjs && node scripts/test-screening-frozen.mjs && node scripts/test-screening-ablation.mjs",
     "test:persistence": "node scripts/test-research-persistence.mjs",
@@ -88,19 +118,27 @@
     "test:facts": "node scripts/test-fact-score.mjs",
     "test:funnel": "node scripts/test-funnel.mjs",
     "check:ci": "node scripts/check-ci-policy.mjs",
-    "audit:dependencies": "node scripts/audit-dependencies.mjs"
+    "audit:dependencies": "node scripts/audit-dependencies.mjs",
+    "test:judgment": "node scripts/test-decision-adapters.mjs && node scripts/test-judgment-release-regressions.mjs && node scripts/test-judgment-wizard.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "4.0.87",
     "@clack/prompts": "^0.10.1",
-    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "ai": "7.0.107",
     "ajv": "^8.20.0",
-    "undici": "^6.28.1",
-    "zod": "^3.25.76"
+    "jsqr": "1.4.0",
+    "pngjs": "7.0.0",
+    "qrcode": "1.5.4",
+    "undici": "^6.29.1",
+    "zod": "^4.6.7"
+  },
+  "overrides": {
+    "proxy-addr": "^2.0.8"
   },
   "optionalDependencies": {
-    "pdfjs-dist": "6.2.108"
+    "pdfjs-dist": "6.2.108",
+    "playwright-core": "1.64.0"
   },
   "engines": {
     "node": ">=22.13"

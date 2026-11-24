@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { assertObjectJsonSchema, assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
 import Ajv from 'ajv'
+import { KEYED_ENGINE_COUNT } from '../lib/keys.mjs'
 
 // ---- isolate every state path before importing anything that reads env ----
 const TMP = mkdtempSync(join(tmpdir(), 'sb-adapters-'))
@@ -353,10 +354,10 @@ for (const fn of ['runFused', 'runFetchPage', 'runXSearch', 'describeLayer', 'sw
   assert(`runtime exports ${fn}`, fn in runtime)
 }
 const info = runtime.describeLayer()
-assert('describeLayer shape', info.layer === 'free' && Array.isArray(info.engines) && typeof info.xOfficial === 'boolean' && info.keyedEngines.total === 4)
-const k1 = runtime.xSearchCacheKey('keyword', { query: 'a' }, 5)
+assert('describeLayer shape', info.layer === 'free' && Array.isArray(info.engines) && typeof info.xOfficial === 'boolean' && info.keyedEngines.total === KEYED_ENGINE_COUNT)
+const k1 = runtime.xSearchCacheKey('keyword', { query: 'a', layer: 'free' }, 5)
 runtime.switchLayer('api')
-const k2 = runtime.xSearchCacheKey('keyword', { query: 'a' }, 5)
+const k2 = runtime.xSearchCacheKey('keyword', { query: 'a', layer: 'api' }, 5)
 runtime.switchLayer('free')
 assert('x cache key embeds layer', k1 !== k2 && k1.includes('"auth":"none"'))
 runtime.X_CACHE.keyword.set('probe', { via: 'x' })
@@ -413,23 +414,27 @@ function mockDshCtx() {
   const m = mockDshCtx()
   dsh.apply(m.ctx, {})
   assert('dsh plugin name + inject', dsh.name === 'search-boost' && dsh.inject.includes('web') && dsh.inject.includes('commands'))
-  assert('dsh registers all tools', ['fused_search', 'fetch_page', 'x_search', 'research_parallel', 'search_stats', 'adaptive_search'].every((n) => m.tools.has(n)))
+  assert('dsh registers all tools', ['fused_search', 'fetch_page', 'community_search', 'community_backend', 'research_parallel', 'search_stats', 'adaptive_search'].every((n) => m.tools.has(n)))
   assert('dsh does not register deep_research', !m.tools.has('deep_research'))
   assert('dsh registers commands', ['web_change', 'x-login', 'x-logout'].every((n) => m.commands.has(n)))
   assert('dsh registers both web providers with shared id', m.providers.search?.id === dsh.PROVIDER_ID && m.providers.fetch?.id === dsh.PROVIDER_ID)
   const policy = m.sections.find((s) => s.name === 'search:policy')
   const status = m.sections.find((s) => s.name === 'search:status')
   assert('dsh policy section order 115 with text', policy?.order === 115 && policy.text.includes('工具路由'))
-  assert('dsh status section is dynamic and reflects layer', status?.order === 116 && typeof status.text === 'function' && status.text().includes('layer: free'))
+  assert('dsh status section is dynamic and reflects layer', status?.order === 116 && typeof status.text === 'function' && status.text().includes('engine_pool: free'))
   const show = m.commands.get('web_change').handler({ rawInput: 'show' })
   assert('/web_change show', show.kind === 'success' && /current layer: \*\*free\*\*/.test(show.text))
   const toApi = m.commands.get('web_change').handler({ rawInput: 'api' })
   assert('/web_change api persists via Core', toApi.kind === 'success' && runtime.getLayer() === 'api')
-  assert('dsh capability re-evaluates on every assembly', status.text().includes('default engine_pool: hybrid'))
+  assert('dsh capability re-evaluates on every assembly', status.text().includes('engine_pool: free'))
   m.commands.get('web_change').handler({ rawInput: 'free' })
   assert('/web_change bad arg', m.commands.get('web_change').handler({ rawInput: 'nope' }).kind === 'error')
   assert('/x-login status', /x-login status — none/.test(m.commands.get('x-login').handler({ rawInput: 'status' }).text))
   assert('/x-logout without creds', /already on the fallback chain/.test(m.commands.get('x-logout').handler({ rawInput: '' }).text))
+  const login = m.commands.get('x-login').handler({ rawInput: '-k xai-fixture-dsh-community-x-key' })
+  assert('DSH /x-login enables hosted X for community without restoring x_search', login.kind === 'success' && runtime.xAuthAvailableSync() && runtime.collectRuntimeCapabilities().x.official.available && !m.tools.has('x_search'))
+  const logout = m.commands.get('x-logout').handler({ rawInput: '' })
+  assert('DSH /x-logout removes local credential, preserving the community tool and fallback', logout.kind === 'success' && !runtime.xAuthAvailableSync() && runtime.xAuthCommands.status().source === 'none' && m.tools.has('community_search'))
   const stats = await m.tools.get('search_stats').execute({}, {})
   assert('dsh search_stats shape', stats.layer === 'free' && stats.caches && typeof stats.grok === 'boolean' && stats.x.source === 'none')
   const fused = m.tools.get('fused_search')
@@ -440,10 +445,11 @@ function mockDshCtx() {
   assert('dsh presentation cards present', typeof fused.presentCall === 'function' && typeof fused.presentResult === 'function' && typeof fused.output.presentationMeta === 'function')
   const meta = fused.output.presentationMeta({}, { results: [{ url: 'https://a', title: 't', snippet: 's', published: '2026-01-01' }], truncated: false })
   assert('dsh presentationMeta maps sources', meta.sources[0].publishedAt === '2026-01-01' && fused.presentResult({}, { meta }).card === 'web')
-  await rejects('dsh x_search requires subject', () => m.tools.get('x_search').execute({}, {}), /provide query/)
+  assert('dsh retires x_search', !m.tools.has('x_search'))
+  await rejects('dsh community X requires subject', () => m.tools.get('community_search').execute({ engines: ['x'] }, {}), /query required/)
   const adaptive = m.tools.get('adaptive_search')
   assert('dsh adaptive_search exposes one question, required intent, community, save/pagination fields', ['questions', 'intent', 'preferences', 'community', 'constraints', 'save_results', 'max_results', 'cursor', 'saved_result_id', 'page_size'].every((key) => key in adaptive.parameters.properties) && adaptive.parameters.properties.questions.description.includes('maxItems: 1'))
-  await rejects('dsh adaptive_search is locked without Jev', () => adaptive.execute({ questions: ['fixture question'], intent: 'fixture direction' }, {}), /Jev not configured/)
+  await rejects('dsh adaptive_search is locked without Jev', () => adaptive.execute({ questions: ['fixture question'], intent: 'fixture direction' }, {}), /Judgment model not configured/)
   const adaptiveUnconfigured = await runtime.runAdaptiveSearch({ questions: ['fixture question'], intent: 'fixture direction' }, {}, { toolState: () => ({ requested: true, enabled: true }), readConfig: () => ({}) })
   const dshUnion = new Ajv({ strict: true, allowUnionTypes: true }).compile(adaptive.output.schema)
   assert('dsh adaptive_search validates the shared schema-v5 branch', dshUnion(adaptiveUnconfigured), JSON.stringify(dshUnion.errors))
@@ -452,8 +458,8 @@ function mockDshCtx() {
 }
 {
   const m = mockDshCtx()
-  dsh.apply(m.ctx, { xSearch: false, researchParallel: false, searchProvider: false, policy: false })
-  assert('dsh config flags disable surfaces', !m.tools.has('x_search') && !m.tools.has('research_parallel') && !m.providers.search && !m.sections.some((s) => s.name === 'search:policy'))
+  dsh.apply(m.ctx, { communitySearch: false, communityBackend: false, researchParallel: false, searchProvider: false, policy: false })
+  assert('dsh config flags disable surfaces', !m.tools.has('community_search') && !m.tools.has('community_backend') && !m.tools.has('research_parallel') && !m.providers.search && !m.sections.some((s) => s.name === 'search:policy'))
 }
 
 // Actual MCP handler + same-process cursor store: approved URLs and the next
@@ -493,17 +499,17 @@ function mockDshCtx() {
   const handlers = new Map()
   const mockPi = { registerTool: (t) => tools.set(t.name, t), registerCommand: (n, c) => commands.set(n, c), on: (ev, fn) => handlers.set(ev, fn) }
   pi.default(mockPi)
-  assert('pi registers all tools', ['fused_search', 'fetch_page', 'search-parallel-subagent', 'x_search', 'adaptive_search'].every((n) => tools.has(n)))
+  assert('pi registers all tools', ['fused_search', 'fetch_page', 'search-parallel-subagent', 'community_search', 'community_backend', 'adaptive_search'].every((n) => tools.has(n)))
   assert('pi does not register deep_research', !tools.has('deep_research'))
   assert('pi registers all commands', ['web_change', 'x-login', 'x-logout', 'search-cache', 'search-audit'].every((n) => commands.has(n)))
   for (const t of tools.values()) {
     assert(`pi ${t.name} parameters are plain JSON schema`, t.parameters.type === 'object' && typeof t.parameters.properties === 'object' && Array.isArray(t.promptGuidelines))
   }
   assert('pi fused_search keeps pi-only params', ['site', 'min_score', 'depth'].every((k) => k in tools.get('fused_search').parameters.properties) && tools.get('fused_search').parameters.properties.max_results.maximum === 20)
-  assert('pi x_search requires type', tools.get('x_search').parameters.required.includes('type'))
+  assert('pi retires x_search', !tools.has('x_search'))
   const piAdaptive = tools.get('adaptive_search')
   assert('pi adaptive_search exposes one question, required intent, community and pagination', ['questions', 'intent', 'preferences', 'community', 'constraints', 'save_results', 'max_results', 'cursor', 'saved_result_id', 'page_size'].every((key) => key in piAdaptive.parameters.properties) && piAdaptive.parameters.properties.questions.items.maxLength === 400)
-  await rejects('pi adaptive_search is locked without Jev', () => piAdaptive.execute('id', { questions: ['fixture question'], intent: 'fixture direction' }), /Jev not configured/)
+  await rejects('pi adaptive_search is locked without Jev', () => piAdaptive.execute('id', { questions: ['fixture question'], intent: 'fixture direction' }), /Judgment model not configured/)
   const { saveJevConfig, clearJevConfig } = await import('../lib/jev-config.mjs')
   saveJevConfig({ apiKey: 'fixture-jev' })
   const { resultPages } = await import('../lib/search/screening/pages.js')
@@ -520,7 +526,7 @@ function mockDshCtx() {
   assert('pi injects policy once and refreshes capability even with existing policy', injected.systemPrompt.startsWith('BASE\n<search_balance>') && (reinjected.systemPrompt.match(/<search_balance>/g) ?? []).length === 1 && (reinjected.systemPrompt.match(/<search_capabilities>/g) ?? []).length === 1)
   runtime.switchLayer('api')
   const changed = await handlers.get('before_agent_start')({ systemPrompt: reinjected.systemPrompt })
-  assert('pi capability is dynamic on the next agent start', changed.systemPrompt.includes('default engine_pool: hybrid'))
+  assert('pi capability is dynamic on the next agent start', changed.systemPrompt.includes('engine_pool: free'))
   runtime.switchLayer('free')
   const notes = []
   const ctx = { ui: { notify: (m) => notes.push(m) } }
@@ -538,10 +544,12 @@ function mockDshCtx() {
   assert('/x-login status (pi)', /x-login status: none/.test(notes.at(-1)))
   await commands.get('x-login').handler('-k ', ctx)
   assert('/x-login -k without key errors', /missing API key/.test(notes.at(-1)))
-  const bad = await tools.get('x_search').execute('id', { type: 'thread' }, undefined, undefined)
-  assert('pi x_search thread without post_id reports error', /post_id required/.test(bad.content[0].text))
-  const both = await tools.get('x_search').execute('id', { type: 'keyword', query: 'q', allowed_x_handles: ['a'], excluded_x_handles: ['b'] })
-  assert('pi x_search rejects allowed+excluded', both.details.error === 'mutually_exclusive_handles')
+  await commands.get('x-login').handler('-k xai-fixture-pi-community-x-key', ctx)
+  assert('Pi /x-login enables hosted X for community without restoring x_search', runtime.xAuthAvailableSync() && runtime.collectRuntimeCapabilities().x.official.available && !tools.has('x_search'))
+  await commands.get('x-logout').handler('', ctx)
+  assert('Pi /x-logout removes local credential, preserving the community tool and fallback', !runtime.xAuthAvailableSync() && runtime.xAuthCommands.status().source === 'none' && tools.has('community_search'))
+  await rejects('pi community X thread requires post_id', () => tools.get('community_search').execute('id', { engines: ['x'], type: 'thread' }), /post_id required/)
+  await rejects('pi community X rejects allowed+excluded', () => tools.get('community_search').execute('id', { engines: ['x'], query: 'q', allowed_x_handles: ['a'], excluded_x_handles: ['b'] }), /mutually exclusive/)
   const parallel = tools.get('search-parallel-subagent')
   await rejects('pi parallel rejects missing mode', () => parallel.execute('id', { query: 'q' }), /exactly one of/)
   await rejects('pi parallel rejects empty tasks', () => parallel.execute('id', { tasks: [] }), /must not be empty/)

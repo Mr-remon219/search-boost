@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     # Keep pre-PR feature-branch validation. PR merge refs are a distinct input.
-    branches: [master, main, 'Mr-remon219/**', jev]
+    branches: [master, main, 'Mr-remon219/**', jev, 'v0.3.0']
   pull_request:
   merge_group:
   workflow_dispatch:

@@ -4,7 +4,9 @@ import './isolate-tests.mjs'
 //   fused-baseline-v1.json          captured from checkout 77e01146271f4d718cc6d8ce499978f94a517203
 //   fused-baseline-community-v1.json captured from the N_off worktree base
 //                                   0a0ce082c3c287e56a72400a599736b242c829e9 BEFORE the snapshot changes
-// Matching both proves the merged base behaves identically to the reference checkout for
+// Replays pin historical DDG weights explicitly (defaults were reduced in the
+// TinyFish migration); the frozen files/digests are not regenerated. Matching
+// both under those weights proves the merged base matches the reference for
 // ordinary fused, and that the N_off snapshot/community work never moved ordinary scores,
 // final lists, selectionScore or provenance. Expected digests are never regenerated here.
 // Two community=true cases carry a DECLARED beta.6 public-output-contract migration: their
@@ -28,6 +30,9 @@ const community = read('./fused-baseline-community-v1.json')
 assert.equal(ordinary.baseline, FUSED_BASELINE_SHA)
 assert.equal(community.baseline, NOFF_BASE_SHA)
 
+const historicalDdg = { balanced: 0.9808701859225035, research: 0.9025744629620456, fresh: 0.9268489619911159 }
+const historicalArgs = (args) => ({ ...args, engineWeights: { ddg: historicalDdg[args.ranking], ...args.engineWeights } })
+
 const selectedSummary = (result) => result.results.map((row) => ({
   url: row.url, score: row.score, selectionScore: row.selectionScore ?? null,
   engines: row.engines, username: row.username ?? null,
@@ -35,7 +40,7 @@ const selectedSummary = (result) => result.results.map((row) => ({
 
 for (const { args, digest, selected } of ordinary.cases) {
   invalidateSearchCaches()
-  const result = await runFused(args, { snapshot: baselineSnapshot })
+  const result = await runFused(historicalArgs(args), { snapshot: baselineSnapshot })
   assert.equal(fusedBaselineDigest(result), digest, `${args.ranking}/${args.enginePool}: ordinary fused score/list/provenance changed`)
   assert.deepEqual(result.results.map((r) => ({ url: r.url, score: r.score, selectionScore: r.selectionScore })), selected)
 }
@@ -49,7 +54,7 @@ const xSearch = (args, opts) => runXSearch(args, {
 
 for (const { args, digest, selected, communityUsed, digestProvenance } of community.cases) {
   invalidateSearchCaches()
-  const result = await runFused(args, { snapshot: () => state, xSearch })
+  const result = await runFused(historicalArgs(args), { snapshot: () => state, xSearch })
   const basis = digestProvenance
     ? `[declared ${digestProvenance.migration}; scores/list/selectionScore/provenance must be identical]`
     : '[frozen pre-change identity]'

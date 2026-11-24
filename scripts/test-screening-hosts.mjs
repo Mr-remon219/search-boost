@@ -29,7 +29,7 @@ const { ADAPTIVE_INPUT_SCHEMA } = await load('lib/search/screening/input.js')
 const { ADAPTIVE_OUTPUT_SCHEMA } = await load('lib/search/screening/schema.js')
 const { adaptiveSearchOutput } = await load('adapters/mcp/schemas.mjs')
 const { saveToolPreferences } = await load('lib/tool-config.mjs')
-const { researchResultsDir, saveResearchResultsV2 } = await load('lib/research-results.mjs')
+const { researchResultsDir, saveResearchResultsV3 } = await load('lib/research-results.mjs')
 
 const ajv = new Ajv({ strict: true, allowUnionTypes: true })
 const validOutput = ajv.compile(ADAPTIVE_OUTPUT_SCHEMA)
@@ -65,14 +65,20 @@ let communityAnswer = 'disable'
 let expectedQuestion = INPUT.questions[0]
 let expectedIntent = INPUT.intent
 let failAllEngines = false
-let failFreeEngines = false
+let failSecondaryEngines = false
 let usageOnWire = true
-const ALLOWED_HOSTS = new Set(['api.search.brave.com', 'api.typesafe.ai', 'publish.x.com', 'www.bing.com', 'html.duckduckgo.com', 'search.yahoo.com', 'mcp.exa.ai'])
+const ALLOWED_HOSTS = new Set(['api.tavily.com', 'api.search.brave.com', 'api.typesafe.ai', 'publish.x.com', 'www.bing.com', 'html.duckduckgo.com', 'mcp.exa.ai'])
 const node = (d) => ({ title: d.title, url: d.url, description: d.description })
-const resultsFor = (query, count) => /x\.com|twitter\.com/.test(query) ? communityPosts(count) : webDocs(count)
+const resultsFor = (query, count) => {
+  const platform = /bilibili\.com/.test(query) ? 'bilibili' : /zhihu\.com/.test(query) ? 'zhihu' : /xiaohongshu\.com/.test(query) ? 'xiaohongshu' : null
+  if (platform) return [{
+    url: platform === 'bilibili' ? 'https://www.bilibili.com/video/BV1fixture' : platform === 'zhihu' ? 'https://www.zhihu.com/question/123/answer/456' : 'https://www.xiaohongshu.com/explore/abcdef',
+    title: 'Node.js fetch cancellation community implementation experience', description: 'First-hand Node.js fetch cancellation migration experience with concrete implementation and reproduction details.',
+  }]
+  return /x\.com|twitter\.com/.test(query) ? communityPosts(count) : webDocs(count)
+}
 const bingPage = (docs) => `<html><body>${docs.map((d) => `<li class="b_algo"><h2><a href="${d.url}">${d.title}</a></h2><p>${d.description}</p></li>`).join('')}</body></html>`
 const ddgPage = (docs) => `<html><body>${docs.map((d) => `<a class="result__a" href="${d.url}">${d.title}</a><a class="result__snippet">${d.description}</a>`).join('')}</body></html>`
-const yahooPage = (docs) => `<html><body>${docs.map((d) => `<div class="dd fst algo "><div class="compTitle"><a href="${d.url}">result</a></div><h3 class="title">${d.title}</h3><div class="compText"><p>${d.description}</p></div></div>`).join('')}</body></html>`
 const exaText = (docs) => docs.map((d) => `Title: ${d.title}\nURL: ${d.url}\nHighlights: ${d.description}`).join('\n---\n')
 const queryOf = (url) => url.searchParams.get('q') ?? url.searchParams.get('p') ?? ''
 globalThis.fetch = async (raw, init) => {
@@ -82,15 +88,18 @@ globalThis.fetch = async (raw, init) => {
     unexpectedHosts.push(url.href)
     throw new TypeError('fetch failed', { cause: Object.assign(new Error('fixture'), { code: 'ENOTFOUND' }) })
   }
-  if (url.hostname !== 'api.typesafe.ai' && (failAllEngines || (failFreeEngines && url.hostname !== 'api.search.brave.com'))) {
+  if (url.hostname !== 'api.typesafe.ai' && (failAllEngines || (failSecondaryEngines && url.hostname !== 'api.search.brave.com'))) {
     throw new TypeError('fetch failed', { cause: Object.assign(new Error('fixture'), { code: 'ENOTFOUND' }) })
+  }
+  if (url.hostname === 'api.tavily.com') {
+    const body = JSON.parse(init.body)
+    return Response.json({ results: resultsFor(body.query, body.max_results).map(r => ({ ...node(r), content: r.description })) })
   }
   if (url.hostname === 'api.search.brave.com') {
     return Response.json({ web: { results: resultsFor(queryOf(url), Number(url.searchParams.get('count') ?? 10)).map(node) } })
   }
   if (url.hostname === 'www.bing.com') return new Response(bingPage(resultsFor(queryOf(url), Number(url.searchParams.get('count') ?? 10)).map(node)), { status: 200 })
   if (url.hostname === 'html.duckduckgo.com') return new Response(ddgPage(resultsFor(queryOf(url), 10).map(node)), { status: 200 })
-  if (url.hostname === 'search.yahoo.com') return new Response(yahooPage(resultsFor(queryOf(url), 10).map(node)), { status: 200 })
   if (url.hostname === 'mcp.exa.ai') {
     const body = JSON.parse(init?.body ?? '{}')
     if (body.method === 'initialize') return Response.json({ jsonrpc: '2.0', id: body.id, result: { protocolVersion: '2025-03-26', capabilities: {}, serverInfo: { name: 'exa-fixture', version: 'fixture' } } }, { headers: { 'mcp-session-id': 'fixture-session' } })
@@ -158,7 +167,7 @@ try {
   assert.equal(listed.inputSchema.additionalProperties, false)
   assert.deepEqual(piTools.get('adaptive_search').parameters, ADAPTIVE_INPUT_SCHEMA)
   assert.deepEqual(Object.keys(dshTools.get('adaptive_search').parameters.properties).sort(), Object.keys(ADAPTIVE_INPUT_SCHEMA.properties).sort())
-  for (const name of ['adaptive_search', 'fused_search', 'x_search']) {
+  for (const name of ['adaptive_search', 'fused_search', 'community_search']) {
     assert.equal(dshTools.get(name).timeoutMs, undefined, `no self-imposed whole-call timeout survives on DSH ${name}`)
   }
   console.log('ok: MCP/Pi/DSH translate the same shared adaptive input schema')
@@ -170,7 +179,7 @@ try {
     const value = structured(host, result)
     assert.equal(result.isError, undefined ?? result.isError)
     assert.equal(validOutput(value), true, `${host}: ${JSON.stringify(validOutput.errors)}`)
-    assert.equal(value.schemaVersion, 5)
+    assert.equal(value.schemaVersion, 6)
     assert.equal(value.policyVersion, 'fused-screening-mix-v2-prototype')
     assert.equal(value.judgementPolicyVersion, 'screening-judgement-v4-no-scope-no-language')
     assert.equal(value.strategyPolicyVersion, 'screening-strategy-v2-community-no-language')
@@ -184,9 +193,9 @@ try {
     assert.equal(value.selection.incomplete, false)
     assert.equal(value.totalResults, 3)
     assert.equal(value.pageResults, 2)
-    assert.match(value.nextCursor, /^s5:[a-f0-9-]{36}\.\d+$/)
+    assert.match(value.nextCursor, /^s6:[a-f0-9-]{36}\.\d+$/)
     assert.equal(value.results.every((row) => row.rank >= 1 && row.valueLevel >= 3), true)
-    assert.equal(value.results.every((row) => row.engines.length > 0 && row.engines.every((name) => ['brave', 'bing', 'ddg', 'yahoo', 'exa-free'].includes(name))), true)
+    assert.equal(value.results.every((row) => row.engines.length > 0 && row.engines.every((name) => ['brave', 'bing', 'ddg', 'exa-free'].includes(name))), true)
     assert.equal(value.results.every((row) => row.url.startsWith('https://ref')), true)
     assert.equal(value.diagnostics.snapshotCandidates >= 3, true)
     assert.equal(value.run.host, host)
@@ -208,7 +217,7 @@ try {
   const autoValue = auto.structuredContent
   assert.equal(validOutput(autoValue), true, JSON.stringify(validOutput.errors))
   assert.equal(autoValue.run.community.input, 'auto')
-  assert.equal(autoValue.run.community.source, 'jev')
+  assert.equal(autoValue.run.community.source, 'judge')
   assert.equal(autoValue.run.community.choice, 'enable')
   assert.equal(autoValue.run.community.requested, true)
   assert.equal(autoValue.run.community.effective, true)
@@ -232,6 +241,37 @@ try {
   assert.equal(autoValue.run.community.usage.inFlight, false)
   assert.equal(autoValue.diagnostics.snapshotCandidates, 32)
   console.log('ok: community is decided inside the same strategy request and its execution status is structured')
+
+  // ---- same platform contracts through real fused + Adaptive host entries ----
+  const platformOptions = { bilibili: { content_type: 'video' }, zhihu: { content_type: 'answer', from_date: null }, xiaohongshu: { content_type: 'note' } }
+  const platforms = ['bilibili', 'zhihu', 'xiaohongshu']
+  for (const host of ['mcp', 'pi', 'dsh']) {
+    clearAllCaches()
+    const before = requests.filter(request => request.startsWith('api.search.brave.com')).length
+    const value = structured(host, await call(host, { ...INPUT, community: platforms, platform_options: platformOptions, max_results: 30, page_size: 50 }))
+    assert.equal(validOutput(value), true, JSON.stringify(validOutput.errors))
+    assert.equal(value.usage.fusedCalls, 1)
+    assert.deepEqual(value.inputSummary.platform_options, platformOptions)
+    assert.deepEqual(value.run.community.channels.map(channel => channel.platform), platforms)
+    for (const platform of platforms) {
+      assert.equal(value.run.community.channels.find(channel => channel.platform === platform).retrieval_mode, 'web-index')
+      assert.ok(value.results.some(row => row.provenance?.some(source => source.platform === platform)), `${host}: ${platform}`)
+    }
+    assert.equal(requests.filter(request => request.startsWith('api.search.brave.com')).length - before, 4, 'one Web + three community index legs, not a separate Adaptive acquisition')
+    const bad = { ...INPUT, community: platforms, platform_options: { reddit: { max_pages: 1 } } }
+    if (host === 'mcp') assert.equal((await call(host, bad)).isError, true)
+    else await assert.rejects(() => call(host, bad), /platform_options/)
+    clearAllCaches()
+    const args = { query: INPUT.questions[0], community: platforms, platform_options: platformOptions, max_results: 10 }
+    const rawFused = host === 'mcp' ? await client.callTool({ name: 'fused_search', arguments: args })
+      : host === 'pi' ? await piTools.get('fused_search').execute('platform-fused', args)
+        : await dshTools.get('fused_search').execute(args, {})
+    const fused = host === 'mcp' ? rawFused.structuredContent : host === 'pi' ? rawFused.details : rawFused
+    assert.deepEqual(fused.communityPlatforms, platforms)
+    assert.ok(fused.communityChannels.every(channel => ['ok', 'partial'].includes(channel.status)), JSON.stringify(fused.communityChannels))
+    for (const row of fused.results.filter(row => row.domain === 'zhihu.com')) assert.ok(row.url.includes('/answer/'))
+  }
+  console.log('ok: actual MCP/Pi/DSH fused and Adaptive entries share platform options/routes; one acquisition and typed selected provenance')
 
   // unknown answer falls back to no community and stays disclosed
   communityAnswer = 'unknown'
@@ -268,7 +308,7 @@ try {
   assert.equal(restored.savedResultId, saved.savedResultId)
   assert.equal(restored.totalResults, 3)
   assert.equal(restored.results.length, 2)
-  assert.match(restored.nextCursor, /^s5:/)
+  assert.match(restored.nextCursor, /^s6:/)
   assert.equal(requests.length, afterSave, 'a saved_result_id restore performs no network call')
   assert.equal(readdirSync(researchResultsDir()).length, 1)
   console.log('ok: s5 pagination and v2 restore stay offline through every host')
@@ -337,7 +377,7 @@ try {
   assert.equal(requests.length, beforeInvalid)
   const locked = await call('mcp', { ...INPUT })
   assert.equal(locked.isError, true)
-  assert.match(locked.content.map((part) => part.text).join('\n'), /Jev not configured/)
+  assert.match(locked.content.map((part) => part.text).join('\n'), /Judgment model not configured/)
   saveJevConfig({ apiKey: 'jev-fixture-secret' })
   saveToolPreferences({ adaptive_search: false })
   const off = await call('mcp', { ...INPUT })
@@ -374,9 +414,12 @@ try {
 
   // A successful empty result (domain filtering) and a mixed failure with one
   // successful empty response are BOTH ordinary zero-hit searches, not outages.
+  // Automatic defaults use APIs only: add a second keyed fixture so partial
+  // failures remain tested without relying on the removed implicit hybrid mode.
+  writeKeysFile({ tavily: 'secondary-engine-fixture', enabledEngines: ['brave', 'tavily'] })
   expectedQuestion = 'fixture empty search site:nomatch.example'
   for (const partial of [false, true]) {
-    failFreeEngines = partial
+    failSecondaryEngines = partial
     for (const host of ['mcp', 'pi', 'dsh']) {
       clearAllCaches()
       const response = await call(host, { ...INPUT, questions: [expectedQuestion], community: false })
@@ -394,7 +437,7 @@ try {
     clearAllCaches()
     const direct = await dshTools.get('fused_search').execute({ query: expectedQuestion, community: false }, {})
     assert.deepEqual(direct.results, [])
-    assert.equal(Object.values(direct.engineStats).filter(stat => stat.successes > 0).length, partial ? 1 : 5)
+    assert.equal(Object.values(direct.engineStats).filter(stat => stat.successes > 0).length, partial ? 1 : 2)
     clearAllCaches()
     const native = await nativeSearchProvider.search({ query: expectedQuestion, maxResults: 6 })
     assert.deepEqual(native.sources, [])
@@ -407,7 +450,7 @@ try {
   assert.equal(partial.results.length > 0, true)
   assert.equal(partial.run.halted, null)
   assert.equal(partial.error, undefined)
-  failFreeEngines = false
+  failSecondaryEngines = false
   console.log('ok: all-failed, successful-empty and partial-success states agree across hosts and DSH native provider')
   assert.deepEqual(unexpectedHosts, [], 'no host outside the fixture set was contacted')
   console.log('ok: locked/disabled entries and real engine failures stay honest at the host boundary')

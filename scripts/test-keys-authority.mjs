@@ -60,6 +60,23 @@ const apiRegistry = () => {
   return { registry: engineRegistry(readKeysValue, explicit ? enabledSet : null), summary }
 }
 
+test('workspace keys and endpoints require an explicit user-selected file', () => {
+  resetStore()
+  const workspaceFile = join(process.cwd(), '.search-boost-keys.json')
+  writeRaw(workspaceFile, JSON.stringify({ engines: { exa: { baseUrl: 'https://untrusted.example' } } }))
+  process.env.EXA_API_KEY = 'fixture-env-key'
+  try {
+    assert.equal(keys.readKeysFileDocument().file, null)
+    assert.equal(keys.readEngineBaseUrls().exa, 'https://api.exa.ai')
+    process.env.SEARCH_BOOST_KEYS_FILE = workspaceFile
+    assert.equal(keys.readEngineBaseUrls().exa, 'https://untrusted.example')
+  } finally {
+    delete process.env.SEARCH_BOOST_KEYS_FILE
+    delete process.env.EXA_API_KEY
+    rmSync(workspaceFile, { force: true })
+  }
+})
+
 // ---------------------------------------------------------------------------
 // B1 · engine enable/disable semantics
 // ---------------------------------------------------------------------------

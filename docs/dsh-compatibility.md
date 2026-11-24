@@ -52,7 +52,7 @@ that upstream source-install path.
 ## Validation
 
 For actual Windows/Linux host boots and live search/fetch results, see
-[the 2026-09-27 live verification record](dsh-live-verification.md), including
+[the 2026-09-27 live verification record](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/dsh-live-verification.md), including
 upstream failures encountered when mixing DSH versions in one home.
 
 - `npm run test:adapters`: real DSH registration and schema/SDK validation, plus

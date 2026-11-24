@@ -145,7 +145,7 @@ if (!realPdfParser) {
       const cache = makePageCache()
       // Distinct URLs ensure these are independent reads, not cache hits.
       const results = await Promise.allSettled(Array.from({ length: 8 }, (_, i) =>
-        fetchPage(`https://example.test/first-${readerAvailable}-${i}.pdf`, undefined, cache)))
+        fetchPage(`https://93.184.216.34/first-${readerAvailable}-${i}.pdf`, undefined, cache)))
       assert.deepEqual(results.map((result) => result.status), Array(8).fill('fulfilled'))
       for (const result of results) {
         assert.equal(result.value.via, 'pdf')
@@ -177,7 +177,7 @@ if (!realPdfParser) {
   await test('a PDF is read as text: no raw bytes, no mojibake, no second request', async () => {
     const seen = stubNetwork(() => pdfResponse(fixturePdf))
     const cache = makePageCache()
-    const url = 'https://example.test/paper.pdf'
+    const url = 'https://93.184.216.34/paper.pdf'
     const page = await fetchPage(url, undefined, cache)
     assert.equal(page.via, 'pdf')
     assert.match(page.content, /Retrieval augmented generation cites retrieved sources\./)
@@ -204,7 +204,7 @@ if (!realPdfParser) {
     // used to be delivered as ~860k characters of mojibake.
     const broken = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.from(Array.from({ length: 900_000 }, (_, i) => (i * 37) % 256))])
     const readerOnly = stubNetwork((url) => url.startsWith('https://r.jina.ai/') ? new Response(prose) : pdfResponse(broken))
-    const recovered = await fetchPage('https://example.test/broken.pdf', undefined, makePageCache())
+    const recovered = await fetchPage('https://93.184.216.34/broken.pdf', undefined, makePageCache())
     assert.equal(recovered.via, 'jina')
     assert.match(recovered.content, /Useful documentation/)
     assert.ok(recovered.content.length < 100_000, `reader text must be bounded, got ${recovered.content.length}`)
@@ -213,7 +213,7 @@ if (!realPdfParser) {
     // With the reader down as well, the failure is reported instead of the bytes.
     stubNetwork(() => pdfResponse(broken))
     await assert.rejects(
-      () => fetchPage('https://example.test/broken.pdf', undefined, makePageCache()),
+      () => fetchPage('https://93.184.216.34/broken.pdf', undefined, makePageCache()),
       (err) => {
         assert.ok(err.message.length < 2000, 'the error must not carry the body')
         assert.match(err.message, /PDF/)
@@ -233,7 +233,7 @@ if (!realPdfParser) {
         }),
       }),
     })
-    const page = await fetchPage('https://example.test/many.pdf', undefined, makePageCache())
+    const page = await fetchPage('https://93.184.216.34/many.pdf', undefined, makePageCache())
     assert.equal(page.via, 'pdf')
     assert.match(page.content, /Page 1 carries a sentence of extractable text\./)
     assert.equal(page.limitation.kind, 'pdf_truncated')
@@ -252,7 +252,7 @@ if (!realPdfParser) {
       }),
     })
     await assert.rejects(
-      () => fetchPage('https://example.test/scanned.pdf', undefined, makePageCache()),
+      () => fetchPage('https://93.184.216.34/scanned.pdf', undefined, makePageCache()),
       (err) => {
         assert.match(err.message, /no extractable text/)
         assert.ok(!err.message.includes('\uFFFD'))
@@ -276,7 +276,7 @@ await test('an injected parser produces pdf text without the real dependency', a
       }),
     }),
   })
-  const page = await fetchPage('https://example.test/injected.pdf', undefined, makePageCache())
+  const page = await fetchPage('https://93.184.216.34/injected.pdf', undefined, makePageCache())
   assert.equal(page.via, 'pdf')
   assert.equal(page.content, 'Extracted by the injected parser.')
 })
@@ -286,7 +286,7 @@ await test('a failing parser falls back to the reader instead of the bytes', asy
   __setPdfParserForTests({
     getDocument: () => ({ promise: Promise.reject(Object.assign(new Error('bad xref'), { name: 'InvalidPDFException' })) }),
   })
-  const page = await fetchPage('https://example.test/failing.pdf', undefined, makePageCache())
+  const page = await fetchPage('https://93.184.216.34/failing.pdf', undefined, makePageCache())
   assert.equal(page.via, 'jina')
   assert.match(page.content, /Useful documentation/)
   assert.equal(seen.length, 2)
@@ -297,7 +297,7 @@ await test('an unavailable parser and a failing reader report a PDF error, not c
   const saved = globalThis.fetch
   __setPdfParserForTests({ getDocument: null })
   await assert.rejects(
-    () => fetchPage('https://example.test/noparser.pdf', undefined, makePageCache()),
+    () => fetchPage('https://93.184.216.34/noparser.pdf', undefined, makePageCache()),
     (err) => {
       assert.equal(err.kind, NET_ERROR_KINDS.unsupported)
       assert.match(err.message, /PDF text extractor|reader failed/)
@@ -333,7 +333,7 @@ await test('a rejected asset prefix does not cost the whole extraction, a real p
       }
     },
   })
-  const page = await fetchPage('https://example.test/assets.pdf', undefined, makePageCache())
+  const page = await fetchPage('https://93.184.216.34/assets.pdf', undefined, makePageCache())
   assert.equal(page.via, 'pdf')
   assert.equal(page.content, 'Text without bundled assets.')
   assert.equal(attempts, 2)
@@ -341,7 +341,7 @@ await test('a rejected asset prefix does not cost the whole extraction, a real p
   let failed = 0
   __setPdfParserForTests({ getDocument: () => { failed++; return { promise: Promise.reject(new Error('bad xref table')) } } })
   await assert.rejects(
-    () => fetchPage('https://example.test/badxref.pdf', undefined, makePageCache()),
+    () => fetchPage('https://93.184.216.34/badxref.pdf', undefined, makePageCache()),
     (err) => {
       assert.match(err.message, /could not be extracted/)
       return true
@@ -354,7 +354,7 @@ await test('a rejected asset prefix does not cost the whole extraction, a real p
 // Binary bodies
 // ---------------------------------------------------------------------------
 await test('HTML byte refusal identifies its safety trigger separately from reader 403', async () => {
-  const url = 'https://example.test/diagnostics'
+  const url = 'https://93.184.216.34/diagnostics'
   const html = `<html><body>${prose}</body></html>`
   const clean = stubNetwork(() => new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } }))
   assert.equal((await fetchPage(url, undefined, makePageCache())).via, 'local')
@@ -379,7 +379,7 @@ await test('a declared binary body is refused or read by the reader, never retur
   const binary = () => new Response(png, { headers: { 'content-type': 'image/png' } })
   stubNetwork(binary)
   await assert.rejects(
-    () => fetchPage('https://example.test/image.png', undefined, makePageCache()),
+    () => fetchPage('https://93.184.216.34/image.png', undefined, makePageCache()),
     (err) => {
       assert.equal(err.kind, NET_ERROR_KINDS.unsupported)
       assert.match(err.message, /not text/)
@@ -389,7 +389,7 @@ await test('a declared binary body is refused or read by the reader, never retur
   )
 
   const seen = stubNetwork((url) => url.startsWith('https://r.jina.ai/') ? new Response(prose) : binary())
-  const page = await fetchPage('https://example.test/image.png', undefined, makePageCache())
+  const page = await fetchPage('https://93.184.216.34/image.png', undefined, makePageCache())
   assert.equal(seen.length, 2)
   assert.equal(page.via, 'jina')
   assert.match(page.content, /Useful documentation/)
@@ -400,7 +400,7 @@ await test('a binary response from the reader is not accepted as page text', asy
   const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(4096, 7)])
   stubNetwork(() => new Response(png, { headers: { 'content-type': 'application/octet-stream' } }))
   await assert.rejects(
-    () => fetchPage('https://example.test/blob', undefined, makePageCache()),
+    () => fetchPage('https://93.184.216.34/blob', undefined, makePageCache()),
     (err) => {
       assert.match(err.message, /not text/)
       assert.ok(!err.message.includes('\uFFFD'))
@@ -417,7 +417,7 @@ await test('text that cannot be decoded is refused like binary, but a stray odd 
   const mojibake = () => new Response(bytes, { headers: { 'content-type': 'text/html' } })
   stubNetwork(mojibake)
   await assert.rejects(
-    () => fetchPage('https://example.test/gbk', undefined, makePageCache()),
+    () => fetchPage('https://93.184.216.34/gbk', undefined, makePageCache()),
     (err) => {
       assert.equal(err.kind, NET_ERROR_KINDS.unsupported)
       assert.match(err.message, /not decodable text/)
@@ -426,7 +426,7 @@ await test('text that cannot be decoded is refused like binary, but a stray odd 
   )
 
   const seen = stubNetwork((url) => url.startsWith('https://r.jina.ai/') ? new Response(prose) : mojibake())
-  const page = await fetchPage('https://example.test/gbk', undefined, makePageCache())
+  const page = await fetchPage('https://93.184.216.34/gbk', undefined, makePageCache())
   assert.equal(seen.length, 2, 'the reader backup must be attempted before failing')
   assert.equal(page.via, 'jina')
   assert.match(page.content, /Useful documentation/)
@@ -436,7 +436,7 @@ await test('text that cannot be decoded is refused like binary, but a stray odd 
   stubNetwork(() => new Response(Buffer.concat([
     Buffer.from(`<p>${prose} odd byte `), Buffer.from([0xb2]), Buffer.from(' and normal text after it.</p>'),
   ]), { headers: { 'content-type': 'text/html' } }))
-  const mixed = await fetchPage('https://example.test/mixed', undefined, makePageCache())
+  const mixed = await fetchPage('https://93.184.216.34/mixed', undefined, makePageCache())
   assert.equal(mixed.via, 'local')
   assert.match(mixed.content, /Useful documentation/)
 })
@@ -448,7 +448,7 @@ await test('a long body is returned in bounded windows that continue from cache'
   const long = Array.from({ length: 40 }, (_, i) => `Paragraph ${i} repeats a sentence for the window test.`).join('\n\n')
   const seen = stubNetwork(() => html(long))
   const cache = makePageCache()
-  const url = 'https://example.test/long'
+  const url = 'https://93.184.216.34/long'
 
   const first = await fetchPage(url, undefined, cache, undefined, { windowChars: 1000 })
   assert.equal(first.content.length, 1000)
@@ -484,13 +484,13 @@ await test('a long body is returned in bounded windows that continue from cache'
 await test('the default window is a hard cap for model-facing content', async () => {
   const huge = `<p>${'word '.repeat(20_000)}</p>`
   stubNetwork(() => html(huge))
-  const page = await fetchPage('https://example.test/huge', undefined, makePageCache())
+  const page = await fetchPage('https://93.184.216.34/huge', undefined, makePageCache())
   assert.equal(page.content.length, PAGE_WINDOW_CHARS)
   assert.equal(page.totalChars > PAGE_WINDOW_CHARS, true)
   assert.equal(page.truncated, true)
   assert.equal(page.nextOffset, PAGE_WINDOW_CHARS)
 
-  const shaped = toFetchPageResult('https://example.test/huge', 'local', 'word '.repeat(20_000), undefined, false, Date.now())
+  const shaped = toFetchPageResult('https://93.184.216.34/huge', 'local', 'word '.repeat(20_000), undefined, false, Date.now())
   assert.equal(shaped.truncated, false, 'the full body constructor stays unclipped')
   assert.equal(windowPageResult(shaped, 0).content.length, PAGE_WINDOW_CHARS)
   assert.equal(windowPageResult(toFetchPageResult('u', 'local', 'short body', undefined, false, Date.now()), 0).truncated, false)
@@ -504,12 +504,12 @@ await test('PDF extraction limitations survive cached continuation and remain tr
     destroy: async () => {},
   }) }) })
   const cache = makePageCache()
-  const first = await fetchPage('https://example.test/bounded.pdf', undefined, cache)
+  const first = await fetchPage('https://93.184.216.34/bounded.pdf', undefined, cache)
   assert.equal(first.limitation.kind, 'pdf_truncated')
-  const last = await fetchPage('https://example.test/bounded.pdf', undefined, cache, undefined, { offset: first.nextOffset, windowChars: Infinity })
+  const last = await fetchPage('https://93.184.216.34/bounded.pdf', undefined, cache, undefined, { offset: first.nextOffset, windowChars: Infinity })
   assert.equal(last.cacheHit, true)
   assert.deepEqual(last.limitation, first.limitation)
-  const whole = await fetchPage('https://example.test/bounded.pdf', undefined, cache, undefined, { windowChars: Infinity })
+  const whole = await fetchPage('https://93.184.216.34/bounded.pdf', undefined, cache, undefined, { windowChars: Infinity })
   assert.equal(whole.truncated, true, 'whole cached extract is not the whole PDF')
   assert.equal(seen.length, 1)
 })
@@ -561,7 +561,7 @@ await test('abort during document load or final-page extraction settles and requ
     getPage: async () => ({ getTextContent: async () => { ac.abort(); return { items: [{ str: prose }] } }, cleanup() {} }),
     destroy: async () => {},
   }) }) })
-  await assert.rejects(fetchPage('https://example.test/cancel-last.pdf', undefined, cache, ac.signal), err => err.kind === NET_ERROR_KINDS.cancelled)
+  await assert.rejects(fetchPage('https://93.184.216.34/cancel-last.pdf', undefined, cache, ac.signal), err => err.kind === NET_ERROR_KINDS.cancelled)
   assert.equal(cache.size(), 0)
   assert.equal(seen.length, 1, 'abort must not trigger reader fallback')
 })
@@ -569,14 +569,14 @@ await test('abort during document load or final-page extraction settles and requ
 await test('control-only short bodies and corrupt tails cannot be delivered by origin or reader', async () => {
   for (const bytes of [Buffer.alloc(400, 7), Buffer.concat([Buffer.from('a'.repeat(5000)), Buffer.alloc(10000, 0xb2)])]) {
     stubNetwork(() => new Response(bytes))
-    await assert.rejects(fetchPage('https://example.test/corrupt', undefined, makePageCache()))
+    await assert.rejects(fetchPage('https://93.184.216.34/corrupt', undefined, makePageCache()))
   }
   stubNetwork(url => url.startsWith('https://r.jina.ai/')
     ? new Response(prose, { headers: { 'content-type': 'image/png' } })
     : new Response(Buffer.alloc(400, 7)))
-  await assert.rejects(fetchPage('https://example.test/declared-binary-reader', undefined, makePageCache()))
+  await assert.rejects(fetchPage('https://93.184.216.34/declared-binary-reader', undefined, makePageCache()))
   const seen = stubNetwork(() => html(`${prose} A literal %PDF-1.7 header is discussed here.`))
-  const page = await fetchPage('https://example.test/pdf-guide', undefined, makePageCache())
+  const page = await fetchPage('https://93.184.216.34/pdf-guide', undefined, makePageCache())
   assert.equal(page.via, 'local')
   assert.equal(seen.length, 1)
 })

@@ -8,8 +8,8 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.2.4-orange?style=flat-square" alt="version"></a>
-  <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.0-blue?style=flat-square" alt="v0.3.0"></a>
+  <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm package"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/architecture-unified%20core-8a2be2?style=flat-square" alt="Architecture"></a>
@@ -27,7 +27,7 @@
 
 ---
 
-> **v0.2.4**：单次快照 Jev 筛选（Schema V5）、私有研究保存/恢复、有界 PDF 文本读取、Desktop 接入，以及软件更新与接入管理分离。详见[发布与迁移说明](./docs/v0.2.4-release.md)：V3 Adaptive 输入/输出及 `upgrade` 命令已变化。源码版本不代表 npm 已发布；`@latest` 以实际 registry 为准。
+> **SearchBoost 0.3.0**：已移除 Yahoo。经 HTTP(S) 代理抓取页面默认拒绝（fail closed），需用 `SEARCH_BOOST_TRUSTED_PROXY` 或 `SEARCH_BOOST_PROXY_DIRECT_FALLBACK` 显式恢复。已启用的 API Key（含新增 Firecrawl、Keenable）会进入默认搜索，可能产生费用，以服务商为准；只想免 Key 时调用传 `engine_pool: "free"`。卸载移除的是所选宿主接入，不是 npm 包。详见 [0.3.0 发布说明](./docs/v0.3.0-release.md)。
 
 ## 目录
 
@@ -41,8 +41,8 @@
   - [工具职责与边界](#工具职责与边界)
   - [1. `fused_search` 多引擎融合搜索](#1-fused_search-多引擎融合搜索)
   - [2. `fetch_page` 智能网页提炼](#2-fetch_page-智能网页提炼)
-  - [3. `x_search` X (Twitter) 动态检索](#3-x_search-x-twitter-动态检索)
-  - [4. `adaptive_search` Jev 意图导向搜索（实验功能）](#4-adaptive_search-jev-意图导向搜索实验功能)
+  - [3. `community_search` 五平台社区检索](#3-community_search-五平台社区检索)
+  - [4. `adaptive_search` Jev / Laya 意图导向搜索（实验功能）](#4-adaptive_search-jev--laya-意图导向搜索实验功能)
   - [引擎池与评分预设](#引擎池与评分预设)
 - [多智能体并行研究工作流](#多智能体并行研究工作流)
 - [安全](#安全)
@@ -56,19 +56,21 @@
 ## 核心特性
 
 - **多引擎并行检索与去重 (`fused_search`)**  
-  同时聚合多个搜索引擎的实时结果。内置**免密钥免费池**（Bing、DuckDuckGo、Yahoo、Exa-free、AnySearch）与**高质量 API 池**（Tavily、Brave、Exa、AnySearch），自动执行跨引擎 URL 规范化去重、域名过滤与权重重排。
+  同时聚合多个搜索引擎的实时结果。内置**免密钥免费池**（Bing、DuckDuckGo、Exa-free、AnySearch）与**API 池**（Tavily、Brave、Exa、AnySearch、TinyFish、DeepSeek Search、Firecrawl、Keenable），自动执行跨引擎 URL 规范化去重、域名过滤与权重重排。
 - **高净度网页正文提取 (`fetch_page`)**  
   优先抓取原站降低等待；必要时使用同线路 curl 兼容兜底，Jina Reader 作为备用读取方式。自动剔除 CSS、JS 及广告噪音，支持 `focus` 关键词段落提炼，具备内存缓存与大体积熔断保护。
-- **X / Twitter 社区情报检索 (`x_search`)**  
-  支持通过官方 xAI API 或免登录回退通道获取推文、作者动态与讨论串。根据可核验的 Snowflake ID 推导 UTC 发布时间，仅在元数据可核验时执行作者与日期过滤。覆盖可能不完整、过时或为空；检索样本不能代表全平台舆论。
-- **Jev 意图导向搜索 (`adaptive_search` · 实验功能)**
-  提供一个完整问题与必填研究方向。检索前一次 Jev 策略请求选择固定排序预设，并在省略 community 时决定是否追加既有社区支路；随后对有界 fused 快照（目标≤10 时最多 32 条，更大目标按原余量比例扩至最高 160 条）做固定选项筛选（安全、原型价值 3/4/5、来源折扣）。没有关键词规划、没有逐材料 constraints 门槛、没有语言校验、没有自动补读，也没有自设的累计预算停止；cursor 与 saved_result_id 只重放已保存结果。不宣称答案已核实或完整。
+- **五平台社区检索 (`community_search`)**
+  显式选择 Reddit、X、B站、知乎、小红书。普通 TUI 每个平台只提供一个免费接入：Reddit 归档、X 基础检索，以及三平台内置原生接入；无需单独部署 MCP、Docker 或浏览器桥。首次配置最后提供可选安装：选择本机 Chrome / Chromium 或可卸载的 SearchBoost 独立下载；后台生成二维码，用平台 App 扫码确认并自动验证身份。Community 支持启停、重新登录和卸载。旧索引 / 桥接配置保持兼容，不作为多个免费接口候选。讨论完整性以当前会话可验证范围为限；B站以公开笔记为主体、评论样本为补充，不抓视频转录。配置完成不保证平台访问或全量覆盖。详见[会话接入与边界](docs/community-search.md#会话和接入)。
+- **Jev / Laya 意图导向搜索 (`adaptive_search` · 实验功能)**
+  提供一个完整问题与必填研究方向。检索前一次判断模型策略请求选择固定排序预设，并在省略 community 时决定是否追加既有社区支路；随后对有界 fused 快照（目标≤10 时最多 32 条，更大目标按原余量比例扩至最高 160 条）做固定选项筛选（安全、原型价值 3/4/5、来源折扣）。没有关键词规划、没有逐材料 constraints 门槛、没有语言校验、没有自动补读，也没有自设的累计预算停止；cursor 与 saved_result_id 只重放已保存结果。不宣称答案已核实或完整。
 - **原生多智能体并行研究工作流**  
   随包提供 `search-boost` 与 `search-boost-parallel-research` Skills。在支持子代理的宿主（如 Cursor、Claude Code、Pi、DSH）中，可将复杂调研拆分为多路 Searcher（抓取证据）与 Summarizer（无工具综合），提供 Fast 与 Complex 两种研究波次。
+- **两套各有侧重的终端界面**
+  `search-boost` 保留快速配置向导，`search-boost tui` 打开侧重状态查看的三栏控制台。控制台支持独立主题、隐藏凭据的原地编辑和需确认联网的额度快照；浏览与预览保持离线。
 - **统一架构，全宿主覆盖**  
   单一核心运行时（Host-neutral Core Runtime），向上提供通用的 Model Context Protocol (MCP) 标准服务，同时深度定制 Pi 原生扩展与 DeepSeek Harness (DSH) 原生插件包。
 - **开箱即用与严苛安全策略**  
-  **无需配置任何 API Key** 即可直接使用免费引擎池；敏感凭证以明文存储于本地受限权限配置文件（POSIX `0600`），不等于静态加密；网络访问交给本机网络和代理，保留请求边界与明确的失败兜底，严禁向模型上下文泄露凭证。
+  **无需配置任何 API Key** 即可直接使用免费引擎池；敏感凭证以明文存储于本地受限权限配置文件（POSIX `0600`），不等于静态加密；页面抓取拒绝本地/私有目标，直连校验并固定 DNS；页面代理默认拒绝，只有 `SEARCH_BOOST_TRUSTED_PROXY=1` 才显式委托远程 DNS 和目标 ACL；代理失败默认不直连，另设 `SEARCH_BOOST_PROXY_DIRECT_FALLBACK=1` 才允许回退并承担出口 IP 暴露代价。固定的用户 API 端点不要求页面信任开关。请求仍有明确边界，严禁向模型上下文泄露凭证。
 
 ---
 
@@ -82,7 +84,7 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
                               │
                     Shared SearchBoost Core
                      lib/runtime.mjs 核心门面
-               搜索 · 抓取 · X · Jev 意图导向搜索
+               搜索 · 抓取 · 社区 · Jev / Laya 意图导向搜索
                               │
               ┌───────────────┼───────────────┐
               │               │               │
@@ -96,9 +98,9 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
      └─────────────────┘
 ```
 
-- **Core (`lib/`)**：宿主无关的算法与网络引擎，负责引擎调用、数据清洗、Jev 协议交互及安全策略。
+- **Core (`lib/`)**：宿主无关的算法与网络引擎，负责引擎调用、数据清洗、专用判断适配器协议交互及安全策略。
 - **Adapters (`adapters/`)**：负责将核心能力翻译为具体协议（MCP JSON-RPC、Pi Extension API、DSH Cordis 生命周期）。
-- **Agents (`agents/`)**：受控提示词、工作流模板与原生 Skills 定义。面向 Agent 的工具选择与分层职责见[提示词职责契约](docs/prompt-contract.md)及 [beta.8 发布说明](docs/v0.2.4-beta.8-release.md)。
+- **Agents (`agents/`)**：受控提示词、工作流模板与原生 Skills 定义。面向 Agent 的工具选择与分层职责见[提示词职责契约](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/prompt-contract.md)及 [beta.8 发布说明](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/v0.2.4-beta.8-release.md)。
 
 ---
 
@@ -125,15 +127,14 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
 ### 1. 全局安装与启动控制台
 
 ```bash
-# 全局安装统一包
-npm install -g search-boost
+npm install -g search-boost@0.3.0
 
-# 启动交互式控制台向导 (TUI)
-search-boost
+search-boost       # 快速配置 / 首次接入向导
+search-boost tui   # 独立全屏控制中心
 ```
 
 > [!TIP]
-> **零 Key 即可起步**：SearchBoost 默认提供免费引擎池（Bing、DuckDuckGo、Yahoo、Exa-free、AnySearch）。无需注册付费服务即可开始检索；实际可用性与结果覆盖取决于引擎及本机网络。
+> **零 Key 即可起步**：SearchBoost 默认提供免费引擎池（Bing、DuckDuckGo、Exa-free、AnySearch）。无需注册付费服务即可开始检索；实际可用性与结果覆盖取决于引擎及本机网络。
 
 ### 2. 三步完成配置
 1. 在默认平铺 TUI 首页选择 **首次配置向导**（文件夹模式：安装与接入 → 首次配置向导），跟随向导配置搜索引擎（可选填 API Key，或直接跳过使用免费池）。
@@ -144,12 +145,21 @@ search-boost
 
 ## 升级与迁移指南
 
+### 页面代理迁移
+
+已有 HTTP(S) 代理配置不再自动授权任意页面抓取：
+
+- `proxy_trust_required`，报错包含 `proxy trust is required`：只有确认信任代理的远程 DNS 和目标 ACL 后，才设置 `SEARCH_BOOST_TRUSTED_PROXY=1`。
+- `proxy_fallback_disabled`，报错包含 `direct fallback is disabled`：先修复代理。只有另行接受直连出口及本机出口 IP 暴露代价后，才设置 `SEARCH_BOOST_PROXY_DIRECT_FALLBACK=1`。
+
+两个开关互不替代，也接受 `true`。将接受的配置写入 MCP 服务端进程环境，再重启服务。不要为了恢复连通性盲目同时打开两个开关。固定 API 网关不需要页面代理信任开关。直连、重定向与 TUN 限制见[网络策略与迁移说明](docs/network-policy.md)。
+
 ### 1. 日常更新：npm 更新软件包，再刷新接入
 
-以下命令适用于 v0.2.4。在该版本发布前，`@latest` 可能仍安装不支持 `refresh` / `research` 的旧版；可先按下文从 v0.2.4 源码运行。软件包更新交给 npm；TUI 不再提供自更新功能。安装、刷新与卸载统一位于 **管理 Agent 接入**（文件夹模式：安装与接入 → 管理 Agent 接入）。
+使用 npm 升级。`search-boost@0.3.0` 固定安装本版本；`@latest` 选择当前稳定通道，`@beta` 选择测试通道。安装会替换本机全局命令。软件包由 npm 更新；TUI 不自行更新 SearchBoost。安装、刷新与移除位于「管理 Agent 接入」（文件夹模式：安装与接入 → 管理 Agent 接入）。
 
 ```bash
-npm install -g search-boost@latest --prefer-online
+npm install -g search-boost@0.3.0
 search-boost
 # → 管理 Agent 接入 → 刷新已有接入 → 选择实际范围
 # 或刷新全部已有接入：
@@ -183,6 +193,12 @@ search-boost
 
 ## 交互式控制台 (TUI)
 
+**两套界面并行**：`search-boost` 是侧重直接修改的快速配置 TUI（保留原有 Clack）；`search-boost tui` 是侧重状态与配置详情的独立全屏控制台（固定侧栏、配置列表、宽屏详情区、原地表单与确认）。支持 `--dry-run`、`--no-color` 和只读 `--preview`。Tab / Shift+Tab 切换三栏、方向键导航、1–8 跳分类、Enter 从列表进入详情（再执行选中操作）、PgUp / PgDn 滚动详情、E 编辑、Space 开关、? 帮助、Q 退出。详见 [独立全屏控制台](docs/console-tui.md)。控制台在此版本中可用；不带参数的 `search-boost` 仍保留原有快速配置 TUI。
+
+**控制台专属：API 额度**。引擎详情内显示额度卡片，列表末尾提供额度总览；按 U 确认后主动查询，浏览不联网。Tavily 查询 credits，Brave 用一次可能计费的搜索读取请求配额，TinyFish 查询账户钱包；Exa / AnySearch 暂提供原因与官方后台入口，不编造余额。详见 [额度接口与安全边界](docs/engine-quota.md)。
+
+### 快速配置 TUI
+
 直接在终端执行 `search-boost` 即可进入基于 Clack 的交互式控制面板。可在此管理宿主接入、搜索配置与凭据；软件包本身仍通过 npm 更新：
 
 默认**平铺首页**按以下顺序直接提供全部入口：
@@ -190,8 +206,8 @@ search-boost
 | 首页入口 | 行为 |
 | :--- | :--- |
 | 首次配置向导；管理 Agent 接入；查看当前状态 | 连续首次配置；安装 / 按范围刷新 / 确认卸载；只读状态 |
-| 搜索引擎配置；默认搜索层；工具开关 | 任选引擎；`free` / `api`；MCP / Pi / DSH 共用开关 |
-| X 凭据；Jev 配置（实验性） | 脱敏凭据管理 |
+| 搜索引擎配置；默认搜索（自动选择）；工具开关 | 配置 Key 和引擎开关（一个 API 即可）；只读展示自动选择；MCP / Pi / DSH 共用开关 |
+| Community 配置；判断模型（Jev / Laya） | 单一免费接入的安装 / 登录 / 启停 / 卸载；判断凭据管理 |
 | 原生搜索替换；输出 MCP 配置片段 | 保留权限选择；只读片段 |
 | TUI 设置；退出 | 菜单布局位于显示语言之前；关闭控制台 |
 
@@ -199,9 +215,11 @@ search-boost
 
 布局和显示语言切换立即生效，保存于 `~/.search-boost/config/tui.json`（或 `$SEARCH_BOOST_HOME/config/tui.json`）。未保存布局（包括仅有语言的旧设置）默认平铺；未保存语言时，中文系统环境使用简体中文，其他环境使用 English。偏好同样适用于独立启动的交互式 setup/config 向导，不影响非交互 CLI 输出、搜索结果或 Agent 回复。工具名、命令、路径、MCP 配置片段与底层原始错误保持原样。dry-run 只预览布局 / 语言，不保存；设置损坏时告警且不覆盖。详见 [TUI 导航与语言设置](docs/tui.md)。
 
+**Community 配置**直接列出五个平台，每个平台一个免费接入，不再选择多个免费来源。小红书 / 知乎 / B站直接安装、登录、启停和卸载；选择本机程序或 SearchBoost 独立下载，登录数据始终隔离，不部署外部服务。首次配置向导将可选社区安装放在最后；控制台用状态卡引导并尽量完整显示二维码；不足时回退 PNG 链接，支持终端上报的 Ctrl+左击及 O / Enter 打开。快速配置给出 PNG 路径；扫码成功自动确认。平台卸载删除其原生配置与专用会话；另有 SearchBoost 独立浏览器卸载，保留本机程序、共享缓存和账号会话，不自动切换来源。Reddit 默认社区、X 凭据和判断模型管理保留；取消及 dry-run 不下载、不开浏览器、不写入。
+
 ### 工具开关
 
-进入 **工具开关**（文件夹模式：搜索与工具 → 工具开关），空格勾选，回车查看变更并确认保存。Esc 或取消确认不写入配置；允许全部关闭。未配置 Jev 时，`adaptive_search` 在状态面板中显示删除线和锁定原因，不进入可选列表。配置 Jev 后默认可用，但此前明确关闭的偏好不会被覆盖。
+进入 **工具开关**（文件夹模式：搜索与工具 → 工具开关），空格勾选，回车查看变更并确认保存。Esc 或取消确认不写入配置；允许全部关闭。未配置判断模型时，`adaptive_search` 在状态面板中显示删除线和锁定原因，不进入可选列表。配置判断模型后默认可用，但此前明确关闭的偏好不会被覆盖。
 
 开关统一保存于 `~/.search-boost/config/tools.json`（或 `$SEARCH_BOOST_HOME/config/tools.json`），采用文件锁和原子写入。加载新版适配器后无需重启、重装宿主：
 
@@ -209,7 +227,7 @@ search-boost
 - **Pi**：约 300ms 内更新活跃工具，保留其他插件工具和原本被宿主排除的工具；会话结束时清理监听。
 - **DSH**：保留注册但立即拒绝关闭工具的新调用；原生搜索/抓取 provider 也遵守对应开关。
 
-每次调用都会重新检查开关，旧工具句柄也不能绕过；正在执行的请求正常完成。移除 Jev 凭据会锁定 adaptive 调用（包括分页和保存结果恢复），恢复凭据不覆盖明确关闭的偏好。这里开关的是**工具入口**，不是底层引擎权限：已开启的 adaptive 只筛选一次内部融合快照，不自动抓取页面，融合搜索的 community 模式仍可内部检索 X。Pi/DSH 的 searcher 波次还要求共享 fused_search、fetch_page 入口及 DSH 范围内工具可用：初始依赖关闭时零派发，每个子进程启动前再次检查；已启动子任务正常完成，无工具 summarizer 不受这两个依赖限制。检查不自动启用工具、不扩大权限。Slash 命令保留用于恢复配置。正在运行旧适配器代码的进程需先更新/重载一次；各宿主需使用同一 SearchBoost 配置目录。
+每次调用都会重新检查开关，旧工具句柄也不能绕过；正在执行的请求正常完成。选中判断模型配置不可用会锁定 adaptive 调用（包括分页和保存结果恢复），恢复配置不覆盖明确关闭的偏好。这里开关的是**工具入口**，不是底层引擎权限：已开启的 adaptive 只筛选一次内部融合快照，不自动抓取页面，融合搜索的 community 模式仍可内部检索 X。Pi/DSH 的 searcher 波次还要求共享 fused_search、fetch_page 入口及 DSH 范围内工具可用：初始依赖关闭时零派发，每个子进程启动前再次检查；已启动子任务正常完成，无工具 summarizer 不受这两个依赖限制。检查不自动启用工具、不扩大权限。Slash 命令保留用于恢复配置。正在运行旧适配器代码的进程需先更新/重载一次；各宿主需使用同一 SearchBoost 配置目录。
 
 ---
 
@@ -223,7 +241,8 @@ search-boost
 | :--- | :--- | :--- |
 | `fused_search` | 多引擎多角度并行查询、结果合并与去重排序 | 仅完成单次搜索；后续是否需要继续检索由主 Agent 判断 |
 | `fetch_page` | 读取已知公开 URL 的完整正文或特定关注段落 | 不是带登录态的浏览器；仍遵守本机网络与代理策略 |
-| `x_search` | 检索 X 平台的公开推文、博主资料或单篇讨论串 | 不承诺完整抓取所有回复，无法代表全平台完整舆论倾向 |
+| `community_search` | 显式选择 Reddit / X / B站 / 知乎 / 小红书，按平台过滤和快照分页 | 来源可用性不同；不承诺穷尽覆盖、不自动登录、不代表整体舆论 |
+| `community_backend` | 列出 / 检查，或明确注册 / 更新 / 移除平台来源 | list/check 是离线配置检查；修改需用户授权，不靠工具参数证明同意 |
 | `adaptive_search` | **实验功能**：对单个问题与必填研究方向进行单次快照筛选 | 返回选中 URL、审查摘录与价值标签；targetMet 只表示数量，不代表答案已核实 |
 | `search_stats` | 查看引擎就绪状态、内存缓存命中与近期活动诊断 | 本地配置就绪不代表此时此刻外部网络一定通畅 |
 | `search_layer` | 在 MCP 环境中查看或切换兼容搜索层模式 | 查看为只读；修改会持久化写入磁盘并需要用户授权 |
@@ -249,7 +268,7 @@ search-boost
 - **`engine_pool`**：`free`（免密钥免费池）、`api`（已配置的 API 引擎）、`hybrid`（两池合并）。不可用或已关闭的引擎会跳过。省略时按兼容层映射：`free` → 免费池，`api` → hybrid。
 - **`ranking`**：最终引擎权重预设：`balanced`（默认）、`research`、`fresh`。不改变查询变体、检索深度或时间过滤，也不证明来源权威性或时效性。
 - **`complexity`**：`simple`（1 组查询变体）、`medium`（最多 2 组变体）、`complex`（最多 3 组深度变体）。
-- **`community`**：布尔值（默认 `false`）。设为 `true` 时会将 X 社区一手开发者的讨论混入结果限额中。
+- **`community`**：平台名称数组（例如 `["reddit","x","zhihu"]`）或兼容布尔值。`false`/`[]` 关闭；旧 `true` 仍只选择 X。默认 false，共用最终结果限额，不自动启用后端。
 
 ---
 
@@ -274,29 +293,50 @@ search-boost
 
 ---
 
-### 3. `x_search` X (Twitter) 动态检索
+### 3. `community_search` 五平台社区检索
 
-专为技术追踪与一手动态设计。支持关键字检索、用户时间线（User 模式）与推文讨论串（Thread 模式）。
+显式选择平台，并在任一 TUI 安装 / 启用其唯一免费接入。选平台不会自动启用被停用的后端或安装浏览器。原公开 `x_search` 入口已退役，X 改用 `community_search` 的 `engines:["x"]`；CLI X 凭据管理与 Pi / DSH `/x-login` / `/x-logout` 仍保留。
 
-**调用参数范例**：
 ```json
 {
-  "query": "Claude 3.7 Sonnet hybrid reasoning from:AnthropicAI",
-  "type": "keyword",
-  "max_results": 5
+  "engines": ["reddit", "zhihu"],
+  "query": "Node.js 迁移体验",
+  "platform_options": {
+    "reddit": { "subreddits": ["node"], "max_pages": 2 },
+    "zhihu": { "content_type": "answer" }
+  },
+  "max_results": 10,
+  "page_size": 3
 }
 ```
 
-- **时间戳推导**：平台元数据缺失或不一致时，可根据有效的 Snowflake 推文 ID 推导 UTC 创建时间；这不核实推文内容。
-- **过滤条件**：keyword 模式接受 `from:username`、`since:YYYY-MM-DD`、`until:YYYY-MM-DD` 等 X 操作符；显式日期范围可用 `from_date` / `to_date`。应用作者或日期过滤时，无法核验相应元数据的候选会被省略。
+| 平台 | 已实现来源 | 主要边界 |
+| :--- | :--- | :--- |
+| Reddit | 有界 Arctic Shift 归档采集、网页索引 | 范围内 / 缓存语料，不是实时全 Reddit 搜索或完整评论 |
+| X | 既有 xAI / Grok 托管检索及尽力回退 | 关键词、语义、账号、线程；过滤依赖可验证元数据，线程可能不完整 |
+| B站 | 内置免费原生接入 | 公开笔记、专栏、Opus 与有界评论；不转录视频 |
+| 知乎 | 内置免费原生接入 | 当前会话可读的问题、回答与讨论；逐条报告完整性 |
+| 小红书 | 内置免费原生接入 | 当前会话可读笔记与讨论；不导出 Cookie、不做 OCR / 转录 |
+
+- 新的直接搜索必须提供 `engines`。`platform_options` 支持各平台已实现的问题 / 日期覆盖及内容、作者、范围条件；未知作者或日期不能满足硬过滤。
+- 逐项保留来源、路径和类型化平台数据；逐平台状态区分不可用、域名排除、空结果、失败和部分成功。样本不代表全平台舆论或完整覆盖。
+- `cursor` 重放已捕获结果；`save_results:true` 明确选择私有保存与 `saved_result_id` 恢复。读取零网络、保留原采集日期，不刷新证据。
+- `fused_search` / `adaptive_search` 用 `community:["reddit","x"]` 选择平台。旧 `true` 仅表示 X；`false` / `[]` 关闭。fused 省略仍关闭，Adaptive 省略时策略最多决定是否加入 X，不扩大到全部平台。
+- 三平台安装在 TUI 内完成，后台生成二维码由本人用 App 扫码，无需操作 Chrome 或部署浏览器桥。详见[二维码与浏览器隔离 / 卸载](docs/community-browser-login.md)。旧桥接 / 索引配置继续兼容，只读查看或明确删除；搜索本身不会安装、登录或更改配置，不绕过验证或修改平台内容。
+
+详见[社区来源、接入与证据边界](docs/community-search.md)。
 
 ---
 
-### 4. `adaptive_search` Jev 意图导向搜索（实验功能）
+### 4. `adaptive_search` Jev / Laya 意图导向搜索（实验功能）
 
-**Vercel 接入**：在 TUI → Jev 配置（文件夹模式：服务与凭据 → Jev 配置）填写 `https://ai-gateway.vercel.sh/v1` 和 Vercel AI Gateway Key。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级配置中的 Jev Key，不读取环境变量；服务端限流等待不会被缩短。
+**简化配置**：TUI → 判断模型（Jev / Laya）（文件夹模式：服务与凭据 → 判断模型）就地显示当前配置，先提供“配置判断服务”，再提供“切换 / 管理已保存配置”；未配置时隐藏已有配置入口，Esc 可退出。配置服务只需选择 Jev / Laya、设置 Base URL 和 API Key，确认后保存。首次配置向导也提供此可选步骤，默认跳过；普通搜索无需判断模型。
 
-调用方提供**一个问题**（`questions` 恰好一项）、**必填的研究方向 `intent`** 以及 0-8 条可选软偏好 `preferences`。工具描述要求用英文书写，但这是给调用方的提示，服务端不做语言校验、拒绝或翻译，任何语言都按原文检索。原文问题就是唯一查询：不再规划关键词、不做查询扩展。检索前的一次 Jev 策略请求选择固定 `balanced`/`research`/`fresh` 排序，并在省略 `community` 时决定是否启用既有社区（X）支路；显式 `community` true/false 覆盖该选择，且不重复提问。随后这次 fused 调用收集**有界快照：目标≤10 时最多 32 条，更大目标为 ceil(max_results×32/10)，最高 160 条**（网页与社区行共用），每条声明候选都以固定选项判断：安全 clear/violation/unavailable、原型价值 0-5、来自真实正贡献引擎的来源折扣，以及每条偏好一次匹配。只有安全且价值已建立为 3/4/5 的材料会被交付，并按版本化筛选公式排序；置信度仅用于审计。不会在凑够前若干条可接受链接后提前停止，没有自动补读，也没有自设的累计成本、token、请求次数或整次时限停止——真实单请求超时、有限重试、认证/限流失败、安全拒绝与显式取消照常生效。
+**Vercel 接入**：选择“配置判断服务 → Jev → Vercel AI Gateway”，Base URL 自动设为 `https://ai-gateway.vercel.sh/v1`，仅需填写 Vercel AI Gateway Key（不是 TypeSafe Key）。系统自动选择官方 SDK 的 `typesafe-ai/jev` 评估接口；不要使用聊天补全端点。默认 TypeSafe `/systemone` 保持兼容。两条路径都只使用用户级选中判断模型配置中的 Key，不读取环境变量；服务端限流等待不会被缩短。
+
+**Laya 接入**：选择“配置判断服务 → Laya”，填写自部署服务的 API 前缀（不含 `/systemone`），API Key 可留空；无 Key 时不发送空 Bearer。新配置自动使用 `multilingual`，预算沿用服务默认值；更改同一目的地时保留已有模型与预算，Key 留空保留原值、输入 `-` 清除。快速配置自动生成名称；已有配置可切换、编辑、查看或删除。编辑不切换当前使用配置，换址不继承旧 Key。诊断缺失、截断、选项坍缩、弃答或缺少离线题头容量证据时，判断保持不可用，不把残存选项当作通过。详见[容量证据与迁移](docs/v0.2.5-release.md)。新运行用 `run.judgment` 记录真实提供方，旧记录不静默升级。
+
+调用方提供**一个问题**（`questions` 恰好一项）、**必填的研究方向 `intent`** 以及 0-8 条可选软偏好 `preferences`。工具描述要求用英文书写，但这是给调用方的提示，服务端不做语言校验、拒绝或翻译，任何语言都按原文检索。原文问题就是 Web 查询：不再规划关键词、不由模型扩写；只有调用者明确给出的平台 query 能覆盖其社区支路。共享 nullable `platform_options` 经同一 fused 底座接入（不另调分页社区入口），且必须明确选择对应 community 平台。检索前的一次判断模型策略请求选择固定 `balanced`/`research`/`fresh` 排序，并在省略 `community` 时决定是否启用既有社区（X）支路；显式 `community` 布尔值/平台数组覆盖该选择，且不重复提问；true 仍仅 X，数组不会自动启用后端。随后这次 fused 调用收集**有界快照：目标≤10 时最多 32 条，更大目标为 ceil(max_results×32/10)，最高 160 条**（网页与社区行共用），每条声明候选都以固定选项判断：安全 clear/violation/unavailable、原型价值 0-5、来自真实正贡献引擎的来源折扣，以及每条偏好一次匹配。只有安全且价值已建立为 3/4/5 的材料会被交付，并按版本化筛选公式排序；置信度仅用于审计。不会在凑够前若干条可接受链接后提前停止，没有自动补读，也没有自设的累计成本、token、请求次数或整次时限停止——真实单请求超时、有限重试、认证/限流失败、安全拒绝与显式取消照常生效。
 
 ```json
 {
@@ -314,28 +354,39 @@ search-boost
 - `max_results` 限制本次选中并保存的数量（默认 10，最大 50）；`page_size` 只影响每页（默认 20，最大 50），不重排、不重新筛选。
 - 返回选中材料的 URL、标题、审查摘录、`valueLevel`/`valueLabel`、rank、真实来源与分数组件，不生成答案。`selection.targetMet` 只表示数量，绝不代表研究完成或已核实；`selection.incomplete`、`diagnostics`、`stopReason`、`outsideReview`、`unreviewed` 如实披露未完成部分，而不是当作低价值。
 - `run.community` 返回有限的社区决策与实际执行状态（`not_requested`/`domain_excluded`/`unavailable`/`blocked`/`succeeded`/`empty`/`failed`/`partial`/`not_run`），不输出模型推理；社区支路失败或部分失败时仍交付有效网页结果，并把本次标记为 incomplete。
-- 用 `{"cursor":"<s5:…>"}`（可附 `page_size`）读取已保存页：不发起新的检索、策略、Jev、社区或价值判断。每页默认 20、最大 50，并有字节预算；cursor 在当前进程内最多保留 30 分钟/32 份结果，翻页结束不等于穷尽检索。
-- 显式 `save_results:true` 时，完整的最终选中集与类型化元数据会私有保存到 SearchBoost home（`search-boost-research-v2`，schema version 5），并返回 `savedResultId`。重启或清缓存后用 `{"saved_result_id":"<savedResultId>"}`（可附 `page_size`）读取，不再重新检索或询问 Jev。旧的 `search-boost-research-v1` 文件继续可读，进入带标记的只读 `h1:` 历史分支（`restoration.historical: true`，保留原 schema 版本，不伪造 v5 字段）。公开工具开关与 Jev 配置锁同样作用于读取；`search-boost research list` / `research export <id> --output <new-file.json>` 无需 Jev、可离线使用。参见[接入与验收边界](docs/research-status-acceptance.md)。
+- 用 `{"cursor":"<s6:…>"}`（可附 `page_size`）读取已保存页：不发起新的检索、策略、Jev、社区或价值判断。每页默认 20、最大 50，并有字节预算；cursor 在当前进程内最多保留 30 分钟/32 份结果，翻页结束不等于穷尽检索。
+- 显式 `save_results:true` 时，完整的最终选中集与类型化元数据会私有保存到 SearchBoost home（`search-boost-research-v3`，schema version 6），并返回 `savedResultId`。重启或清缓存后用 `{"saved_result_id":"<savedResultId>"}`（可附 `page_size`）读取，不再重新检索或询问 Jev。旧 v2/schema-5 文件不升级，继续按原合同及 `s5:` 读取；旧的 `search-boost-research-v1` 文件继续可读，进入带标记的只读 `h1:` 历史分支（`restoration.historical: true`，保留原 schema 版本，不伪造 v5 字段）。公开工具开关与判断模型配置锁同样作用于读取；`search-boost research list` / `research export <id> --output <new-file.json>` 无需 Jev、可离线使用。参见[接入与验收边界](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/research-status-acceptance.md)。
 - 阈值仍是未标定工程起点。完整契约、预算和迁移说明见 [Jev 单问题研究检索](docs/jev-adaptive-search.md)。
 
 ---
 
 ### 引擎池与评分预设
 
+**默认自动选择：**只需配置并启用任意一个 API，引擎默认集合就是已启用 API；没有启用的 API 时使用免 Key 引擎。不必切换免费/API 模式，也不必配齐全部 Key。两个 TUI 均支持引擎启停及单引擎使用。显式 `engine_pool=free/api/hybrid` 语义不变；API 请求失败不偷偷换成免 Key 引擎。旧 layer 文件和环境变量不再决定隐式搜索默认值。
+
 `engine_pool` 选择调用集合，`ranking` 选择跨池共享权重；`complexity` 控制查询广度与深度，不改变评分权重。AnySearch 是单一逻辑引擎：free 匿名、api 要求 key、hybrid 优先用已配置 key。使用 `ANYSEARCH_API_KEY` 或 `config keys --set anysearch=KEY` 配置。
+
+DeepSeek Search（`deepseek-search`）通过 Anthropic 兼容 API 调用原生联网搜索，不启动外部 CLI。使用 `DEEPSEEK_API_KEY` 或 `search-boost config keys --set deepseek-search=KEY` 配置；已有显式白名单时需在引擎配置中启用。默认加入 api/hybrid，不加入 free。三个排序预设权重均为 **1.0**，支持 `engine_weights: {"deepseek-search": 0.8}` 单次覆盖；零权重仍会调用。每个查询变体使用一次可能计费的 `deepseek-v4-flash` 模型请求，最多调用一次原生搜索，只采纳结构化搜索结果和引用摘录。Base URL 独立于聊天配置，自动追加 `/messages`。详见[接入说明与验证边界](docs/deepseek-search.md)。
+
+TinyFish Search 是需要 key 的 API 引擎：在 TUI → 搜索引擎配置 → TinyFish Search（文件夹模式：服务与凭据 → 搜索引擎配置）中配置，或使用 `TINYFISH_API_KEY`、`config keys --set tinyfish=KEY`。TUI 支持更换 / 删除 Key、自定义 / 恢复 Base URL 和脱敏状态；在“引擎启用 / 停用”中选择 `tinyfish`，不会因保存 Key 静默扩张已有白名单。TinyFish 默认加入 api/hybrid，不加入 free 池（显式 `engines` 仍可覆盖池选择）。服务价格与限额可能变化，钱包余额不等于剩余搜索次数；每个查询变体各计一次；不自动翻页或启用内嵌 Fetch。请求沿用服务默认 US/en 地区/语言。Yahoo 已移除，显式 Yahoo 引擎/权重输入会被拒绝。
+
+Firecrawl 与 Keenable 是需要 key 的 API 引擎：使用 `FIRECRAWL_API_KEY` / `KEENABLE_API_KEY`，或 `config keys --set firecrawl=KEY` / `--set keenable=KEY` 配置；已有显式白名单时需在引擎配置中启用。两者默认加入 api/hybrid，不加入 free 池，三个排序预设权重均为中性值 **1.0**，可用 `engine_weights` 单次覆盖。Firecrawl 使用 `POST /v2/search`（Bearer）并读取 `data.web[]`；Keenable 使用 `POST /v1/search`（`X-API-Key`）并发送文档规定的 `max_results`（1–50）。可能产生费用，以服务商为准。二者都不把 `recency` 转成服务端时间过滤，也未声明原生域名过滤，因此 `include_domains` 走 `site:` 提示加客户端过滤。Firecrawl 结果默认不带发布时间（除非网关启用抓取），故其 freshness 打分恒中立；Keenable 返回 ISO 8601 的 `published_at`，可正常参与 freshness。两者都不提供额度查询，控制台显示为不支持。返回 200 但结构异常或业务失败时按引擎失败上报，绝不当作空结果。
 
 | 引擎 | balanced | research | fresh |
 | --- | ---: | ---: | ---: |
 | bing | 0.957 | 0.927 | 1.020 |
-| ddg | 0.981 | 0.903 | 0.927 |
-| yahoo | 0.957 | 0.877 | 0.902 |
+| ddg | 0.589 | 0.542 | 0.556 |
 | exa-free | 1.004 | 1.085 | 0.951 |
 | tavily | 1.049 | 1.105 | 1.084 |
 | brave | 1.004 | 0.951 | 1.125 |
 | exa | 1.049 | 1.146 | 1.063 |
 | anysearch | 1.004 | 1.042 | 0.951 |
+| tinyfish | 1.000 | 1.000 | 1.000 |
+| deepseek-search | 1.000 | 1.000 | 1.000 |
+| firecrawl | 1.000 | 1.000 | 1.000 |
+| keenable | 1.000 | 1.000 | 1.000 |
 
-权重是未经实测标注校准的冷启动先验。`consensus-v2.1` 使用原始排名、相关来源组折扣和 max+log 共识，元数据修正最多 20%；质量分与列表选择分分离。零权重不投票，旧 `min_score` 阈值需重新校准。详见 [评分设计与迁移](docs/fusion-scoring.md) 和 [引擎池](docs/search-routing.md)。
+权重是未经实测标注校准的冷启动默认值。DDG 使用此前权重的 60%，TinyFish 从中性权重开始，其他默认值保持不变，不重新归一化。`consensus-v2.1` 使用原始排名、相关来源组折扣和 max+log 共识，元数据修正最多 20%；质量分与列表选择分分离。零权重不投票，旧 `min_score` 阈值需重新校准。详见 [评分设计与迁移](docs/fusion-scoring.md) 和 [引擎池](docs/search-routing.md)。
 
 ---
 
@@ -381,6 +432,10 @@ Pi/DSH 子代理工具加载、旧 `pi-search-boost` 路径与已移除的 `deep
 
 ## 安全
 
+### 页面代理与直连回退
+
+`proxy_trust_required` 要求通过 `SEARCH_BOOST_TRUSTED_PROXY=1` 单独选择信任代理的远程 DNS 和目标 ACL。`proxy_fallback_disabled` 默认不允许直连出口，只有另行接受隐私代价后才设置 `SEARCH_BOOST_PROXY_DIRECT_FALLBACK=1`。两个开关互不替代，也不证明代理最终目的地址是公开地址。系统不可见 TUN 不提供物理目标 public-only 保证。选择前先阅读[网络信任边界与迁移步骤](docs/network-policy.md)。
+
 ### 自定义搜索 API 地址
 
 TUI 默认首页进入 **搜索引擎配置**（文件夹模式：服务与凭据），每个引擎同时显示密钥掩码、当前 Base URL 和 default/custom 标记。选择 **Set / replace Base URL** 修改地址后，可继续保留或修改密钥；**Restore default Base URL** 只恢复地址。可任选单个引擎，无须依次经过所有凭据项；保留其他引擎的密钥与路由选择。状态页和 `config keys --show` 也会显示生效地址。独立 CLI `search-boost config keys` 和首次配置仍保留逐项引导。
@@ -396,6 +451,10 @@ search-boost config keys --reset-base-url exa
 | Exa | `https://api.exa.ai` | `/search` |
 | Brave | `https://api.search.brave.com/res/v1` | `/web/search` |
 | AnySearch | `https://api.anysearch.com/v1` | `/search` |
+| TinyFish Search | `https://api.search.tinyfish.ai` | `/` |
+| DeepSeek Search | `https://api.deepseek.com/anthropic/v1` | `/messages` |
+| Firecrawl | `https://api.firecrawl.dev` | `/v2/search` |
+| Keenable | `https://api.keenable.ai` | `/v1/search` |
 
 填写 API 基础地址，**不要填写完整搜索端点**；网关路径前缀会保留。地址存放在 keys 文件的 `engines.<name>.baseUrl`，兼容现有密钥字符串和路由开关。请仅使用可信、兼容对应引擎 API 的网关：搜索词与已配置密钥会发送到该地址（AnySearch 在 free 池仍不发送密钥）。推荐 HTTPS，也支持本地网关的 HTTP；拒绝包含用户名密码、查询参数或片段的地址。不影响 Exa-free；地址变更后不会复用旧地址的搜索缓存。
 
@@ -403,20 +462,23 @@ API Key 存放在由 SearchBoost 自己管理的凭据文件中，不写入提�
 
 - **文件权限**：密钥存放在 `~/.search-boost/config/keys.json`（可用 `SEARCH_BOOST_HOME` 重定向根目录）。在 POSIX 系统上目录为 `0700`、文件为 `0600`；覆盖写入时先生成全新的 `0600` 临时文件再改名替换，已存在的文件不会被放宽权限。同一根目录下的备份与升级状态同样为 `0600`。环境变量指定的自定义目录会保留其原有权限，但凭据文件仍以 `0600` 创建。Windows 没有 POSIX 权限位，由 ACL 继承决定。
 - **原子写入与加锁**：写入使用 `O_EXCL` 临时文件加改名替换，读取方只会看到旧文件或新文件，不会读到写了一半的内容；写入失败会自行清理临时文件并保留原文件。读改写流程持有独占锁，两个写入者不会静默互相覆盖，被拒绝的修改也不会触碰原文件。
-- **不回显**：API Key 只在调用所属引擎时随请求发送（Tavily、Brave、Exa 的请求参数或请求头）。状态输出、`search-boost config keys --show` 与 doctor 报告只显示掩码（`abcd****wxyz`）；错误信息经过测试不会包含凭据内容，Jev 评测请求中也不含 Key、掩码 Key 或指纹。AnySearch 已参与引擎路由：free 使用匿名额度，api 要求 key，hybrid 优先使用已配置 key；同次融合只计一票。
+- **不回显**：API Key 只在调用所属引擎时随请求发送（Tavily、Brave、Exa、AnySearch、TinyFish 的请求参数或请求头）。状态输出、`search-boost config keys --show` 与 doctor 报告只显示掩码（`abcd****wxyz`）；错误信息经过测试不会包含凭据内容，Jev 评测请求中也不含 Key、掩码 Key 或指纹。AnySearch 已参与引擎路由：free 使用匿名额度，api 要求 key，hybrid 优先使用已配置 key；同次融合只计一票。
 
 
 ---
 
 ## CLI 命令参考（自动化与进阶）
 
-以下 CLI 参考对应 v0.2.4；`refresh` 与 `research` 需要该版本或更新版本。源码合并不等于 npm 发布，在所需版本发布前请从源码运行。
+以下 CLI 参考对应 **0.3.0**。
 
 **DeepSeek Harness Desktop**：交互安装选中 DSH 后，可选择 Desktop / CLI / All，再为 Desktop 选择 **自动安装（默认）** 或 **本地目录接入**。自动方式通过注册表（含自定义安装目录）、默认目录及 PATH 找到桌面版内置命令；先启动一次再完全退出（包括托盘）。本地方式在其他接入（包括 Grok）结束后，最后显示当前包的完整持久目录，由用户粘贴到运行中的 Desktop「插件 → 添加插件」；TUI 等待只读检测，稳定完成后结束，Esc / Ctrl+C 或超时则报告未完成并保留其他结果。检测到保存的安装不代表运行中的插件已加载；没有内置启动器时会明确提示运行时未验证。临时 `_npx` 缓存不能作为本地链接来源。也可直接在应用输入 `search-boost` 从 npm 安装。自动安装/更新仍验证宿主解析器，遮蔽副本不能报成功；禁用状态保留，`--enable-dsh-bundle` 明确要求启用（本地方式由用户在 Desktop 启用）。所有权与验证限制见 [Desktop 接入说明](docs/dsh-desktop.md)。
 
 ```bash
 # ----------------- 启动与基础 -----------------
-search-boost                                # 打开交互式控制面板 (TUI)
+search-boost                                # 快速配置向导
+search-boost tui                            # 独立全屏控制台
+search-boost tui --preview                  # 无需 TTY 的离线只读快照
+search-boost tui --dry-run                  # 预览变更，不写入、不查询额度
 search-boost status                         # 只读磁盘/配置证据；运行中宿主版本仍未知
 search-boost status --json                  # 结构化安装证据
 search-boost research list                  # 列出显式保存的私有研究结果
@@ -436,15 +498,19 @@ search-boost install -t dsh --profile web   # 为 DeepSeek Harness CLI 接入 we
 search-boost install -t dsh --dsh-surface desktop -y # Desktop 原生命令 + 本地包接入
 search-boost install -t dsh --dsh-surface all -y     # Desktop 与 CLI 分别安装
 # 无需全局安装 search-boost / dsh / pnpm（Windows、Linux、macOS）：
-npx --yes search-boost@latest install -t dsh --profile web -y
+npx --yes --package search-boost@0.3.0 search-boost install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # 仅演练安装过程，不写磁盘
 
 # ----------------- 凭据与配置管理 -----------------
 search-boost config keys                    # 命令行配置/查看搜索引擎 Keys
 search-boost config keys --set anysearch=KEY  # 配置 AnySearch 密钥（ANYSEARCH_API_KEY）
-search-boost config layer                   # 切换默认搜索层 (free / api)
+search-boost config keys --set tinyfish=KEY   # 配置 TinyFish Search（TINYFISH_API_KEY）
+search-boost config keys --set firecrawl=KEY  # 配置 Firecrawl（FIRECRAWL_API_KEY）
+search-boost config keys --set keenable=KEY   # 配置 Keenable（KEENABLE_API_KEY）
+search-boost config layer                   # 查看自动路由（旧层偏好不影响默认选择）
 search-boost config x --import-grok         # 从本机 Grok 客户端快速导入 X 凭据
 search-boost config jev                     # 配置 Jev 认知引擎端点与 Token
+search-boost community-login xiaohongshu    # 显式登录专用浏览器；也支持 zhihu / bilibili
 
 # ----------------- 健康检查与诊断 -----------------
 search-boost doctor                         # 离线健康检查
@@ -459,7 +525,7 @@ search-boost uninstall -t cursor,claude -y  # 移除指定宿主的集成与注�
 
 ## 源码安装与本地开发
 
-适用于参与开发，或提前验证尚未进入 npm 正式发布的代码；文档其他位置的 `@latest` 命令指向 npm 已发布版本。
+适用于参与开发，或提前验证尚未发布的代码；`@beta` 选择测试通道，`@latest` 选择稳定通道。
 
 ### 环境准备
 
@@ -474,6 +540,7 @@ search-boost uninstall -t cursor,claude -y  # 移除指定宿主的集成与注�
 # 1. 克隆仓库
 git clone https://github.com/Mr-remon219/search-boost.git
 cd search-boost
+git checkout v0.3.0  # 0.3.0 系列开发分支
 
 # 2. 按 CI 的方式安装依赖
 npm ci
@@ -487,7 +554,8 @@ npm run plugin:sync-grok
 ### 不装全局包直接运行
 
 ```bash
-node cli.mjs                  # 直接从检出目录启动交互式控制台 (TUI)
+node cli.mjs                  # 快速配置向导
+node cli.mjs tui              # 从源码启动独立控制台
 node cli.mjs status           # 查看当前状态摘要
 node cli.mjs install -t pi -y # 从当前检出目录挂载 Pi 扩展
 node cli.mjs install -t dsh --profile web
@@ -508,10 +576,12 @@ search-boost
 | :--- | :--- |
 | `npm run check` | CLI、核心层、适配器与脚本的语法检查 |
 | `npm run prepublishOnly` | 语法与 CI 策略检查、精确依赖锁审计（需要 registry 联网），再运行全部隔离回归入口，含生成资产、安装 / 刷新 / 迁移、搜索、适配器与 MCP |
+| `npm run test:console` | 控制台导航、主题、隐藏输入、额度确认 / 取消与离线响应 fixture |
+| `npm run test:community` | 五平台路由、过滤、快照分页、桥 / worker fixture 和 Adaptive 接入 |
 | `npm run test:network` | 代理重试、curl 兜底、请求边界与兼容性回归 |
 | `npm run test:adapters` | MCP / Pi / DSH 适配器协议测试，以及 Pi 子代理配置迁移诊断 |
 | `npm run test:parallel` | Searcher/Summarizer 契约、DSH 派发预检、取消与工具隔离 |
-| `npm run test:adaptive` | 单次快照 V5 筛选、候选容量边界及 MCP / Pi / DSH 适配器夹具（非真实宿主会话） |
+| `npm run test:adaptive` | 单次快照 V6 筛选（保留 V5 历史读取）、候选容量边界及 MCP / Pi / DSH 适配器夹具（非真实宿主会话） |
 | `npm run smoke` | MCP JSON-RPC 协议冒烟测试 |
 
 回归套件使用隔离状态、本地回环夹具与进程替身，不需要真实引擎 Key；依赖审计需要访问 registry。`npm run prepublishOnly` 全绿是本地 PR 门禁，不证明真实宿主加载、付费服务行为或证据质量。
@@ -527,3 +597,7 @@ search-boost
 ## 开源协议
 
 本项目基于 [MIT License](./LICENSE) 协议开源。
+
+### 配置信任边界
+
+API 密钥和自定义引擎端点只从用户配置或显式环境覆盖读取，不自动加载工作区 `.search-boost-keys.json`。确需信任时，先检查文件，再将 `SEARCH_BOOST_KEYS_FILE` 指向该路径；这同时授权其中的密钥和端点。

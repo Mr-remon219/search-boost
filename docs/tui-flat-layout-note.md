@@ -1,6 +1,6 @@
 # TUI 平铺 / 文件夹布局设计笔记
 
-> 本文保留 beta.6 获批准的布局设计与验收依据，不是 beta.7 当前菜单。beta.7 删除自更新并将安装/刷新/卸载合并到“管理 Agent 接入”；当前行为见 [tui.md](tui.md) 和 [管理接入 note](agent-integration-management-note.md)。
+> 本文保留 beta.6 获批准的布局设计与验收依据，不是当前菜单。beta.7 删除自更新并将安装/刷新/卸载合并到“管理 Agent 接入”；Community 分支将 X 首页入口替换为五平台 Community 配置，X 凭据直接位于 X 页面。当前行为见 [tui.md](tui.md) 和 [管理接入 note](agent-integration-management-note.md)。
 
 - **状态**：用户已确认设计，beta.6 实现已集成；本笔记保留设计依据，实际行为与验证边界见 [tui.md](./tui.md) 和 beta.6 发布记录。
 - **关联问题**：BUG-004，当前文件夹式导航增加了直接访问功能的层级。
@@ -122,10 +122,10 @@ Jev 是可选实验性服务，不强迫新用户在首次配置中设置。
 
 直接展示实际支持工具的多选、当前状态与依赖说明，然后“预览变更 → 确认保存”。
 
-包括 `fused_search`、`fetch_page`、`x_search`、`adaptive_search`、并行研究入口、`search_stats`、`search_layer`；按宿主支持情况标注，不把不同宿主的入口名称强行统一成可调用工具名。
+包括 `fused_search`、`fetch_page`、`community_search`、`community_backend`、`adaptive_search`、并行研究入口、`search_stats`、`search_layer`；按宿主支持情况标注，不把不同宿主的入口名称强行统一成可调用工具名。
 
 - Jev 未配置时，`adaptive_search` 明确标记不可用。
-- 说明关闭 `x_search` 入口不等于关闭 fused 的社区检索。
+- 说明关闭 `community_search` 入口不等于关闭 fused 的社区检索。
 - 保留工具依赖检查与运行中调用的既有处理，不因布局改变权限范围。
 
 ### X 凭据

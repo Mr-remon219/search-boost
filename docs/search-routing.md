@@ -14,13 +14,14 @@ MCP / Pi / DSH fused_search
       → mergeCommunityResults / createXPipeline
       → selectDiverse → 最终 max_results
 
-MCP / Pi / DSH x_search
-  → runtime.runXSearch
-      → official / fallback retrieval
+MCP / Pi / DSH community_search (engines:["x"])
+  → runtime.runCommunitySearch → communitySearch → existing-x provider
+      → runtime.runXSearch → hosted / fallback retrieval
       → createXPipeline：normalize → dedupe → filter → max_results
+      → platform data / channel diagnostics → immutable result pages
 ```
 
-没有 fused_search ↔ x_search 递归，也没有复制 X retrieval 实现。community 使用 keyword 模式；GraphQL user 与 oEmbed thread 路径仍供直接 x_search 使用。
+没有 fused_search ↔ community_search 递归，也没有复制 X retrieval 实现；fused/Adaptive 使用未分页的候选核心。直接 community_search 的 X 支持 keyword/semantic/user/thread；GraphQL user 与 oEmbed thread 路径仍由内部 X 核心使用。独立 x_search 工具已移除。
 
 主要模块：
 
@@ -33,16 +34,29 @@ MCP / Pi / DSH x_search
 
 本次不改安装、全局 npm 迁移或宿主注册流程。
 
+## 默认选择：配置和开关决定，不再手动分层
+
+省略 `engine_pool` 和单次旧 `layer` 参数时，至少一个 API 引擎已配置且启用，就默认**只调用已启用的 API 引擎**；否则使用可用免 Key 引擎。无需全部供应商的 Key，也无需切换“免费层 / API 层”。只启用一个 API 是完整支持的模式，不产生“引擎未配齐”告警。
+
+- 显式 `engine_pool=free/api/hybrid` 仍按原集合选取；`complexity` 和 `ranking` 不变。
+- `engines` 继续覆盖调用集合；所有入口均尊重缺 Key、白名单和停用状态。
+- 默认自动选择只请求可用子集，不把其他供应商未配置当作异常；显式指定池或引擎仍保留不可用警告。
+- API 请求失败不会偷偷改用免 Key 引擎；明确 API 池没有可用 Key 时仍返回空集合与 warnings。
+- AnySearch 匿名模式不算“已配置 API”；配置并启用 AnySearch Key 后可单独成为默认 API。
+- 轻量 TUI 按引擎提供就地启停，也保留集中多选；完整控制台提供每个引擎的确认式开关，并在“默认搜索”只读展示实时选择。
+- 开关变化在下一次搜索读取并影响缓存身份，关闭全部 API 后默认改用免 Key 引擎。AnySearch 的停用仍约束匿名路径。
+
 ## 参数正交性
 
 | 参数 | 默认 | 唯一职责 |
 | --- | --- | --- |
 | `complexity` | `medium` | `simple / medium / complex` 控制预算、至多 1/2/3 个 variants 和默认 basic/basic/advanced depth |
-| `engine_pool` | 从兼容 layer 映射 | `free / api / hybrid` 选择默认调用集合 |
+| `engine_pool` | 自动：有已启用 API 则 api，否则 free | `free / api / hybrid` 选择默认调用集合 |
 | `ranking` | `balanced` | `balanced / research / fresh` 只选择最终 engine-weight preset |
 | `engines` | 省略 | 显式覆盖本次调用集合，可跨 pool；不绕过缺 key 或禁用状态 |
 | `engine_weights` | 省略 | 覆盖指定引擎的评分权重；不增加或移除任何调用 |
-| `community` | `false` | 需要近期开发者/社区声音时额外使用 X Core |
+| `community` | `false` | 严格平台名数组；true=X-only、false/[]=off，选择不启用 backend |
+| `platform_options` | 省略/null | 复用直接社区的各平台参数，只允许明确所选平台，不由参数隐式开启 |
 
 `queries` 是调用方提供的独立角度；query 中的 OR alternatives 也占 variant 预算。没有额外的 LLM 自动改写器。`ranking=fresh` 不隐式修改日期范围、搜索深度或请求参数；时效需求仍用 `recency`。
 
@@ -53,35 +67,58 @@ MCP / Pi / DSH x_search
 | 引擎 | balanced | research | fresh |
 | --- | ---: | ---: | ---: |
 | bing | 0.957 | 0.927 | 1.020 |
-| ddg | 0.981 | 0.903 | 0.927 |
-| yahoo | 0.957 | 0.877 | 0.902 |
+| ddg | 0.589 | 0.542 | 0.556 |
 | exa-free | 1.004 | 1.085 | 0.951 |
 | tavily | 1.049 | 1.105 | 1.084 |
 | brave | 1.004 | 0.951 | 1.125 |
 | exa | 1.049 | 1.146 | 1.063 |
 | anysearch | 1.004 | 1.042 | 0.951 |
+| tinyfish | 1.000 | 1.000 | 1.000 |
+| deepseek-search | 1.000 | 1.000 | 1.000 |
+| firecrawl | 1.000 | 1.000 | 1.000 |
+| keenable | 1.000 | 1.000 | 1.000 |
 
-同一引擎、同一策略的权重跨池共享。上表为固定八引擎原生先验的对数收缩冷启动值（几何均值为 1），不是实测质量排名；完整精度在 routing.js。free 为 bing/ddg/yahoo/exa-free/anysearch；api 为 tavily/brave/exa/anysearch；hybrid 为去重并集。不可按本次成功/可用引擎重新归一化。后续离线标注评估须包含全 1 权重 neutral baseline。
+同一引擎、同一策略的权重跨池共享。原有先验采用固定集合的对数收缩冷启动尺度；本次删除 Yahoo，DDG 乘 0.60，TinyFish 以 1.0 加入，其他数值不变，因此当前表不再承诺几何均值为 1。firecrawl 与 keenable 为新增引擎，同样采用未经校准的中性值 1.0。权重不是实测质量排名；完整精度在 routing.js。free 为 bing/ddg/exa-free/anysearch；api 为 tavily/brave/exa/anysearch/tinyfish/deepseek-search/firecrawl/keenable；hybrid 为去重并集。不可按本次成功/可用引擎重新归一化。后续离线标注评估须包含全 1 权重 neutral baseline。
 
 池成员固定，实际可用性动态读取。API-only 池没有可用 key 时返回空集合与 warnings，不偷偷启用免费池。
 
 `anysearch` 同时属于 free/api 池，hybrid 去重后只调用一次；`ANYSEARCH_API_KEY` 或 keys.json 的 `anysearch` 保存密钥。free 匿名调用，api 要求 key，hybrid 有 key 时用 key、否则匿名。显式禁用/白名单也作用于匿名路径，不降级绕过禁用。匿名限额和网络错误正常报告，不从错误正文自动注册或保存凭据。
 
+### DeepSeek Search
+
+`deepseek-search` 为 keyed API 引擎，默认 api/hybrid，三个预设权重均为 1.0。支持已有 Key、Base URL、启停和权重覆盖契约；详见 [接入说明](deepseek-search.md)。
+
+### TinyFish Search 与 Yahoo 移除
+
+`tinyfish` 是正式 keyed API 引擎，通过 `TINYFISH_API_KEY` 或 `config keys --set tinyfish=KEY` 配置，支持既有启停、白名单及 Base URL。默认 free 集合不包含它；显式 `engines` 依然可跨池选择。已有白名单不自动增加新引擎。配置可用性不等于真实联网成功。
+
+请求 `GET https://api.search.tinyfish.ai/`，使用 `X-API-Key`，发送 `query`、原生域名参数及可选 `recency_minutes`。第一页结果在客户端限量，不发未文档化 count 参数、不自动翻页、不启用内嵌 Fetch。保留 `position` 原始排名，`date` 缺失时未知；默认地区/语言为服务的 US/en。
+
+当前零费用额度为 30 请求/分钟、500 请求/小时，钱包 $0 仍可使用；每个 variant 和社区检索请求独立占额度。HTTP 配额与权限失败正常披露，不自动充值或重试。数字型 Retry-After 在 429 提示中保留。
+
+Yahoo 不再有运行时或公开枚举入口，显式引擎/权重输入拒绝；历史记录保持原始来源，不转译成其他引擎。此次不改变 TinyFetch、Jina 或 `fetch_page`。
+
 ## 兼容方案
 
-- 保留原 layer 配置、环境变量、`search_layer` 与 `/web_change`：旧 `free → free`，旧 `api → hybrid`。这是保留旧 api layer 原本包含免费引擎的语义，不是新 API-only 池的定义。
+- 原 layer 文件和 `SEARCH_BOOST_LAYER` 不再决定隐式搜索默认值，也不自动重写用户旧文件。旧 `config layer`、`search_layer`、`/web_change` 仅保留兼容偏好的读写，并明确提示其不影响自动选择。首次配置不再询问或创建层配置。显式单次 `layer=free/api` 仍映射 `free/hybrid`，推荐改用 engine_pool。
 - 显式 `engine_pool` 优先于 layer；MCP/DSH 保留废弃的单次 `layer` alias。
 - Core 暂时接受 `complexity=auto`，仍用旧 heuristic，但返回弃用 warning。公开工具 schema 仅列 simple/medium/complex；旧客户端应刷新 schema。
 - 保留返回值中的 `layer`、`tier`、`engineStats` 等现有字段，增加 pool、ranking 和实际执行诊断。
 - 保留 `fusion.js` 的公共 URL helper re-exports 和 tier table 导出；tier table 现在不再改变引擎集合。
+
+## Adaptive 与五平台社区共用底座
+
+Adaptive → runFused → 未分页 communitySearch；不调用公共分页入口、不维护第二套获取。两个入口透传同一 nullable platform_options，平台 query 只有调用者显式覆盖，Web 仍用原问题。各平台 author/date/content_type/subreddits 的硬条件也约束普通 Web 匹配行，不用 X handle/身份规则处理其他平台。非 X recency 软、明确日期逐边界硬；历史硬上界优先于生成窗口。日观测代表整天，不能冒充午夜通过日内硬上界；日期/作者冲突保持未知，选中域名的未知内容路径也不能绕过类别。X user 不把 Web 帖子造为账户，thread 仅合并可验证目标帖子；账户创建日期不冒充帖子日期。明确所选非 X 内容按平台身份合并 Web/native 别名并安全化对应 URI（含出处）；不按标题合并、不普遍删其他 Web query。索引包装仍是原 Web engine 票；各索引原日期观察保留，矛盾不 first-wins，X Snowflake 权威不被其覆盖。
+
+显式独立社区来源可在无普通引擎时经 fused 执行/报告，配置不足与 partial 不静默降级。本次 snapshot engineRequestsNow 排除嵌套 cache/in-flight 旧计数，原渠道 stats 保留；Reddit 范围发现的 Web 请求不漏记。Adaptive v6 保留渠道/选中出处的有类型摘要，分页/保存仍为自身 s6/v3 零网络重放；community 直接入口 c1 独立。详见 [接入滚动设计](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/adaptive-community-integration-spec.md)。
 
 ## X 约束、去重与最终选择
 
 1. 所有 X retrieval 来源经过相同 normalize/merge/filter。URL 中的 post ID 优先；现代 Snowflake 可恢复真实时间，优先于模型给出的冲突日期。缺失日期/作者/计数不会被虚构成符合过滤条件的数据。
 2. `allowed_x_handles` / `excluded_x_handles` / username 与字段日期做交集；字段 `to_date` 包含整天，query `until:` 仍为排他上界。可验证的 query metadata operators 统一在本地执行；无法验证的约束会提示或排除缺元数据项。
 3. X 用 post ID 去重，所以 x.com、twitter.com、mobile、`i/web/status` 与带作者路径不会重复。Web 使用去 tracking/fragment 的 URL key，保留路径大小写、有意义的 query 和端口。
-4. community 候选模式不提前执行最终过滤/限量；先与普通 Web leg 中的 X 帖子合并元数据，再统一执行 X 约束，防止普通 Web 结果绕过作者/日期过滤。候选模式有独立缓存键，不会污染公开 x_search。
-5. 相同来源不重复计分：同引擎多个 variant 命中的 URL 只保留最佳 rank 贡献；Web/X 两条路都找到同一帖子时，每个引擎只贡献一次。official 或无 Web provenance 的 fallback 使用中性权重 1，不属于可自定义的八个 Web engine weights。
+4. community 候选模式不提前执行最终过滤/限量；先与普通 Web leg 中的 X 帖子合并元数据，再统一执行 X 约束，防止普通 Web 结果绕过作者/日期过滤。候选模式有独立缓存键，不会污染直接 community_search 的 X 结果。
+5. 相同来源不重复计分：同引擎多个 variant 命中的 URL 只保留最佳 rank 贡献；Web/X 两条路都找到同一帖子时，每个引擎只贡献一次。official 或无 Web provenance 的 fallback 使用中性权重 1，不属于可自定义的当前 Web engine weights。
 6. 最终使用已入选结果的标题/摘要 shingle 相似度选择，质量分不变；短摘要 Web 回退为每域最多两条，单站点限制豁免；X 按作者最多两条。未知 X 作者使用同一保守桶，不允许靠缺元数据绕过作者多样性。
 7. include/exclude domains（含 query 中的 site 规则）作用于全部结果。X/Twitter 域名 aliases 视为同一来源；排除 X 时跳过 community。显式 recency 在社区通道转为 UTC 日期下界，最终也检查普通 Web leg 的 X 帖子。Web recency 仍为软时效偏好/引擎提示，未知日期中立。
 

@@ -8,8 +8,8 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.2.4-orange?style=flat-square" alt="version"></a>
-  <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.0-blue?style=flat-square" alt="v0.3.0"></a>
+  <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm package"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/architecture-unified%20core-8a2be2?style=flat-square" alt="Architecture"></a>
@@ -27,7 +27,7 @@
 
 ---
 
-> **v0.2.4**: single-snapshot Jev screening (schema V5), private research save/recovery, bounded PDF text extraction, Desktop integration, and separate package updates / integration management. See the [release and migration notes](./docs/v0.2.4-release.md): V3 adaptive inputs/outputs and the `upgrade` command have changed. This source version does not imply npm publication; `@latest` follows the published registry.
+> **SearchBoost 0.3.0**: Yahoo is removed. Page fetching through an HTTP(S) proxy now fails closed unless you opt in with `SEARCH_BOOST_TRUSTED_PROXY` or `SEARCH_BOOST_PROXY_DIRECT_FALLBACK`. Enabled API keys, including the new Firecrawl and Keenable engines, join default searches and may incur provider charges; pass `engine_pool: "free"` to stay keyless. Uninstall removes the selected host integrations, not the npm package. See the [0.3.0 release notes](./docs/v0.3.0-release.md).
 
 ## Table of Contents
 
@@ -41,8 +41,8 @@
   - [Tool Responsibilities & Boundaries](#tool-responsibilities--boundaries)
   - [1. `fused_search` Multi-Engine Search](#1-fused_search-multi-engine-search)
   - [2. `fetch_page` Smart Content Reader](#2-fetch_page-smart-content-reader)
-  - [3. `x_search` X (Twitter) Intelligence](#3-x_search-x-twitter-intelligence)
-  - [4. `adaptive_search` Jev Intent-Guided Search (Experimental)](#4-adaptive_search-jev-intent-guided-search-experimental)
+  - [3. `community_search` Five-Platform Retrieval](#3-community_search-five-platform-retrieval)
+  - [4. `adaptive_search` Jev / Laya Intent-Guided Search (Experimental)](#4-adaptive_search-jev--laya-intent-guided-search-experimental)
   - [Engine Pools & Scoring Presets](#engine-pools--scoring-presets)
 - [Parallel Multi-Agent Research Workflows](#parallel-multi-agent-research-workflows)
 - [Security](#security)
@@ -56,19 +56,21 @@
 ## Key Features
 
 - **Multi-Engine Parallel Fusion (`fused_search`)**  
-  Queries multiple search providers in parallel. Features an out-of-the-box **keyless free pool** (Bing, DuckDuckGo, Yahoo, Exa-free, AnySearch) and a keyed **API pool** (Tavily, Brave, Exa, AnySearch). Automatically performs cross-engine URL deduplication, domain routing, and relevance re-ranking.
+  Queries multiple search providers in parallel. Features an out-of-the-box **keyless free pool** (Bing, DuckDuckGo, Exa-free, AnySearch) and a keyed **API pool** (Tavily, Brave, Exa, AnySearch, TinyFish, DeepSeek Search, Firecrawl, Keenable). Automatically performs cross-engine URL deduplication, domain routing, and relevance re-ranking.
 - **Clean Webpage Content Extractor (`fetch_page`)**  
   Fetches the origin first for low latency, with optional same-route curl compatibility fallback and Jina Reader backup. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
-- **X / Twitter Community Intelligence (`x_search`)**  
-  Retrieves public posts, user timelines, and discussion threads via official xAI API or an anonymous fallback channel. Derives UTC timestamps from verifiable Snowflake post IDs and applies author/date filters only when metadata can be verified. Coverage may be incomplete, stale or empty; a retrieved sample does not establish platform-wide sentiment.
-- **Jev Intent-Guided Search (`adaptive_search` · Experimental)**
-  Supply one full question and a required research intent. One pre-search Jev strategy request selects the fixed ranking preset and (when community is omitted) whether to add the already-wired community branch; one bounded fused snapshot (32 candidates for targets up to 10; larger targets keep the same headroom ratio, at most 160) is then screened with fixed safety, prototype value 3/4/5 and source-discount options. No keyword planning, no constraints gate, no language check, no automatic page read, and no self-set cumulative budget stop; cursor and saved-result pagination only replay stored results. No claim of verified or complete answers.
+- **Five-Platform Community Retrieval (`community_search`)**
+  Explicitly select Reddit, X, Bilibili, Zhihu or Xiaohongshu. Each platform has one free integration in the TUI: Reddit archives, X basic retrieval, and built-in native readers for the three Chinese platforms. No separate MCP, Docker or browser bridge deployment. Optional community installation is the last onboarding step: choose local Chrome / Chromium or a removable SearchBoost-owned download; scan its private QR PNG in the app, then account verification and session storage are automatic. Community supports enablement, re-login and uninstall. Legacy index / bridge records remain compatible but are not multiple free source choices. Discussion completeness is bounded by verifiable current-session evidence; Bilibili focuses public notes with sampled comments, not video transcripts. Setup never guarantees platform access or full coverage. See [session setup and boundaries](docs/community-search.md#会话和接入).
+- **Jev / Laya Intent-Guided Search (`adaptive_search` · Experimental)**
+  Supply one full question and a required research intent. One pre-search judgment strategy request selects the fixed ranking preset and (when community is omitted) whether to add the already-wired community branch; one bounded fused snapshot (32 candidates for targets up to 10; larger targets keep the same headroom ratio, at most 160) is then screened with fixed safety, prototype value 3/4/5 and source-discount options. No keyword planning, no constraints gate, no language check, no automatic page read, and no self-set cumulative budget stop; cursor and saved-result pagination only replay stored results. No claim of verified or complete answers.
 - **Native Multi-Agent Parallel Research**  
   Bundles `search-boost` and `search-boost-parallel-research` skills. In hosts supporting subagents (Cursor, Claude Code, Pi, DSH), tasks can be dispatched to parallel Searchers (gathering evidence) and Summarizers (pure synthesis without tools), supporting both Fast and Complex waves.
+- **Two Purpose-Built Terminal Interfaces**
+  Keep the quick configuration wizard with `search-boost`, or open the status-first three-pane console with `search-boost tui`. The console offers independent themes, masked inline editing and quota snapshots after explicit consent; browsing and preview stay offline.
 - **Unified Core Across All Host Ecosystems**  
   A single, host-neutral core runtime powering standard Model Context Protocol (MCP) servers, alongside native extensions for Pi and Cordis plugin bundles for DeepSeek Harness (DSH).
 - **Zero-Config Onboarding & Strict Security**  
-  **Requires zero API keys to start** using the free engine pool. Sensitive credentials are stored as plaintext in local private configs with restricted file permissions (POSIX `0600`); this is not encryption at rest. Uses local networking and proxy DNS, with bounded requests and explicit fallback. Configured credentials are kept out of model prompts and diagnostic output.
+  **Requires zero API keys to start** using the free engine pool. Sensitive credentials are stored as plaintext in local private configs with restricted file permissions (POSIX `0600`); this is not encryption at rest. Page fetches block local/private targets and pin validated direct DNS; page proxy routes fail closed unless `SEARCH_BOOST_TRUSTED_PROXY=1` explicitly delegates remote DNS and destination ACLs. Proxy-to-direct fallback is independently disabled unless `SEARCH_BOOST_PROXY_DIRECT_FALLBACK=1`, which can expose the local egress IP. Fixed user-configured API endpoints do not require the page trust flag. Requests remain bounded. Configured credentials are kept out of model prompts and diagnostic output.
 
 ---
 
@@ -82,7 +84,7 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
                               │
                     Shared SearchBoost Core
                     lib/runtime.mjs facade
-              search · fetch · X · adaptive evidence
+              search · fetch · community · adaptive
                               │
               ┌───────────────┼───────────────┐
               │               │               │
@@ -96,9 +98,9 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
      └─────────────────┘
 ```
 
-- **Core (`lib/`)**: Host-neutral algorithms, engine orchestration, Jev client protocol, and network safety policies.
+- **Core (`lib/`)**: Host-neutral algorithms, engine orchestration, dedicated judgment adapter protocol, and network safety policies.
 - **Adapters (`adapters/`)**: Maps core operations into host-specific protocols (MCP JSON-RPC, Pi Extension API, DSH Cordis lifecycle).
-- **Agents (`agents/`)**: Host prompt contracts, workflow templates, and native skill definitions. See the [prompt responsibility contract](docs/prompt-contract.md) and [beta.8 release notes](docs/v0.2.4-beta.8-release.md) for the Agent-facing routing update.
+- **Agents (`agents/`)**: Host prompt contracts, workflow templates, and native skill definitions. See the [prompt responsibility contract](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/prompt-contract.md) and [beta.8 release notes](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/v0.2.4-beta.8-release.md) for the Agent-facing routing update.
 
 ---
 
@@ -125,15 +127,14 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
 ### 1. Install & Launch the Dashboard
 
 ```bash
-# Install globally
-npm install -g search-boost
+npm install -g search-boost@0.3.0
 
-# Launch the interactive terminal UI (TUI)
-search-boost
+search-boost       # Quick setup / configuration wizard
+search-boost tui   # Independent full-screen control center
 ```
 
 > [!TIP]
-> **Zero API Keys Required to Start**: SearchBoost includes a keyless free pool (Bing, DuckDuckGo, Yahoo, Exa-free, AnySearch). No paid-provider signup is required; availability and result coverage depend on the providers and your network.
+> **Zero API Keys Required to Start**: SearchBoost includes a keyless free pool (Bing, DuckDuckGo, Exa-free, AnySearch). No paid-provider signup is required; availability and result coverage depend on the providers and your network.
 
 ### 2. 3-Step Setup Wizard
 1. Select **Setup wizard** on the default flat TUI home (folder layout: Installation & integrations → Setup). Configure engine keys (or skip to use free tier) and optional X credentials.
@@ -144,12 +145,21 @@ search-boost
 
 ## Upgrade & Migration Guide
 
+### Page proxy migration
+
+Existing HTTP(S) proxy settings no longer authorize arbitrary page fetching:
+
+- `proxy_trust_required` (`proxy trust is required`): set `SEARCH_BOOST_TRUSTED_PROXY=1` only after you trust the proxy's remote DNS and destination ACLs.
+- `proxy_fallback_disabled` (`direct fallback is disabled`): repair the proxy first. Separately set `SEARCH_BOOST_PROXY_DIRECT_FALLBACK=1` only if you accept direct egress and possible exposure of your local egress IP.
+
+The switches are independent and also accept `true`. Set accepted values in your MCP server environment, then restart the server. Do not enable both just to restore connectivity. Fixed API gateways do not require page-proxy trust. See [network policy and migration](docs/network-policy.md) for direct routing, redirects, and TUN limits.
+
 ### 1. Routine Updates: npm First, Then Refresh Integrations
 
-The commands below describe v0.2.4. Before it is published, `@latest` may still install an older release without `refresh` or `research`; use a v0.2.4 source checkout as described below. Use npm to update the package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
+Upgrade with npm. `search-boost@0.3.0` pins this release; `@latest` selects the current stable channel and `@beta` the prerelease channel. Installation replaces your local global executable. Use npm to update the package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
 
 ```bash
-npm install -g search-boost@latest --prefer-online
+npm install -g search-boost@0.3.0
 search-boost
 # → Manage agent integrations → Refresh existing integrations → select scopes
 # Or refresh all existing integrations:
@@ -183,6 +193,12 @@ search-boost
 
 ## Interactive Console (TUI)
 
+**Two interfaces coexist:** `search-boost` is the configuration-first quick TUI (retaining Clack); `search-boost tui` is the status-first independent full-screen console with a fixed sidebar, configuration list, wide-screen details and inline forms/confirmation. Supports `--dry-run`, `--no-color` and read-only `--preview`. Tab / Shift+Tab switches the three panes, arrows navigate, 1–8 jump sections, Enter moves from the list to details (then runs the selected action), PgUp / PgDn scrolls details, E edits, Space toggles, ? shows help and Q exits. See [Independent console TUI](docs/console-tui.md). The console is available in this beta; `search-boost` without arguments keeps the existing quick configuration TUI.
+
+**Console-only: API quota cards and overview.** Press U to query after explicit network consent; browsing stays offline. Tavily reports credits, Brave reads request quotas via one potentially billable search, and TinyFish reports the account wallet. Exa / AnySearch currently show requirements and official dashboard links rather than invented balances. See [quota adapters and safety boundaries](docs/engine-quota.md).
+
+### Quick configuration TUI
+
 Launch `search-boost` without arguments to access the interactive dashboard built with Clack. Manage host integrations, search configuration and credentials here; package updates are handled by npm:
 
 The default **flat** home lists these actions in order:
@@ -190,8 +206,8 @@ The default **flat** home lists these actions in order:
 | Home entries | Behavior |
 | :--- | :--- |
 | Setup wizard; Manage agent integrations; Status | Guided setup; install / scoped refresh / confirmed uninstall; read-only status |
-| Search engine configuration; Default search layer; Tool switches | Choose individual engines; `free` / `api`; shared MCP / Pi / DSH switches |
-| X credentials; Jev configuration (experimental) | Masked credential management |
+| Search engine configuration; Search defaults (automatic); Tool switches | Configure keys and engine switches (one API is enough); read-only automatic selection; shared MCP / Pi / DSH switches |
+| Community configuration; judgment models (Jev / Laya) | One free integration per platform: install / log in / enable / uninstall; judgment credentials |
 | Native web search; Print MCP snippet | Explicit permission choices; read-only snippets |
 | TUI settings; Exit | Menu layout before display language; close the console |
 
@@ -199,9 +215,11 @@ The default **flat** home lists these actions in order:
 
 Layout and language changes apply immediately and are saved in `~/.search-boost/config/tui.json` (or `$SEARCH_BOOST_HOME/config/tui.json`). Missing layout (including legacy language-only settings) defaults to flat. Without a saved language preference, Chinese system locales select Simplified Chinese; other locales select English. The preference also applies to standalone interactive setup/config commands, not non-interactive CLI output, search results or agent replies. Tool names, commands, paths, MCP snippets and raw upstream errors remain unchanged. Dry-run previews layout/language without saving; malformed settings are warned about, not overwritten. See [TUI navigation and language settings](docs/tui.md).
 
+**Community configuration** opens the five platforms directly, with one free integration per platform rather than a source picker. Install, log in, enable/disable and uninstall Xiaohongshu / Zhihu / Bilibili here; choose a local browser program or an isolated, removable SearchBoost download. Optional community installation is the last setup step. The console shows lifecycle cards and a full QR when it fits; otherwise use the PNG link or O/Enter. The quick TUI provides the PNG path. Ctrl+click is handled where the terminal reports it; macOS native links may use Cmd+click. Platform uninstall removes native configuration and owned login data; separate browser uninstall removes only SearchBoost’s download, keeping local browsers, shared caches and account sessions; it does not enable another source. Reddit scopes, X credentials and judgment profiles remain manageable. Cancel and dry-run do not download, launch browsers or write configuration.
+
 ### Tool switches
 
-Open **Tool switches** (folder layout: Search & tools → Tool switches), toggle with Space, press Enter to review, then confirm. Esc or declining confirmation writes nothing; an empty selection disables all tools. Locked `adaptive_search` appears struck through in the status panel and is excluded from selectable choices until Jev is configured. Configuring Jev makes it available by default; an explicit OFF preference is preserved.
+Open **Tool switches** (folder layout: Search & tools → Tool switches), toggle with Space, press Enter to review, then confirm. Esc or declining confirmation writes nothing; an empty selection disables all tools. Locked `adaptive_search` appears struck through in the status panel and is excluded from selectable choices until a judgment profile is configured. Configuring a profile makes it available by default; an explicit OFF preference is preserved.
 
 Preferences are shared through `~/.search-boost/config/tools.json` (or `$SEARCH_BOOST_HOME/config/tools.json`), using atomic, locked writes. No host restart or reinstall is needed once the updated adapters are loaded:
 
@@ -209,7 +227,7 @@ Preferences are shared through `~/.search-boost/config/tools.json` (or `$SEARCH_
 - **Pi:** active tools refresh within approximately 300ms; unrelated and initially excluded tools are preserved. Watchers stop on session shutdown.
 - **DSH:** registrations remain present but disabled calls fail immediately; the native search/fetch provider paths obey the same switches.
 
-Every new invocation checks the current preference, including stale tool handles. Existing requests finish normally. Removing Jev credentials locks adaptive calls (including pagination and saved-result recovery); restoring credentials does not override explicit OFF. These are **tool-entry switches**, not engine permissions: enabled adaptive research screens one internal fused snapshot and does not read pages automatically, and fused community search may still use internal X retrieval. Searcher waves in Pi/DSH also require the shared fused_search and fetch_page entries and DSH scoped tools: disabled dependencies prevent initial dispatch, and are checked again before each child starts. Started children finish normally; tool-free summarizers do not require these entries. Checks never enable tools or expand permissions. Slash commands remain available for recovery. Existing processes running older adapter code require one reload/update first. Hosts sharing these settings must use the same SearchBoost home.
+Every new invocation checks the current preference, including stale tool handles. Existing requests finish normally. An unavailable selected judgment profile locks adaptive calls (including pagination and saved-result recovery); restoring configuration does not override explicit OFF. These are **tool-entry switches**, not engine permissions: enabled adaptive research screens one internal fused snapshot and does not read pages automatically, and fused community search may still use internal X retrieval. Searcher waves in Pi/DSH also require the shared fused_search and fetch_page entries and DSH scoped tools: disabled dependencies prevent initial dispatch, and are checked again before each child starts. Started children finish normally; tool-free summarizers do not require these entries. Checks never enable tools or expand permissions. Slash commands remain available for recovery. Existing processes running older adapter code require one reload/update first. Hosts sharing these settings must use the same SearchBoost home.
 
 ---
 
@@ -223,10 +241,11 @@ When integrated, agents automatically receive standard tool definitions and auto
 | :--- | :--- | :--- |
 | `fused_search` | Parallel multi-engine querying, deduplication, and diversity re-ranking | A single search step; follow-up decisions remain with the parent agent |
 | `fetch_page` | Reading clean content from public URLs with optional keyword focus | Not an authenticated browser; local network and proxy policy still apply |
-| `x_search` | Retrieving public X posts, author timelines, or discussion threads | Does not guarantee exhaustive comment threads or total sentiment sampling |
-| `adaptive_search` | **Experimental**: one bounded fused snapshot + fixed-option Jev screening for one question and a required intent | Selected URLs with reviewed extracts and value labels; targetMet is quantity only, not verified answers |
+| `community_search` | Explicit Reddit / X / Bilibili / Zhihu / Xiaohongshu retrieval, per-platform filters and snapshot paging | Source availability varies; no exhaustive coverage, automatic login or sentiment guarantee |
+| `community_backend` | List/check or explicitly register/update/remove a platform source | List/check are offline readiness checks; mutations require user authorization, not just a tool parameter |
+| `adaptive_search` | **Experimental**: one bounded fused snapshot + fixed-option judgment screening for one question and a required intent | Selected URLs with reviewed extracts and value labels; targetMet is quantity only, not verified answers |
 | `search_stats` | Reading engine status, memory cache hits, and recent diagnostic stats | Read-only; configuration readiness does not guarantee active external network reachability |
-| `search_layer` | Viewing or switching compatibility search layer in MCP | `show` is read-only; changing layers mutates persistent configuration on disk |
+| `search_layer` | Inspecting automatic routing and legacy preference in MCP | `show` is read-only; legacy writes do not change automatic engine selection |
 
 ---
 
@@ -246,10 +265,10 @@ Dispatches queries across engines concurrently, normalizes URLs, strips redirect
 }
 ```
 
-- **`engine_pool`**: `free` (keyless Bing, DuckDuckGo, Yahoo, Exa-free, AnySearch), `api` (configured API engines), or `hybrid` (both pools). Unavailable or disabled engines are skipped. When omitted, the compatibility layer maps `free` to the free pool and `api` to hybrid.
+- **`engine_pool`**: `free` (keyless Bing, DuckDuckGo, Exa-free, AnySearch), `api` (configured API engines), or `hybrid` (both pools). Unavailable or disabled engines are skipped. When omitted, the compatibility layer maps `free` to the free pool and `api` to hybrid.
 - **`ranking`**: Final engine-weight presets: `balanced` (default), `research`, or `fresh`. They do not change query variants, search depth or recency filters, and do not establish source authority or freshness.
 - **`complexity`**: `simple` (1 query variant), `medium` (up to 2 variants), `complex` (up to 3 deep variants).
-- **`community`**: Boolean (`false` by default). Set to `true` to blend real-time X developer discussions into the final result quota.
+- **`community`**: Platform-name array (e.g. `["reddit","x","zhihu"]`) or legacy boolean. `false`/`[]` disables; old `true` selects X only. Defaults false, shares the final quota, and never enables a backend.
 
 ---
 
@@ -274,29 +293,50 @@ Reads webpage content from search URLs. Reads and cleans the origin first; PDFs 
 
 ---
 
-### 3. `x_search` X (Twitter) Intelligence
+### 3. `community_search` Five-Platform Retrieval
 
-Designed for real-time technical tracking and first-party developer updates. Supports keyword search, author timelines, and thread conversations.
+Choose platforms explicitly; install / enable each platform’s one free integration in either TUI. Selection does not enable a disabled backend or install a browser. The former public `x_search` entry is retired; use `community_search` with `engines:["x"]`. CLI X credentials and Pi / DSH `/x-login` / `/x-logout` remain available.
 
-**Tool Arguments Example**:
 ```json
 {
-  "query": "Claude 3.7 Sonnet hybrid reasoning from:AnthropicAI",
-  "type": "keyword",
-  "max_results": 5
+  "engines": ["reddit", "zhihu"],
+  "query": "Node.js migration experience",
+  "platform_options": {
+    "reddit": { "subreddits": ["node"], "max_pages": 2 },
+    "zhihu": { "content_type": "answer" }
+  },
+  "max_results": 10,
+  "page_size": 3
 }
 ```
 
-- **Timestamp derivation**: When a valid Snowflake post ID is available, it can supply a UTC creation timestamp if platform metadata is missing or inconsistent; this does not verify the post text.
-- **Filters**: Keyword mode accepts X operators such as `from:username`, `since:YYYY-MM-DD`, and `until:YYYY-MM-DD`. Use `from_date` / `to_date` for explicit date bounds; candidates without verifiable author/date metadata are omitted when those filters apply.
+| Platform | Implemented sources | Important limits |
+| :--- | :--- | :--- |
+| Reddit | Bounded Arctic Shift archive collection; web index | Scoped / cached corpus, not real-time all-Reddit search or complete comments |
+| X | Existing hosted xAI / Grok search and best-effort fallback | Keyword, semantic, user, thread; metadata filters require verification; threads may be partial |
+| Bilibili | Built-in free native integration | Public notes, articles, Opus and bounded comments; no video transcription |
+| Zhihu | Built-in free native integration | Current-session accessible questions, answers and discussion; explicit completeness |
+| Xiaohongshu | Built-in free native integration | Current-session notes and discussion; no cookie export, OCR or transcription |
+
+- `engines` is required for a new direct search. Per-platform options include query/date overrides and supported content / author / scope filters. Unknown dates or authors cannot satisfy hard filters.
+- Items expose provenance, route and typed platform data; channels distinguish unavailable, excluded, empty, failed and partial results. A sample cannot establish platform-wide sentiment or completeness.
+- `cursor` replays the captured result set; `save_results:true` opts into private persistence and `saved_result_id` recovery. Reads are zero-network and retain the original capture date; they do not refresh evidence.
+- In `fused_search` / `adaptive_search`, use `community:["reddit","x"]` to opt into platforms. Legacy `true` means X only; `false` / `[]` disables. Omitted fused community stays off; omitted Adaptive community lets its strategy decide X only.
+- Three-platform setup uses a background isolated browser and app QR scan; no manual bridge deployment. See [QR, browser isolation and uninstall](docs/community-browser-login.md). Legacy bridge / index records remain compatible for read-only inspection or explicit removal. Searching never installs, logs in or changes configuration, bypasses gates or modifies platform content.
+
+See [community sources, setup and evidence boundaries](docs/community-search.md).
 
 ---
 
-### 4. `adaptive_search` Jev Intent-Guided Search (Experimental)
+### 4. `adaptive_search` Jev / Laya Intent-Guided Search (Experimental)
 
-**Vercel support**: in TUI → Jev configuration (folder layout: Services & credentials → Jev configuration), enter `https://ai-gateway.vercel.sh/v1` and a Vercel AI Gateway key. SearchBoost selects the official SDK evaluation model `typesafe-ai/jev`, not chat completions. The default TypeSafe `/systemone` path remains supported. Both paths use only the canonical user Jev credential, not environment keys, and respect server rate-limit delays.
+**Simplified setup**: TUI → Judgment models (Jev / Laya) (folder layout: Services & credentials → Judgment models) shows the current profile, puts Configure judgment service first, then Switch / manage saved profiles. With no saved configuration, the saved-profile entry is hidden; Escape exits. Select Jev / Laya, set the Base URL and API key, then confirm. First-time setup offers this optional step, skipped by default; ordinary search needs no judgment model.
 
-Supply **one question** (`questions` has exactly one item) plus a **required research `intent`** and optional soft `preferences`. Write them in English as a caller instruction: the server never language-checks, rejects or translates them, and any language is searched exactly as written. The original question is the only query — there is no keyword planning and no query expansion. One pre-search Jev strategy request selects the fixed `balanced`/`research`/`fresh` ranking and, when `community` is omitted, `enable`/`disable`/`unknown` for the already-wired community (X) branch; an explicit `community` true/false overrides that choice and is never asked back. That single fused call collects a **bounded snapshot: 32 candidates for targets up to 10, ceil(max_results×32/10) for larger targets (at most 160)** (web and community rows share it), and every declared candidate is screened with fixed options: safety `clear`/`violation`/`unavailable`, prototype value levels 0-5, source discounts from real positive-contribution engines, and one match per preference. Only safe material with an established value 3/4/5 is delivered, ranked by the versioned screening formula; confidence is audit-only. There is no early stop at the first K acceptable links, no automatic page read, and no self-imposed cumulative cost, token, request-count or whole-run time budget — real single-request timeouts, limited retries, authentication/rate-limit failures, safety refusals and explicit cancellation still apply.
+**Vercel support**: choose Configure judgment service → Jev → Vercel AI Gateway. The Base URL is fixed to `https://ai-gateway.vercel.sh/v1`; enter a Vercel AI Gateway key, not a TypeSafe key. SearchBoost selects the official SDK evaluation model `typesafe-ai/jev`, not chat completions. The default TypeSafe `/systemone` path remains supported. Both paths use only the selected canonical user judgment profile, not environment keys, and respect server rate-limit delays.
+
+**Laya support**: choose Configure judgment service → Laya and enter the self-hosted API prefix (without `/systemone`) and an optional API key. New configurations use `multilingual` and server-default token budgets; changes to an existing destination preserve its model and budgets. Leave the key empty to keep a stored key, or enter `-` to clear an optional Laya key. No empty Bearer is sent. The quick TUI generates profile names; saved profiles support switching, editing, read-only inspection and deletion. Editing does not activate a profile; a changed URL never inherits its old key. Missing diagnostics, truncation, collapsed options, abstention or absent offline head-capacity evidence make judgments unavailable, never model-approved residual choices. See [capacity evidence and migration](docs/v0.2.5-release.md). New runs identify the selected provider in `run.judgment`; historical records are never silently upgraded.
+
+Supply **one question** (`questions` has exactly one item) plus a **required research `intent`** and optional soft `preferences`. Write them in English as a caller instruction: the server never language-checks, rejects or translates them, and any language is searched exactly as written. The original question is the Web query — there is no keyword planning or model query expansion; only explicit caller-supplied platform queries may override their community leg. Shared nullable `platform_options` apply through the same fused base (not a second paged community call) and require matching explicit community selection. One pre-search judgment strategy request selects the fixed `balanced`/`research`/`fresh` ranking and, when `community` is omitted, `enable`/`disable`/`unknown` for the already-wired community (X) branch; an explicit `community` boolean or platform array overrides that choice and is never asked back; legacy true still selects X only and arrays never enable backends. That single fused call collects a **bounded snapshot: 32 candidates for targets up to 10, ceil(max_results×32/10) for larger targets (at most 160)** (web and community rows share it), and every declared candidate is screened with fixed options: safety `clear`/`violation`/`unavailable`, prototype value levels 0-5, source discounts from real positive-contribution engines, and one match per preference. Only safe material with an established value 3/4/5 is delivered, ranked by the versioned screening formula; confidence is audit-only. There is no early stop at the first K acceptable links, no automatic page read, and no self-imposed cumulative cost, token, request-count or whole-run time budget — real single-request timeouts, limited retries, authentication/rate-limit failures, safety refusals and explicit cancellation still apply.
 
 ```json
 {
@@ -314,28 +354,39 @@ Supply **one question** (`questions` has exactly one item) plus a **required res
 - `max_results` caps the selected and saved set (default 10, max 50); `page_size` only changes the page (default 20, max 50) and never re-orders or re-filters.
 - Results contain selected URLs, titles, reviewed extracts, `valueLevel`/`valueLabel`, rank, real provenance and score components — never generated answers. `selection.targetMet` means quantity only, never research completion or verification; `selection.incomplete`, `diagnostics`, `stopReason`, `outsideReview` and `unreviewed` disclose what was not finished rather than treating it as low value.
 - `run.community` reports the finite community decision and the actual execution status (`not_requested`/`domain_excluded`/`unavailable`/`blocked`/`succeeded`/`empty`/`failed`/`partial`/`not_run`), never model reasoning. A failed or partial community branch keeps valid web results and marks the run incomplete.
-- Read saved pages with `{"cursor":"<s5:…>"}` (optional `page_size`) only: no new search, strategy, Jev, community or value call. Default 20/max 50 per page with a byte budget. Cursors last up to 30 minutes/32 recent sets in the current process and are not exhaustive search.
-- With explicit `save_results:true`, the complete final selected set plus typed metadata is stored privately under the SearchBoost home (`search-boost-research-v2`, schema version 5) and you receive a `savedResultId`. After a restart or cache clear, read `{"saved_result_id":"<savedResultId>"}` (optional `page_size`) without another search or Jev call. Older `search-boost-research-v1` files stay readable in a marked read-only `h1:` historical branch (`restoration.historical: true`, original schema version preserved, no invented v5 fields). Public tool switches and the Jev configuration lock still apply to reads; `search-boost research list` / `research export <id> --output <new-file.json>` work offline without Jev. See [integration and acceptance boundaries](docs/research-status-acceptance.md).
+- Read saved pages with `{"cursor":"<s6:…>"}` (optional `page_size`) only: no new search, strategy, Jev, community or value call. Default 20/max 50 per page with a byte budget. Cursors last up to 30 minutes/32 recent sets in the current process and are not exhaustive search.
+- With explicit `save_results:true`, the complete final selected set plus typed metadata is stored privately under the SearchBoost home (`search-boost-research-v3`, schema version 6) and you receive a `savedResultId`. After a restart or cache clear, read `{"saved_result_id":"<savedResultId>"}` (optional `page_size`) without another search or Jev call. Older v2/schema-5 files stay unchanged and readable with `s5:` cursors; older `search-boost-research-v1` files stay readable in a marked read-only `h1:` historical branch (`restoration.historical: true`, original schema version preserved, no invented v5 fields). Public tool switches and the judgment-profile configuration lock still apply to reads; `search-boost research list` / `research export <id> --output <new-file.json>` work offline without Jev. See [integration and acceptance boundaries](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/research-status-acceptance.md).
 - Thresholds remain uncalibrated engineering starting points. See the [contract, budgets and migration notes](docs/jev-adaptive-search.md).
 
 ---
 
 ### Engine Pools & Scoring Presets
 
+**Defaults are automatic:** configure and enable any one API engine and default searches use only the enabled APIs; with none enabled, searches use keyless engines. No free/API mode switch or complete set of keys is required. Both TUIs support engine switches and single-engine use. Explicit `engine_pool=free/api/hybrid` keeps its original meaning; API failures do not silently fall back to keyless engines. Legacy layer files/env no longer control implicit searches.
+
 `engine_pool` selects engines, `ranking` selects shared cross-pool weights, and `complexity` controls query breadth and depth, not scoring weights. AnySearch is one logical engine: anonymous in free, key-required in api, and key-preferred in hybrid. Configure `ANYSEARCH_API_KEY` or `config keys --set anysearch=KEY`.
+
+DeepSeek Search (`deepseek-search`) uses the native Anthropic-compatible web search API, not a CLI subprocess. Configure `DEEPSEEK_API_KEY` or `search-boost config keys --set deepseek-search=KEY`, then enable it in the engine configuration if you already have an explicit whitelist. It joins api/hybrid, not default free. All three ranking presets start at weight **1.0**; override with `engine_weights: {"deepseek-search": 0.8}`. Zero weight still calls the engine. Each query variant uses a potentially billable `deepseek-v4-flash` model turn with at most one native search; only structured search results and citation excerpts are used as evidence. Base URL is independent of chat configuration; `/messages` is appended. See [integration details and validation limits](docs/deepseek-search.md).
+
+TinyFish Search is a keyed API engine: use TUI → Search engine configuration → TinyFish Search (folder layout: Services & credentials → Search engine configuration), `TINYFISH_API_KEY`, or `config keys --set tinyfish=KEY`. The TUI supports key replacement/removal, custom/reset Base URLs and masked status; use Enable / disable engines to select `tinyfish` without silently expanding an existing whitelist. It joins api/hybrid, not the default free pool (explicit `engines` still overrides pool membership). Service pricing and limits can change; a wallet balance is not a count of searches remaining. Each query variant counts as a request. No automatic pagination or inline Fetch is used. Requests default to the service's US/en locale. Yahoo has been removed; explicit Yahoo engine/weight inputs are rejected.
+
+Firecrawl and Keenable are keyed API engines: configure `FIRECRAWL_API_KEY` / `KEENABLE_API_KEY`, or `config keys --set firecrawl=KEY` / `--set keenable=KEY`, then enable them in the engine configuration if you already have an explicit whitelist. Both join api/hybrid, never the default free pool, and all three ranking presets start at the neutral weight **1.0**; override per request with `engine_weights`. Firecrawl uses `POST /v2/search` with a Bearer token and reads `data.web[]`; Keenable uses `POST /v1/search` with `X-API-Key` and sends the documented `max_results` (1–50). May incur charges; check with the provider. Neither forwards `recency` as a provider-side time filter and neither declares native domain filtering, so `include_domains` is applied as a `site:` hint plus a client-side filter. Firecrawl results carry no publication date unless the gateway enables scraping, so freshness scoring is neutral for them; Keenable returns ISO 8601 `published_at`, which does drive freshness. Neither engine exposes a quota probe, so the console reports quota as unsupported. A 200 response with a malformed or unsuccessful envelope is reported as an engine failure, never as an empty result.
 
 | Engine | balanced | research | fresh |
 | --- | ---: | ---: | ---: |
 | bing | 0.957 | 0.927 | 1.020 |
-| ddg | 0.981 | 0.903 | 0.927 |
-| yahoo | 0.957 | 0.877 | 0.902 |
+| ddg | 0.589 | 0.542 | 0.556 |
 | exa-free | 1.004 | 1.085 | 0.951 |
 | tavily | 1.049 | 1.105 | 1.084 |
 | brave | 1.004 | 0.951 | 1.125 |
 | exa | 1.049 | 1.146 | 1.063 |
 | anysearch | 1.004 | 1.042 | 0.951 |
+| tinyfish | 1.000 | 1.000 | 1.000 |
+| deepseek-search | 1.000 | 1.000 | 1.000 |
+| firecrawl | 1.000 | 1.000 | 1.000 |
+| keenable | 1.000 | 1.000 | 1.000 |
 
-These are uncalibrated cold-start priors, not measured quality rankings. `consensus-v2.1` combines original ranks, related-provider discounts and max+log consensus, with metadata adjustments capped at 20%. Quality and list-selection scores stay separate; zero-weight sources cannot vote. Recalibrate old `min_score` thresholds. See [scoring and migration](docs/fusion-scoring.md) and [pool routing](docs/search-routing.md).
+These are uncalibrated cold-start defaults, not measured quality rankings. DDG uses 60% of its previous weights; TinyFish starts neutral, and other defaults are unchanged without re-normalization. `consensus-v2.1` combines original ranks, related-provider discounts and max+log consensus, with metadata adjustments capped at 20%. Quality and list-selection scores stay separate; zero-weight sources cannot vote. Recalibrate old `min_score` thresholds. See [scoring and migration](docs/fusion-scoring.md) and [pool routing](docs/search-routing.md).
 
 ---
 
@@ -381,6 +432,10 @@ For Pi/DSH child-tool loading, stale `pi-search-boost` references, and the retir
 
 ## Security
 
+### Page proxies and direct fallback
+
+`proxy_trust_required` requires a separate choice to trust remote DNS and destination ACLs through `SEARCH_BOOST_TRUSTED_PROXY=1`. `proxy_fallback_disabled` leaves direct egress off unless you separately accept its privacy cost with `SEARCH_BOOST_PROXY_DIRECT_FALLBACK=1`. Neither switch enables the other. These choices do not prove the proxy's final destination public. System-invisible TUN routing has no physical public-only guarantee. Read the [network trust boundaries and migration steps](docs/network-policy.md) before you opt in.
+
 ### Custom search API bases
 
 Open **Search engine configuration** on the flat TUI home (folder layout: Services & credentials). Each engine shows its masked key and default/custom Base URL. Choose **Set / replace Base URL**, then keep or edit the key; **Restore default Base URL** resets only the address. Choose any individual engine without stepping through all credential slots; unrelated keys and routing selections are preserved. Status and `config keys --show` also show the effective bases. Standalone `search-boost config keys` and first setup retain the sequential guided wizard.
@@ -396,6 +451,10 @@ search-boost config keys --reset-base-url exa
 | Exa | `https://api.exa.ai` | `/search` |
 | Brave | `https://api.search.brave.com/res/v1` | `/web/search` |
 | AnySearch | `https://api.anysearch.com/v1` | `/search` |
+| TinyFish Search | `https://api.search.tinyfish.ai` | `/` |
+| DeepSeek Search | `https://api.deepseek.com/anthropic/v1` | `/messages` |
+| Firecrawl | `https://api.firecrawl.dev` | `/v2/search` |
+| Keenable | `https://api.keenable.ai` | `/v1/search` |
 
 Supply an API base, **not a full search endpoint**; gateway prefixes are preserved. Overrides live in `engines.<name>.baseUrl` in the keys file; existing key strings and routing flags are unchanged. Use only trusted API-compatible gateways: queries and configured keys are sent there (AnySearch remains anonymous in the free pool). Prefer HTTPS; HTTP is supported for local gateways. Credentials, query strings and fragments in URLs are rejected. Exa-free is unaffected. Changing a base invalidates the search cache partition.
 
@@ -403,20 +462,23 @@ API keys use a credential store this tool owns. They are not written into prompt
 
 - **Private file permissions**: keys live in `~/.search-boost/config/keys.json` (redirect the root with `SEARCH_BOOST_HOME`). On POSIX the store directory is `0700` and the file is `0600`; a rewrite is built from a fresh `0600` temporary file rather than written in place, so an existing file is never widened. Backups and upgrade receipts under the same root are `0600` as well. An env-overridden directory keeps its own mode, while the credential file is still created `0600`. Windows has no POSIX mode bits — ACL inheritance applies there.
 - **Atomic, locked writes**: replacement uses an `O_EXCL` temporary file plus rename, so a reader sees either the old or the new file and never a partial one; a failed write cleans up after itself and leaves the previous file untouched. Read-modify-write cycles take an exclusive lock, so two writers cannot silently lose each other's update, and a rejected change does not touch the file at all.
-- **Never echoed back**: a key is only sent to the engine it belongs to (Tavily, Brave, Exa and AnySearch request parameters/headers). Status output, `search-boost config keys --show` and the doctor report print masked values (`abcd****wxyz`); error messages are tested not to contain credential material, and Jev evaluation payloads deliberately carry no key, masked key or fingerprint. AnySearch uses anonymous quota in free, requires a key in api, and prefers a configured key in hybrid. Its potentially credential-bearing error envelopes are never echoed or persisted.
+- **Never echoed back**: a key is only sent to the engine it belongs to (Tavily, Brave, Exa, AnySearch and TinyFish request parameters/headers). Status output, `search-boost config keys --show` and the doctor report print masked values (`abcd****wxyz`); error messages are tested not to contain credential material, and Jev evaluation payloads deliberately carry no key, masked key or fingerprint. AnySearch uses anonymous quota in free, requires a key in api, and prefers a configured key in hybrid. Its potentially credential-bearing error envelopes are never echoed or persisted.
 
 
 ---
 
 ## CLI Command Reference (Headless & CI)
 
-The following CLI reference describes v0.2.4. `refresh` and `research` require that version or later; merging source does not publish it to npm. Use a source checkout until the required version is published.
+This CLI reference describes **0.3.0**.
 
 **DeepSeek Harness Desktop:** interactive installation offers Desktop / CLI / All, then **Automatic (default)** or **Local directory** for Desktop. Automatic setup retains bundled-command discovery through Windows installer registry metadata (including custom destinations), default directories and PATH; launch Desktop once, then fully quit it including its tray. Local setup runs last, after all other integrations including Grok, and displays the current durable package directory to paste into the running app's Plugins → Add plugin dialog. The TUI observes saved installation read-only and finishes after stable verification; Escape / Ctrl+C or timeout marks Desktop unfinished while retaining earlier results. Saved installation is not proof of live activation; missing bundled launchers explicitly leave runtime verification unknown. Temporary `_npx` paths are refused as persistent local links. The app also accepts `search-boost` for a registry install. Automatic install/update still verifies the owning resolver and rejects shadow copies. Disabled bundles stay disabled unless explicitly requested; local setup with `--enable-dsh-bundle` waits for the user to enable it in Desktop. See [Desktop integration](docs/dsh-desktop.md) for ownership and validation limits.
 
 ```bash
 # ----------------- Core & Interactive -----------------
-search-boost                                # Launch interactive dashboard (TUI)
+search-boost                                # Quick configuration wizard
+search-boost tui                            # Independent full-screen console
+search-boost tui --preview                  # Offline, read-only snapshot without a TTY
+search-boost tui --dry-run                  # Preview changes; no writes or quota requests
 search-boost status                         # Disk/configuration evidence; running host version remains unknown
 search-boost status --json                  # Structured read-only installation evidence
 search-boost research list                  # List opt-in private result snapshots
@@ -436,15 +498,19 @@ search-boost install -t dsh --profile web   # Connect to DeepSeek Harness CLI we
 search-boost install -t dsh --dsh-surface desktop -y # Desktop bundled command + local package
 search-boost install -t dsh --dsh-surface all -y     # Manage Desktop and CLI independently
 # No global search-boost / dsh / pnpm required (Windows, Linux, macOS):
-npx --yes search-boost@latest install -t dsh --profile web -y
+npx --yes --package search-boost@0.3.0 search-boost install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # Preview installation without writing files
 
 # ----------------- Configuration Management -----------------
 search-boost config keys                    # Manage API keys from CLI
 search-boost config keys --set anysearch=KEY  # Configure the AnySearch key (ANYSEARCH_API_KEY)
-search-boost config layer                   # Switch default layer (free / api)
+search-boost config keys --set tinyfish=KEY   # Configure TinyFish Search (TINYFISH_API_KEY)
+search-boost config keys --set firecrawl=KEY  # Configure Firecrawl (FIRECRAWL_API_KEY)
+search-boost config keys --set keenable=KEY   # Configure Keenable (KEENABLE_API_KEY)
+search-boost config layer                   # Inspect automatic routing (legacy layer writes do not affect it)
 search-boost config x --import-grok         # Import X credentials from local Grok login
 search-boost config jev                     # Configure Jev endpoint and token
+search-boost community-login xiaohongshu    # Explicit dedicated browser login; also zhihu / bilibili
 
 # ----------------- Diagnostics & Health -----------------
 search-boost doctor                         # Run offline diagnostic checks
@@ -459,7 +525,7 @@ search-boost uninstall -t cursor,claude -y  # Remove integrations from selected 
 
 ## Installation from Source & Development
 
-Use this path to contribute to SearchBoost, or to test code that is not in a published release yet. Everywhere else, `@latest` refers to the published package.
+Use this path to contribute to SearchBoost, or to test code that is not in a published release yet. `@beta` selects the prerelease channel; `@latest` selects the stable channel.
 
 ### Prerequisites
 
@@ -474,6 +540,7 @@ Use this path to contribute to SearchBoost, or to test code that is not in a pub
 # 1. Clone the repository
 git clone https://github.com/Mr-remon219/search-boost.git
 cd search-boost
+git checkout v0.3.0  # Development branch for the 0.3.0 line
 
 # 2. Install dependencies exactly as CI does
 npm ci
@@ -487,7 +554,8 @@ The clone lands on the repository's default branch. To test a different branch o
 ### Run it without a global install
 
 ```bash
-node cli.mjs                  # interactive TUI straight from the checkout
+node cli.mjs                  # Quick configuration wizard
+node cli.mjs tui              # Independent console from the checkout
 node cli.mjs status           # one-shot status summary
 node cli.mjs install -t pi -y # mount the Pi extension from this checkout
 node cli.mjs install -t dsh --profile web
@@ -508,6 +576,8 @@ After changing adapter or agent assets, re-run the same install command for that
 | :--- | :--- |
 | `npm run check` | Syntax check across the CLI, core, adapters and scripts |
 | `npm run prepublishOnly` | Syntax and CI policy checks, exact-lock dependency audit (registry access required), then every isolated regression entrypoint, including generated assets, install / refresh / migration, search, adapters and MCP |
+| `npm run test:console` | Console navigation, themes, masked editing, quota consent / cancellation and offline response fixtures |
+| `npm run test:community` | Five-platform routing, filters, snapshot paging, bridge / worker fixtures and Adaptive integration |
 | `npm run test:network` | Proxy retries, curl fallback, request bounds and compatibility regressions |
 | `npm run test:adapters` | MCP, Pi and DSH adapter protocol suites plus Pi subagent settings migration/diagnosis |
 | `npm run test:parallel` | Searcher/summarizer contracts, DSH dispatch preflight, cancellation and tool isolation |
@@ -527,3 +597,7 @@ Regression suites use isolated state, loopback fixtures and process doubles; no 
 ## License
 
 This project is licensed under the [MIT License](./LICENSE).
+
+### Configuration trust
+
+API keys and custom engine endpoints are read only from user configuration or explicit environment overrides. Workspace `.search-boost-keys.json` files are not auto-loaded. To intentionally trust one, set `SEARCH_BOOST_KEYS_FILE` to its path; this authorizes both its keys and endpoints. Review the file first.

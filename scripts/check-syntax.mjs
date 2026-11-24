@@ -22,7 +22,7 @@ function collect(dir) {
       out.push(join(dir, entry.name))
     } else if (entry.name.endsWith('.js')) {
       const rel = relative(ROOT, dir).replace(/\\/g, '/')
-      if (rel === 'lib/search' || rel.startsWith('lib/search/') || rel.startsWith('adapters/')) out.push(join(dir, entry.name))
+      if (rel === 'lib/search' || rel.startsWith('lib/search/') || rel.startsWith('adapters/') || rel.startsWith('browser/')) out.push(join(dir, entry.name))
     }
   }
   return out

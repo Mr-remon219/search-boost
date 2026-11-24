@@ -8,22 +8,35 @@ Read this optional resource for examples, result interpretation or troubleshooti
 
 ## Choose a call
 
-- fused_search: use for the vast majority of public-web research, including difficult investigations. No Jev configuration is required. Retrieves ranked extracts across configured engines; supports varied queries and explicit source control.
+- fused_search: use for the vast majority of public-web research, including difficult investigations. No judgment configuration is required. Retrieves ranked extracts across configured engines; supports varied queries and explicit source control.
 - fetch_page: read a known URL to inspect the original text or verify a claim that search extracts do not establish.
-- x_search: find X-only posts, account material or available thread content. Select the mode and its required fields using the schema.
-- adaptive_search: when enabled with configured Jev, use for higher-quality evidence selection on medium-to-high difficulty or uncertain questions. Prefer it when noisy sources, unclear relevance or many plausible leads make intent-guided screening valuable. It screens one snapshot, not an entire investigation, and does not orchestrate children.
+- community_search: selected-platform evidence for reddit, x, bilibili, zhihu and xiaohongshu. All support keyword; X retains semantic, user and thread through its existing pipeline. platform_options selects independent platform conditions; a backend without the requested operation reports unsupported, never a silent keyword downgrade. Select engines:["x"] for X-only tasks.
+- community_backend: list/check inspect configuration readiness without network probing; register/update/remove persist instance configuration and require user authorization. Only registered SearchBoost providers and their allowlisted configuration fields are accepted. Browser providers require a user-started loopback bridge and an environment-variable token reference, never raw credentials, arbitrary endpoints, code or packages. Search failures never authorize enabling or registering a backend.
+- adaptive_search: when enabled with a configured judgment model (Jev or Laya), use for higher-quality evidence selection on medium-to-high difficulty or uncertain questions. Prefer it when noisy sources, unclear relevance or many plausible leads make intent-guided screening valuable. It screens one snapshot, not an entire investigation, and does not orchestrate children.
 - search_stats / search_layer with layer=show: inspect diagnostics or the current compatibility default. Changing the layer persists a new default and requires authorization.
 
 Choose in this order:
-1. Check which tools are actually enabled. If Jev is not configured or Adaptive is unavailable, use enabled fused_search for research of any difficulty; do not attempt a locked call, require setup or change configuration automatically.
+1. Check which tools are actually enabled. If no judgment profile is configured or Adaptive is unavailable, use enabled fused_search for research of any difficulty; do not attempt a locked call, require setup or change configuration automatically.
 2. If both are available, prefer Adaptive when a medium-to-high difficulty or uncertain question needs higher-quality, intent-guided evidence selection. Call it directly without a preliminary fused_search.
-3. Use fused_search when direct retrieval is sufficient or varied queries/source control are needed. Neither a difficult project nor configured Jev makes every call an Adaptive call; choose by the evidence need rather than adopting one tool for every task.
+3. Use fused_search when direct retrieval is sufficient or varied queries/source control are needed. Neither a difficult project nor a configured judgment model (Jev or Laya) makes every call an Adaptive call; choose by the evidence need rather than adopting one tool for every task.
 
 These are routing heuristics, not a measured entropy score or hard difficulty threshold. Higher-quality selection is the purpose of screening, not a guarantee that its labels prove truth. For broader investigations, the parent defines the plan, verifies decisive sources and synthesizes the answer; independent angles may use an authorized parallel workflow.
 
 Search controls have separate roles: pool/engines select sources, ranking/weights affect scoring, and complexity sets retrieval breadth/depth. Request-local choices do not change persistent defaults.
 
 The optional search-boost://capabilities resource reports current configuration readiness, tool switches and pool defaults, not connectivity, coverage or permission grants. A disabled tool must not be called. Unavailable engines are disclosed, not silently replaced. Legacy layer=api maps to the hybrid pool, whereas engine_pool=api selects only configured/enabled API engines.
+
+## Community entries
+
+Use community_search with {"engines":["reddit","zhihu"],"query":"Node.js migration experiences","max_results":5}, or {"engines":["x"],"type":"user","username":"nodejs"}. Four X modes and author/date filters retain their existing evidence limitations. platform_options partitions nullable parameters by selected platform; a non-null local value overrides its common field, while null inherits/defaults. max_results is 1–30 and the captured final total, not a per-platform multiplier or page size. Reddit defaults to bounded archive acquisition and local ranking; Bilibili/Zhihu/Xiaohongshu default to indexed excerpts. Optional public-video and user-enabled browser routes do not imply full text, comments, complete threads or live connectivity.
+
+community_backend {"action":"list"} lists implementation metadata and instance readiness. {"action":"check","id":"x-default"} checks configuration only, not live connectivity. Explicitly authorized {"action":"update","id":"x-default","enabled":false} disables that instance only; another enabled, configuration-ready X instance can keep X available. With no ready X instance, community X and fused/Adaptive X are unavailable. Built-in instances cannot be removed, but can be disabled. Tool-entry switches are separate from backend readiness: disabling community_search alone does not disable explicitly selected fused/Adaptive community retrieval. Registrations never install tools, log in, export cookies, solve challenges or broaden host/child permissions.
+
+search-boost://community-capabilities reports supported platforms and instances without exposing credentials or making network requests. fused_search and adaptive_search accept unique community platform-name arrays, for example ["reddit","zhihu"]. Legacy true selects X only; false or [] disables the branch. Omitted fused community is off; omitted Adaptive community lets its existing strategy decide the legacy X branch only. Selection does not enable instances or change permissions. Both fused_search and adaptive_search accept the same nullable platform_options for explicitly selected communities (for example community:["reddit","zhihu"], platform_options:{reddit:{subreddits:["node"],max_pages:2},zhihu:{content_type:"answer"}}). Nonempty options require matching explicit platform selection; they never auto-enable it. Adaptive calls the fused base once, not the paged community_search facade: Web/community candidates share the bounded snapshot, original source votes and the full screening pass. Web uses the original question; a platform query changes only when the caller explicitly supplies it, never through model expansion. Explicit date/author/category/scope conditions also constrain matching ordinary Web candidates; null does not erase a hard condition. Qualified instants project to their UTC day, not a local-date prefix; unqualified ISO times and month-only observations do not invent a timezone or first day. Day-only publication observations represent the whole day, not an invented midnight; partial overlap with a hard timestamp window remains unverified. Conflicting publication/author observations stay unknown, and unrecognized paths on a constrained platform host do not bypass category/scope filters. Fused recency is a soft ranking preference for non-X results; direct community date bounds are strict. Reddit acquisition windows remain separate collection bounds.
+
+Direct community results use schema_version:2 pages, retaining platform-specific data (schema_version/platform/kind) alongside the common evidence projection. page_size defaults to 5; total_results is the saved set size, results/page_results count this page. Read next_cursor using {"cursor":"<c1:…>","page_size":5} only: no new search, processing, audit dispatch or connectivity probe. Optional save_results:true persists public evidence privately; {"saved_result_id":"<id>"} restores the original historical snapshot. Cursor and saved reads cannot include search parameters. Community c1 cursors/formats are separate from Adaptive. Cursors are process/home-bound and expire; an expired page does not trigger automatic re-search. Dates accept YYYY-MM-DD or timezone-qualified ISO timestamps. Platform outputs need not share all fields; missing metadata is not fabricated.
+
+Example of independent processing: {"engines":["reddit","zhihu"],"query":"Node.js migration","platform_options":{"reddit":{"subreddits":["node"],"max_pages":2},"zhihu":{"content_type":"answer","from_date":null}},"max_results":10,"page_size":3}. A null condition inherits/defaults; it does not bypass a common explicit filter. Reddit author filters use usernames, not arbitrary index display labels. Bilibili public/browser currently support videos only; web-index may return other allowed categories. Non-X semantic/user/thread acquisition remains unimplemented and is disclosed per backend.
 
 ## Examples
 
@@ -51,13 +64,13 @@ Read a known source, and check focusMiss, limitations and nextOffset before trea
 {"url":"https://nodejs.org/docs/latest-v22.x/api/globals.html","focus":"fetch AbortSignal timeout"}
 \`\`\`
 
-X-only calls:
+X-only community_search calls:
 
 \`\`\`json
-{"type":"keyword","query":"from:OpenAI API","max_results":5}
+{"engines":["x"],"type":"keyword","query":"from:OpenAI API","max_results":5}
 \`\`\`
 \`\`\`json
-{"type":"user","username":"OpenAI"}
+{"engines":["x"],"type":"user","username":"OpenAI"}
 \`\`\`
 
 For a thread, supply the real post ID/status URL in post_id; a returned thread need not be the full conversation.
@@ -68,7 +81,7 @@ One question with a required screening direction:
 {"questions":["How do Node.js 22 and 24 support fetch cancellation, excluding experimental APIs?"],"intent":"Find supported cancellation behavior with version-specific limits and counterexamples.","preferences":["Primary implementation references"],"max_results":8,"page_size":3,"save_results":true}
 \`\`\`
 
-This example omits community so Jev chooses the existing branch. Explicit true/false overrides it without another community question. The ordinary fused_search default remains false and never calls Jev. For saved reads, use cursor or saved_result_id with page_size only; new search fields must not be mixed in:
+This example omits community so the selected judgment model chooses the existing branch. Explicit true/false overrides it without another community question. The ordinary fused_search default remains false and never calls a judgment model. For saved reads, use cursor or saved_result_id with page_size only; new search fields must not be mixed in:
 
 \`\`\`json
 {"saved_result_id":"00000000-0000-0000-0000-000000000000","page_size":20}
@@ -78,7 +91,9 @@ Replace the example ID with the returned savedResultId; a syntactically valid pl
 
 ## Adaptive result interpretation
 
-One pre-search Jev request selects the fixed ranking preset and, when omitted by the caller, the already-wired community branch. Unknown/missing community choices mean off, with disclosure; strategy never widens engines, credentials, permissions or domain limits. English is requested by field guidance, not server-validated or translated. Only the original question is searched: intent/preferences guide screening, not query expansion.
+Adaptive v6 selected rows retain typed source/rank/route provenance (provenanceTruncated discloses the per-row bound), not unreviewed provider raw payloads. Recognized content on explicitly selected non-X platforms merges across Web/native URL aliases by platform identity, with signed/query parameters removed from those item/source URIs; meaningful query parameters on other Web sources are not globally stripped. run.community.channels preserves bounded backend/retrieval/coverage and engine diagnostics without checkpoint hashes or credentials. These additive fields do not upgrade old saved evidence or prove completeness. Verbose channel details may be omitted only from a page, with details_truncated and a warning; measured statuses, usage and global counts remain, and private saved records are unchanged. Nested cache/in-flight observations never count as new dispatches; subreddit discovery requests remain observable. Independent archive/hosted sources may still run through fused when no ordinary Web engine is ready; explicit unavailable/unsupported channels are reported rather than silently substituted.
+
+One pre-search judgment request selects the fixed ranking preset and, when omitted by the caller, the already-wired community branch. Unknown/missing community choices mean off, with disclosure; strategy never widens engines, credentials, permissions or domain limits. English is requested by field guidance, not server-validated or translated. Only the original question is searched: intent/preferences guide screening, not query expansion.
 
 The single fused snapshot has capacity ${adaptiveCandidateLimit(10)} for result targets through 10, scales proportionally for larger targets, and reaches ${adaptiveCandidateLimit(50)} at target 50. Web and community share that capacity. Capacity is a ceiling, not a supply, qualified-result, latency or cost guarantee. Every declared candidate is reviewed before selection; no early stop at the first K acceptable links and no automatic full-page reading occur.
 
@@ -86,7 +101,7 @@ Only safety-clear material with established value 3/4/5 is admitted. Values are 
 
 No self-imposed cumulative cost, token, request-count or whole-run quota stops screening. Actual per-request timeouts, limited retries, authentication/rate-limit/network failures, safety refusals and explicit cancellation still apply. The parent's research rounds and optional child waves are separate from this one screening pass.
 
-constraints is a retired material gate: omit it; [] only warns and non-empty arrays fail before network calls. Keep research conditions in question/intent, use site:/-site: or fused_search domain filters for hard domain restrictions, and verify required document properties by reading. Jev receives question, direction and necessary fragments, never engine credentials or fingerprints. Do not send secrets/private reasoning or configure the external service without authorization.
+constraints is a retired material gate: omit it; [] only warns and non-empty arrays fail before network calls. Keep research conditions in question/intent, use site:/-site: or fused_search domain filters for hard domain restrictions, and verify required document properties by reading. The selected judgment service receives question, direction and necessary fragments, never engine credentials or fingerprints. Do not send secrets/private reasoning or configure the external service without authorization.
 
 save_results opts into a private local snapshot of the complete selected set and typed metadata, without credentials or model logs. Host sessions/audit may retain their own data; local saving is not a blanket no-retention promise. Pagination/restoration performs no search, strategy or value judgment. Cursors are process-local (${PAGE_TTL_MS / 60_000} minutes, up to ${MAX_PAGE_RUNS} retained runs); a savedResultId supports recovery after restart. Historical h1: restores are read-only original evidence, not fresh search, new scores or re-verification. Page size affects delivery only; byte limits can shorten a page, with explicit warnings and continuation.
 

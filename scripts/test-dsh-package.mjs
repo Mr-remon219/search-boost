@@ -34,6 +34,12 @@ try {
   writeFileSync(join(payload, 'package.json'), JSON.stringify(manifest))
   for (const file of manifest.files) cpSync(join(root, file), join(payload, file), { recursive: true })
   const packed = JSON.parse(await run('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', temp], payload))[0]
+  const packedPaths = packed.files.map(entry => entry.path)
+  const userDocs = ['network-policy', 'migration', 'community-search', 'community-browser-login', 'console-tui', 'tui', 'host-upgrades', 'deepseek-search', 'dsh-compatibility', 'dsh-desktop', 'engine-quota', 'fusion-scoring', 'search-routing', 'subagent-tools', 'jev-adaptive-search', 'v0.2.2-release', 'v0.2.3-release', 'v0.2.4-release', 'v0.2.5-release', 'v0.3.0-beta1-release', 'v0.3.0-beta2-release', 'v0.3.0-beta3-release', 'v0.3.0-release'].map(name => `docs/${name}.md`)
+  for (const name of ['SECURITY.md', 'README.md', 'README_zh.md', 'LICENSE', ...userDocs]) assert(packedPaths.includes(name), `missing user documentation ${name}`)
+  assert.deepEqual(packedPaths.filter(name => name.startsWith('docs/')).sort(), [...userDocs].sort(), 'npm must ship the explicit user-documentation allowlist only')
+  assert(!packedPaths.some(name => name.includes('candidate.patch') || name.startsWith('scripts/test')), 'internal patches/tests must not ship')
+  assert(packedPaths.length < 335, 'internal documentation/assets must be removed from the package payload')
   for (const name of ['adapters/dsh/schema.js', 'adapters/dsh/index.js', 'adapters/dsh/cordis.patch.yml']) {
     assert(packed.files.some((entry) => entry.path === name), `missing tarball file ${name}`)
   }

@@ -14,7 +14,12 @@ __setUndiciLoaderForTests(async () => ({ ...await import('undici'), fetch: (...a
 const calls = []
 globalThis.fetch = async (input, init = {}) => {
   calls.push({ url: new URL(String(input)), body: init.body ? JSON.parse(init.body) : null, headers: init.headers })
-  return new Response(JSON.stringify({ results: [], web: { results: [] }, code: 0, data: { results: [{ title: '', url: 'https://example.org/doc', snippet: 'summary', content: 'body' }] } }), {
+  // One body must satisfy every adapter shape under test: AnySearch reads
+  // data.results, Firecrawl reads data.web.
+  return new Response(JSON.stringify({ results: [], web: { results: [] }, code: 0, data: {
+    results: [{ title: '', url: 'https://example.org/doc', snippet: 'summary', content: 'body' }],
+    web: [{ title: 'Firecrawl row', url: 'https://firecrawl.example/1', description: 'fixture' }],
+  } }), {
     status: 200,
     headers: { 'content-type': 'application/json' },
   })
@@ -27,15 +32,18 @@ try {
   const engines = engineRegistry({ exa: 'fixture-key', tavily: 'fixture-key', brave: 'fixture-key' })
 
   await test('custom API bases preserve prefixes, request auth and AnySearch free mode', async () => {
-    const names = ['tavily', 'exa', 'brave', 'anysearch']
+    const names = ['tavily', 'exa', 'brave', 'anysearch', 'firecrawl', 'keenable']
     const bases = Object.fromEntries(names.map((name) => [name, `https://gateway.example/${name}/v1/`]))
     const custom = engineRegistry(Object.fromEntries(names.map((name) => [name, 'fixture-key'])), null, bases)
+    const searchPath = { brave: 'web/search', firecrawl: 'v2/search', keenable: 'v1/search' }
     for (const name of names) {
       await custom[name].search('a & b', 3, { enginePool: 'api' })
-      assert.equal(lastCall().url.pathname, `/${name}/v1/${name === 'brave' ? 'web/search' : 'search'}`)
+      assert.equal(lastCall().url.pathname, `/${name}/v1/${searchPath[name] ?? 'search'}`)
       assert.equal(lastCall().url.hostname, 'gateway.example')
       if (name === 'tavily') assert.equal(lastCall().body.api_key, 'fixture-key')
       if (name === 'exa') assert.equal(lastCall().headers['x-api-key'], 'fixture-key')
+      if (name === 'firecrawl') assert.equal(lastCall().headers.authorization, 'Bearer fixture-key')
+      if (name === 'keenable') assert.equal(lastCall().headers['x-api-key'], 'fixture-key')
       if (name === 'brave') {
         assert.equal(lastCall().headers['x-subscription-token'], 'fixture-key')
         assert.equal(lastCall().url.searchParams.get('q'), 'a & b')
@@ -69,16 +77,8 @@ try {
     assert.equal(lastCall().url.searchParams.get('freshness'), 'pm')
   })
 
-  await test('Yahoo preserves primary and supplemental positions through malformed/duplicate cards', async () => {
-    const saved = globalThis.fetch
-    const card = (url, title, primary = true) => `${primary ? '<div class="dd fst algo result">' : ''}<div class="compTitle"><a href="${url}"><h3 class="title">${title}</h3></a></div><div class="compText"><p>snippet</p></div>`
-    try {
-      globalThis.fetch = async () => new Response(card('javascript:bad', 'invalid') + card('https://one.example', 'one') + card('https://one.example', 'duplicate') + card('https://two.example', 'two'))
-      const rows = await engines.yahoo.search('query', 10, {})
-      assert.deepEqual(rows.map((r) => r.providerRank), [2, 4])
-      globalThis.fetch = async () => new Response(card('javascript:bad', 'invalid', false) + card('https://one.example', 'one', false) + card('https://one.example', 'duplicate', false) + card('https://two.example', 'two', false))
-      assert.deepEqual((await engines.yahoo.search('query', 10, {})).map((r) => r.providerRank), [2, 4])
-    } finally { globalThis.fetch = saved }
+  await test('removed Yahoo has no registry entry or hidden adapter', () => {
+    assert.equal(Object.hasOwn(engines, 'yahoo'), false)
   })
   await test('AnySearch pool readiness, optional auth and bounded documented envelope', async () => {
     const anonymous = engineRegistry({}).anysearch

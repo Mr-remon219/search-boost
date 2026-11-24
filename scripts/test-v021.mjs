@@ -62,11 +62,11 @@ try {
   await test('U03 page version query parameters cannot alias each other in the cache', async () => {
     let calls = 0
     __setUndiciLoaderForTests(async () => ({ ...undici, fetch: async url => { calls++; return new undici.Response(('Requested ' + decodeURIComponent(String(url)) + '\n').repeat(3)) } }))
-    const cache = makePageCache(); const first = await fetchPage('https://example.com/doc?ref=v1', undefined, cache)
-    const second = await fetchPage('https://example.com/doc?ref=v2', undefined, cache)
-    assert.notEqual(resultKey({ url: 'https://example.com/doc?ref=v1' }), resultKey({ url: 'https://example.com/doc?ref=v2' }))
+    const cache = makePageCache(); const first = await fetchPage('https://93.184.216.34/doc?ref=v1', undefined, cache)
+    const second = await fetchPage('https://93.184.216.34/doc?ref=v2', undefined, cache)
+    assert.notEqual(resultKey({ url: 'https://93.184.216.34/doc?ref=v1' }), resultKey({ url: 'https://93.184.216.34/doc?ref=v2' }))
     assert.equal(calls, 2); assert.match(first.content, /ref=v1/); assert.match(second.content, /ref=v2/)
-    assert.equal((await fetchPage('https://example.com/doc?ref=v2#heading', undefined, cache)).via, 'cache')
+    assert.equal((await fetchPage('https://93.184.216.34/doc?ref=v2#heading', undefined, cache)).via, 'cache')
   })
   await test('U04 root TOML is effective, idempotent, and restored byte-for-byte', () => {
     for (const before of ['web_search = "live"\n[mcp_servers.other]\ncommand="x"\n', '[mcp_servers.other]\ncommand="x"\n', 'instructions="""\n[not-a-table]\nweb_search="fake"\n"""\nweb_search = "cached"\n[foo]\na=1\n']) {
