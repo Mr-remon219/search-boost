@@ -55,6 +55,7 @@ export const fusedSearchOutput = {
     attempts: z.number().optional(),
     successes: z.number().optional(),
     note: z.string().optional(),
+    transportRequests: z.number().int().optional(),
   })).optional(),
   warnings: z.array(z.string()).optional(),
   results: z.array(z.object({

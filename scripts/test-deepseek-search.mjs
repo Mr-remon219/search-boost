@@ -8,7 +8,7 @@ import { engineRegistry } from '../lib/search/engines.js'
 import { ENGINE_POOLS, RANKING_WEIGHTS, resolveSearchRoute } from '../lib/search/routing.js'
 import { DEEPSEEK_SEARCH_ENDPOINT, LEGACY_DEEPSEEK_MESSAGES_BASE, deepseekSearch } from '../lib/search/deepseek-search.js'
 import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
-import { runFused, invalidateSearchCaches } from '../lib/runtime.mjs'
+import { runFused, fusedHitToJson, fusedResultIsError, invalidateSearchCaches } from '../lib/runtime.mjs'
 import { runtimeSnapshot } from '../lib/search/capability.js'
 import { configNestedPath, configFlatPath } from '../lib/config-paths.mjs'
 import { readKeys, writeKeysFile, readKeysRouting, keyStatus, unsetKey } from '../lib/keys.mjs'
@@ -190,6 +190,77 @@ try {
     sleep: () => { controller2.abort(); return Promise.reject(Object.assign(new Error('deepseek-search: cancelled'), { kind: 'cancelled' })) },
   }), e => e.kind === 'cancelled')
   assert.equal(fetches, 1, 'cancel does not start another attempt')
+  const fixedNow = Date.parse('2026-11-25T00:00:00.000Z')
+  async function retryCase(retryAfter, now = fixedNow) {
+    const sleeps = []
+    let fetches = 0
+    let error
+    try {
+      await deepseekSearch('alpha', 3, { now: () => now }, { [name]: key }, {}, {
+        fetchImpl: async () => { fetches += 1; return new Response('SECRET', { status: 429, headers: { 'retry-after': retryAfter } }) },
+        sleep: async (ms) => { sleeps.push(ms) },
+      })
+    } catch (err) { error = err }
+    return { fetches, sleeps, kind: error?.kind }
+  }
+  const integerStop = await retryCase('2')
+  assert.equal(integerStop.fetches, 1)
+  assert.deepEqual(integerStop.sleeps, [])
+  const integerRetry = await retryCase('1')
+  assert.equal(integerRetry.fetches, 3)
+  assert.deepEqual(integerRetry.sleeps, [1000, 1000])
+  const past = await retryCase(new Date(fixedNow - 86_400_000).toUTCString())
+  assert.equal(past.fetches, 3)
+  assert.deepEqual(past.sleeps, [0, 0])
+  const future = await retryCase(new Date(fixedNow + 120_000).toUTCString())
+  assert.equal(future.fetches, 1, 'a Retry-After 120s in the future stops instead of the 20/40ms backoff')
+  assert.deepEqual(future.sleeps, [])
+  const invalid = await retryCase('not-a-date')
+  assert.equal(invalid.fetches, 1)
+  assert.deepEqual(invalid.sleeps, [])
+  const cancelSleeps = []
+  let cancelFetches = 0
+  const cancelSignal = AbortSignal.abort()
+  await assert.rejects(deepseekSearch('alpha', 3, { signal: cancelSignal }, { [name]: key }, {}, {
+    fetchImpl: async () => { cancelFetches += 1; return new Response('SECRET', { status: 429, headers: { 'retry-after': '1' } }) },
+    sleep: async (ms) => { cancelSleeps.push(ms) },
+  }), e => e.kind === 'cancelled')
+  assert.equal(cancelFetches, 0)
+  assert.deepEqual(cancelSleeps, [])
+
+  respond = () => Response.json({ results: [
+    { url: 'https://null.example/a', title: 'Null title', snippet: 's', summary: null },
+    { url: 'https://missing.example/a', title: 'Missing title', snippet: '' },
+    { url: 'https://empty.example/a', title: 'Empty title', snippet: 'ui', summary: '' },
+  ] })
+  const shaped = await engine().search('alpha', 5)
+  assert.equal(shaped.find(row => row.url.includes('null.')).summary, null)
+  assert.equal(Object.hasOwn(shaped.find(row => row.url.includes('missing.')), 'summary'), false)
+  assert.equal(shaped.find(row => row.url.includes('empty.')).summary, '')
+  const keyed = () => ({ engines: engineRegistry({ [name]: key }), routing: { enabledNames: [name], keys: { [name]: key } }, fingerprint: 'keyed-shape', capability: {} })
+  const beforeShape = calls.length
+  const fusedShape = await runFused({ query: 'shape', enginePool: 'api', engineList: [name], complexity: 'simple' }, { snapshot: keyed })
+  for (const host of ['null', 'missing', 'empty']) {
+    const row = fusedHitToJson(fusedShape.results.find(item => item.url.startsWith('https://' + host + '.')))
+    assert.ok(row, host)
+    if (host === 'missing') assert.equal(Object.hasOwn(row, 'summary'), false)
+    if (host === 'null') assert.equal(row.summary, null)
+    if (host === 'empty') assert.equal(row.summary, '')
+  }
+  respond = () => Response.json({ results: [] })
+  const emptyOk = await runFused({ query: 'empty-ok', enginePool: 'api', engineList: [name], complexity: 'simple' }, { snapshot: keyed })
+  assert.equal(emptyOk.results.length, 0)
+  assert.equal(emptyOk.engineStats[name].successes, 1)
+  assert.equal(fusedResultIsError(emptyOk), false)
+  assert.match(emptyOk.warnings.join('\n'), /no matches/)
+  const beforeNoKey = calls.length
+  const noKey = await runFused({ query: 'no-key', engineList: [name], complexity: 'simple' }, { snapshot: () => ({ engines: engineRegistry({}), routing: { enabledNames: [] }, fingerprint: 'nokey', capability: {} }) })
+  assert.equal(calls.length, beforeNoKey, 'missing key does not send a request')
+  assert.equal(fusedResultIsError(noKey), true)
+  assert.equal(noKey.enginesUsed.length, 0)
+  assert.ok(beforeShape < calls.length)
+  assert.doesNotMatch(noKey.warnings.join('\n'), /empty success/)
+
   console.log('DeepSeek Search API: routing, one protocol, bounds, retries, empty success and cancellation passed (fixture transport, no live API).')
 } finally {
   globalThis.fetch = originalFetch

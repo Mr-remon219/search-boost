@@ -171,7 +171,7 @@ function assertDiagnostics(payload) {
   assert.ok(Array.isArray(payload.enginesUsed))
   assert.ok(Array.isArray(payload.warnings))
   for (const [engine, stat] of Object.entries(payload.engineStats)) {
-    assert.ok(Object.keys(stat).every((key) => ['used', 'errors', 'attempts', 'successes', 'note'].includes(key)), `${engine}: undeclared stat field`)
+    assert.ok(Object.keys(stat).every((key) => ['used', 'errors', 'attempts', 'successes', 'note', 'transportRequests'].includes(key)), `${engine}: undeclared stat field`)
     assert.equal(typeof stat.used, 'boolean')
     assert.equal(typeof stat.errors, 'number')
   }

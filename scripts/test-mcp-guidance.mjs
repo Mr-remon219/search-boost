@@ -21,7 +21,7 @@ const client = new Client({ name: 'guidance-test', version: '1.0.0' })
 const env = { ...process.env, HOME: home, USERPROFILE: home, SEARCH_BOOST_HOME: home,
   PI_CODING_AGENT_DIR: join(home, 'pi'), SEARCH_BOOST_LAYER: 'free', SEARCH_BOOST_KEYS_FILE: join(home, 'keys.json'),
   SEARCH_BOOST_LAYER_FILE: join(home, 'layer.json'), SEARCH_BOOST_XAUTH_FILE: join(home, 'xauth.json') }
-for (const key of ['TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'ANYSEARCH_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY', 'XAI_API_KEY']) delete env[key]
+for (const key of ['TAVILY_API_KEY', 'BRAVE_API_KEY', 'EXA_API_KEY', 'ANYSEARCH_API_KEY', 'PI_SEARCH_TAVILY_KEY', 'PI_SEARCH_BRAVE_KEY', 'PI_SEARCH_EXA_KEY', 'XAI_API_KEY', 'DEEPSEEK_API_KEY', 'FIRECRAWL_API_KEY', 'KEENABLE_API_KEY', 'TINYFISH_API_KEY']) delete env[key]
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [fileURLToPath(new URL('../cli.mjs', import.meta.url)), 'serve'],
@@ -75,11 +75,21 @@ try {
   assert.ok(byName.fused_search.inputSchema.properties.engines.items.enum.includes('anysearch'))
   assert.equal(byName.fused_search.inputSchema.properties.min_score.minimum, 0)
   const empty = await client.callTool({ name: 'fused_search', arguments: { query: 'fixture', engine_pool: 'api', ranking: 'research', engine_weights: { exa: 0 }, community: false } })
-  assert(!empty.isError)
+  assert.equal(empty.isError, true, 'a pool with no callable engine is not an empty success')
   assert.deepEqual(empty.structuredContent.enginesUsed, [])
   assert.deepEqual(empty.structuredContent.effectiveWeights, {})
   assert.equal(empty.structuredContent.communityUsed, false)
   assert.ok(empty.structuredContent.warnings.length > 0)
+  assert.doesNotMatch(empty.content.map(part => part.text).join('\n'), /empty success/)
+  const missingKey = await client.callTool({ name: 'fused_search', arguments: { query: 'stdio-no-key', engines: ['deepseek-search'], complexity: 'simple' } })
+  const missingText = missingKey.content.map(part => part.text).join('\n')
+  assert.equal(missingKey.isError, true)
+  assert.deepEqual(missingKey.structuredContent.enginesUsed, [])
+  assert.match(missingKey.structuredContent.warnings.join('\n'), /deepseek-search unavailable/)
+  assert.match(missingKey.structuredContent.routeExplanation, /No engine was called/)
+  assert.match(missingText, /not an empty search result/)
+  assert.doesNotMatch(missingText, /empty success/)
+  assert.equal(missingKey.structuredContent.engineStats['deepseek-search'], undefined)
   writeFileSync(join(home, 'keys.json'), JSON.stringify({ tavily: 'fixture-secret-tavily' }))
   assert.ok((await capability()).availableEngines.includes('tavily'))
   assert.ok(!JSON.stringify(await capability()).includes('fixture-secret'))
