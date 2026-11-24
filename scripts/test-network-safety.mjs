@@ -38,7 +38,7 @@ const skip = (name, reason) => { skipped.push(`${name} (${reason})`); console.lo
 const savedEnv = {}
 const TEST_TIMEOUT_MS = 20_000
 const clearNetworkEnv = () => {
-  for (const name of ['http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY', 'no_proxy', 'NO_PROXY', 'SEARCH_BOOST_TRUSTED_TUN', 'SEARCH_BOOST_ALLOW_TUN_FAKEIP', 'DSH_SEARCH_ALLOW_TUN_FAKEIP']) {
+  for (const name of ['http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY', 'no_proxy', 'NO_PROXY', 'SEARCH_BOOST_TRUSTED_TUN', 'SEARCH_BOOST_ALLOW_TUN_FAKEIP', 'DSH_SEARCH_ALLOW_TUN_FAKEIP', 'SEARCH_BOOST_TRUSTED_PROXY', 'SEARCH_BOOST_PROXY_DIRECT_FALLBACK']) {
     if (!(name in savedEnv)) savedEnv[name] = process.env[name]
     delete process.env[name]
   }
@@ -334,7 +334,7 @@ try {
     try {
       await assert.rejects(
         guardedFetch(`https://tls.example:${port}/`, {
-          env: { https_proxy: `http://127.0.0.1:${proxy.port}` },
+          env: { SEARCH_BOOST_TRUSTED_PROXY: '1', https_proxy: `http://127.0.0.1:${proxy.port}` },
           lookupImpl: () => { throw new Error('unexpected local lookup') },
         }),
         (err) => err.kind === NET_ERROR_KINDS.tls,
@@ -529,7 +529,7 @@ try {
     const proxy = await startTunnelProxy(() => '127.0.0.1')
     try {
       const res = await guardedFetch(`http://proxy-only.invalid:${origin.port}/page`, {
-        env: { http_proxy: `http://127.0.0.1:${proxy.port}` },
+        env: { SEARCH_BOOST_TRUSTED_PROXY: '1', http_proxy: `http://127.0.0.1:${proxy.port}` },
         lookupImpl: () => { throw new Error('must not resolve the target locally') },
       })
       assert.match(await res.text(), /fixture body/)
@@ -543,7 +543,7 @@ try {
     const proxy = await startTunnelProxy(() => '127.0.0.1')
     try {
       const res = await guardedFetch(`http://127.0.0.1:${origin.port}/page`, {
-        env: { http_proxy: `http://127.0.0.1:${proxy.port}`, no_proxy: '127.0.0.1' },
+        env: { SEARCH_BOOST_TRUSTED_PROXY: '1', http_proxy: `http://127.0.0.1:${proxy.port}`, no_proxy: '127.0.0.1' },
         lookupImpl: () => { throw new Error('obsolete DNS pre-check must not run') },
       })
       assert.match(await res.text(), /fixture body/)
@@ -562,7 +562,7 @@ try {
     const proxy = await startTunnelProxy(() => '127.0.0.1')
     const seen = []
     const options = {
-      env: { http_proxy: `http://127.0.0.1:${proxy.port}`, no_proxy: '127.0.0.1' },
+      env: { SEARCH_BOOST_TRUSTED_PROXY: '1', http_proxy: `http://127.0.0.1:${proxy.port}`, no_proxy: '127.0.0.1' },
       lookupImpl: (host, _opts, cb) => { seen.push(host); cb(null, [{ address: '127.0.0.1', family: 4 }]) },
     }
     try {
@@ -584,7 +584,7 @@ try {
     const proxy = await startTunnelProxy(() => '127.0.0.1', 4)
     try {
       const res = await guardedFetch(`http://fifth.invalid:${origin.port}/`, {
-        env: { http_proxy: `http://127.0.0.1:${proxy.port}` },
+        env: { SEARCH_BOOST_TRUSTED_PROXY: '1', http_proxy: `http://127.0.0.1:${proxy.port}` },
         lookupImpl: () => { throw new Error('must stay proxied') },
       })
       assert.match(await res.text(), /fixture body/)
@@ -602,7 +602,7 @@ try {
     })
     try {
       const res = await guardedFetch(`http://127.0.0.1:${origin.port}/start`, {
-        env: { http_proxy: `http://127.0.0.1:${proxy.port}` },
+        env: { SEARCH_BOOST_TRUSTED_PROXY: '1', SEARCH_BOOST_PROXY_DIRECT_FALLBACK: '1', http_proxy: `http://127.0.0.1:${proxy.port}` },
       })
       assert.match(await res.text(), /fixture body/)
       assert.equal(proxy.connects.length, 5, 'redirects stay on the direct fallback lane')
@@ -617,7 +617,7 @@ try {
       const origin = await startRecorder()
       try {
         const res = await guardedFetch(`http://127.0.0.1:${origin.port}/`, {
-          env: { http_proxy: `http://127.0.0.1:${proxy.port}` }, transport,
+          env: { SEARCH_BOOST_TRUSTED_PROXY: '1', SEARCH_BOOST_PROXY_DIRECT_FALLBACK: '1', http_proxy: `http://127.0.0.1:${proxy.port}` }, transport,
         })
         assert.match(await res.text(), /fixture body/)
         assert.equal(proxy.connects.length, 5, `reset attempts via ${transport ?? 'undici'}`)
@@ -647,6 +647,7 @@ try {
     const proxy = await startTunnelProxy((host) => host, Infinity)
     try {
       process.env.http_proxy = `http://127.0.0.1:${proxy.port}`
+      process.env.SEARCH_BOOST_PROXY_DIRECT_FALLBACK = '1'
       resetFetchDispatcher()
       const res = await ipv4Fetch(`http://127.0.0.1:${origin.port}/search`, {
         method: 'POST', body: JSON.stringify({ query: 'fixture query' }),
@@ -658,6 +659,7 @@ try {
       assert.equal(origin.requests.length, 1)
       assert.equal(origin.requests[0].method, 'POST')
     } finally {
+      delete process.env.SEARCH_BOOST_PROXY_DIRECT_FALLBACK
       delete process.env.http_proxy
       resetFetchDispatcher()
       await proxy.close(); await origin.close()
@@ -680,7 +682,7 @@ try {
     const proxy = await startTunnelProxy(() => '127.0.0.1')
     try {
       const res = await guardedFetch(`http://http-error.invalid:${origin.port}/`, {
-        env: { http_proxy: `http://127.0.0.1:${proxy.port}` },
+        env: { SEARCH_BOOST_TRUSTED_PROXY: '1', http_proxy: `http://127.0.0.1:${proxy.port}` },
         lookupImpl: () => { throw new Error('unexpected direct fallback') },
       })
       assert.equal(res.status, 503)
@@ -691,7 +693,7 @@ try {
       const denied = await startTunnelProxy(() => '127.0.0.1', Infinity, status)
       try {
         await assert.rejects(guardedFetch('http://denied.invalid/', {
-          env: { http_proxy: `http://127.0.0.1:${denied.port}` },
+          env: { SEARCH_BOOST_TRUSTED_PROXY: '1', http_proxy: `http://127.0.0.1:${denied.port}` },
           lookupImpl: () => { throw new Error('unexpected direct fallback') },
         }))
         assert.equal(denied.connects.length, 1)
@@ -708,10 +710,10 @@ try {
     try {
       const lookupImpl = () => { lookups++; throw new Error('unexpected DNS') }
       await assert.rejects(guardedFetch(`http://127.0.0.1:${origin.port}/`, {
-        env: { http_proxy: `http://127.0.0.1:${dead.port}` }, lookupImpl, timeoutMs: 1000,
+        env: { SEARCH_BOOST_TRUSTED_PROXY: '1', http_proxy: `http://127.0.0.1:${dead.port}` }, lookupImpl, timeoutMs: 1000,
       }))
       await assert.rejects(guardedFetch('http://page.invalid/', {
-        env: { http_proxy: 'socks5://127.0.0.1:9' }, lookupImpl,
+        env: { SEARCH_BOOST_TRUSTED_PROXY: '1', http_proxy: 'socks5://127.0.0.1:9' }, lookupImpl,
       }), (err) => err.kind === NET_ERROR_KINDS.proxyUnsupported)
       assert.equal(lookups, 0)
       assert.equal(origin.requests.length, 0)

@@ -105,7 +105,7 @@
     "test:search": "node scripts/test-search-routing.mjs && node scripts/test-auto-routing.mjs",
     "test:keys-authority": "node scripts/test-keys-authority.mjs",
     "test:dry-run": "node scripts/test-dry-run.mjs",
-    "test:network": "node scripts/test-network-safety.mjs && node scripts/test-audit-regressions.mjs && node scripts/test-fetch-fallback.mjs && node scripts/test-fetch-pdf.mjs",
+    "test:network": "node scripts/test-proxy-defaults.mjs && node scripts/test-network-safety.mjs && node scripts/test-audit-regressions.mjs && node scripts/test-fetch-fallback.mjs && node scripts/test-fetch-pdf.mjs",
     "test:v021": "node scripts/test-v021.mjs && node scripts/test-review-regressions.mjs",
     "test:screening": "node scripts/test-screening.mjs && node scripts/test-screening-core.mjs && node scripts/test-screening-frozen.mjs && node scripts/test-screening-ablation.mjs",
     "test:persistence": "node scripts/test-research-persistence.mjs",

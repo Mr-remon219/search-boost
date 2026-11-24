@@ -70,7 +70,7 @@
 - **Unified Core Across All Host Ecosystems**  
   A single, host-neutral core runtime powering standard Model Context Protocol (MCP) servers, alongside native extensions for Pi and Cordis plugin bundles for DeepSeek Harness (DSH).
 - **Zero-Config Onboarding & Strict Security**  
-  **Requires zero API keys to start** using the free engine pool. Sensitive credentials are stored as plaintext in local private configs with restricted file permissions (POSIX `0600`); this is not encryption at rest. Page fetches block local/private targets and pin validated direct DNS; configured proxies are trusted to enforce remote-DNS destination policy. Requests remain bounded with explicit fallback. Configured credentials are kept out of model prompts and diagnostic output.
+  **Requires zero API keys to start** using the free engine pool. Sensitive credentials are stored as plaintext in local private configs with restricted file permissions (POSIX `0600`); this is not encryption at rest. Page fetches block local/private targets and pin validated direct DNS; page proxy routes fail closed unless `SEARCH_BOOST_TRUSTED_PROXY=1` explicitly delegates remote DNS and destination ACLs. Proxy-to-direct fallback is independently disabled unless `SEARCH_BOOST_PROXY_DIRECT_FALLBACK=1`, which can expose the local egress IP. Fixed user-configured API endpoints do not require the page trust flag. Requests remain bounded. Configured credentials are kept out of model prompts and diagnostic output.
 
 ---
 
