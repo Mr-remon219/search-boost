@@ -126,14 +126,20 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
 - **Node.js**：`>= 22.13.0`
 - **包管理器**：`npm`（或 `pnpm`）
 
-### 1. 全局安装与启动控制台
+### 1. 安装这次交付的 beta
+
+**还没有上架 npm registry。** `0.3.1-beta.1` 没有发布。不要先执行 `npm install -g search-boost@beta` 或 `npm install -g search-boost@0.3.1-beta.1`。这两条命令装不到本候选，也不表示已经发布。
+
+安装 PR 交付的 tarball。命令目标是这个文件：
 
 ```bash
-npm install -g search-boost@0.3.1-beta.1
-
-search-boost       # 快速配置 / 首次接入向导
-search-boost tui   # 独立全屏控制中心
+npm install -g /absolute/path/to/search-boost-0.3.1-beta.1.tgz
+search-boost --version   # 必须打印 0.3.1-beta.1
+search-boost             # 快速配置 / 首次接入向导
+search-boost tui         # 独立全屏控制中心
 ```
+
+`npm install -g search-boost@latest` 是已发布的稳定通道，不会装上这个 beta。在维护者发布预发布版本之前，`@beta` 不是这个包。
 
 > [!TIP]
 > **零 Key 即可起步**：SearchBoost 默认提供免费引擎池（Bing、DuckDuckGo、Exa-free、AnySearch）。无需注册付费服务即可开始检索；实际可用性与结果覆盖取决于引擎及本机网络。
@@ -158,10 +164,11 @@ search-boost tui   # 独立全屏控制中心
 
 ### 1. 日常更新：npm 更新软件包，再刷新接入
 
-使用 npm 升级。`search-boost@0.3.1-beta.1` 固定本 beta 候选；`@latest` 仍是稳定通道，不会被本 beta 移动。若 registry 还没有这个版本，请安装 PR 中的 tarball，不要把本页当成已发布记录。`@beta` 只有维护者发布后才是预发布通道。安装会替换本机全局命令。软件包由 npm 更新；TUI 不自行更新 SearchBoost。安装、刷新与移除位于「管理 Agent 接入」（文件夹模式：安装与接入 → 管理 Agent 接入）。
+这个 beta 不是 registry 发布。要换到 `0.3.1-beta.1`，先安装交付的 tarball，再刷新接入。`@latest` 仍是已发布的稳定通道，不是这个 beta。维护者发布预发布版本之前，`@beta` 也不指向本候选。安装会替换本机全局命令。已发布的软件包由 npm 更新；TUI 不自行更新 SearchBoost。安装、刷新与移除位于「管理 Agent 接入」（文件夹模式：安装与接入 → 管理 Agent 接入）。
 
 ```bash
-npm install -g search-boost@0.3.1-beta.1
+npm install -g /absolute/path/to/search-boost-0.3.1-beta.1.tgz
+search-boost --version   # 0.3.1-beta.1
 search-boost
 # → 管理 Agent 接入 → 刷新已有接入 → 选择实际范围
 # 或刷新全部已有接入：
@@ -267,7 +274,7 @@ search-boost
 }
 ```
 
-- **`engine_pool`**：`free`（免密钥免费池）、`api`（已配置的 API 引擎）、`hybrid`（两池合并）。不可用或已关闭的引擎会跳过。省略时按兼容层映射：`free` → 免费池，`api` → hybrid。
+- **`engine_pool`**：`free`（免密钥免费池）、`api`（已配置的 API 引擎）、`hybrid`（两池合并）。不可用或已关闭的引擎会跳过。省略 `engine_pool` 不是下面这条映射：至少有一个已启用的 API Key 时，默认搜索只用这些 API；否则使用免 Key 池。旧的 `layer` 参数才是兼容映射：`layer=free` 选择免费池，`layer=api` 选择 hybrid。两者同时出现时以 `engine_pool` 为准。
 - **`ranking`**：最终引擎权重预设：`balanced`（默认）、`research`、`fresh`。不改变查询变体、检索深度或时间过滤，也不证明来源权威性或时效性。
 - **`complexity`**：`simple`（1 组查询变体）、`medium`（最多 2 组变体）、`complex`（最多 3 组深度变体）。
 - **`community`**：平台名称数组（例如 `["reddit","x","zhihu"]`）或兼容布尔值。`false`/`[]` 关闭；旧 `true` 仍只选择 X。默认 false，共用最终结果限额，不自动启用后端。
@@ -499,8 +506,9 @@ search-boost install -t pi -y               # 为 Pi 挂载原生扩展及提示
 search-boost install -t dsh --profile web   # 为 DeepSeek Harness CLI 接入 web profile
 search-boost install -t dsh --dsh-surface desktop -y # Desktop 原生命令 + 本地包接入
 search-boost install -t dsh --dsh-surface all -y     # Desktop 与 CLI 分别安装
-# 无需全局安装 search-boost / dsh / pnpm（Windows、Linux、macOS）：
-npx --yes --package search-boost@0.3.1-beta.1 search-boost install -t dsh --profile web -y
+# 无需全局安装 search-boost / dsh / pnpm（Windows、Linux、macOS）。
+# 这个 beta 不在 registry 上；--package 指向交付的 tarball，不是 @beta：
+npx --yes --package /absolute/path/to/search-boost-0.3.1-beta.1.tgz search-boost install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # 仅演练安装过程，不写磁盘
 
 # ----------------- 凭据与配置管理 -----------------
@@ -527,7 +535,7 @@ search-boost uninstall -t cursor,claude -y  # 移除指定宿主的集成与注�
 
 ## 源码安装与本地开发
 
-适用于参与开发，或提前验证尚未发布的代码；`@beta` 选择测试通道，`@latest` 选择稳定通道。
+适用于参与开发，或提前验证尚未发布的代码。维护者发布预发布版本之后，`@beta` 才是测试通道，`@latest` 是稳定通道。这次的 `0.3.1-beta.1` 候选不在这两个 tag 上。
 
 ### 环境准备
 

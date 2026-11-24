@@ -126,14 +126,20 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
 - **Node.js**: `>= 22.13.0`
 - **Package Manager**: `npm` (or `pnpm`)
 
-### 1. Install & Launch the Dashboard
+### 1. Install this delivered beta
+
+**Not on the npm registry.** `0.3.1-beta.1` has not been published. Do not start with `npm install -g search-boost@beta` or `npm install -g search-boost@0.3.1-beta.1`. Neither command installs this candidate, and neither means a release exists.
+
+Install the tarball delivered with the pull request. The command target is that file:
 
 ```bash
-npm install -g search-boost@0.3.1-beta.1
-
-search-boost       # Quick setup / configuration wizard
-search-boost tui   # Independent full-screen control center
+npm install -g /absolute/path/to/search-boost-0.3.1-beta.1.tgz
+search-boost --version   # must print 0.3.1-beta.1
+search-boost             # Quick setup / configuration wizard
+search-boost tui         # Independent full-screen control center
 ```
+
+`npm install -g search-boost@latest` is the published stable channel. It does not install this beta. `@beta` is not this package until a maintainer publishes a prerelease.
 
 > [!TIP]
 > **Zero API Keys Required to Start**: SearchBoost includes a keyless free pool (Bing, DuckDuckGo, Exa-free, AnySearch). No paid-provider signup is required; availability and result coverage depend on the providers and your network.
@@ -158,10 +164,11 @@ The switches are independent and also accept `true`. Set accepted values in your
 
 ### 1. Routine Updates: npm First, Then Refresh Integrations
 
-Upgrade with npm. `search-boost@0.3.1-beta.1` pins this beta candidate; `@latest` stays the stable channel and is not moved by this beta. If the registry does not have this version yet, install the pull-request tarball instead of treating this page as a publish record. `@beta` is the prerelease channel only after a maintainer publishes it. Installation replaces your local global executable. Use npm to update the package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
+This beta is not a registry release. To move onto `0.3.1-beta.1`, install the delivered tarball, then refresh. `@latest` stays the published stable channel and is not this beta. `@beta` does not name this candidate until a maintainer publishes a prerelease. Installation replaces your local global executable. Use npm to update a published package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
 
 ```bash
-npm install -g search-boost@0.3.1-beta.1
+npm install -g /absolute/path/to/search-boost-0.3.1-beta.1.tgz
+search-boost --version   # 0.3.1-beta.1
 search-boost
 # → Manage agent integrations → Refresh existing integrations → select scopes
 # Or refresh all existing integrations:
@@ -267,7 +274,7 @@ Dispatches queries across engines concurrently, normalizes URLs, strips redirect
 }
 ```
 
-- **`engine_pool`**: `free` (keyless Bing, DuckDuckGo, Exa-free, AnySearch), `api` (configured API engines), or `hybrid` (both pools). Unavailable or disabled engines are skipped. When omitted, the compatibility layer maps `free` to the free pool and `api` to hybrid.
+- **`engine_pool`**: `free` (keyless Bing, DuckDuckGo, Exa-free, AnySearch), `api` (configured API engines), or `hybrid` (both pools). Unavailable or disabled engines are skipped. Omitting `engine_pool` is not the mapping below: if at least one API key is enabled, that default search uses those APIs; otherwise it uses the keyless pool. The old `layer` parameter is the compatibility mapping: `layer=free` selects the free pool and `layer=api` selects hybrid. When both are set, `engine_pool` wins.
 - **`ranking`**: Final engine-weight presets: `balanced` (default), `research`, or `fresh`. They do not change query variants, search depth or recency filters, and do not establish source authority or freshness.
 - **`complexity`**: `simple` (1 query variant), `medium` (up to 2 variants), `complex` (up to 3 deep variants).
 - **`community`**: Platform-name array (e.g. `["reddit","x","zhihu"]`) or legacy boolean. `false`/`[]` disables; old `true` selects X only. Defaults false, shares the final quota, and never enables a backend.
@@ -499,8 +506,9 @@ search-boost install -t pi -y               # Mount Pi extension and prompt temp
 search-boost install -t dsh --profile web   # Connect to DeepSeek Harness CLI web profile
 search-boost install -t dsh --dsh-surface desktop -y # Desktop bundled command + local package
 search-boost install -t dsh --dsh-surface all -y     # Manage Desktop and CLI independently
-# No global search-boost / dsh / pnpm required (Windows, Linux, macOS):
-npx --yes --package search-boost@0.3.1-beta.1 search-boost install -t dsh --profile web -y
+# No global search-boost / dsh / pnpm required (Windows, Linux, macOS).
+# This beta is not on the registry; --package is the delivered tarball, not @beta:
+npx --yes --package /absolute/path/to/search-boost-0.3.1-beta.1.tgz search-boost install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # Preview installation without writing files
 
 # ----------------- Configuration Management -----------------
@@ -527,7 +535,7 @@ search-boost uninstall -t cursor,claude -y  # Remove integrations from selected 
 
 ## Installation from Source & Development
 
-Use this path to contribute to SearchBoost, or to test code that is not in a published release yet. `@beta` selects the prerelease channel; `@latest` selects the stable channel.
+Use this path to contribute to SearchBoost, or to test code that is not in a published release yet. After a maintainer publishes a prerelease, `@beta` selects that channel and `@latest` selects stable. This `0.3.1-beta.1` candidate is not on either tag.
 
 ### Prerequisites
 
