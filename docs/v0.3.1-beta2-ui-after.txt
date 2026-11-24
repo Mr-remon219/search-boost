@@ -1,0 +1,69 @@
+0.3.1-beta.2 UI gate. Isolation home. No live search and no credential is printed.
+beta.1 did not run this set. These lines are from this process.
+
+keyboard
+1:overview 2:engines 3:search 4:tools 5:community 6:judgment 7:agents 8:settings
+focus list/detail/sidebar, j/k, help, and the selection marker all responded.
+zh-54
+  ⣤⡀ ⢛⣿⣿  SearchBoost  /  CONTROL CENTER             
+  ⠈⢻⣶⠟⠁⠛  v0.3.1-beta.2 · 默认搜索 · Ayu Dark        
+  ⣴⠟⠁     ───────────────────────────────────────────
+  1 总览         │ ▸ 默认搜索                        
+  2 搜索引擎     │                                   
+▸ 3 默认搜索     │ ▸ 自动选择引擎         API        
+  4 工具开关     │ Enter 打开 · → 详情 · 1/2         
+  5 社区检索     │ ──────────────────────────────────
+  6 判断模型     │ 自动选择引擎                      
+  7 Agent 接入   │ 协议：deepseek-search 只调用 POST 
+  8 界面设置     │ /v1/tools/search。没有 live 验证。
+─────────────────────────────────────────────────────
+  就绪                                               
+  Enter 打开  → 详情  Esc 返回  Tab 切栏             
+  ? 帮助  Q 退出  ≥112 列同时显示三栏                
+NO_COLOR
+interactive --no-color with NO_COLOR=1 and TERM=dumb has no truecolor SGR.
+non-tty
+tui without a TTY fails and names --preview. --preview --no-color prints plain text.
+cancel
+Enter on the default confirm choice left keys.json unchanged.
+conflict
+Operation failed: configuration changed elsewhere. Press R and try again; this change was not saved.
+diagnostics
+fused_search: no selected engine was called for "stdio-no-key". This is not an empty search result. engine_pool=api did not run. deepseek-search unavailable (missing credentials, disabled, or locally unavailable); not called. No selected engine was called (deepseek-search). engine_pool=api did not run. Next: search-boost config keys --show. Enable with search-boost config keys --set <id>=KEY and search-boost config keys --enable <id>. This call only: engine_pool=free, and do not list keyed engines.
+Retry-After 1.5, integer 2, invalid text and a future HTTP-date all stop.
+dedup
+one URL from bing and ddg stays one row and keeps both provenance entries. A named bing call does not add tavily.
+
+English search page after keyboard focus returned to the list
+  ⣤⡀ ⢛⣿⣿  SearchBoost  /  CONTROL CENTER                                                           
+  ⠈⢻⣶⠟⠁⠛  v0.3.1-beta.2 · Search defaults · Ayu Dark                                               
+  ⣴⠟⠁     ─────────────────────────────────────────────────────────────────────────────────────────
+  1 Overview          │ ▸ Search defaults                                                          
+  2 Engines           │                                                                            
+▸ 3 Search defaults   │ ▸ Automatic engine selection                                 API           
+  4 Tools             │   Per-request search options                                 fused_search  
+  5 Community         │                                                                            
+  6 Judgment          │                                                                            
+  7 Integrations      │                                                                            
+  8 Settings          │                                                                            
+                      │                                                                            
+  Browse offline      │                                                                            
+  ?  Help             │                                                                            
+  Q  Exit             │                                                                            
+                      │                                                                            
+                      │ Enter open · → details · 1/2                                               
+                      │ ───────────────────────────────────────────────────────────────────────────
+                      │ Automatic engine selection                                                 
+                      │ Protocol: deepseek-search calls POST /v1/tools/search only. No live check. 
+                      │ Default search (engine_pool omitted): deepseek-search.                     
+                      │ These may incur charges (deepseek-search). Check with the provider.        
+                      │ This call only: engine_pool=free, and do not list keyed engines.           
+───────────────────────────────────────────────────────────────────────────────────────────────────
+  Ready                                                                                            
+  Tab / Shift+Tab focus  ↑↓ move  Enter open  → details                                            
+  ? help  Q quit  ≥112 columns shows all three panes                                               
+
+48 columns
+SearchBoost                                    
+Terminal too small: resize to at least 54 × 16.
+Q / Ctrl+C → Exit                              

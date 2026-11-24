@@ -6,7 +6,7 @@ import * as z from 'zod'
 import { fusedSearchInput } from '../adapters/mcp/schemas.mjs'
 import { engineRegistry } from '../lib/search/engines.js'
 import { ENGINE_POOLS, RANKING_WEIGHTS, resolveSearchRoute } from '../lib/search/routing.js'
-import { DEEPSEEK_SEARCH_ENDPOINT, LEGACY_DEEPSEEK_MESSAGES_BASE, deepseekSearch } from '../lib/search/deepseek-search.js'
+import { DEEPSEEK_SEARCH_ENDPOINT, LEGACY_DEEPSEEK_MESSAGES_BASE, deepseekSearch, retryWaitMs } from '../lib/search/deepseek-search.js'
 import { __setUndiciLoaderForTests, closeFetchDispatchers } from '../lib/search/ipv4-fetch.js'
 import { runFused, fusedHitToJson, fusedResultIsError, invalidateSearchCaches } from '../lib/runtime.mjs'
 import { runtimeSnapshot } from '../lib/search/capability.js'
@@ -218,6 +218,14 @@ try {
   const invalid = await retryCase('not-a-date')
   assert.equal(invalid.fetches, 1)
   assert.deepEqual(invalid.sleeps, [])
+  const decimalStop = await retryCase('1.5')
+  assert.equal(decimalStop.fetches, 1, 'Retry-After 1.5 is 1500ms and stops; it is not the date 2001-01-05')
+  assert.deepEqual(decimalStop.sleeps, [])
+  const decimalWait = await retryCase('0.5')
+  assert.equal(decimalWait.fetches, 3)
+  assert.deepEqual(decimalWait.sleeps, [500, 500])
+  assert.equal(retryWaitMs(1, '1.5', fixedNow), null)
+  assert.equal(retryWaitMs(1, '1', fixedNow), 1000)
   const cancelSleeps = []
   let cancelFetches = 0
   const cancelSignal = AbortSignal.abort()
@@ -258,6 +266,9 @@ try {
   assert.equal(calls.length, beforeNoKey, 'missing key does not send a request')
   assert.equal(fusedResultIsError(noKey), true)
   assert.equal(noKey.enginesUsed.length, 0)
+  assert.equal(noKey.enginePool, 'api', 'an unavailable named API is not reported as the free pool')
+  assert.match(noKey.routeExplanation, /engine_pool=api did not run/)
+  assert.doesNotMatch(noKey.warnings.join('\n'), /requested free pool/)
   assert.ok(beforeShape < calls.length)
   assert.doesNotMatch(noKey.warnings.join('\n'), /empty success/)
 

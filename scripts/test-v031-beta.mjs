@@ -3,11 +3,11 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { ConsoleModel, renderConsole } from '../lib/console-tui.mjs'
+import { ConsoleModel, renderConsole, displayWidth } from '../lib/console-tui.mjs'
 import { setKey, writeKeysFile, readKeysRouting, readKeysFileDocument, keysFilePath, KEY_NAMES } from '../lib/keys.mjs'
 import { formatKeyStatusLines } from '../lib/installer/keys-wizard.mjs'
 import { describeDefaultSearch, explainSelection } from '../lib/search/routing.js'
-import { plannedEngineCalls } from '../lib/search/fusion.js'
+import { plannedEngineCalls, fitDiagnosticNote } from '../lib/search/fusion.js'
 import { normalizeSearchHit } from '../lib/search/results.js'
 import { runFused, fusedResultIsError, fusedHitToJson, invalidateSearchCaches } from '../lib/runtime.mjs'
 import { runChain } from '../lib/search/engines.js'
@@ -82,6 +82,19 @@ assert.match(details, /engine_pool omitted/)
 assert.match(details, /may incur charges/)
 assert.doesNotMatch(details, /未配齐/)
 const screen = renderConsole(model, { columns: 120, rows: 40, color: false })
+assert.match(details.split('\n')[0], /POST \/v1\/tools\/search/)
+assert.match(screen, /\/v1\/tools\/search/)
+const narrow = renderConsole(model, { columns: 48, rows: 16, color: false })
+for (const line of narrow.split('\n')) assert.ok(displayWidth(line) <= 48, line)
+assert.match(narrow, /54/)
+const compact = renderConsole(model, { columns: 54, rows: 16, color: false })
+for (const line of compact.split('\n')) assert.ok(displayWidth(line) <= 54, line)
+assert.match(compact, /\/v1\/tools\/search/)
+const zh = new ConsoleModel({ language: 'zh-CN' })
+zh.handleKey('3')
+const zhScreen = renderConsole(zh, { columns: 54, rows: 16, color: false })
+for (const line of zhScreen.split('\n')) assert.ok(displayWidth(line) <= 54, line)
+assert.match(zhScreen, /协议/)
 console.log('--- isolation console search page (not a host TUI) ---')
 console.log(details)
 console.log(screen)
@@ -181,4 +194,14 @@ await assert.rejects(runChain({
   ddg: { available: () => true, search: async () => { chain += 1; return [] } },
 }, 'q', 1, {}), /cross-engine fallback is disabled/)
 assert.equal(chain, 0)
+const longNote = `HEAD ${'x'.repeat(180)} TAIL-MARKER`
+const fitted = fitDiagnosticNote(`http_500: ${longNote}`)
+assert.equal(fitted.length, 120)
+assert.match(fitted, /^http_500: HEAD/)
+assert.match(fitted, /TAIL-MARKER$/)
+calls.length = 0
+engines.bing = fake('bing', async () => { throw Object.assign(new Error(longNote), { kind: 'http_500' }) })
+const tailed = await runFused({ query: 'note-tail', engineList: ['bing'], complexity: 'simple' }, { snapshot })
+assert.match(tailed.engineStats.bing.note, /TAIL-MARKER$/)
+assert.ok(tailed.engineStats.bing.note.length <= 120)
 console.log('v0.3.1 beta isolation checks passed (fixture engines and local CLI/console; no live provider).')

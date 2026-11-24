@@ -1,0 +1,54 @@
+beta.1 console before beta.2. Isolation render, not a live host. No secrets.
+
+wide 100x28
+  ⣤⡀ ⢛⣿⣿  SearchBoost  /  CONTROL CENTER                                                           
+  ⠈⢻⣶⠟⠁⠛  v0.3.1-beta.1 · Search defaults · Ayu Dark                                               
+  ⣴⠟⠁     ─────────────────────────────────────────────────────────────────────────────────────────
+  1 Overview          │ ▸ Search defaults                                                          
+  2 Engines           │                                                                            
+▸ 3 Search defaults   │ ▸ Automatic engine selection                                 API           
+  4 Tools             │   Per-request search options                                 fused_search  
+  5 Community         │                                                                            
+  6 Judgment          │                                                                            
+  7 Integrations      │                                                                            
+  8 Settings          │                                                                            
+                      │                                                                            
+  Browse offline      │                                                                            
+  ?  Help             │                                                                            
+  Q  Exit             │                                                                            
+                      │                                                                            
+                      │ Enter open · → details · 1/2                                               
+                      │ ───────────────────────────────────────────────────────────────────────────
+                      │ Automatic engine selection                                                 
+                      │ Default search (engine_pool omitted): deepseek-search.                     
+                      │ These may incur charges (deepseek-search); check with the provider.        
+                      │ This call only: pass engine_pool=free and do not list keyed engines in     
+                      │ engines.                                                                   
+───────────────────────────────────────────────────────────────────────────────────────────────────
+  Ready                                                                                            
+  Tab / Shift+Tab focus  ↑↓ move  Enter open  → details                                            
+  ? help  Q quit  ≥112 columns shows all three panes                                               
+
+narrow 60x20
+  ⣤⡀ ⢛⣿⣿  SearchBoost  /  CONTROL CENTER                   
+  ⠈⢻⣶⠟⠁⠛  v0.3.1-beta.1 · Search defaults · Ayu Dark       
+  ⣴⠟⠁     ─────────────────────────────────────────────────
+  1 Overview     │ ▸ Search defaults                       
+  2 Engines      │                                         
+▸ 3 Search defa… │ ▸ Automatic engine select… API          
+  4 Tools        │   Per-request search opti… fused_search 
+  5 Community    │                                         
+  6 Judgment     │ Enter open · → details · 1/2            
+  7 Integrations │ ────────────────────────────────────────
+  8 Settings     │ Automatic engine selection              
+                 │ Default search (engine_pool omitted):   
+  Browse offline │ deepseek-search.                        
+  ?  Help        │ These may incur charges                 
+  Q  Exit        │ (deepseek-search); check with the       
+───────────────────────────────────────────────────────────
+  Ready                                                    
+  Enter open  → details  Esc back  Tab focus               
+  ? help  Q quit  ≥112 columns shows all three panes       
+
+missing-key message
+fused_search: no selected engine was called for "stdio-no-key". This is not an empty search result. deepseek-search unavailable (missing credentials, disabled, or locally unavailable); not called; No available engines in requested free pool; no implicit fallback Check search-boost config keys --show. No other engine was called.
