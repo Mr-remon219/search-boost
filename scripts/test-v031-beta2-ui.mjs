@@ -8,6 +8,7 @@ import { PassThrough } from 'node:stream'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ConsoleModel, renderConsole, displayWidth, runConsoleTui } from '../lib/console-tui.mjs'
+import { linesForClack } from '../lib/installer/tui.mjs'
 import { writeKeysFile, readKeys, keysFilePath } from '../lib/keys.mjs'
 import { formatAllEnginesFailedMessage, runFused, fusedResultIsError, invalidateSearchCaches } from '../lib/runtime.mjs'
 import { retryWaitMs } from '../lib/search/deepseek-search.js'
@@ -84,9 +85,8 @@ const zh = new ConsoleModel({ language: 'zh-CN' })
 key(zh, '3', '3')
 const zhFrame = renderConsole(zh, { columns: 54, rows: 16, color: false })
 within(zhFrame, 54)
-assert.match(zhFrame, /默认搜索/)
-assert.match(zhFrame, /协议/)
-assert.match(zhFrame, /\/v1\/tools\/search/)
+assert.match(zhFrame, /自动搜索：deepseek-search/)
+assert.match(zhFrame, /可能收费，以服务商为准。/)
 note('zh-54', zhFrame)
 
 const plain = renderConsole(model, { columns: 80, rows: 24, color: false })
@@ -117,7 +117,8 @@ try {
 }
 assert.equal(written.includes('\u001b[38;'), false)
 assert.equal(written.includes('\u001b[48;'), false)
-assert.match(written, /\/v1\/tools\/search/)
+assert.match(written, /Automatic search: deepseek-search/)
+assert.match(written, /May incur charges/)
 note('NO_COLOR', 'interactive --no-color with NO_COLOR=1 and TERM=dumb has no truecolor SGR.')
 
 const preview = spawnSync(process.execPath, [cli, 'tui', '--preview', '--no-color'], { encoding: 'utf8', env: { ...process.env, NO_COLOR: '1', TERM: 'dumb' } })
@@ -200,6 +201,89 @@ const only = await runFused({ query: 'only bing', engineList: ['bing'], complexi
 assert.deepEqual(calls, ['bing'])
 assert.equal(only.results.length, 1)
 note('dedup', 'one URL from bing and ddg stays one row and keeps both provenance entries. A named bing call does not add tavily.')
+
+function screenOf(language, columns, rows, setup) {
+  const view = new ConsoleModel({ language })
+  setup?.(view)
+  return renderConsole(view, { columns, rows, color: false })
+}
+writeKeysFile({ 'deepseek-search': undefined, tavily: undefined, enabledEngines: null })
+const overviewEn = screenOf('en', 80, 24)
+const overviewZh = screenOf('zh-CN', 60, 20)
+within(overviewEn, 80)
+within(overviewZh, 60)
+assert.match(overviewEn, /Automatic search:/)
+assert.match(overviewEn, /complete setup/)
+assert.doesNotMatch(overviewEn.split('\n').slice(0, 12).join('\n'), /Config home/)
+assert.match(overviewZh, /自动搜索：免 Key 引擎/)
+assert.match(overviewZh, /这是完整配置/)
+note('overview-80x24', overviewEn)
+note('overview-zh-60x20', overviewZh)
+
+const search = new ConsoleModel({ language: 'zh-CN' })
+writeKeysFile({ 'deepseek-search': secret, enabledEngines: ['deepseek-search'] })
+search.reload()
+key(search, '3', '3')
+renderConsole(search, { columns: 60, rows: 20, color: false })
+key(search, 'return')
+assert.equal(search.sectionId, 'search')
+assert.equal(search.focus, 'detail')
+const detailZh = renderConsole(search, { columns: 60, rows: 20, color: false })
+assert.match(detailZh, /自动搜索：deepseek-search/)
+assert.match(detailZh, /可能收费，以服务商为准。/)
+let protocolPages = 0
+while (!/POST \/v1\/tools\/search/.test(renderConsole(search, { columns: 60, rows: 20, color: false })) && protocolPages < 3) {
+  key(search, 'pagedown')
+  protocolPages += 1
+}
+assert.ok(protocolPages <= 2, `protocol took ${protocolPages} PgDn`)
+const wideSearch = new ConsoleModel({ language: 'en' })
+wideSearch.reload()
+key(wideSearch, '3', '3')
+renderConsole(wideSearch, { columns: 80, rows: 24, color: false })
+key(wideSearch, 'return')
+let widePages = 0
+while (!/POST \/v1\/tools\/search/.test(renderConsole(wideSearch, { columns: 80, rows: 24, color: false })) && widePages < 3) {
+  key(wideSearch, 'pagedown')
+  widePages += 1
+}
+assert.ok(widePages <= 1, `80x24 protocol took ${widePages} PgDn`)
+const place = wideSearch.sectionId
+const placeIndex = wideSearch.index
+wideSearch.confirm('leave this row?', () => writeKeysFile({ enabledEngines: ['tavily'] }))
+const confirmFrame = renderConsole(wideSearch, { columns: 80, rows: 24, color: false })
+const confirmNarrow = renderConsole(wideSearch, { columns: 60, rows: 20, color: false })
+for (const frame of [confirmFrame, confirmNarrow]) {
+  assert.match(frame, /Cancel — do not save/)
+  assert.match(frame, /Confirm/)
+  assert.match(frame, /No writes before consent/)
+  within(frame, frame === confirmFrame ? 80 : 60)
+}
+assert.equal(wideSearch.modal.index, 0)
+key(wideSearch, 'return')
+await settle()
+assert.equal(wideSearch.sectionId, place)
+assert.equal(wideSearch.index, placeIndex)
+assert.equal(wideSearch.focus, 'detail')
+const three = renderConsole(new ConsoleModel({ language: 'en' }), { columns: 120, rows: 40, color: false })
+assert.ok(three.split('\n').some(line => (line.match(/│/g) ?? []).length >= 2))
+assert.match(three, /▸/)
+const marks = new ConsoleModel({ language: 'en' })
+key(marks, '2', '2')
+const marked = renderConsole(marks, { columns: 80, rows: 24, color: false })
+assert.match(marked, /● /)
+assert.match(marked, /○ No key/)
+assert.match(renderConsole(marks, { columns: 80, rows: 24, color: false }), /▸/)
+const safe = linesForClack('Protocol: POST /v1/tools/search only. No live check.', 60)
+assert.deepEqual(safe, ['Protocol: POST /v1/tools/search only. No live check.'])
+const wrapped = linesForClack('deepseek-search calls the official Search API POST /v1/tools/search and must not split those tokens across a menu.', 60)
+assert.ok(wrapped.every(line => displayWidth(line) <= 52))
+assert.ok(wrapped.some(line => line.includes('official Search API')))
+assert.ok(wrapped.some(line => /(^| )POST( |$)/.test(line)))
+assert.ok(wrapped.some(line => line.includes('/v1/tools/search')))
+assert.ok(wrapped.every(line => !line.startsWith('OST') && !line.startsWith('fficial')))
+note('detail-zh-60x20', detailZh)
+note('confirm-80x24', confirmFrame)
 
 const report = [
   '0.3.1-beta.2 UI gate. Isolation home. No live search and no credential is printed.',

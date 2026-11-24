@@ -690,6 +690,7 @@ await test('Ayu/TokyoNight palettes and the standard SearchBoost logo cover all 
 await test('single-action entries open directly and language/theme pickers cancel back to the list', () => freshConsole(async () => {
   for (const language of ['en', 'zh-CN']) {
     const model = new ConsoleModel({ language })
+    renderConsole(model, { columns: 120, rows: 24, color: false })
     model.navigate(7)
     for (const id of ['language', 'theme']) {
       model.selection.settings = model.rows.findIndex(row => row.id === id)
@@ -707,8 +708,13 @@ await test('single-action entries open directly and language/theme pickers cance
     assert.doesNotMatch(words, /控制台专属|Console only|两套界面|Independent full-screen/)
     model.navigate(1); key(model, 'return')
     assert.equal(model.focus, 'detail'); assert.equal(model.modal, null, 'multiple-action entries retain the details chooser')
-    model.navigate(2); key(model, 'return'); await settle()
-    assert.equal(model.sectionId, 'engines', 'automatic defaults action opens engine switches, not a layer mutation')
+    model.navigate(2)
+    renderConsole(model, { columns: 80, rows: 24, color: false })
+    key(model, 'return'); await settle()
+    assert.equal(model.sectionId, 'search', 'a narrow list Enter opens details and does not run the hidden engine-switch action')
+    assert.equal(model.focus, 'detail')
+    key(model, 'return'); await settle()
+    assert.equal(model.sectionId, 'engines', 'the engine-switch action runs only after its detail is visible')
     assert.equal(model.modal, null)
     assert.equal(existsSync(searchBoostHome()), false)
   }
