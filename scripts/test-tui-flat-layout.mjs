@@ -446,6 +446,12 @@ try {
       assert(hint.includes('api/hybrid'))
       assert(hint.includes(language === 'en' ? 'disabled' : '已停用'))
       assert(hint.includes('****') && !hint.includes(secret))
+      // Newly added keyed engines must keep their friendly label and pool hint.
+      for (const [name, label] of [['firecrawl', 'Firecrawl'], ['keenable', 'Keenable']]) {
+        const row = menus[0].options.find(option => option.value === name)
+        assert.equal(row?.label, label, `${name} keeps its friendly label`)
+        assert(row.hint.includes('api/hybrid'), `${name} keeps its api/hybrid hint`)
+      }
       assert(edited.logs.some(line => line.includes('TINYFISH_API_KEY') && line.includes('api/hybrid')))
       assert(edited.logs.some(line => line.includes('https://gateway.example/tinyfish/')), 'root search path preserves the gateway prefix')
       assert(!JSON.stringify({ records: edited.records, logs: edited.logs }).includes(secret), 'TUI never echoes the entered key')

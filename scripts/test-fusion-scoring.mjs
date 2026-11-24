@@ -163,6 +163,6 @@ const disabled = resolveSearchRoute({ enginePool: 'hybrid', engineList: ['anysea
 assert.deepEqual(disabled.engineNames, [])
 assert.ok(disabled.warnings.length > 0)
 assert.deepEqual(resolveKeyedEngines({ anysearch: 'fixture' }, readEngineRoutingFromDoc({ engines: { anysearch: { enabled: false } } })), [])
-assert.equal(new Set(ENGINE_POOLS.hybrid).size, 9)
-console.log('ok: AnySearch readiness and disabled routing, nine unique logical engines')
+assert.equal(new Set(ENGINE_POOLS.hybrid).size, 11)
+console.log('ok: AnySearch readiness and disabled routing, eleven unique logical engines')
 console.log('All consensus-v2 scoring/integration tests passed (no live API calls).')

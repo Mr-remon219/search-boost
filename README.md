@@ -56,7 +56,7 @@
 ## Key Features
 
 - **Multi-Engine Parallel Fusion (`fused_search`)**  
-  Queries multiple search providers in parallel. Features an out-of-the-box **keyless free pool** (Bing, DuckDuckGo, Exa-free, AnySearch) and a keyed **API pool** (Tavily, Brave, Exa, AnySearch, TinyFish, DeepSeek Search). Automatically performs cross-engine URL deduplication, domain routing, and relevance re-ranking.
+  Queries multiple search providers in parallel. Features an out-of-the-box **keyless free pool** (Bing, DuckDuckGo, Exa-free, AnySearch) and a keyed **API pool** (Tavily, Brave, Exa, AnySearch, TinyFish, DeepSeek Search, Firecrawl, Keenable). Automatically performs cross-engine URL deduplication, domain routing, and relevance re-ranking.
 - **Clean Webpage Content Extractor (`fetch_page`)**  
   Fetches the origin first for low latency, with optional same-route curl compatibility fallback and Jina Reader backup. Strips CSS, JS, and ad clutter. Supports focused contextual paragraph extraction via `focus`, backed by in-memory caching and size limits.
 - **Five-Platform Community Retrieval (`community_search`)**
@@ -363,6 +363,8 @@ DeepSeek Search (`deepseek-search`) uses the native Anthropic-compatible web sea
 
 TinyFish Search is a keyed API engine: use TUI → Search engine configuration → TinyFish Search (folder layout: Services & credentials → Search engine configuration), `TINYFISH_API_KEY`, or `config keys --set tinyfish=KEY`. The TUI supports key replacement/removal, custom/reset Base URLs and masked status; use Enable / disable engines to select `tinyfish` without silently expanding an existing whitelist. It joins api/hybrid, not the default free pool (explicit `engines` still overrides pool membership). Service pricing and limits can change; a wallet balance is not a count of searches remaining. Each query variant counts as a request. No automatic pagination or inline Fetch is used. Requests default to the service's US/en locale. Yahoo has been removed; explicit Yahoo engine/weight inputs are rejected.
 
+Firecrawl and Keenable are keyed API engines: configure `FIRECRAWL_API_KEY` / `KEENABLE_API_KEY`, or `config keys --set firecrawl=KEY` / `--set keenable=KEY`, then enable them in the engine configuration if you already have an explicit whitelist. Both join api/hybrid, never the default free pool, and all three ranking presets start at the neutral weight **1.0**; override per request with `engine_weights`. Firecrawl uses `POST /v2/search` with a Bearer token and reads `data.web[]`; Keenable uses `POST /v1/search` with `X-API-Key` and sends the documented `max_results` (1–50). Both bill per search. Neither forwards `recency` as a provider-side time filter and neither declares native domain filtering, so `include_domains` is applied as a `site:` hint plus a client-side filter. Firecrawl results carry no publication date unless the gateway enables scraping, so freshness scoring is neutral for them; Keenable returns ISO 8601 `published_at`, which does drive freshness. Neither engine exposes a quota probe, so the console reports quota as unsupported. A 200 response with a malformed or unsuccessful envelope is reported as an engine failure, never as an empty result.
+
 | Engine | balanced | research | fresh |
 | --- | ---: | ---: | ---: |
 | bing | 0.957 | 0.927 | 1.020 |
@@ -374,6 +376,8 @@ TinyFish Search is a keyed API engine: use TUI → Search engine configuration �
 | anysearch | 1.004 | 1.042 | 0.951 |
 | tinyfish | 1.000 | 1.000 | 1.000 |
 | deepseek-search | 1.000 | 1.000 | 1.000 |
+| firecrawl | 1.000 | 1.000 | 1.000 |
+| keenable | 1.000 | 1.000 | 1.000 |
 
 These are uncalibrated cold-start defaults, not measured quality rankings. DDG uses 60% of its previous weights; TinyFish starts neutral, and other defaults are unchanged without re-normalization. `consensus-v2.1` combines original ranks, related-provider discounts and max+log consensus, with metadata adjustments capped at 20%. Quality and list-selection scores stay separate; zero-weight sources cannot vote. Recalibrate old `min_score` thresholds. See [scoring and migration](docs/fusion-scoring.md) and [pool routing](docs/search-routing.md).
 
@@ -438,6 +442,8 @@ search-boost config keys --reset-base-url exa
 | AnySearch | `https://api.anysearch.com/v1` | `/search` |
 | TinyFish Search | `https://api.search.tinyfish.ai` | `/` |
 | DeepSeek Search | `https://api.deepseek.com/anthropic/v1` | `/messages` |
+| Firecrawl | `https://api.firecrawl.dev` | `/v2/search` |
+| Keenable | `https://api.keenable.ai` | `/v1/search` |
 
 Supply an API base, **not a full search endpoint**; gateway prefixes are preserved. Overrides live in `engines.<name>.baseUrl` in the keys file; existing key strings and routing flags are unchanged. Use only trusted API-compatible gateways: queries and configured keys are sent there (AnySearch remains anonymous in the free pool). Prefer HTTPS; HTTP is supported for local gateways. Credentials, query strings and fragments in URLs are rejected. Exa-free is unaffected. Changing a base invalidates the search cache partition.
 
@@ -488,6 +494,8 @@ search-boost install -t cursor --dry-run    # Preview installation without writi
 search-boost config keys                    # Manage API keys from CLI
 search-boost config keys --set anysearch=KEY  # Configure the AnySearch key (ANYSEARCH_API_KEY)
 search-boost config keys --set tinyfish=KEY   # Configure TinyFish Search (TINYFISH_API_KEY)
+search-boost config keys --set firecrawl=KEY  # Configure Firecrawl (FIRECRAWL_API_KEY)
+search-boost config keys --set keenable=KEY   # Configure Keenable (KEENABLE_API_KEY)
 search-boost config layer                   # Inspect automatic routing (legacy layer writes do not affect it)
 search-boost config x --import-grok         # Import X credentials from local Grok login
 search-boost config jev                     # Configure Jev endpoint and token

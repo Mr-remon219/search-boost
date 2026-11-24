@@ -14,7 +14,7 @@
 
 ## 权重与评分
 
-权重见 [search-routing.md](search-routing.md)。原有先验来自固定集合几何均值 GM 的 `sqrt(prior / GM)` 冷启动尺度。TinyFish 迁移删除 Yahoo，DDG 三个默认值分别乘 0.60，TinyFish 三个默认值为 1.0；其余保持原值，当前表不再满足旧 GM 归一化公式。同策略权重跨池共享，失败、缺 key 或单引擎运行不重新归一化。ranking 只改权重，complexity 只改预算。
+权重见 [search-routing.md](search-routing.md)。原有先验来自固定集合几何均值 GM 的 `sqrt(prior / GM)` 冷启动尺度。TinyFish 迁移删除 Yahoo，DDG 三个默认值分别乘 0.60，TinyFish 三个默认值为 1.0；后加入的 firecrawl / keenable 同样取中性值 1.0；其余保持原值，当前表不再满足旧 GM 归一化公式。同策略权重跨池共享，失败、缺 key 或单引擎运行不重新归一化。ranking 只改权重，complexity 只改预算。
 
 每个 URL 的有效观察使用一基排名 `r >= 1`：
 

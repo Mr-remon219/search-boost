@@ -631,7 +631,7 @@ assert('anysearch-only wizard run persists no routing decision', readEngineRouti
 
 const routedWizard = await runKeysWizardScenario({
   seed: { tavily: 'tvly-seed-key-12345678' },
-  actions: ['keep', 'keep', 'keep', 'set', 'keep', 'keep', ['tavily']],
+  actions: ['keep', 'keep', 'keep', 'set', 'keep', 'keep', 'keep', 'keep', ['tavily']],
   passwords: ['as-wizard-key-123456'],
 })
 const routingPrompt = routedWizard.selects.find((s) => /Which API engines/.test(s.message))

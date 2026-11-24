@@ -75,8 +75,10 @@ MCP / Pi / DSH community_search (engines:["x"])
 | anysearch | 1.004 | 1.042 | 0.951 |
 | tinyfish | 1.000 | 1.000 | 1.000 |
 | deepseek-search | 1.000 | 1.000 | 1.000 |
+| firecrawl | 1.000 | 1.000 | 1.000 |
+| keenable | 1.000 | 1.000 | 1.000 |
 
-同一引擎、同一策略的权重跨池共享。原有先验采用固定集合的对数收缩冷启动尺度；本次删除 Yahoo，DDG 乘 0.60，TinyFish 以 1.0 加入，其他数值不变，因此当前表不再承诺几何均值为 1。权重不是实测质量排名；完整精度在 routing.js。free 为 bing/ddg/exa-free/anysearch；api 为 tavily/brave/exa/anysearch/tinyfish/deepseek-search；hybrid 为去重并集。不可按本次成功/可用引擎重新归一化。后续离线标注评估须包含全 1 权重 neutral baseline。
+同一引擎、同一策略的权重跨池共享。原有先验采用固定集合的对数收缩冷启动尺度；本次删除 Yahoo，DDG 乘 0.60，TinyFish 以 1.0 加入，其他数值不变，因此当前表不再承诺几何均值为 1。firecrawl 与 keenable 为新增引擎，同样采用未经校准的中性值 1.0。权重不是实测质量排名；完整精度在 routing.js。free 为 bing/ddg/exa-free/anysearch；api 为 tavily/brave/exa/anysearch/tinyfish/deepseek-search/firecrawl/keenable；hybrid 为去重并集。不可按本次成功/可用引擎重新归一化。后续离线标注评估须包含全 1 权重 neutral baseline。
 
 池成员固定，实际可用性动态读取。API-only 池没有可用 key 时返回空集合与 warnings，不偷偷启用免费池。
 

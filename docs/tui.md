@@ -70,6 +70,8 @@
 搜索引擎配置
   tavily / brave / exa / anysearch   凭据来源与启用状态（脱敏）
   TinyFish Search                   tinyfish，脱敏状态 · api/hybrid · 需要 Key
+  DeepSeek Search                   deepseek-search，脱敏状态 · api/hybrid · 需要 Key
+  firecrawl / keenable              脱敏状态 · api/hybrid · 需要 Key
   其他凭据槽位                       仅保存，适配器尚未实现
   引擎启用 / 停用
   返回
