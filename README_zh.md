@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.0-blue?style=flat-square" alt="v0.3.0"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.1--beta.1-blue?style=flat-square" alt="v0.3.1-beta.1"></a>
   <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm package"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
@@ -27,6 +27,8 @@
 
 ---
 
+> **SearchBoost 0.3.1-beta.1** 是本树的 beta 候选，不是 npm `latest`，本文也不表示已经发布。`deepseek-search` 现在只调用官方 Search API。见 [0.3.1-beta.1 说明](./docs/v0.3.1-beta1-release.md)。除这条协议变化外，下面的 0.3.0 行为仍然有效。
+>
 > **SearchBoost 0.3.0**：已移除 Yahoo。经 HTTP(S) 代理抓取页面默认拒绝（fail closed），需用 `SEARCH_BOOST_TRUSTED_PROXY` 或 `SEARCH_BOOST_PROXY_DIRECT_FALLBACK` 显式恢复。已启用的 API Key（含新增 Firecrawl、Keenable）会进入默认搜索，可能产生费用，以服务商为准；只想免 Key 时调用传 `engine_pool: "free"`。卸载移除的是所选宿主接入，不是 npm 包。详见 [0.3.0 发布说明](./docs/v0.3.0-release.md)。
 
 ## 目录
@@ -127,7 +129,7 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
 ### 1. 全局安装与启动控制台
 
 ```bash
-npm install -g search-boost@0.3.0
+npm install -g search-boost@0.3.1-beta.1
 
 search-boost       # 快速配置 / 首次接入向导
 search-boost tui   # 独立全屏控制中心
@@ -156,10 +158,10 @@ search-boost tui   # 独立全屏控制中心
 
 ### 1. 日常更新：npm 更新软件包，再刷新接入
 
-使用 npm 升级。`search-boost@0.3.0` 固定安装本版本；`@latest` 选择当前稳定通道，`@beta` 选择测试通道。安装会替换本机全局命令。软件包由 npm 更新；TUI 不自行更新 SearchBoost。安装、刷新与移除位于「管理 Agent 接入」（文件夹模式：安装与接入 → 管理 Agent 接入）。
+使用 npm 升级。`search-boost@0.3.1-beta.1` 固定本 beta 候选；`@latest` 仍是稳定通道，不会被本 beta 移动。若 registry 还没有这个版本，请安装 PR 中的 tarball，不要把本页当成已发布记录。`@beta` 只有维护者发布后才是预发布通道。安装会替换本机全局命令。软件包由 npm 更新；TUI 不自行更新 SearchBoost。安装、刷新与移除位于「管理 Agent 接入」（文件夹模式：安装与接入 → 管理 Agent 接入）。
 
 ```bash
-npm install -g search-boost@0.3.0
+npm install -g search-boost@0.3.1-beta.1
 search-boost
 # → 管理 Agent 接入 → 刷新已有接入 → 选择实际范围
 # 或刷新全部已有接入：
@@ -366,7 +368,7 @@ search-boost
 
 `engine_pool` 选择调用集合，`ranking` 选择跨池共享权重；`complexity` 控制查询广度与深度，不改变评分权重。AnySearch 是单一逻辑引擎：free 匿名、api 要求 key、hybrid 优先用已配置 key。使用 `ANYSEARCH_API_KEY` 或 `config keys --set anysearch=KEY` 配置。
 
-DeepSeek Search（`deepseek-search`）通过 Anthropic 兼容 API 调用原生联网搜索，不启动外部 CLI。使用 `DEEPSEEK_API_KEY` 或 `search-boost config keys --set deepseek-search=KEY` 配置；已有显式白名单时需在引擎配置中启用。默认加入 api/hybrid，不加入 free。三个排序预设权重均为 **1.0**，支持 `engine_weights: {"deepseek-search": 0.8}` 单次覆盖；零权重仍会调用。每个查询变体使用一次可能计费的 `deepseek-v4-flash` 模型请求，最多调用一次原生搜索，只采纳结构化搜索结果和引用摘录。Base URL 独立于聊天配置，自动追加 `/messages`。详见[接入说明与验证边界](docs/deepseek-search.md)。
+DeepSeek Search（`deepseek-search`）仍是 0.3.0 的同一个引擎 ID。从 0.3.1-beta.1 起只调用 `POST https://api.deepseek.com/v1/tools/search`，不再调用已退役的 messages/`web_search_20250305`，同一把 Key 也不会打两条路径。使用 `DEEPSEEK_API_KEY` 或 `search-boost config keys --set deepseek-search=KEY` 保存；保存不联网，也不改变已有白名单。没有白名单时，已配置的 Key 会进入默认搜索。它加入 api/hybrid，不加入 free。三个排序权重仍是未经校准的 **1.0**。`summary` 给 agent，`snippet` 给界面，二者不互相填空。费用以服务商现行规则为准。本 beta 没有 live 账号验证。详见 [DeepSeek Search](docs/deepseek-search.md)。
 
 TinyFish Search 是需要 key 的 API 引擎：在 TUI → 搜索引擎配置 → TinyFish Search（文件夹模式：服务与凭据 → 搜索引擎配置）中配置，或使用 `TINYFISH_API_KEY`、`config keys --set tinyfish=KEY`。TUI 支持更换 / 删除 Key、自定义 / 恢复 Base URL 和脱敏状态；在“引擎启用 / 停用”中选择 `tinyfish`，不会因保存 Key 静默扩张已有白名单。TinyFish 默认加入 api/hybrid，不加入 free 池（显式 `engines` 仍可覆盖池选择）。服务价格与限额可能变化，钱包余额不等于剩余搜索次数；每个查询变体各计一次；不自动翻页或启用内嵌 Fetch。请求沿用服务默认 US/en 地区/语言。Yahoo 已移除，显式 Yahoo 引擎/权重输入会被拒绝。
 
@@ -452,7 +454,7 @@ search-boost config keys --reset-base-url exa
 | Brave | `https://api.search.brave.com/res/v1` | `/web/search` |
 | AnySearch | `https://api.anysearch.com/v1` | `/search` |
 | TinyFish Search | `https://api.search.tinyfish.ai` | `/` |
-| DeepSeek Search | `https://api.deepseek.com/anthropic/v1` | `/messages` |
+| DeepSeek Search | `https://api.deepseek.com` | `/v1/tools/search` |
 | Firecrawl | `https://api.firecrawl.dev` | `/v2/search` |
 | Keenable | `https://api.keenable.ai` | `/v1/search` |
 
@@ -469,7 +471,7 @@ API Key 存放在由 SearchBoost 自己管理的凭据文件中，不写入提�
 
 ## CLI 命令参考（自动化与进阶）
 
-以下 CLI 参考对应 **0.3.0**。
+以下 CLI 参考对应 **0.3.1-beta.1**。
 
 **DeepSeek Harness Desktop**：交互安装选中 DSH 后，可选择 Desktop / CLI / All，再为 Desktop 选择 **自动安装（默认）** 或 **本地目录接入**。自动方式通过注册表（含自定义安装目录）、默认目录及 PATH 找到桌面版内置命令；先启动一次再完全退出（包括托盘）。本地方式在其他接入（包括 Grok）结束后，最后显示当前包的完整持久目录，由用户粘贴到运行中的 Desktop「插件 → 添加插件」；TUI 等待只读检测，稳定完成后结束，Esc / Ctrl+C 或超时则报告未完成并保留其他结果。检测到保存的安装不代表运行中的插件已加载；没有内置启动器时会明确提示运行时未验证。临时 `_npx` 缓存不能作为本地链接来源。也可直接在应用输入 `search-boost` 从 npm 安装。自动安装/更新仍验证宿主解析器，遮蔽副本不能报成功；禁用状态保留，`--enable-dsh-bundle` 明确要求启用（本地方式由用户在 Desktop 启用）。所有权与验证限制见 [Desktop 接入说明](docs/dsh-desktop.md)。
 
@@ -498,7 +500,7 @@ search-boost install -t dsh --profile web   # 为 DeepSeek Harness CLI 接入 we
 search-boost install -t dsh --dsh-surface desktop -y # Desktop 原生命令 + 本地包接入
 search-boost install -t dsh --dsh-surface all -y     # Desktop 与 CLI 分别安装
 # 无需全局安装 search-boost / dsh / pnpm（Windows、Linux、macOS）：
-npx --yes --package search-boost@0.3.0 search-boost install -t dsh --profile web -y
+npx --yes --package search-boost@0.3.1-beta.1 search-boost install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # 仅演练安装过程，不写磁盘
 
 # ----------------- 凭据与配置管理 -----------------
@@ -540,7 +542,7 @@ search-boost uninstall -t cursor,claude -y  # 移除指定宿主的集成与注�
 # 1. 克隆仓库
 git clone https://github.com/Mr-remon219/search-boost.git
 cd search-boost
-git checkout v0.3.0  # 0.3.0 系列开发分支
+git checkout v0.3.0  # 稳定的 0.3.0 线。本 beta 在独立分支，不合并到这里。
 
 # 2. 按 CI 的方式安装依赖
 npm ci

@@ -23,6 +23,7 @@ import { promptPath } from '../../agents/router.mjs'
 import { piAgentDir } from '../../lib/config-paths.mjs'
 import {
   AuditLog,
+  allAttemptedEnginesFailed,
   ENGINE_ORDER,
   LAYER_LABELS,
   cacheSizes,
@@ -198,6 +199,7 @@ export default function searchBoostExtension(pi) {
         `Score: ${res.scoreVersion}; Pool: ${res.enginePool}; ranking: ${res.ranking}; enginesUsed: ${res.enginesUsed.join(', ')}; effectiveWeights: ${JSON.stringify(res.effectiveWeights)}; communityUsed: ${res.communityUsed}`,
         ...(res.communityChannels?.length ? [`Community routes: ${res.communityChannels.map(c => `${c.platform}: ${c.status}/${c.retrieval_mode ?? 'unavailable'}${c.note ? ` — ${c.note}` : ''}`).join('; ')}`] : []),
         `Engines: ${stats}${res.cacheHit ? ' — cache hit' : ''} — ${res.tookMs}ms`,
+        ...(res.routeExplanation ? [res.routeExplanation] : []),
         ...(res.warnings ?? []).map((w) => `WARNING: ${w}`),
         includeDomains.length > 0 ? `Include domains: ${includeDomains.join(', ')}` : '',
         params.exclude_domains?.length ? `Excluded domains: ${params.exclude_domains.join(', ')}` : '',
@@ -205,7 +207,9 @@ export default function searchBoostExtension(pi) {
         '',
       ]
       if (res.results.length === 0) {
-        lines.push('No results. Consider retrying with different keyword variants or engines.')
+        lines.push(allAttemptedEnginesFailed(res.engineStats)
+          ? 'No results because every selected engine failed. No other engine was called.'
+          : 'No matches from the selected engines. This is an empty success. No other engine was called.')
       }
       res.results.forEach((r, i) => {
         const usable = r.content && countWords(r.content) >= 300
@@ -217,6 +221,7 @@ export default function searchBoostExtension(pi) {
             ? `   [content: ${countWords(r.content)} words — engine-extracted material; check relevance and completeness]\n${excerptForTool(r.content).split('\n').map((l) => `   ${l}`).join('\n')}`
             : '',
           r.snippet ? `   ${r.snippet.slice(0, 240)}` : '',
+          typeof r.summary === 'string' && r.summary && r.summary !== r.snippet ? `   summary: ${r.summary.slice(0, 800)}` : '',
           '',
         )
       })

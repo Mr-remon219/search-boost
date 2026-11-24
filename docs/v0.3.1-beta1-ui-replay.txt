@@ -1,0 +1,74 @@
+Isolation replay. Not a live host TUI. Not a live search.
+
+config keys --show
+API keys (tavily, brave, exa, anysearch, tinyfish, deepseek-search, firecrawl, keenable)
+--------------------------------------------------------
+  tavily     missing
+    Base URL: https://api.tavily.com (default)
+  brave      missing
+    Base URL: https://api.search.brave.com/res/v1 (default)
+  exa        missing
+    Base URL: https://api.exa.ai (default)
+  anysearch  missing
+    Base URL: https://api.anysearch.com/v1 (default)
+  tinyfish   missing
+    Base URL: https://api.search.tinyfish.ai (default)
+  deepseek-search file  fixt****3456  enabled
+    Base URL: https://api.deepseek.com (default)
+  firecrawl  missing
+    Base URL: https://api.firecrawl.dev (default)
+  keenable   missing
+    Base URL: https://api.keenable.ai (default)
+
+Keyed pool: 1/8 enabled (deepseek-search)
+
+File: ~/.search-boost/config/keys.json
+Default search (engine_pool omitted): deepseek-search.
+These may incur charges (deepseek-search); check with the provider.
+This call only: pass engine_pool=free and do not list keyed engines in engines.
+One engine: config keys --engines <id>, or fused_search engines: ["<id>"].
+默认搜索（未传 engine_pool）将使用所列引擎。可能产生费用，以服务商为准。仅本次免 Key：传 engine_pool=free，且不要在 engines 中列出 Key 引擎。
+Saving a key does not change the stored engine whitelist (deepseek-search).
+保存 Key 不改已有白名单。没有白名单时，已配置的 Key 都会进入默认搜索，因此再保存一把 Key 会加入默认集合。
+deepseek-search, once enabled or named for a call, uses official Search API POST /v1/tools/search only. The retired messages/web_search path is not called. Charges follow the provider's current rules. This build did not verify a live account.
+
+console section 3, default confirm is cancel
+  ⣤⡀ ⢛⣿⣿  SearchBoost  /  CONTROL CENTER                                                                               
+  ⠈⢻⣶⠟⠁⠛  v0.3.1-beta.1 · Search defaults · Ayu Dark                                                                   
+  ⣴⠟⠁     ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  1 Overview          │ ▸ Search defaults                             │   Details · Automatic engine selection         
+  2 Engines           │                                               │                                                
+▸ 3 Search defaults   │ ▸ Automatic engine selection   API            │ Default search (engine_pool omitted):          
+  4 Tools             │   Per-request search options   fused_search   │ deepseek-search.                               
+  5 Community         │                                               │ These may incur charges (deepseek-search);     
+  6 Judgment          │                                               │ check with the provider.                       
+  7 Integrations      │                                               │ This call only: pass engine_pool=free and do   
+  8 Settings          │                                               │ not list keyed engines in engines.             
+                      │                                               │ One engine: config keys --engines <id>, or     
+  Browse offline      │                                               │ fused_search engines: ["<id>"].                
+  ?  Help             │                                               │ 默认搜索（未传                                 
+  Q  Exit             │                                               │ engine_pool）将使用所列引擎。可能产生费用，以服
+                      │                                               │ 务商为准。仅本次免 Key：传                     
+                      │                                               │ engine_pool=free，且不要在 engines 中列出 Key  
+                      │                                               │ 引擎。                                         
+                      │                                               │ Saving a key does not change the stored engine 
+                      │                                               │ whitelist (deepseek-search).                   
+                      │                                               │ 保存 Key 不改已有白名单。没有白名单时，已配置的
+                      │                                               │  Key 都会进入默认搜索，因此再保存一把 Key      
+                      │                                               │ 会加入默认集合。                               
+                      │                                               │ deepseek-search, once enabled or named for a   
+                      │                                               │ call, uses official Search API POST            
+                      │                                               │ /v1/tools/search only. The retired             
+                      │                                               │ messages/web_search path is not called. Charges
+                      │                                               │  follow the provider's current rules. This     
+                      │                                               │ build did not verify a live account.           
+                      │                                               │ This shows the engines used when engine_pool is
+                      │                                               │  omitted. It does not run a search.            
+                      │                                               │                                                
+                      │                                               │ PgUp/PgDn details                              
+                      │                                               │ Actions ↑↓ · 1/1                               
+                      │ Enter open · → details · 1/2                  │ ▸ Manage engine switches                       
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Ready                                                                                                                
+  Tab / Shift+Tab focus  ↑↓ move  Enter open  → details                                                                
+  1–8 sections  R reload  L language  ? help  Q quit                                                                   

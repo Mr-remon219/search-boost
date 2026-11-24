@@ -17,7 +17,7 @@ import {
   describeLayer,
   formatFusedSummary,
   formatAllEnginesFailedMessage,
-  allAttemptedEnginesFailed,
+  fusedResultIsError,
   fusedHitToJson,
   getLayer,
   jevCapability,
@@ -98,13 +98,13 @@ function summarizeAdaptive(result) {
         resultCount: hits.length,
         enginesRequested: result.enginesRequested ?? [],
         enginesUsed: result.enginesUsed ?? [],
-        enginePool: result.enginePool, ranking: result.ranking, effectiveWeights: result.effectiveWeights, communityUsed: result.communityUsed,
+        enginePool: result.enginePool, ranking: result.ranking, routeExplanation: result.routeExplanation, effectiveWeights: result.effectiveWeights, communityUsed: result.communityUsed,
         communityPlatforms: result.communityPlatforms, communityChannels: result.communityChannels,
         results: hits,
         engineStats: result.engineStats ?? {},
         warnings: result.warnings ?? [],
       }
-      if (hits.length === 0 && allAttemptedEnginesFailed(result.engineStats)) {
+      if (fusedResultIsError(result)) {
         return toolErr(formatAllEnginesFailedMessage(result), structured)
       }
       return toolOk(formatFusedSummary(result), structured)

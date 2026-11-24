@@ -222,7 +222,7 @@ function registerFusedSearchTool(ctx) {
           tier: { type: 'string' },
           depth: { type: 'string' },
           layer: { type: 'string' },
-          enginePool: { type: 'string' }, ranking: { type: 'string' }, effectiveWeights: { type: 'object', additionalProperties: { type: 'number' } }, communityUsed: { type: 'boolean' },
+          enginePool: { type: 'string' }, ranking: { type: 'string' }, routeExplanation: { type: 'string' }, effectiveWeights: { type: 'object', additionalProperties: { type: 'number' } }, communityUsed: { type: 'boolean' },
           communityPlatforms: { type: 'array', items: { type: 'string' } },
           communityChannels: { type: 'array', items: { type: 'object' } },
           enginesRequested: { type: 'array', items: { type: 'string' } },
@@ -243,7 +243,7 @@ function registerFusedSearchTool(ctx) {
                 engineRanks: { type: 'object', additionalProperties: { type: 'number' } },
                 contributions: { type: 'object', additionalProperties: { type: 'number' } },
                 provenance: { type: 'array', items: { type: 'object' } }, dateStatus: { type: 'string' },
-                snippet: { type: 'string' }, score: { type: 'number' }, engines: { type: 'array', items: { type: 'string' } },
+                snippet: { type: 'string' }, summary: { type: ['string', 'null'] }, siteName: { type: ['string', 'null'] }, authority: { type: ['integer', 'null'] }, rerankScore: { type: ['number', 'null'] }, score: { type: 'number' }, engines: { type: 'array', items: { type: 'string' } },
                 published: { type: ['string', 'null'] }, content: { type: 'string' }, kind: { type: 'string' }, username: { type: 'string' }, id: { type: 'string' },
               },
               required: ['title', 'url', 'domain'],
@@ -298,12 +298,14 @@ function renderFused(value) {
   const lines = []
   lines.push(`**fused_search: "${value.query}"** — layer ${value.layer ?? 'api'}, tier ${value.tier}, ${value.results.length} hits, ${value.tookMs}ms${value.cacheHit ? ' (cache hit)' : ''}`)
   lines.push(`scoreVersion: ${value.scoreVersion}; engine_pool: ${value.enginePool}; ranking: ${value.ranking}; enginesUsed: ${(value.enginesUsed ?? []).join(', ')}; effectiveWeights: ${JSON.stringify(value.effectiveWeights ?? {})}; communityUsed: ${!!value.communityUsed}`)
+  if (value.routeExplanation) lines.push(value.routeExplanation)
   if (value.communityChannels?.length) lines.push(`Community routes: ${value.communityChannels.map(c => `${c.platform}: ${c.status}/${c.retrieval_mode ?? 'unavailable'}${c.note ? ` — ${c.note}` : ''}`).join('; ')}`)
   for (const [i, r] of value.results.entries()) {
     const eng = (r.engines ?? []).join('+')
     lines.push(`${i + 1}. [${r.score}] ${r.title} — ${r.domain} (${eng})${r.published ? `, ${r.published}` : ''}`)
     lines.push(`   ${r.url}`)
     if (r.snippet) lines.push(`   ${r.snippet.slice(0, 200)}`)
+    if (typeof r.summary === 'string' && r.summary && r.summary !== r.snippet) lines.push(`   summary: ${r.summary.slice(0, 800)}`)
   }
   const errs = Object.entries(value.engineStats ?? {}).filter(([, v]) => v.errors > 0)
   if (errs.length > 0) {
