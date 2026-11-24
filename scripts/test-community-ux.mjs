@@ -3,6 +3,7 @@ import './isolate-tests.mjs'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { EventEmitter } from 'node:events'
 import { setTimeout as delay } from 'node:timers/promises'
 import QRCode from 'qrcode'
@@ -70,12 +71,15 @@ function prompts(replies = [], events = []) {
 }
 try {
   await test('UX01/02/05/15: three platforms require one multi-select, no repeated approval, configured platforms skip login', async () => {
+    process.env.SEARCH_BOOST_HOME = join(process.env.SEARCH_BOOST_HOME, 'MCP-Docker-verification-private profile')
     const services = fixture(), p = prompts([['multiselect', ['xiaohongshu', 'zhihu', 'bilibili']]])
     const result = await context(() => runCommunityStep(p.clack, {}, { services })); p.done()
     assert(result.ok); assert.equal(p.records.length, 1); assert.equal(services.calls.filter(call => call.startsWith('login:')).length, 3)
     assert.equal(services.calls.filter(call => call === 'choose').length, 1)
     assert(p.logs.some(text => text.includes('3 已连接')))
-    assert(!p.logs.some(text => /MCP|Docker|verification|private profile/.test(text)))
+    const home = process.env.SEARCH_BOOST_HOME
+    const uiCopy = p.logs.map(text => text.replaceAll(pathToFileURL(home).href, 'file://test-home').replaceAll(home, '<test-home>'))
+    assert(!uiCopy.some(text => /MCP|Docker|verification|private profile/.test(text)))
     const again = prompts([['multiselect', ['xiaohongshu', 'zhihu', 'bilibili']]])
     const before = services.calls.length; await context(() => runCommunityStep(again.clack, {}, { services })); again.done()
     assert.equal(services.calls.length, before)

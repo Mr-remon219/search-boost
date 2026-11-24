@@ -99,7 +99,7 @@ beta.6 保留原先默认目标 10 / 容量 32 的筛选余量比例；12 条目
 {"questions":["What concrete Node.js migration failures have developers reported?"],"intent":"Find first-hand failures, reproduction steps and counterexamples.","community":["reddit","zhihu"],"platform_options":{"reddit":{"subreddits":["node"],"max_pages":2},"zhihu":{"content_type":"answer","query":"Node.js 升级失败"}},"max_results":10,"page_size":3}
 ```
 
-Web 查询不改写；中文 query 只由调用者明确提供给知乎支路。社区与 Web 在最终硬作者/日期/类别/范围过滤后共享 fused 快照、原引擎票和判断，索引包装不增加独立社区票。不会调用分页 facade 或返回 c1 游标，保存/读取仍用 Adaptive s6/v3，并且零新检索/判断。架构与离线证据见 [滚动接入设计](adaptive-community-integration-spec.md)。
+Web 查询不改写；中文 query 只由调用者明确提供给知乎支路。社区与 Web 在最终硬作者/日期/类别/范围过滤后共享 fused 快照、原引擎票和判断，索引包装不增加独立社区票。不会调用分页 facade 或返回 c1 游标，保存/读取仍用 Adaptive s6/v3，并且零新检索/判断。架构与离线证据见 [滚动接入设计](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/adaptive-community-integration-spec.md)。
 
 ## 7. 失败语义
 

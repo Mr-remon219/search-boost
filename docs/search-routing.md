@@ -108,7 +108,7 @@ Yahoo 不再有运行时或公开枚举入口，显式引擎/权重输入拒绝�
 
 Adaptive → runFused → 未分页 communitySearch；不调用公共分页入口、不维护第二套获取。两个入口透传同一 nullable platform_options，平台 query 只有调用者显式覆盖，Web 仍用原问题。各平台 author/date/content_type/subreddits 的硬条件也约束普通 Web 匹配行，不用 X handle/身份规则处理其他平台。非 X recency 软、明确日期逐边界硬；历史硬上界优先于生成窗口。日观测代表整天，不能冒充午夜通过日内硬上界；日期/作者冲突保持未知，选中域名的未知内容路径也不能绕过类别。X user 不把 Web 帖子造为账户，thread 仅合并可验证目标帖子；账户创建日期不冒充帖子日期。明确所选非 X 内容按平台身份合并 Web/native 别名并安全化对应 URI（含出处）；不按标题合并、不普遍删其他 Web query。索引包装仍是原 Web engine 票；各索引原日期观察保留，矛盾不 first-wins，X Snowflake 权威不被其覆盖。
 
-显式独立社区来源可在无普通引擎时经 fused 执行/报告，配置不足与 partial 不静默降级。本次 snapshot engineRequestsNow 排除嵌套 cache/in-flight 旧计数，原渠道 stats 保留；Reddit 范围发现的 Web 请求不漏记。Adaptive v6 保留渠道/选中出处的有类型摘要，分页/保存仍为自身 s6/v3 零网络重放；community 直接入口 c1 独立。详见 [接入滚动设计](adaptive-community-integration-spec.md)。
+显式独立社区来源可在无普通引擎时经 fused 执行/报告，配置不足与 partial 不静默降级。本次 snapshot engineRequestsNow 排除嵌套 cache/in-flight 旧计数，原渠道 stats 保留；Reddit 范围发现的 Web 请求不漏记。Adaptive v6 保留渠道/选中出处的有类型摘要，分页/保存仍为自身 s6/v3 零网络重放；community 直接入口 c1 独立。详见 [接入滚动设计](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/adaptive-community-integration-spec.md)。
 
 ## X 约束、去重与最终选择
 

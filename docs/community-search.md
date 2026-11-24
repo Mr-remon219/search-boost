@@ -46,7 +46,7 @@ SearchBoost 自己实现社区路由、平台 adapter、证据归一化与融合
 
 两个入口也接受下面相同的 nullable `platform_options`，须通过 `community` 明确选择对应平台；非空分区不隐式开启平台，省略 Adaptive community 仍只由策略决定 X。Adaptive → runFused → 未分页 communitySearch，社区和普通 Web 匹配行共用最后硬过滤、原来源票、全局候选容量与一次完整判断，不二次调用直接入口、不多做检索/审计。明确的 query 只覆盖该平台；无 Web engine 的独立 archive/hosted 来源可经同一 fused 底座执行，失败/未就绪如实报告。
 
-Adaptive v6 记录类型化的 `run.community.channels` 和最终选中行 `provenance`（原 engine/rank 与 route；不塞 raw/session/checkpoint hash/未审全文），旧记录可读但不补造。多渠道说明过大时，仅本页省略说明/必要的逐渠道 engine_stats 明细，以 details_truncated 和告警披露；测量状态、usage、覆盖/后处理计数与全局统计保留，私有原记录不变。缓存旧观察不算本次新派发，Reddit Web 范围发现请求也保留计数。保存和读页仍是 Adaptive s6/v3，不使用直接社区 c1，重放零新检索/判断。接入初轮离线验收为 85 隔离入口/288 文件；二次自审 AR1–AR6/DOC1 修复后最新代码重新执行 86 入口/289 文件通过，既有 7+5 frozen fused 回放保留原 hash，真实平台/已安装宿主仍未验收。示例与决策证据见 [Adaptive 接入设计](adaptive-community-integration-spec.md) 和 [当前判断契约](jev-adaptive-search.md)。
+Adaptive v6 记录类型化的 `run.community.channels` 和最终选中行 `provenance`（原 engine/rank 与 route；不塞 raw/session/checkpoint hash/未审全文），旧记录可读但不补造。多渠道说明过大时，仅本页省略说明/必要的逐渠道 engine_stats 明细，以 details_truncated 和告警披露；测量状态、usage、覆盖/后处理计数与全局统计保留，私有原记录不变。缓存旧观察不算本次新派发，Reddit Web 范围发现请求也保留计数。保存和读页仍是 Adaptive s6/v3，不使用直接社区 c1，重放零新检索/判断。接入初轮离线验收为 85 隔离入口/288 文件；二次自审 AR1–AR6/DOC1 修复后最新代码重新执行 86 入口/289 文件通过，既有 7+5 frozen fused 回放保留原 hash，真实平台/已安装宿主仍未验收。示例与决策证据见 [Adaptive 接入设计](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/adaptive-community-integration-spec.md) 和 [当前判断契约](jev-adaptive-search.md)。
 
 ## 平台独立参数与处理
 
@@ -80,7 +80,7 @@ cursor/saved_result_id 读取只能附 page_size，不能混入 engines/query �
 
 `save_results:true` 才写私有 `state/community/<uuid>.json`，返回 saved_result_id；默认不写结果文件。独立 `search-boost-community-v1` 格式，不混用 Adaptive 的研究快照/cursor。单快照最多 4 MiB，持久目录最多 32 组/32 MiB，旧组按容量淘汰。恢复接受 `{"saved_result_id":"<id>","page_size":3}`，可跨进程，但材料和 captured_at 保留原样，明确 historical，不联网刷新或重筛。文件大小、格式、ID、普通文件/链接、类型化 payload 校验失败即拒绝。
 
-单页使用约 96 KB UTF-8 软界限：减少条数，不截断已存证据；单条超软界限时完整返回并警告，整组超存储界限明确失败。存储是公共证据与诊断，不包含后端配置、token、浏览器会话或模型原始日志。工具入口授权仍由宿主执行，分页不是权限旁路。设计与滚动决策见 [platform pipeline SPEC](community-platform-pipeline-spec.md)。
+单页使用约 96 KB UTF-8 软界限：减少条数，不截断已存证据；单条超软界限时完整返回并警告，整组超存储界限明确失败。存储是公共证据与诊断，不包含后端配置、token、浏览器会话或模型原始日志。工具入口授权仍由宿主执行，分页不是权限旁路。设计与滚动决策见 [platform pipeline SPEC](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/community-platform-pipeline-spec.md)。
 
 ## Reddit：有界采集、范围、断点与检索
 
@@ -221,7 +221,7 @@ SearchBoost 内部接管请求：只允许固定平台及静态资源域名，�
 
 **当前所有 3xx 跳转都失败即停止**，不会把重定向交还浏览器自动跟随，因为 Playwright 的路由拦截不再覆盖这条跳转。跳转至登录/验证页面或其他入口会使读取不完整，不应写成健康空结果。`aborted_by_policy/blocked_redirects` 是脱敏计数，不公开请求 URL 或凭据。
 
-ready 只验证浏览器文件和确认过的专用会话存在，不证明平台认证、连通性或近期正文已恢复。发布前还需本人登录后的实际检索和正文/时间人工抽查。固定模板、DOM 状态和站点接口可能改版；识别不到则报告不足。测试见 `scripts/test-community-native.mjs` 与 `scripts/test-community-discussion.mjs`，排查记录见 [本次修复](community-retrieval-fix.md)。
+ready 只验证浏览器文件和确认过的专用会话存在，不证明平台认证、连通性或近期正文已恢复。发布前还需本人登录后的实际检索和正文/时间人工抽查。固定模板、DOM 状态和站点接口可能改版；识别不到则报告不足。测试见 `scripts/test-community-native.mjs` 与 `scripts/test-community-discussion.mjs`，排查记录见 [本次修复](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/community-retrieval-fix.md)。
 
 ## 证据与状态
 
@@ -235,4 +235,4 @@ capability resource：`search-boost://community-capabilities`，总 resource 为
 
 `npm run test:community` 包含独立参数/null/ISO 精度、类型化平台 data、内存分页/私有跨进程恢复与篡改/零网络边界、registry/config、五平台 fixture、scope/checkpoint、429/取消、过滤/公平限额、真实 loopback bridge transport、DOM 卡片与 browser worker Disable/Reload 行为 fixture、1/2 页预算下跨调用公平性、真实 X 编排的 11/20/30 条 cap 与过滤/partial/cache 回归、软 recency、MCP policy 资源一致性、MCP SDK round trip、Pi 注册及融合/Adaptive 参数契约。DSH 用 pinned SDK 编译原始/投影 schema 并执行；完整隔离门禁自动收录新增测试。
 
-这些是离线服务/协议/DOM fixture，不是五平台真实账号、真实 Chrome extension 安装会话或所有 Pi/DSH 安装版本的验收。X 原有四模式回归单独运行。49ecd7c 的历史 80 入口门禁漏测了 C1–C7；C1–C7 当轮为 82 入口；平台处理/分页最终完整隔离门禁为 84 个入口通过、284 文件语法通过，依赖审计 0 vulnerabilities。详细复现、修复、验证和剩余边界见 [交付前自审](community-search-self-review.md)。浏览器/native/归档本身会随服务变化，不把配置状态和 fixture 测试写成真实连接/可用性保证。
+这些是离线服务/协议/DOM fixture，不是五平台真实账号、真实 Chrome extension 安装会话或所有 Pi/DSH 安装版本的验收。X 原有四模式回归单独运行。49ecd7c 的历史 80 入口门禁漏测了 C1–C7；C1–C7 当轮为 82 入口；平台处理/分页最终完整隔离门禁为 84 个入口通过、284 文件语法通过，依赖审计 0 vulnerabilities。详细复现、修复、验证和剩余边界见 [交付前自审](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/community-search-self-review.md)。浏览器/native/归档本身会随服务变化，不把配置状态和 fixture 测试写成真实连接/可用性保证。

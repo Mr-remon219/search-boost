@@ -100,7 +100,7 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
 
 - **Core (`lib/`)**：宿主无关的算法与网络引擎，负责引擎调用、数据清洗、专用判断适配器协议交互及安全策略。
 - **Adapters (`adapters/`)**：负责将核心能力翻译为具体协议（MCP JSON-RPC、Pi Extension API、DSH Cordis 生命周期）。
-- **Agents (`agents/`)**：受控提示词、工作流模板与原生 Skills 定义。面向 Agent 的工具选择与分层职责见[提示词职责契约](docs/prompt-contract.md)及 [beta.8 发布说明](docs/v0.2.4-beta.8-release.md)。
+- **Agents (`agents/`)**：受控提示词、工作流模板与原生 Skills 定义。面向 Agent 的工具选择与分层职责见[提示词职责契约](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/prompt-contract.md)及 [beta.8 发布说明](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/v0.2.4-beta.8-release.md)。
 
 ---
 
@@ -348,7 +348,7 @@ search-boost
 - 返回选中材料的 URL、标题、审查摘录、`valueLevel`/`valueLabel`、rank、真实来源与分数组件，不生成答案。`selection.targetMet` 只表示数量，绝不代表研究完成或已核实；`selection.incomplete`、`diagnostics`、`stopReason`、`outsideReview`、`unreviewed` 如实披露未完成部分，而不是当作低价值。
 - `run.community` 返回有限的社区决策与实际执行状态（`not_requested`/`domain_excluded`/`unavailable`/`blocked`/`succeeded`/`empty`/`failed`/`partial`/`not_run`），不输出模型推理；社区支路失败或部分失败时仍交付有效网页结果，并把本次标记为 incomplete。
 - 用 `{"cursor":"<s6:…>"}`（可附 `page_size`）读取已保存页：不发起新的检索、策略、Jev、社区或价值判断。每页默认 20、最大 50，并有字节预算；cursor 在当前进程内最多保留 30 分钟/32 份结果，翻页结束不等于穷尽检索。
-- 显式 `save_results:true` 时，完整的最终选中集与类型化元数据会私有保存到 SearchBoost home（`search-boost-research-v3`，schema version 6），并返回 `savedResultId`。重启或清缓存后用 `{"saved_result_id":"<savedResultId>"}`（可附 `page_size`）读取，不再重新检索或询问 Jev。旧 v2/schema-5 文件不升级，继续按原合同及 `s5:` 读取；旧的 `search-boost-research-v1` 文件继续可读，进入带标记的只读 `h1:` 历史分支（`restoration.historical: true`，保留原 schema 版本，不伪造 v5 字段）。公开工具开关与判断模型配置锁同样作用于读取；`search-boost research list` / `research export <id> --output <new-file.json>` 无需 Jev、可离线使用。参见[接入与验收边界](docs/research-status-acceptance.md)。
+- 显式 `save_results:true` 时，完整的最终选中集与类型化元数据会私有保存到 SearchBoost home（`search-boost-research-v3`，schema version 6），并返回 `savedResultId`。重启或清缓存后用 `{"saved_result_id":"<savedResultId>"}`（可附 `page_size`）读取，不再重新检索或询问 Jev。旧 v2/schema-5 文件不升级，继续按原合同及 `s5:` 读取；旧的 `search-boost-research-v1` 文件继续可读，进入带标记的只读 `h1:` 历史分支（`restoration.historical: true`，保留原 schema 版本，不伪造 v5 字段）。公开工具开关与判断模型配置锁同样作用于读取；`search-boost research list` / `research export <id> --output <new-file.json>` 无需 Jev、可离线使用。参见[接入与验收边界](https://github.com/Mr-remon219/search-boost/blob/5836d0998ad7397ac0192741cfd48af95d8468c5/docs/research-status-acceptance.md)。
 - 阈值仍是未标定工程起点。完整契约、预算和迁移说明见 [Jev 单问题研究检索](docs/jev-adaptive-search.md)。
 
 ---
