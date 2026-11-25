@@ -179,6 +179,8 @@ search-boost refresh --dry-run
 
 刷新只使用当前软件包，保留凭据、权限、禁用状态及无关配置，不安装未接入的宿主。取消勾选表示本次不处理，不表示卸载。旧 `upgrade` / `--sync-only` 已移除。
 
+不要用 `npm install -g search-boost@0.3.0` 回滚本候选。registry 上没有这个版本。本候选的安装、升级、回滚、备份和还原只写在 [0.3.1-beta.4 说明](./docs/v0.3.1-beta4-release.md)。
+
 Grok 本地缓存若原生更新后仍陈旧，需要完全退出 Grok，再独立确认保留数据重建和对当前源的信任。`-y` 本身不授予重建同意；显式 CLI 同意为 `search-boost refresh -y --repair-grok-cache`。这会请求宿主 `uninstall --keep-data` 后 `install --trust`，不保证旧名称数据自动迁移。成功后重启宿主。详见 [接入刷新](docs/host-upgrades.md)。
 
 ---

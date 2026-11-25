@@ -179,6 +179,8 @@ search-boost refresh --dry-run
 
 Refresh uses the current package and preserves credentials, permissions, disabled states and unrelated configuration. It does not install unconfigured hosts. Unchecking a target means no operation, not removal. The old `upgrade` command and `--sync-only` option are removed.
 
+Do not roll this candidate back with `npm install -g search-boost@0.3.0`. That version is not on the registry. Install, upgrade, rollback, backup and restore for this candidate are only in the [0.3.1-beta.4 notes](./docs/v0.3.1-beta4-release.md).
+
 If a Grok local cache remains stale after native update, fully quit Grok and separately approve data-retaining reconstruction and trust of the displayed source. `-y` alone is not approval; explicit CLI approval is `search-boost refresh -y --repair-grok-cache`. This requests native `uninstall --keep-data`, then `install --trust`; legacy-name data reuse is not guaranteed. Restart affected hosts afterward. See [integration refresh](docs/host-upgrades.md).
 
 ---
