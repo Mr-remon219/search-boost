@@ -298,6 +298,7 @@ function renderFused(value) {
   const lines = []
   lines.push(`**fused_search: "${value.query}"** — layer ${value.layer ?? 'api'}, tier ${value.tier}, ${value.results.length} hits, ${value.tookMs}ms${value.cacheHit ? ' (cache hit)' : ''}`)
   lines.push(`scoreVersion: ${value.scoreVersion}; engine_pool: ${value.enginePool}; ranking: ${value.ranking}; enginesUsed: ${(value.enginesUsed ?? []).join(', ')}; effectiveWeights: ${JSON.stringify(value.effectiveWeights ?? {})}; communityUsed: ${!!value.communityUsed}`)
+  if (value.outcome) lines.push(`outcome: ${value.outcome}`)
   if (value.routeExplanation) lines.push(value.routeExplanation)
   if (value.communityChannels?.length) lines.push(`Community routes: ${value.communityChannels.map(c => `${c.platform}: ${c.status}/${c.retrieval_mode ?? 'unavailable'}${c.note ? ` — ${c.note}` : ''}`).join('; ')}`)
   for (const [i, r] of value.results.entries()) {

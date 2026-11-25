@@ -199,6 +199,7 @@ export default function searchBoostExtension(pi) {
         `Score: ${res.scoreVersion}; Pool: ${res.enginePool}; ranking: ${res.ranking}; enginesUsed: ${res.enginesUsed.join(', ')}; effectiveWeights: ${JSON.stringify(res.effectiveWeights)}; communityUsed: ${res.communityUsed}`,
         ...(res.communityChannels?.length ? [`Community routes: ${res.communityChannels.map(c => `${c.platform}: ${c.status}/${c.retrieval_mode ?? 'unavailable'}${c.note ? ` — ${c.note}` : ''}`).join('; ')}`] : []),
         `Engines: ${stats}${res.cacheHit ? ' — cache hit' : ''} — ${res.tookMs}ms`,
+        ...(res.outcome ? [`outcome: ${res.outcome}`] : []),
         ...(res.routeExplanation ? [res.routeExplanation] : []),
         ...(res.warnings ?? []).map((w) => `WARNING: ${w}`),
         includeDomains.length > 0 ? `Include domains: ${includeDomains.join(', ')}` : '',

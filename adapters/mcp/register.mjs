@@ -98,7 +98,7 @@ function summarizeAdaptive(result) {
         resultCount: hits.length,
         enginesRequested: result.enginesRequested ?? [],
         enginesUsed: result.enginesUsed ?? [],
-        enginePool: result.enginePool, ranking: result.ranking, routeExplanation: result.routeExplanation, effectiveWeights: result.effectiveWeights, communityUsed: result.communityUsed,
+        enginePool: result.enginePool, ranking: result.ranking, routeExplanation: result.routeExplanation, outcome: result.outcome, effectiveWeights: result.effectiveWeights, communityUsed: result.communityUsed,
         communityPlatforms: result.communityPlatforms, communityChannels: result.communityChannels,
         results: hits,
         engineStats: result.engineStats ?? {},

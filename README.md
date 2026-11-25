@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.1--beta.3-blue?style=flat-square" alt="v0.3.1-beta.3"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.1--beta.4-blue?style=flat-square" alt="v0.3.1-beta.4"></a>
   <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm package"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
@@ -27,7 +27,7 @@
 
 ---
 
-> **SearchBoost 0.3.1-beta.3** is the current beta candidate in this tree. It is not an npm `latest` release and this document does not mean the version has been published. `deepseek-search` still calls the official Search API only. See the [0.3.1-beta.3 notes](./docs/v0.3.1-beta3-release.md). The 0.3.0 behavior below still applies except for that protocol change.
+> **SearchBoost 0.3.1-beta.4** is the current beta candidate in this tree. It is not an npm `latest` release and this document does not mean the version has been published. `deepseek-search` still calls the official Search API only. See the [0.3.1-beta.4 notes](./docs/v0.3.1-beta4-release.md). The 0.3.0 behavior below still applies except for that protocol change.
 >
 > **SearchBoost 0.3.0**: Yahoo is removed. Page fetching through an HTTP(S) proxy now fails closed unless you opt in with `SEARCH_BOOST_TRUSTED_PROXY` or `SEARCH_BOOST_PROXY_DIRECT_FALLBACK`. Enabled API keys, including the new Firecrawl and Keenable engines, join default searches and may incur provider charges; pass `engine_pool: "free"` to stay keyless. Uninstall removes the selected host integrations, not the npm package. See the [0.3.0 release notes](./docs/v0.3.0-release.md).
 
@@ -128,13 +128,13 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
 
 ### 1. Install this delivered beta
 
-**Not on the npm registry.** `0.3.1-beta.3` has not been published. Do not start with `npm install -g search-boost@beta` or `npm install -g search-boost@0.3.1-beta.3`. Neither command installs this candidate, and neither means a release exists.
+**Not on the npm registry.** `0.3.1-beta.4` has not been published. Do not start with `npm install -g search-boost@beta` or `npm install -g search-boost@0.3.1-beta.4`. Neither command installs this candidate, and neither means a release exists.
 
 Install the tarball delivered with the pull request. The command target is that file:
 
 ```bash
-npm install -g /absolute/path/to/search-boost-0.3.1-beta.3.tgz
-search-boost --version   # must print 0.3.1-beta.3
+npm install -g /absolute/path/to/search-boost-0.3.1-beta.4.tgz
+search-boost --version   # must print 0.3.1-beta.4
 search-boost             # Quick setup / configuration wizard
 search-boost tui         # Independent full-screen control center
 ```
@@ -164,11 +164,11 @@ The switches are independent and also accept `true`. Set accepted values in your
 
 ### 1. Routine Updates: npm First, Then Refresh Integrations
 
-This beta is not a registry release. To move onto `0.3.1-beta.3`, install the delivered tarball, then refresh. `@latest` stays the published stable channel and is not this beta. `@beta` does not name this candidate until a maintainer publishes a prerelease. Installation replaces your local global executable. Use npm to update a published package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
+This beta is not a registry release. To move onto `0.3.1-beta.4`, install the delivered tarball, then refresh. `@latest` stays the published stable channel and is not this beta. `@beta` does not name this candidate until a maintainer publishes a prerelease. Installation replaces your local global executable. Use npm to update a published package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
 
 ```bash
-npm install -g /absolute/path/to/search-boost-0.3.1-beta.3.tgz
-search-boost --version   # 0.3.1-beta.3
+npm install -g /absolute/path/to/search-boost-0.3.1-beta.4.tgz
+search-boost --version   # 0.3.1-beta.4
 search-boost
 # → Manage agent integrations → Refresh existing integrations → select scopes
 # Or refresh all existing integrations:
@@ -478,7 +478,7 @@ API keys use a credential store this tool owns. They are not written into prompt
 
 ## CLI Command Reference (Headless & CI)
 
-This CLI reference describes **0.3.1-beta.3**.
+This CLI reference describes **0.3.1-beta.4**.
 
 **DeepSeek Harness Desktop:** interactive installation offers Desktop / CLI / All, then **Automatic (default)** or **Local directory** for Desktop. Automatic setup retains bundled-command discovery through Windows installer registry metadata (including custom destinations), default directories and PATH; launch Desktop once, then fully quit it including its tray. Local setup runs last, after all other integrations including Grok, and displays the current durable package directory to paste into the running app's Plugins → Add plugin dialog. The TUI observes saved installation read-only and finishes after stable verification; Escape / Ctrl+C or timeout marks Desktop unfinished while retaining earlier results. Saved installation is not proof of live activation; missing bundled launchers explicitly leave runtime verification unknown. Temporary `_npx` paths are refused as persistent local links. The app also accepts `search-boost` for a registry install. Automatic install/update still verifies the owning resolver and rejects shadow copies. Disabled bundles stay disabled unless explicitly requested; local setup with `--enable-dsh-bundle` waits for the user to enable it in Desktop. See [Desktop integration](docs/dsh-desktop.md) for ownership and validation limits.
 
@@ -508,7 +508,7 @@ search-boost install -t dsh --dsh-surface desktop -y # Desktop bundled command +
 search-boost install -t dsh --dsh-surface all -y     # Manage Desktop and CLI independently
 # No global search-boost / dsh / pnpm required (Windows, Linux, macOS).
 # This beta is not on the registry; --package is the delivered tarball, not @beta:
-npx --yes --package /absolute/path/to/search-boost-0.3.1-beta.3.tgz search-boost install -t dsh --profile web -y
+npx --yes --package /absolute/path/to/search-boost-0.3.1-beta.4.tgz search-boost install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # Preview installation without writing files
 
 # ----------------- Configuration Management -----------------
@@ -535,7 +535,7 @@ search-boost uninstall -t cursor,claude -y  # Remove integrations from selected 
 
 ## Installation from Source & Development
 
-Use this path to contribute to SearchBoost, or to test code that is not in a published release yet. After a maintainer publishes a prerelease, `@beta` selects that channel and `@latest` selects stable. This `0.3.1-beta.3` candidate is not on either tag.
+Use this path to contribute to SearchBoost, or to test code that is not in a published release yet. After a maintainer publishes a prerelease, `@beta` selects that channel and `@latest` selects stable. This `0.3.1-beta.4` candidate is not on either tag.
 
 ### Prerequisites
 
