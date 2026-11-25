@@ -1,0 +1,157 @@
+0.3.1-beta.2 UI gate. Isolation home. No live search and no credential is printed.
+beta.1 did not run this set. These lines are from this process.
+
+keyboard
+1:overview 2:engines 3:search 4:tools 5:community 6:judgment 7:agents 8:settings
+focus list/detail/sidebar, j/k, help, and the selection marker all responded.
+zh-54
+  ⣤⡀ ⢛⣿⣿  SearchBoost  /  CONTROL CENTER             
+  ⠈⢻⣶⠟⠁⠛  v0.3.1-beta.2 · 默认搜索 · Ayu Dark        
+  ⣴⠟⠁     ───────────────────────────────────────────
+  1 总览         │ ▸ 默认搜索                        
+  2 搜索引擎     │                                   
+▸ 3 默认搜索     │ ▸ 自动选择引擎         API        
+  4 工具开关     │ Enter 打开 · → 详情 · 1/2         
+  5 社区检索     │ ──────────────────────────────────
+  6 判断模型     │ 自动选择引擎                      
+  7 Agent 接入   │ 自动搜索：deepseek-search。       
+  8 界面设置     │ 可能收费，以服务商为准。          
+─────────────────────────────────────────────────────
+  就绪                                               
+  Enter 打开  → 详情  Esc 返回  Tab 切栏             
+  ? 帮助  Q 退出  ≥112 列同时显示三栏                
+NO_COLOR
+interactive --no-color with NO_COLOR=1 and TERM=dumb has no truecolor SGR.
+non-tty
+tui without a TTY fails and names --preview. --preview --no-color prints plain text.
+cancel
+Enter on the default confirm choice left keys.json unchanged.
+conflict
+Operation failed: configuration changed elsewhere. Press R and try again; this change was not saved.
+diagnostics
+fused_search: no selected engine was called for "stdio-no-key". This is not an empty search result. engine_pool=api did not run. deepseek-search unavailable (missing credentials, disabled, or locally unavailable); not called. No selected engine was called (deepseek-search). engine_pool=api did not run. Next: search-boost config keys --show. Enable with search-boost config keys --set <id>=KEY and search-boost config keys --enable <id>. This call only: engine_pool=free, and do not list keyed engines.
+Retry-After 1.5, integer 2, invalid text and a future HTTP-date all stop.
+dedup
+one URL from bing and ddg stays one row and keeps both provenance entries. A named bing call does not add tavily.
+overview-80x24
+  ⣤⡀ ⢛⣿⣿  SearchBoost  /  CONTROL CENTER                                       
+  ⠈⢻⣶⠟⠁⠛  v0.3.1-beta.2 · Overview · Ayu Dark                                  
+  ⣴⠟⠁     ─────────────────────────────────────────────────────────────────────
+▸ 1 Overview          │ ▸ Overview                                             
+  2 Engines           │                                                        
+  3 Search defaults   │ ▸ SearchBoost control center             v0.3.1-beta.2 
+  4 Tools             │   API engines                            0/8           
+  5 Community         │   Integrations                           0/8           
+  6 Judgment          │   Free community integrations            No MCP deploy…
+  7 Integrations      │   Offline diagnostics                    Read-only     
+  8 Settings          │                                                        
+                      │                                                        
+  Browse offline      │ Enter / → details · 1/5                                
+  ?  Help             │ ───────────────────────────────────────────────────────
+  Q  Exit             │ SearchBoost control center                             
+                      │ Automatic search: bing, ddg, exa-free, anysearch.      
+                      │ No keyed API is enabled. engine_pool omitted uses these
+                      │  keyless engines. This is a complete setup.            
+                      │ Start here: engines and switches → automatic selection 
+───────────────────────────────────────────────────────────────────────────────
+  Ready                                                                        
+  Tab / Shift+Tab focus  ↑↓ move  Enter / → details                            
+  ? help  Q quit  ≥112 columns shows all three panes                           
+overview-zh-60x20
+  ⣤⡀ ⢛⣿⣿  SearchBoost  /  CONTROL CENTER                   
+  ⠈⢻⣶⠟⠁⠛  v0.3.1-beta.2 · 总览 · Ayu Dark                  
+  ⣴⠟⠁     ─────────────────────────────────────────────────
+▸ 1 总览         │ ▸ 总览                                  
+  2 搜索引擎     │                                         
+  3 默认搜索     │ ▸ SearchBoost 控制中心     v0.3.1-beta.2
+  4 工具开关     │   API 引擎                 0/8          
+  5 社区检索     │   Agent 接入               0/8          
+  6 判断模型     │ Enter / → 进入详情 · 1/5                
+  7 Agent 接入   │ ────────────────────────────────────────
+  8 界面设置     │ SearchBoost 控制中心                    
+                 │ 自动搜索：免 Key 引擎（bing, ddg,       
+  浏览不联网     │ exa-free, anysearch）。                 
+  ?  Help        │ 没有已启用的 API。这是完整配置。        
+  Q  Exit        │ 建议：搜索引擎与开关 → 自动选择 → Agent 
+───────────────────────────────────────────────────────────
+  就绪                                                     
+  Enter/→ 详情  Esc 返回  Tab 切栏                         
+  ? 帮助  Q 退出  ≥112 列同时显示三栏                      
+detail-zh-60x20
+  ⣤⡀ ⢛⣿⣿  SearchBoost  /  CONTROL CENTER                   
+  ⠈⢻⣶⠟⠁⠛  v0.3.1-beta.2 · 默认搜索 · Ayu Dark              
+  ⣴⠟⠁     ─────────────────────────────────────────────────
+  1 总览         │ ▸ 详情 · 自动选择引擎                   
+  2 搜索引擎     │                                         
+▸ 3 默认搜索     │ 自动搜索：deepseek-search。             
+  4 工具开关     │ 可能收费，以服务商为准。                
+  5 社区检索     │ 有效源就是上面的名单。仅本次免          
+  6 判断模型     │ Key：engine_pool=free，且不要列出 Key   
+  7 Agent 接入   │ 引擎。                                  
+  8 界面设置     │ 保存 Key 不改白名单（deepseek-search）。
+                 │ 协议：只调用 POST /v1/tools/search。没有
+  浏览不联网     │ PgUp/PgDn 详情 · 1/4                    
+  ?  Help        │ 操作 ↑↓ · 1/1                           
+  Q  Exit        │ ▸ 管理引擎开关                          
+───────────────────────────────────────────────────────────
+  就绪                                                     
+  ↑↓ 操作  PgUp/PgDn 详情  Enter 执行  Esc 列表            
+  ? 帮助  Q 退出  ≥112 列同时显示三栏                      
+confirm-80x24
+  ⣤⡀ ⢛⣿⣿  SearchBoost  /  CONTROL CENTER                                       
+  ⠈⢻⣶⠟⠁⠛  v0.3.1-beta.2 · Search defaults · Ayu Dark                           
+  ⣴⠟⠁     ─────────────────────────────────────────────────────────────────────
+  1 Overview          │ ▸ Confirm change                                       
+  2 Engines           │ leave this row?                                        
+▸ 3 Search defaults   │                                                        
+  4 Tools             │ ▸ Cancel — do not save                                 
+  5 Community         │   Confirm                                              
+  6 Judgment          │                                                        
+  7 Integrations      │                                                        
+  8 Settings          │                                                        
+                      │                                                        
+  Browse offline      │                                                        
+  ?  Help             │                                                        
+  Q  Exit             │                                                        
+                      │                                                        
+                      │                                                        
+                      │                                                        
+                      │                                                        
+───────────────────────────────────────────────────────────────────────────────
+  Ready                                                                        
+  ↑↓ / Tab select  PgUp/PgDn description  Enter confirm  Esc back              
+  PgUp/PgDn info  No writes before consent  Ctrl+C quit                        
+
+English search page after keyboard focus returned to the list
+  ⣤⡀ ⢛⣿⣿  SearchBoost  /  CONTROL CENTER                                                           
+  ⠈⢻⣶⠟⠁⠛  v0.3.1-beta.2 · Search defaults · Ayu Dark                                               
+  ⣴⠟⠁     ─────────────────────────────────────────────────────────────────────────────────────────
+  1 Overview          │ ▸ Search defaults                                                          
+  2 Engines           │                                                                            
+▸ 3 Search defaults   │ ▸ Automatic engine selection                                 API           
+  4 Tools             │   Per-request search options                                 fused_search  
+  5 Community         │                                                                            
+  6 Judgment          │                                                                            
+  7 Integrations      │                                                                            
+  8 Settings          │                                                                            
+                      │                                                                            
+  Browse offline      │                                                                            
+  ?  Help             │                                                                            
+  Q  Exit             │                                                                            
+                      │                                                                            
+                      │ Enter open · → details · 1/2                                               
+                      │ ───────────────────────────────────────────────────────────────────────────
+                      │ Automatic engine selection                                                 
+                      │ Automatic search: deepseek-search.                                         
+                      │ May incur charges. Check with the provider.                                
+                      │ Effective sources when engine_pool is omitted are the names above. This    
+                      │ call only: engine_pool=free, and do not list keyed engines.                
+───────────────────────────────────────────────────────────────────────────────────────────────────
+  Ready                                                                                            
+  Tab / Shift+Tab focus  ↑↓ move  Enter open  → details                                            
+  ? help  Q quit  ≥112 columns shows all three panes                                               
+
+48 columns
+SearchBoost                                    
+Terminal too small: resize to at least 54 × 16.
+Q / Ctrl+C → Exit                              

@@ -86,7 +86,7 @@ MCP / Pi / DSH community_search (engines:["x"])
 
 ### DeepSeek Search
 
-`deepseek-search` 为 keyed API 引擎，默认 api/hybrid，三个预设权重均为 1.0。支持已有 Key、Base URL、启停和权重覆盖契约；详见 [接入说明](deepseek-search.md)。
+`deepseek-search` 仍是原来的 keyed API 引擎，默认 api/hybrid，三个预设权重均为 1.0。0.3.1-beta.1 把同一 ID 的唯一协议改为官方 `POST /v1/tools/search`，不再调用 0.3.0 的 messages/web_search，也不在失败时换协议。详见 [接入说明](deepseek-search.md)。
 
 ### TinyFish Search 与 Yahoo 移除
 

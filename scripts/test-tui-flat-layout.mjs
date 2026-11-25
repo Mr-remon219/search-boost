@@ -160,10 +160,10 @@ try {
   assert(existsSync(unreadable), 'an unreadable store is not removed')
   fresh()
   const healthyFree = await runScenario(['exit'])
-  assert.equal(healthyFree.records[0].options.find(o => o.value === 'layer').hint, 'auto: keyless engines')
+  assert.equal(healthyFree.records[0].options.find(o => o.value === 'layer').hint, 'bing, ddg, exa-free, anysearch · keyless, complete')
   writeKeysFile({ tavily: 'healthy-fixture-key' })
   const healthyApi = await runScenario(['exit'])
-  assert.equal(healthyApi.records[0].options.find(o => o.value === 'layer').hint, 'auto: tavily')
+  assert.equal(healthyApi.records[0].options.find(o => o.value === 'layer').hint, 'tavily · may charge')
   assert.equal(process.exitCode, undefined)
   console.log('ok: corrupt/unreadable keys show a localized hint without blocking flat/folder menus; actual config stays strict')
 

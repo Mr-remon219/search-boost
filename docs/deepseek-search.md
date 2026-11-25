@@ -1,51 +1,65 @@
-# DeepSeek Search 接入
+# DeepSeek Search
 
-## 配置与权重
+引擎 ID 仍是 `deepseek-search`。0.3.1-beta.1 起它只调用官方独立 Search API，不再调用 0.3.0 的 Anthropic messages + `web_search_20250305`。同一把 Key 不会打两条路径。失败时也不回退到旧协议、Fetch 或其他引擎。
 
-逻辑引擎名为 `deepseek-search`，属于默认 api/hybrid 池，不属于默认 free 池。显式 `engines` 可沿用现有跨池选择契约，但不能绕过缺 Key 或禁用状态。
+本文件记录 2026-11-24 对官网的阅读。没有用真实 Key 发过请求，因此不是 live 验证。
+
+亲核页面：
+
+- https://api-docs.deepseek.com/guides/search/
+- https://api-docs.deepseek.com/api/search.md
+- https://api-docs.deepseek.com/updates/ （2026-10-17 写明开放自研搜索 API）
+- https://api-docs.deepseek.com/quick_start/pricing/
+- https://api-docs.deepseek.com/zh-cn/guides/search/
+- https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
+
+## 配置
 
 ```bash
 search-boost config keys --set deepseek-search=KEY
 search-boost config keys --enable deepseek-search
-# 可选：可信 Anthropic 兼容网关的 API base，不是完整 Messages endpoint
-search-boost config keys --base-url deepseek-search=https://gateway.example/anthropic/v1
 ```
 
-也可设置 `DEEPSEEK_API_KEY`，或通过 TUI 的搜索引擎配置设置 Key、启停、Base URL、恢复默认地址及删除文件 Key。已有显式白名单不自动扩张；文件与环境变量凭据均受启停配置约束。保存 Key 不触发联网，也不修改用户聊天模型的凭据或 endpoint。
+也可以使用 `DEEPSEEK_API_KEY`。保存 Key 不联网。已有 `enabledEngines` 白名单不会因为保存而扩大。没有白名单时，0.3.0 的规则仍是「已配置的 Key 都启用」，所以第一把或额外的 Key 会进入默认搜索。要把它留在默认搜索之外，使用 `--disable` 或显式白名单。
 
-`balanced / research / fresh` 三个预设权重均为 **1.0**：未经实测校准的中性冷启动值，非质量保证。不重算其他引擎权重，不按当次可用集合归一化。没有足够证据确认其索引上游，不强行归入 Bing/Google/Exa 来源组；这也不证明来源独立。
+启用后，省略 `engine_pool` 的搜索会包含它，并可能产生费用。当次免 Key：`engine_pool: "free"`，且不要在 `engines` 里列出它。
 
-单次 MCP/Pi/DSH `fused_search` 输入示例：
+Base URL 的默认值是 `https://api.deepseek.com`，路径固定追加 `/v1/tools/search`。文件里如果还存着 0.3.0 的默认值 `https://api.deepseek.com/anthropic/v1`，只把它当成旧默认值，仍然只请求 Search API。自定义基址若指向 `/anthropic` 或 `/messages`，不会发请求。
 
-```json
-{
-  "query": "DeepSeek API documentation",
-  "engine_pool": "api",
-  "engines": ["deepseek-search", "exa"],
-  "engine_weights": { "deepseek-search": 0.8 },
-  "complexity": "simple"
-}
-```
+三个排序权重仍是未经校准的 1.0。
 
-权重必须为有限非负数；零权重仍调用引擎，但不参与评分。需要停止请求应禁用或不选择该引擎，而不是设为零权重。
+## 请求
 
-## 协议与执行边界
+`POST https://api.deepseek.com/v1/tools/search`
 
-实现依据：[DeepSeek 官方 Harness provider 源码](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/web/web-search-deepseek/src/provider.ts)。这是直接 HTTP 接入，不依赖同名 Python CLI，也不复用 Harness 的账户登录 token。
+- `Authorization: Bearer <key>`。不发送 `x-api-key`，不发送 `anthropic-version`。
+- `query`：原样发送。按 Unicode 码点计必须是 1–128 且不能全空白。官方写的是 “Unicode characters”，没有定义码点、UTF-16 或字素簇。本实现用码点，超长直接拒绝，不截断。
+- `count`：1–50。调用方没给时用官方默认 10。越界不发出，也不悄悄改成别的数再声称那就是用户的值。
+- `ori_question`：只有调用方另外给了合法的 1–128 码点字符串才发送。
+- `need_content`：默认 false。只有显式打开才为 true。默认不调用 Fetch。
+- `localization`：是 IP。默认不发送，本版也没有开关去发送。
 
-- 默认 `POST https://api.deepseek.com/anthropic/v1/messages`。
-- API base 自动追加 `/messages`；不读取聊天的 `DEEPSEEK_BASE_URL`。
-- 使用 `x-api-key` 和 Bearer Key；`anthropic-version: 2023-06-01`。
-- 固定辅助模型 `deepseek-v4-flash`、`max_tokens: 4096`、关闭 thinking。
-- 使用原生 `web_search_20250305`，每个查询变体最多一次工具调用（`max_uses: 1`）。每个变体可能产生模型和搜索费用；服务限额及定价以提供方为准。
-- 只接受 `web_search_tool_result` 内的结构化 `web_search_result`。摘要按 URL 关联文本块的 `citations[].cited_text`；生成的回答正文不作为证据。没有引用摘录时摘要保持空，不编造内容。
-- 原始结果位置用于 `providerRank`；URL 去重并限制返回数量。`page_age` 经公共日期规范化，缺失/不可解析时未知。
-- 域名约束沿用 query 中的 `site:` 提示及最终本地硬过滤；不发送未验证的原生域名/日期参数。`recency` 沿用融合软偏好，不保证服务端日期过滤。
-- 单请求超时 60 秒，响应体上限 8 MB，传递调用取消信号；使用既有受控网络传输。禁止重定向，HTTP/原生工具失败不伪装为空成功，不回显错误正文或自动重试 HTTP 失败。
-- 无结构化结果块即报错；合法空结果块允许空列表。当前不提供自动余额查询，控制台显示 unsupported，不以搜索请求探测余额。
+查询里的 `site:`、`OR`、引号由 DeepSeek 搜索语法原样处理。融合层不会为了这个引擎把 query 拆开或改写。
 
-## 验证
+## 响应
 
-`scripts/test-deepseek-search.mjs` 已加入 `npm run test:engines`，覆盖池/权重/schema、实际请求和 citation 映射、重复/畸形条目、单 Key 权威配置、环境变量/启停、CLI/Base URL、融合缓存及零权重、HTTP/JSON/工具错误、响应大小及取消。
+只读 `results`。模型风格的 `content` / `web_search_tool_result` 不是搜索结果，会报无效响应，不从正文里抽 URL。
 
-所有测试使用隔离配置和模拟传输，未调用真实 DeepSeek 服务、未修改用户已有凭据。真实账户可用性、费用、中文检索质量和延迟仍需独立验证。
+- `snippet` 给 UI，`summary` 给 agent。二者都不互相填空。
+- `title`、`site_name`、`date`、`authority`、`rerank_score` 缺失或类型不对时保持空或 null。
+- 只要 `http`/`https` 且不带账号密码的 URL。不编造链接。
+- HTTP 200 且 `results` 为 `[]` 是成功零条。
+
+## 错误与重试
+
+缺 Key、非法 query/count、已退役的 messages 基址：零次出站。
+
+只对 408、429 和 5xx 额外重试，最多 2 次。400、401、402、403、404、413 不重试。`Retry-After` 的纯数字按秒解释，包括 `1.5` 这种小数；只有不超过 1 秒才等待，更长就停止，不会把 `1.5` 交给日期解析。HTTP-date 按当前时钟计算，未来且超过 1 秒也停止。取消之后不再发下一次。错误类放在 `engineStats` 的 `note`，整条最长 120 个字符，超长时保留开头和结尾，不回显响应正文。
+
+## 价格
+
+2026-11-24 的英文价格页写 Search API 每 1,000 次成功请求 $0.75，中文页写 5 元。指南写明失败、空结果和超时不计费，且价格可能变化。界面不把这个单价写成承诺。没有 live 账单核对。
+
+## 测试
+
+`scripts/test-deepseek-search.mjs` 和 `scripts/test-v031-beta.mjs` 使用隔离配置和 fixture。它们不访问真实 DeepSeek，也不能证明账号权限或来源真实性。

@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.0-blue?style=flat-square" alt="v0.3.0"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.1--beta.5-blue?style=flat-square" alt="v0.3.1-beta.5"></a>
   <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm package"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
@@ -27,6 +27,8 @@
 
 ---
 
+> **SearchBoost 0.3.1-beta.5** is the current beta candidate in this tree. It is not an npm `latest` release and this document does not mean the version has been published. `deepseek-search` still calls the official Search API only. See the [0.3.1-beta.5 notes](./docs/v0.3.1-beta5-release.md). The 0.3.0 behavior below still applies except for that protocol change.
+>
 > **SearchBoost 0.3.0**: Yahoo is removed. Page fetching through an HTTP(S) proxy now fails closed unless you opt in with `SEARCH_BOOST_TRUSTED_PROXY` or `SEARCH_BOOST_PROXY_DIRECT_FALLBACK`. Enabled API keys, including the new Firecrawl and Keenable engines, join default searches and may incur provider charges; pass `engine_pool: "free"` to stay keyless. Uninstall removes the selected host integrations, not the npm package. See the [0.3.0 release notes](./docs/v0.3.0-release.md).
 
 ## Table of Contents
@@ -124,14 +126,20 @@ SearchBoost follows a **"One Core, Three Adapters"** architecture. All search lo
 - **Node.js**: `>= 22.13.0`
 - **Package Manager**: `npm` (or `pnpm`)
 
-### 1. Install & Launch the Dashboard
+### 1. Install this delivered beta
+
+**Not on the npm registry.** `0.3.1-beta.5` has not been published. Do not start with `npm install -g search-boost@beta` or `npm install -g search-boost@0.3.1-beta.5`. Neither command installs this candidate, and neither means a release exists.
+
+Install the tarball delivered with the pull request. The command target is that file:
 
 ```bash
-npm install -g search-boost@0.3.0
-
-search-boost       # Quick setup / configuration wizard
-search-boost tui   # Independent full-screen control center
+npm install -g /absolute/path/to/search-boost-0.3.1-beta.5.tgz
+search-boost --version   # must print 0.3.1-beta.5
+search-boost             # Quick setup / configuration wizard
+search-boost tui         # Independent full-screen control center
 ```
+
+`npm install -g search-boost@latest` is the published stable channel. It does not install this beta. `@beta` is not this package until a maintainer publishes a prerelease.
 
 > [!TIP]
 > **Zero API Keys Required to Start**: SearchBoost includes a keyless free pool (Bing, DuckDuckGo, Exa-free, AnySearch). No paid-provider signup is required; availability and result coverage depend on the providers and your network.
@@ -156,10 +164,11 @@ The switches are independent and also accept `true`. Set accepted values in your
 
 ### 1. Routine Updates: npm First, Then Refresh Integrations
 
-Upgrade with npm. `search-boost@0.3.0` pins this release; `@latest` selects the current stable channel and `@beta` the prerelease channel. Installation replaces your local global executable. Use npm to update the package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
+This beta is not a registry release. To move onto `0.3.1-beta.5`, install the delivered tarball, then refresh. `@latest` stays the published stable channel and is not this beta. `@beta` does not name this candidate until a maintainer publishes a prerelease. Installation replaces your local global executable. Use npm to update a published package; the TUI no longer updates SearchBoost itself. Installation, refresh and removal live under **Manage agent integrations** (folder layout: Installation & integrations → Manage agent integrations).
 
 ```bash
-npm install -g search-boost@0.3.0
+npm install -g /absolute/path/to/search-boost-0.3.1-beta.5.tgz
+search-boost --version   # 0.3.1-beta.5
 search-boost
 # → Manage agent integrations → Refresh existing integrations → select scopes
 # Or refresh all existing integrations:
@@ -169,6 +178,8 @@ search-boost refresh --dry-run
 ```
 
 Refresh uses the current package and preserves credentials, permissions, disabled states and unrelated configuration. It does not install unconfigured hosts. Unchecking a target means no operation, not removal. The old `upgrade` command and `--sync-only` option are removed.
+
+Do not roll this candidate back with `npm install -g search-boost@0.3.0`. That version is not on the registry. Install, upgrade, rollback, backup and restore for this candidate are only in the [0.3.1-beta.5 notes](./docs/v0.3.1-beta5-release.md).
 
 If a Grok local cache remains stale after native update, fully quit Grok and separately approve data-retaining reconstruction and trust of the displayed source. `-y` alone is not approval; explicit CLI approval is `search-boost refresh -y --repair-grok-cache`. This requests native `uninstall --keep-data`, then `install --trust`; legacy-name data reuse is not guaranteed. Restart affected hosts afterward. See [integration refresh](docs/host-upgrades.md).
 
@@ -265,7 +276,7 @@ Dispatches queries across engines concurrently, normalizes URLs, strips redirect
 }
 ```
 
-- **`engine_pool`**: `free` (keyless Bing, DuckDuckGo, Exa-free, AnySearch), `api` (configured API engines), or `hybrid` (both pools). Unavailable or disabled engines are skipped. When omitted, the compatibility layer maps `free` to the free pool and `api` to hybrid.
+- **`engine_pool`**: `free` (keyless Bing, DuckDuckGo, Exa-free, AnySearch), `api` (configured API engines), or `hybrid` (both pools). Unavailable or disabled engines are skipped. Omitting `engine_pool` is not the mapping below: if at least one API key is enabled, that default search uses those APIs; otherwise it uses the keyless pool. The old `layer` parameter is the compatibility mapping: `layer=free` selects the free pool and `layer=api` selects hybrid. When both are set, `engine_pool` wins.
 - **`ranking`**: Final engine-weight presets: `balanced` (default), `research`, or `fresh`. They do not change query variants, search depth or recency filters, and do not establish source authority or freshness.
 - **`complexity`**: `simple` (1 query variant), `medium` (up to 2 variants), `complex` (up to 3 deep variants).
 - **`community`**: Platform-name array (e.g. `["reddit","x","zhihu"]`) or legacy boolean. `false`/`[]` disables; old `true` selects X only. Defaults false, shares the final quota, and never enables a backend.
@@ -366,7 +377,7 @@ Supply **one question** (`questions` has exactly one item) plus a **required res
 
 `engine_pool` selects engines, `ranking` selects shared cross-pool weights, and `complexity` controls query breadth and depth, not scoring weights. AnySearch is one logical engine: anonymous in free, key-required in api, and key-preferred in hybrid. Configure `ANYSEARCH_API_KEY` or `config keys --set anysearch=KEY`.
 
-DeepSeek Search (`deepseek-search`) uses the native Anthropic-compatible web search API, not a CLI subprocess. Configure `DEEPSEEK_API_KEY` or `search-boost config keys --set deepseek-search=KEY`, then enable it in the engine configuration if you already have an explicit whitelist. It joins api/hybrid, not default free. All three ranking presets start at weight **1.0**; override with `engine_weights: {"deepseek-search": 0.8}`. Zero weight still calls the engine. Each query variant uses a potentially billable `deepseek-v4-flash` model turn with at most one native search; only structured search results and citation excerpts are used as evidence. Base URL is independent of chat configuration; `/messages` is appended. See [integration details and validation limits](docs/deepseek-search.md).
+DeepSeek Search (`deepseek-search`) is the same engine id as 0.3.0. As of 0.3.1-beta.1 it calls only `POST https://api.deepseek.com/v1/tools/search`. It does not call the retired messages/`web_search_20250305` path, and the same key is never sent to both. Configure `DEEPSEEK_API_KEY` or `search-boost config keys --set deepseek-search=KEY`. Saving a key does not search and does not change an existing whitelist. When no whitelist is stored, a configured key is enabled for default search. It joins api/hybrid, not the free pool. Ranking weights stay at the uncalibrated **1.0**. `summary` is the agent extract and `snippet` is the short UI line; neither fills the other. Charges follow the provider's current rules. No live account was verified for this beta. See [DeepSeek Search](docs/deepseek-search.md).
 
 TinyFish Search is a keyed API engine: use TUI → Search engine configuration → TinyFish Search (folder layout: Services & credentials → Search engine configuration), `TINYFISH_API_KEY`, or `config keys --set tinyfish=KEY`. The TUI supports key replacement/removal, custom/reset Base URLs and masked status; use Enable / disable engines to select `tinyfish` without silently expanding an existing whitelist. It joins api/hybrid, not the default free pool (explicit `engines` still overrides pool membership). Service pricing and limits can change; a wallet balance is not a count of searches remaining. Each query variant counts as a request. No automatic pagination or inline Fetch is used. Requests default to the service's US/en locale. Yahoo has been removed; explicit Yahoo engine/weight inputs are rejected.
 
@@ -452,7 +463,7 @@ search-boost config keys --reset-base-url exa
 | Brave | `https://api.search.brave.com/res/v1` | `/web/search` |
 | AnySearch | `https://api.anysearch.com/v1` | `/search` |
 | TinyFish Search | `https://api.search.tinyfish.ai` | `/` |
-| DeepSeek Search | `https://api.deepseek.com/anthropic/v1` | `/messages` |
+| DeepSeek Search | `https://api.deepseek.com` | `/v1/tools/search` |
 | Firecrawl | `https://api.firecrawl.dev` | `/v2/search` |
 | Keenable | `https://api.keenable.ai` | `/v1/search` |
 
@@ -469,7 +480,7 @@ API keys use a credential store this tool owns. They are not written into prompt
 
 ## CLI Command Reference (Headless & CI)
 
-This CLI reference describes **0.3.0**.
+This CLI reference describes **0.3.1-beta.5**.
 
 **DeepSeek Harness Desktop:** interactive installation offers Desktop / CLI / All, then **Automatic (default)** or **Local directory** for Desktop. Automatic setup retains bundled-command discovery through Windows installer registry metadata (including custom destinations), default directories and PATH; launch Desktop once, then fully quit it including its tray. Local setup runs last, after all other integrations including Grok, and displays the current durable package directory to paste into the running app's Plugins → Add plugin dialog. The TUI observes saved installation read-only and finishes after stable verification; Escape / Ctrl+C or timeout marks Desktop unfinished while retaining earlier results. Saved installation is not proof of live activation; missing bundled launchers explicitly leave runtime verification unknown. Temporary `_npx` paths are refused as persistent local links. The app also accepts `search-boost` for a registry install. Automatic install/update still verifies the owning resolver and rejects shadow copies. Disabled bundles stay disabled unless explicitly requested; local setup with `--enable-dsh-bundle` waits for the user to enable it in Desktop. See [Desktop integration](docs/dsh-desktop.md) for ownership and validation limits.
 
@@ -497,8 +508,9 @@ search-boost install -t pi -y               # Mount Pi extension and prompt temp
 search-boost install -t dsh --profile web   # Connect to DeepSeek Harness CLI web profile
 search-boost install -t dsh --dsh-surface desktop -y # Desktop bundled command + local package
 search-boost install -t dsh --dsh-surface all -y     # Manage Desktop and CLI independently
-# No global search-boost / dsh / pnpm required (Windows, Linux, macOS):
-npx --yes --package search-boost@0.3.0 search-boost install -t dsh --profile web -y
+# No global search-boost / dsh / pnpm required (Windows, Linux, macOS).
+# This beta is not on the registry; --package is the delivered tarball, not @beta:
+npx --yes --package /absolute/path/to/search-boost-0.3.1-beta.5.tgz search-boost install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # Preview installation without writing files
 
 # ----------------- Configuration Management -----------------
@@ -525,7 +537,7 @@ search-boost uninstall -t cursor,claude -y  # Remove integrations from selected 
 
 ## Installation from Source & Development
 
-Use this path to contribute to SearchBoost, or to test code that is not in a published release yet. `@beta` selects the prerelease channel; `@latest` selects the stable channel.
+Use this path to contribute to SearchBoost, or to test code that is not in a published release yet. After a maintainer publishes a prerelease, `@beta` selects that channel and `@latest` selects stable. This `0.3.1-beta.5` candidate is not on either tag.
 
 ### Prerequisites
 
@@ -540,7 +552,7 @@ Use this path to contribute to SearchBoost, or to test code that is not in a pub
 # 1. Clone the repository
 git clone https://github.com/Mr-remon219/search-boost.git
 cd search-boost
-git checkout v0.3.0  # Development branch for the 0.3.0 line
+git checkout v0.3.0  # Stable 0.3.0 line. This beta lives on its own branch and is not merged here.
 
 # 2. Install dependencies exactly as CI does
 npm ci
