@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.1--beta.4-blue?style=flat-square" alt="v0.3.1-beta.4"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.1--beta.5-blue?style=flat-square" alt="v0.3.1-beta.5"></a>
   <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm package"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
@@ -27,7 +27,7 @@
 
 ---
 
-> **SearchBoost 0.3.1-beta.4** 是本树当前的 beta 候选，不是 npm `latest`，本文也不表示已经发布。`deepseek-search` 仍然只调用官方 Search API。见 [0.3.1-beta.4 说明](./docs/v0.3.1-beta4-release.md)。除这条协议变化外，下面的 0.3.0 行为仍然有效。
+> **SearchBoost 0.3.1-beta.5** 是本树当前的 beta 候选，不是 npm `latest`，本文也不表示已经发布。`deepseek-search` 仍然只调用官方 Search API。见 [0.3.1-beta.5 说明](./docs/v0.3.1-beta5-release.md)。除这条协议变化外，下面的 0.3.0 行为仍然有效。
 >
 > **SearchBoost 0.3.0**：已移除 Yahoo。经 HTTP(S) 代理抓取页面默认拒绝（fail closed），需用 `SEARCH_BOOST_TRUSTED_PROXY` 或 `SEARCH_BOOST_PROXY_DIRECT_FALLBACK` 显式恢复。已启用的 API Key（含新增 Firecrawl、Keenable）会进入默认搜索，可能产生费用，以服务商为准；只想免 Key 时调用传 `engine_pool: "free"`。卸载移除的是所选宿主接入，不是 npm 包。详见 [0.3.0 发布说明](./docs/v0.3.0-release.md)。
 
@@ -128,13 +128,13 @@ SearchBoost 采用“**单核三适配**”设计，所有搜索算法、分词�
 
 ### 1. 安装这次交付的 beta
 
-**还没有上架 npm registry。** `0.3.1-beta.4` 没有发布。不要先执行 `npm install -g search-boost@beta` 或 `npm install -g search-boost@0.3.1-beta.4`。这两条命令装不到本候选，也不表示已经发布。
+**还没有上架 npm registry。** `0.3.1-beta.5` 没有发布。不要先执行 `npm install -g search-boost@beta` 或 `npm install -g search-boost@0.3.1-beta.5`。这两条命令装不到本候选，也不表示已经发布。
 
 安装 PR 交付的 tarball。命令目标是这个文件：
 
 ```bash
-npm install -g /absolute/path/to/search-boost-0.3.1-beta.4.tgz
-search-boost --version   # 必须打印 0.3.1-beta.4
+npm install -g /absolute/path/to/search-boost-0.3.1-beta.5.tgz
+search-boost --version   # 必须打印 0.3.1-beta.5
 search-boost             # 快速配置 / 首次接入向导
 search-boost tui         # 独立全屏控制中心
 ```
@@ -164,11 +164,11 @@ search-boost tui         # 独立全屏控制中心
 
 ### 1. 日常更新：npm 更新软件包，再刷新接入
 
-这个 beta 不是 registry 发布。要换到 `0.3.1-beta.4`，先安装交付的 tarball，再刷新接入。`@latest` 仍是已发布的稳定通道，不是这个 beta。维护者发布预发布版本之前，`@beta` 也不指向本候选。安装会替换本机全局命令。已发布的软件包由 npm 更新；TUI 不自行更新 SearchBoost。安装、刷新与移除位于「管理 Agent 接入」（文件夹模式：安装与接入 → 管理 Agent 接入）。
+这个 beta 不是 registry 发布。要换到 `0.3.1-beta.5`，先安装交付的 tarball，再刷新接入。`@latest` 仍是已发布的稳定通道，不是这个 beta。维护者发布预发布版本之前，`@beta` 也不指向本候选。安装会替换本机全局命令。已发布的软件包由 npm 更新；TUI 不自行更新 SearchBoost。安装、刷新与移除位于「管理 Agent 接入」（文件夹模式：安装与接入 → 管理 Agent 接入）。
 
 ```bash
-npm install -g /absolute/path/to/search-boost-0.3.1-beta.4.tgz
-search-boost --version   # 0.3.1-beta.4
+npm install -g /absolute/path/to/search-boost-0.3.1-beta.5.tgz
+search-boost --version   # 0.3.1-beta.5
 search-boost
 # → 管理 Agent 接入 → 刷新已有接入 → 选择实际范围
 # 或刷新全部已有接入：
@@ -179,7 +179,7 @@ search-boost refresh --dry-run
 
 刷新只使用当前软件包，保留凭据、权限、禁用状态及无关配置，不安装未接入的宿主。取消勾选表示本次不处理，不表示卸载。旧 `upgrade` / `--sync-only` 已移除。
 
-不要用 `npm install -g search-boost@0.3.0` 回滚本候选。registry 上没有这个版本。本候选的安装、升级、回滚、备份和还原只写在 [0.3.1-beta.4 说明](./docs/v0.3.1-beta4-release.md)。
+不要用 `npm install -g search-boost@0.3.0` 回滚本候选。registry 上没有这个版本。本候选的安装、升级、回滚、备份和还原只写在 [0.3.1-beta.5 说明](./docs/v0.3.1-beta5-release.md)。
 
 Grok 本地缓存若原生更新后仍陈旧，需要完全退出 Grok，再独立确认保留数据重建和对当前源的信任。`-y` 本身不授予重建同意；显式 CLI 同意为 `search-boost refresh -y --repair-grok-cache`。这会请求宿主 `uninstall --keep-data` 后 `install --trust`，不保证旧名称数据自动迁移。成功后重启宿主。详见 [接入刷新](docs/host-upgrades.md)。
 
@@ -480,7 +480,7 @@ API Key 存放在由 SearchBoost 自己管理的凭据文件中，不写入提�
 
 ## CLI 命令参考（自动化与进阶）
 
-以下 CLI 参考对应 **0.3.1-beta.4**。
+以下 CLI 参考对应 **0.3.1-beta.5**。
 
 **DeepSeek Harness Desktop**：交互安装选中 DSH 后，可选择 Desktop / CLI / All，再为 Desktop 选择 **自动安装（默认）** 或 **本地目录接入**。自动方式通过注册表（含自定义安装目录）、默认目录及 PATH 找到桌面版内置命令；先启动一次再完全退出（包括托盘）。本地方式在其他接入（包括 Grok）结束后，最后显示当前包的完整持久目录，由用户粘贴到运行中的 Desktop「插件 → 添加插件」；TUI 等待只读检测，稳定完成后结束，Esc / Ctrl+C 或超时则报告未完成并保留其他结果。检测到保存的安装不代表运行中的插件已加载；没有内置启动器时会明确提示运行时未验证。临时 `_npx` 缓存不能作为本地链接来源。也可直接在应用输入 `search-boost` 从 npm 安装。自动安装/更新仍验证宿主解析器，遮蔽副本不能报成功；禁用状态保留，`--enable-dsh-bundle` 明确要求启用（本地方式由用户在 Desktop 启用）。所有权与验证限制见 [Desktop 接入说明](docs/dsh-desktop.md)。
 
@@ -510,7 +510,7 @@ search-boost install -t dsh --dsh-surface desktop -y # Desktop 原生命令 + �
 search-boost install -t dsh --dsh-surface all -y     # Desktop 与 CLI 分别安装
 # 无需全局安装 search-boost / dsh / pnpm（Windows、Linux、macOS）。
 # 这个 beta 不在 registry 上；--package 指向交付的 tarball，不是 @beta：
-npx --yes --package /absolute/path/to/search-boost-0.3.1-beta.4.tgz search-boost install -t dsh --profile web -y
+npx --yes --package /absolute/path/to/search-boost-0.3.1-beta.5.tgz search-boost install -t dsh --profile web -y
 search-boost install -t cursor --dry-run    # 仅演练安装过程，不写磁盘
 
 # ----------------- 凭据与配置管理 -----------------
@@ -537,7 +537,7 @@ search-boost uninstall -t cursor,claude -y  # 移除指定宿主的集成与注�
 
 ## 源码安装与本地开发
 
-适用于参与开发，或提前验证尚未发布的代码。维护者发布预发布版本之后，`@beta` 才是测试通道，`@latest` 是稳定通道。这次的 `0.3.1-beta.4` 候选不在这两个 tag 上。
+适用于参与开发，或提前验证尚未发布的代码。维护者发布预发布版本之后，`@beta` 才是测试通道，`@latest` 是稳定通道。这次的 `0.3.1-beta.5` 候选不在这两个 tag 上。
 
 ### 环境准备
 

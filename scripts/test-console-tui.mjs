@@ -7,6 +7,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ConsoleModel, renderConsole, displayWidth, fitText, cleanText, runConsoleTui } from '../lib/console-tui.mjs'
+import { runFused, invalidateSearchCaches } from '../lib/runtime.mjs'
 import { readKeys, readKeysRouting, writeKeysFile, keysFilePath } from '../lib/keys.mjs'
 import { toolStates } from '../lib/tool-config.mjs'
 import { readCommunityConfig, communityConfigPath } from '../lib/community/config.mjs'
@@ -727,11 +728,15 @@ await test('a live shrink clears the previous frame and keeps confirm focus', as
   model.confirm('桌面尺寸复核', () => { throw new Error('confirm must not run') })
   const session = runConsoleTui([], { input, output, model })
   const sizes = [[190, 58], [79, 23], [65, 19], [135, 39]]
+  let previous = [190, 58]
   for (const [columns, rows] of sizes) {
     output.columns = columns; output.rows = rows; output.emit('resize')
     const paint = chunks.at(-1)
-    assert.match(paint, /^\x1b\[H\x1b\[2J/, `${columns}x${rows} repaints from a cleared screen`)
-    const lines = paint.slice('\x1b[H\x1b[2J'.length).replaceAll('\r\n', '\n').split('\n')
+    const changed = columns !== previous[0] || rows !== previous[1]
+    previous = [columns, rows]
+    if (changed) assert.match(paint, /^\x1b\[H\x1b\[2J/, `${columns}x${rows} clears once when the size changes`)
+    else assert.doesNotMatch(paint, /\x1b\[2J/, `${columns}x${rows} same-size repaint does not clear the screen`)
+    const lines = paint.replace(/^\x1b\[H(?:\x1b\[2J)?/, '').replaceAll('\r\n', '\n').split('\n')
     assert.ok(lines.length <= rows - 1, `${columns}x${rows} height`)
     for (const line of lines) assert.ok(displayWidth(line) <= columns - 1, `${columns}x${rows} width`)
     assert.match(paint, /取消，不保存/)
@@ -741,7 +746,10 @@ await test('a live shrink clears the previous frame and keeps confirm focus', as
     assert.equal(model.sectionId, 'overview')
   }
   const before = existsSync(keysFilePath()) ? readFileSync(keysFilePath()) : null
+  const beforeNav = chunks.length
   key(model, 'down')
+  assert.doesNotMatch(chunks.at(-1), /\x1b\[2J/, 'moving a confirmation highlight does not clear the screen')
+  assert.ok(chunks.length > beforeNav)
   assert.equal(model.modal.index, 1, 'keys still move the open confirmation after the shrink')
   key(model, 'up')
   assert.equal(model.modal.index, 0)
@@ -752,6 +760,67 @@ await test('a live shrink clears the previous frame and keeps confirm focus', as
   input.emit('keypress', 'q', { name: 'q' })
   await session
   assert.equal(output.listenerCount('resize'), 0)
+})
+await test('engine action arrows only move the highlight', async () => {
+  writeKeysFile({ tavily: 'fixture-tavily-nav', baseUrls: { tavily: 'http://127.0.0.1:18765/tavily' } })
+  const before = readFileSync(keysFilePath())
+  const input = new PassThrough(); input.isTTY = true; input.setRawMode = raw => { input.isRaw = raw }
+  const output = new EventEmitter(); output.isTTY = true; output.columns = 160; output.rows = 50
+  const chunks = []; output.write = text => { chunks.push(String(text)); return true }
+  const model = new ConsoleModel({ language: 'en' })
+  const session = runConsoleTui([], { input, output, model })
+  const press = (text, name) => { input.emit('keypress', text, { name, sequence: text }); return chunks.at(-1) }
+  press('2', '2')
+  press('', 'tab')
+  assert.equal(model.sectionId, 'engines')
+  assert.equal(model.current.id, 'tavily')
+  assert.equal(model.focus, 'detail')
+  const edit = press('', 'down')
+  const restore = press('', 'down')
+  const next = press('', 'down')
+  const back = press('', 'up')
+  const editAgain = press('', 'up')
+  for (const [label, paint] of [['2/8', edit], ['3/8', restore], ['4/8', next], ['3/8 again', back], ['2/8 again', editAgain]]) {
+    assert.equal(model.modal, null, `${label} did not run the action`)
+    assert.doesNotMatch(paint, /\x1b\[2J/, `${label} does not clear the screen`)
+    assert.match(paint, /CONTROL CENTER/, `${label} keeps the header`)
+    assert.match(paint, /Overview/, `${label} keeps the sidebar`)
+    assert.match(paint, /tavily/, `${label} keeps the engine`)
+    assert.match(paint, /127\.0\.0\.1:18765\/tavily/, `${label} keeps the base URL`)
+  }
+  assert.match(edit, /Edit Base URL/)
+  assert.match(restore, /Restore default URL/)
+  assert.match(editAgain, /Edit Base URL/)
+  const restoreAgain = press('', 'down')
+  assert.match(restoreAgain, /Restore default URL/)
+  assert.doesNotMatch(restoreAgain, /\x1b\[2J/)
+  press('', 'return')
+  assert.equal(model.modal?.kind, 'select', 'Enter opens confirmation instead of writing')
+  assert.equal(model.modal.index, 0)
+  press('', 'return'); await settle()
+  assert.equal(model.modal, null)
+  assert.deepEqual(readFileSync(keysFilePath()), before)
+  output.columns = 80; output.rows = 24; output.emit('resize')
+  assert.match(chunks.at(-1), /^\x1b\[H\x1b\[2J/)
+  assert.match(chunks.at(-1), /tavily/)
+  const narrow = press('', 'down')
+  assert.doesNotMatch(narrow, /\x1b\[2J/)
+  assert.match(narrow, /tavily/)
+  assert.equal(model.modal, null)
+  press('q', 'q')
+  await session
+  const again = new ConsoleModel({ language: 'en' })
+  again.navigate(1)
+  assert.equal(again.current.id, 'tavily')
+  assert.equal(again.pages.engines.find(row => row.id === 'tavily').status, 'Enabled')
+  assert.match(renderConsole(again, { columns: 120, rows: 30, color: false }), /127\.0\.0\.1:18765\/tavily/)
+  invalidateSearchCaches()
+  const found = await runFused({ query: 'beta5 navigation', engineList: ['tavily'], complexity: 'simple' }, {
+    snapshot: () => ({ engines: { tavily: { available: () => true, search: async () => [{ title: 'kept', url: 'https://ex.com/tavily', snippet: 'mock' }] } }, routing: { enabledNames: ['tavily'] }, fingerprint: 'nav-mock', capability: {} }),
+  })
+  assert.equal(found.results[0].title, 'kept')
+  assert.equal(found.engineStats.tavily.attempts, 1)
+  assert.equal(found.results[0].url, 'https://ex.com/tavily')
 })
 await test('resize-only frames block invisible confirmation/input and resume without losing drafts', () => freshConsole(async () => {
   const model = new ConsoleModel({ language: 'en' })
