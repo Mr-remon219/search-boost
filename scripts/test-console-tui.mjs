@@ -719,6 +719,40 @@ await test('single-action entries open directly and language/theme pickers cance
     assert.equal(existsSync(searchBoostHome()), false)
   }
 }))
+await test('a live shrink clears the previous frame and keeps confirm focus', async () => {
+  const input = new PassThrough(); input.isTTY = true; input.setRawMode = raw => { input.isRaw = raw }
+  const output = new EventEmitter(); output.isTTY = true; output.columns = 190; output.rows = 58
+  const chunks = []; output.write = text => { chunks.push(String(text)); return true }
+  const model = new ConsoleModel({ language: 'zh-CN' })
+  model.confirm('桌面尺寸复核', () => { throw new Error('confirm must not run') })
+  const session = runConsoleTui([], { input, output, model })
+  const sizes = [[190, 58], [79, 23], [65, 19], [135, 39]]
+  for (const [columns, rows] of sizes) {
+    output.columns = columns; output.rows = rows; output.emit('resize')
+    const paint = chunks.at(-1)
+    assert.match(paint, /^\x1b\[H\x1b\[2J/, `${columns}x${rows} repaints from a cleared screen`)
+    const lines = paint.slice('\x1b[H\x1b[2J'.length).replaceAll('\r\n', '\n').split('\n')
+    assert.ok(lines.length <= rows - 1, `${columns}x${rows} height`)
+    for (const line of lines) assert.ok(displayWidth(line) <= columns - 1, `${columns}x${rows} width`)
+    assert.match(paint, /取消，不保存/)
+    assert.equal(model.modal?.kind, 'select')
+    assert.equal(model.modal.index, 0)
+    assert.equal(model.focus, 'detail')
+    assert.equal(model.sectionId, 'overview')
+  }
+  const before = existsSync(keysFilePath()) ? readFileSync(keysFilePath()) : null
+  key(model, 'down')
+  assert.equal(model.modal.index, 1, 'keys still move the open confirmation after the shrink')
+  key(model, 'up')
+  assert.equal(model.modal.index, 0)
+  key(model, 'return'); await settle()
+  assert.equal(model.modal, null)
+  const after = existsSync(keysFilePath()) ? readFileSync(keysFilePath()) : null
+  assert.deepEqual(after, before)
+  input.emit('keypress', 'q', { name: 'q' })
+  await session
+  assert.equal(output.listenerCount('resize'), 0)
+})
 await test('resize-only frames block invisible confirmation/input and resume without losing drafts', () => freshConsole(async () => {
   const model = new ConsoleModel({ language: 'en' })
   let commits = 0
