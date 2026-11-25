@@ -2,6 +2,7 @@ import { testRoot } from './isolate-tests.mjs'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const repo = '/workspace'
 const prefix = join(testRoot, 'prefix')
@@ -23,8 +24,13 @@ const secret = 'fixture-doc-backup-key'
 run('search-boost', ['config', 'keys', '--set', `brave=${secret}`, '--engines', 'brave,deepseek-search', '--base-url', 'brave=https://fixture-gateway.example/brave', '--base-url', 'deepseek-search=https://api.deepseek.com'])
 const beforeShow = run('search-boost', ['config', 'keys', '--show'])
 if (beforeShow.includes(secret)) throw new Error('config keys --show printed the raw fixture key')
-if (!beforeShow.includes('https://api.deepseek.com')) throw new Error('beta.4 show did not print the stored DeepSeek base')
-if (!/deepseek-search[\s\S]*自定义|custom/.test(beforeShow)) throw new Error('stored DeepSeek base was not marked custom on beta.4')
+const fileLine = beforeShow.split('\n').map((line) => line.startsWith('File: ') ? line.slice(6) : line.startsWith('文件：') ? line.slice(3) : '').find(Boolean)
+if (!fileLine) throw new Error('config keys --show did not print a File line')
+const earlyKeys = fileLine.startsWith('~/') ? join(home, fileLine.slice(2)) : fileLine
+const stored = JSON.parse(readFileSync(earlyKeys, 'utf8'))
+if (stored.baseUrls) throw new Error('CLI wrote top-level baseUrls; the product field is engines.<name>.baseUrl')
+if (stored.engines?.brave?.baseUrl !== 'https://fixture-gateway.example/brave') throw new Error('CLI did not store engines.brave.baseUrl')
+if (stored.engines?.['deepseek-search']?.baseUrl !== 'https://api.deepseek.com') throw new Error('CLI did not store engines.deepseek-search.baseUrl')
 
 const script = `
 set -euo pipefail
@@ -99,20 +105,49 @@ if (!readFileSync(keys).equals(backupBytes)) throw new Error('refresh changed ke
 const packedRoot = join(testRoot, 'v030')
 mkdirSync(packedRoot, { recursive: true })
 const archivePath = join(testRoot, 'v0.3.0.tar')
-run('git', ['-C', repo, 'archive', '--format=tar', '-o', archivePath, '12428996dd1aef92f0aedf78ed77066fd59cdbec'])
+const tagObject = run('git', ['-C', repo, 'rev-parse', 'v0.3.0']).trim()
+const peeled = run('git', ['-C', repo, 'rev-parse', 'v0.3.0^{}']).trim()
+if (tagObject !== '12428996dd1aef92f0aedf78ed77066fd59cdbec') throw new Error(`tag object is ${tagObject}`)
+if (peeled !== '61c428b786230e71d7a84b2c417da4a9ac246d54') throw new Error(`peeled commit is ${peeled}`)
+if (run('git', ['-C', repo, 'cat-file', '-t', tagObject]).trim() !== 'tag') throw new Error('v0.3.0 is not an annotated tag')
+run('git', ['-C', repo, 'archive', '--format=tar', '-o', archivePath, peeled])
 run('tar', ['-x', '-C', packedRoot, '-f', archivePath])
 const v030Name = run('npm', ['pack', '--ignore-scripts'], packedRoot).trim().split('\n').at(-1)
 run('npm', ['install', '--global', '--prefix', prefix, join(packedRoot, v030Name)])
 const rolled = run('search-boost', ['--version']).trim()
 if (rolled !== '0.3.0') throw new Error(`rolled binary printed ${rolled}`)
 if (!readFileSync(keys).equals(backupBytes)) throw new Error('installing the v0.3.0 tarball changed keys')
+function requestEffect() {
+  const root = join(prefix, 'lib', 'node_modules', 'search-boost')
+  const code = `
+    import { readEngineBaseUrls } from ${JSON.stringify(pathToFileURL(join(root, 'lib', 'keys.mjs')).href)};
+    import { engineSearchUrl } from ${JSON.stringify(pathToFileURL(join(root, 'lib', 'engine-endpoints.mjs')).href)};
+    const bases = readEngineBaseUrls();
+    process.stdout.write(JSON.stringify({
+      brave: bases.brave,
+      deepseek: bases['deepseek-search'],
+      braveRequest: engineSearchUrl('brave', bases),
+      deepseekRequest: engineSearchUrl('deepseek-search', bases),
+    }));
+  `
+  return JSON.parse(run('node', ['--input-type=module', '-e', code]))
+}
+const kept = requestEffect()
+if (kept.deepseekRequest !== 'https://api.deepseek.com/messages') throw new Error(`0.3.0 kept request is ${kept.deepseekRequest}`)
+if (!kept.braveRequest.startsWith('https://fixture-gateway.example/brave')) throw new Error('0.3.0 did not keep the brave base')
 const oldShow = run('search-boost', ['config', 'keys', '--show'])
-if (!oldShow.includes('https://api.deepseek.com')) throw new Error('0.3.0 show lost the stored DeepSeek base')
+if (oldShow.includes('/anthropic/v1')) throw new Error('0.3.0 show used the Anthropic default while the beta base was stored')
 if (oldShow.includes(secret)) throw new Error('0.3.0 show printed the raw fixture key')
 run('search-boost', ['config', 'keys', '--reset-base-url', 'deepseek-search'])
+const reset = requestEffect()
+if (reset.deepseekRequest !== 'https://api.deepseek.com/anthropic/v1/messages') throw new Error(`0.3.0 reset request is ${reset.deepseekRequest}`)
+if (!reset.braveRequest.startsWith('https://fixture-gateway.example/brave')) throw new Error('0.3.0 reset removed the brave base')
 const resetShow = run('search-boost', ['config', 'keys', '--show'])
 if (!resetShow.includes('https://api.deepseek.com/anthropic/v1')) throw new Error('0.3.0 reset did not show the Anthropic default base')
-if (resetShow.includes('https://fixture-gateway.example/brave') === false) throw new Error('0.3.0 reset cleared the unrelated custom base')
+const resetDoc = JSON.parse(readFileSync(keys, 'utf8'))
+if (resetDoc.baseUrls) throw new Error('reset wrote top-level baseUrls')
+if (resetDoc.engines?.['deepseek-search']?.baseUrl) throw new Error('reset left engines.deepseek-search.baseUrl')
+if (resetDoc.engines?.brave?.baseUrl !== 'https://fixture-gateway.example/brave') throw new Error('reset rewrote engines.brave.baseUrl')
 console.log('located keys from config keys --show inside the isolated HOME; backup cmp, failed restore, successful restore, refresh, and 0.3.0 base reset matched the documented steps')
 console.log('NOT RUN: a second concurrent keys writer. Existing writes already fail closed and leave the previous file.')
 console.log('This isolated HOME is not a user path.')
