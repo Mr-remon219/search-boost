@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.1-blue?style=flat-square" alt="v0.3.1"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.2--beta.1-blue?style=flat-square" alt="v0.3.2-beta.1"></a>
   <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm package"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
@@ -27,6 +27,8 @@
 
 ---
 
+> **SearchBoost 0.3.2-beta.1** 补记已在 0.3.0 发布的引擎贡献者。引擎行为仍以已发 0.3.1 为基线。本 beta 不打 tag、不发 GitHub Release，也不 `npm publish`。见 [0.3.2-beta.1 说明](./docs/v0.3.2-beta.1-release.md)。
+>
 > **SearchBoost 0.3.1** 是本树的正式候选。本文不表示已经打 tag 或发布。registry 的 `latest` 仍是 `0.2.4`，`beta` 仍是 `0.3.0-beta3`。不要执行 `npm install -g search-boost@0.3.1`。`deepseek-search` 仍然只调用官方 Search API。见 [0.3.1 说明](./docs/v0.3.1-release.md)。除这条协议变化外，下面的 0.3.0 行为仍然有效。
 >
 > **SearchBoost 0.3.0**：已移除 Yahoo。经 HTTP(S) 代理抓取页面默认拒绝（fail closed），需用 `SEARCH_BOOST_TRUSTED_PROXY` 或 `SEARCH_BOOST_PROXY_DIRECT_FALLBACK` 显式恢复。已启用的 API Key（含新增 Firecrawl、Keenable）会进入默认搜索，可能产生费用，以服务商为准；只想免 Key 时调用传 `engine_pool: "free"`。卸载移除的是所选宿主接入，不是 npm 包。详见 [0.3.0 发布说明](./docs/v0.3.0-release.md)。
@@ -51,6 +53,7 @@
 - [CLI 命令参考（自动化与进阶）](#cli-命令参考自动化与进阶)
 - [源码安装与本地开发](#源码安装与本地开发)
 - [友情链接](#友情链接)
+- [贡献者](#贡献者)
 - [开源协议](#开源协议)
 
 ---
@@ -603,6 +606,10 @@ search-boost
 - [LINUX DO](https://linux.do/)
 
 ---
+
+## 贡献者
+
+- [hardworkDAD](https://github.com/hardworkDAD) — Firecrawl 与 Keenable 带钥匙引擎适配器（[PR #40](https://github.com/Mr-remon219/search-boost/pull/40)），自 0.3.0 起纳入。
 
 ## 开源协议
 

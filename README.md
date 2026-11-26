@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.1-blue?style=flat-square" alt="v0.3.1"></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-v0.3.2--beta.1-blue?style=flat-square" alt="v0.3.2-beta.1"></a>
   <a href="https://www.npmjs.com/package/search-boost"><img src="https://img.shields.io/badge/npm-search--boost-cb3837?style=flat-square&logo=npm" alt="npm package"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.13-339933?style=flat-square&logo=node.js" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License"></a>
@@ -27,6 +27,8 @@
 
 ---
 
+> **SearchBoost 0.3.2-beta.1** records the contributor for engines already shipped in 0.3.0. Engine behavior stays on the released 0.3.1 baseline. This beta does not tag, release, or publish. See the [0.3.2-beta.1 notes](./docs/v0.3.2-beta.1-release.md).
+>
 > **SearchBoost 0.3.1** is the formal candidate in this tree. This document does not mean it has been tagged or published. Registry `latest` is still `0.2.4` and `beta` is still `0.3.0-beta3`. Do not run `npm install -g search-boost@0.3.1`. `deepseek-search` still calls the official Search API only. See the [0.3.1 notes](./docs/v0.3.1-release.md). The 0.3.0 behavior below still applies except for that protocol change.
 >
 > **SearchBoost 0.3.0**: Yahoo is removed. Page fetching through an HTTP(S) proxy now fails closed unless you opt in with `SEARCH_BOOST_TRUSTED_PROXY` or `SEARCH_BOOST_PROXY_DIRECT_FALLBACK`. Enabled API keys, including the new Firecrawl and Keenable engines, join default searches and may incur provider charges; pass `engine_pool: "free"` to stay keyless. Uninstall removes the selected host integrations, not the npm package. See the [0.3.0 release notes](./docs/v0.3.0-release.md).
@@ -51,6 +53,7 @@
 - [CLI Command Reference (Headless & CI)](#cli-command-reference-headless--ci)
 - [Installation from Source & Development](#installation-from-source--development)
 - [Friendly Links](#friendly-links)
+- [Contributors](#contributors)
 - [License](#license)
 
 ---
@@ -603,6 +606,10 @@ Regression suites use isolated state, loopback fixtures and process doubles; no 
 - [LINUX DO](https://linux.do/)
 
 ---
+
+## Contributors
+
+- [hardworkDAD](https://github.com/hardworkDAD) — Firecrawl and Keenable keyed engine adapters (PR #40), included since 0.3.0.
 
 ## License
 
